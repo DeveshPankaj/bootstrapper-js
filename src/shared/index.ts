@@ -1,4 +1,4 @@
-import { Observable, Subject } from "rxjs"
+import { BehaviorSubject, Observable, Subject } from "rxjs"
 
 declare global{
     interface Window {
@@ -17,7 +17,11 @@ export type PlatformEvent = {
 
 
 export class Host {
-    constructor(private window: Window, private readonly platform: Platform) {}
+
+    public readonly commands$: Observable<Array<{name: string, exec: ()=>void}>>
+    constructor(private window: Window, private readonly platform: Platform, private commands: BehaviorSubject<Array<{name: string, exec: ()=>void}>>) {
+        this.commands$ = this.commands.asObservable()
+    }
 
     public appendDomElement(el: HTMLElement) {
         this.window.document.body.appendChild(el)
@@ -35,6 +39,10 @@ export class Host {
 
     public removeCSSStyleSheet(style: CSSStyleSheet) {        
         this.window.document.adoptedStyleSheets = this.window.document.adoptedStyleSheets.filter(x => x !== style)
+    }
+
+    public registerCommand(command_name: string, callback: (...args: any[]) => void, options: {label?: string} = {}) {
+        this.commands.next([...this.commands.getValue(), {name: command_name, exec: callback}])
     }
 }
 

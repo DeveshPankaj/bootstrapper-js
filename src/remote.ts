@@ -1,9 +1,11 @@
 import { Host, Platform, PlatformEvent } from "@shared/index"
-import { Subject } from "rxjs"
+import { BehaviorSubject, Subject } from "rxjs"
 import { Module, modules } from "./modules"
 
 //@ts-ignore
 const public_path = __webpack_public_path__ as string
+
+const commands = new BehaviorSubject<Array<{name: string, exec: ()=>void}>>([])
 
 class WindowService {
 
@@ -19,7 +21,7 @@ class WindowService {
                 const newPlatform = new Platform(platformEventEmitter)
                 iframe.contentWindow!.platform = newPlatform
 
-                const host = new Host(this.window, newPlatform)
+                const host = new Host(this.window, newPlatform, commands)
                 newPlatform.setHost(host)
 
                 resolve([iframe.contentWindow!, platformEventEmitter])
