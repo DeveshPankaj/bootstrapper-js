@@ -9,6 +9,7 @@ module.exports = {
     bootstrapper: "./src/index.ts",
     remote: "./src/remote.ts",
     layout: "./src/layout/",
+    'game-of-life': "./src/game-of-life/",
   },
   output: {
     filename: '[name].bundle.js',
@@ -44,6 +45,7 @@ module.exports = {
     alias: {
       "@shared": path.resolve(__dirname, 'src/shared/'),
       "@layout": path.resolve(__dirname, 'src/layout/'),
+      "@game-of-life": path.resolve(__dirname, 'src/game-of-life/'),
     }
   },
   plugins: [

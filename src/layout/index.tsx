@@ -3,6 +3,7 @@ import { Platform } from '@shared/index'
 import { Header } from './header'
 import {createRoot} from 'react-dom/client'
 import React from 'react'
+import { Commands } from './commands'
 
 const platform = Platform.getInstance()
 
@@ -13,6 +14,11 @@ styles.replace(`
         padding:0;
         font-family: monospace;
         height: 100svh;
+        overflow: hidden;
+    }
+
+    * {
+        box-sizing: border-box;
     }
 
     @font-face {
@@ -39,8 +45,35 @@ styles.replace(`
     }
 
     .layout-default {
-        background: #292a2d;
-        color: #919191;
+        // background: #292a2d;
+        // color: #919191;
+        height: -webkit-fill-available;
+
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        grid-template-rows: auto 1fr auto;
+        // gap: 5px;
+        grid-auto-flow: row;
+        grid-template-areas:
+            "header header header"
+            "left-nav content-area right-nav"
+            "footer footer footer";
+
+    }
+    .header {
+        grid-area: header;
+    }
+    .left-nav {
+        grid-area: left-nav;
+    }
+    .content-area {
+        grid-area: content-area;
+    }
+    .right-nav {
+        grid-area: right-nav;
+    }
+    .footer {
+        grid-area: footer;
     }
 `)
 
@@ -48,8 +81,31 @@ styles.replace(`
 export const render = (container: HTMLElement) => {
     platform.host.addCSSStyleSheet(styles)
 
+    const iframeRef = {current: null as HTMLIFrameElement | null}
+    const onCommandClick = (command: {name: string, exec: (...args: any[]) => void}) => {
+        const iframeBody = iframeRef.current?.contentWindow?.document?.body
+        if(!iframeBody) return;
+
+        iframeBody.style.margin = '0'
+        command.exec(iframeBody)
+    }
+
     const root = createRoot(container)
-    root.render(<Header />)
+    root.render(
+        <>
+            <div className="header">
+                <Header />
+            </div>
+            <div className="left-nav">
+                <Commands onCommandClick={onCommandClick} />
+            </div>
+            <div className="content-area">
+                <iframe ref={iframeRef} style={{border: 0, width: '-webkit-fill-available',height: '-webkit-fill-available'}} />
+            </div>
+            <div className="right-nav"></div>
+            <div className="footer"></div>
+        </>
+    )
 }
 
 
