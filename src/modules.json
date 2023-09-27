@@ -1,0 +1,9 @@
+{
+  "core.layout": {
+    "url": "http://127.0.0.1:9000/layout.bundle.js",
+    "metedata": {
+      "version": "0.0.1"
+    },
+    "params": []
+  }
+}
