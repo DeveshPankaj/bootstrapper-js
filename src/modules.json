@@ -1,13 +1,13 @@
 {
   "core.layout": {
-    "url": "http://127.0.0.1:9000/layout.bundle.js",
+    "url": "https://deveshpankaj.github.io/bootstrapper-js/dist/layout.bundle.js",
     "metedata": {
       "version": "0.0.1"
     },
     "params": []
   },
   "app.game-of-life": {
-    "url": "http://127.0.0.1:9000/game-of-life.bundle.js",
+    "url": "https://deveshpankaj.github.io/bootstrapper-js/dist/game-of-life.bundle.js",
     "metedata": {
       "version": "0.0.1"
     },
