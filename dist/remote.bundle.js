@@ -1583,7 +1583,7 @@ function __disposeResources(env) {
   \**************************/
 /***/ ((module) => {
 
-module.exports = JSON.parse('{"core.layout":{"url":"http://127.0.0.1:9000/layout.bundle.js","metedata":{"version":"0.0.1"},"params":[]},"app.game-of-life":{"url":"http://127.0.0.1:9000/game-of-life.bundle.js","metedata":{"version":"0.0.1"},"params":[]}}');
+module.exports = JSON.parse('{"core.layout":{"url":"https://deveshpankaj.github.io/bootstrapper-js/dist/layout.bundle.js","metedata":{"version":"0.0.1"},"params":[]},"app.game-of-life":{"url":"https://deveshpankaj.github.io/bootstrapper-js/dist/game-of-life.bundle.js","metedata":{"version":"0.0.1"},"params":[]}}');
 
 /***/ })
 
