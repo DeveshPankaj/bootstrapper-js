@@ -44,6 +44,7 @@ const ModulesComponent = () => {
             }
         )
 
+
         return () => subscription.unsubscribe()
 
     }, [])
@@ -79,10 +80,12 @@ const ModulesComponent = () => {
     return (
       <>
         <div style={{padding: '1rem'}}>
+          <h4>Commands</h4>
+
           {commans.map((command, idx) => (
             <div key={`[${idx}]${command.name}`}>
                 <span style={{color: 'green'}}>[{command.servicePlatformName}]</span>
-                {command.name}
+                {(command.meta as any).callable ? <button onClick={_=> command.exec()}>{command.name}</button> : command.name}
             </div>
           ))}
         </div>
@@ -96,10 +99,15 @@ const ModulesComponent = () => {
             padding: "1rem",
           }}
         >
+          <h4>Load dunamic module</h4>
           <input placeholder="namespace" defaultValue={form.namespace} onChange={ev => form.namespace=ev.target.value}></input>
           <textarea placeholder={configPlacegholder} style={{height: '10rem'}} defaultValue={configPlacegholder} onChange={ev => form.config=ev.target.value}></textarea>
           <button onClick={_ => loadModule()}>Load Module</button>
         </div>
+
+        <pre>
+
+        </pre>
       </>
     );
 }

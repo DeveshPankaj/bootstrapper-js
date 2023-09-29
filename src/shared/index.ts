@@ -48,8 +48,16 @@ export class Host {
         this.window.document.adoptedStyleSheets = this.window.document.adoptedStyleSheets.filter(x => x !== style)
     }
 
-    public registerCommand(command_name: string, callback: (...args: any[]) => void, meta: unknown = {}) {
-        this.commands.next([...this.commands.getValue(), Object.freeze({name: command_name, exec: callback, servicePlatformName: this.platform.name, meta})])
+    public registerCommand(command_name: string, callback: (...args: any[]) => void, meta: unknown = {}): {remove: ()=>void} {
+        
+        const newCommandObject = Object.freeze({name: command_name, exec: callback, servicePlatformName: this.platform.name, meta})
+        this.commands.next([...this.commands.getValue(), newCommandObject])
+
+        return {
+            remove: () => {
+                this.commands.next(this.commands.getValue().filter(x => x !== newCommandObject))
+            }
+        }
     }
 
     public callCommand(command_name: string, ...args: any) {
