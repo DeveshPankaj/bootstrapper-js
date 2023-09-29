@@ -16,10 +16,17 @@ export type PlatformEvent = {
 }
 
 
+export type Command = {
+  name: string;
+  exec: (...args: unknown[]) => void;
+  servicePlatformName: string;
+  meta: unknown;
+};
+
 export class Host {
 
-    public readonly commands$: Observable<Array<{name: string, exec: ()=>void}>>
-    constructor(private window: Window, private readonly platform: Platform, private commands: BehaviorSubject<Array<{name: string, exec: ()=>void}>>) {
+    public readonly commands$: Observable<Array<Command>>
+    constructor(private window: Window, private readonly platform: Platform, private commands: BehaviorSubject<Array<Command>>) {
         this.commands$ = this.commands.asObservable()
     }
 
@@ -41,8 +48,15 @@ export class Host {
         this.window.document.adoptedStyleSheets = this.window.document.adoptedStyleSheets.filter(x => x !== style)
     }
 
-    public registerCommand(command_name: string, callback: (...args: any[]) => void, options: {label?: string} = {}) {
-        this.commands.next([...this.commands.getValue(), {name: command_name, exec: callback}])
+    public registerCommand(command_name: string, callback: (...args: any[]) => void, meta: unknown = {}) {
+        this.commands.next([...this.commands.getValue(), Object.freeze({name: command_name, exec: callback, servicePlatformName: this.platform.name, meta})])
+    }
+
+    public callCommand(command_name: string, ...args: any) {
+        const allCommands = this.commands.getValue()
+        const commands = allCommands.filter(x => x.name === command_name)
+
+        commands.forEach(command => command.exec(...args))
     }
 }
 
@@ -53,7 +67,7 @@ export class Platform {
     public readonly events$: Observable<PlatformEvent>
     public host!: Host
     public window: Window = window
-    constructor(private readonly _events: Subject<PlatformEvent>) {
+    constructor(private readonly _events: Subject<PlatformEvent>, public readonly name: string) {
         this.events$ = _events.asObservable()
     }
 

@@ -1,3 +1,4 @@
+import { BehaviorSubject } from "rxjs"
 import _modules from "./modules.json"
 
 //@ts-ignore
@@ -21,5 +22,6 @@ if(localModules) {
 
 
 
-export const modules: {[key: string]: Module} = localParsedModule || _modules || {}
+const defaultModules: {[key: string]: Module} = localParsedModule || _modules || {}
+export const modules = new BehaviorSubject(defaultModules)
 
