@@ -14,7 +14,9 @@ const loadBootstrapScript = (storage) => {
     script.src = bootstrap_script_path;
     window.document.head.appendChild(script);
 };
+const initWindow = () => { };
 window.addEventListener('load', () => {
+    initWindow();
     loadBootstrapScript(localStorage);
 });
 

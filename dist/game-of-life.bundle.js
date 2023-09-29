@@ -33406,13 +33406,19 @@ class Host {
     removeCSSStyleSheet(style) {
         this.window.document.adoptedStyleSheets = this.window.document.adoptedStyleSheets.filter(x => x !== style);
     }
-    registerCommand(command_name, callback, options = {}) {
-        this.commands.next([...this.commands.getValue(), { name: command_name, exec: callback }]);
+    registerCommand(command_name, callback, meta = {}) {
+        this.commands.next([...this.commands.getValue(), Object.freeze({ name: command_name, exec: callback, servicePlatformName: this.platform.name, meta })]);
+    }
+    callCommand(command_name, ...args) {
+        const allCommands = this.commands.getValue();
+        const commands = allCommands.filter(x => x.name === command_name);
+        commands.forEach(command => command.exec(...args));
     }
 }
 class Platform {
-    constructor(_events) {
+    constructor(_events, name) {
         this._events = _events;
+        this.name = name;
         this._services = new Map();
         this.window = window;
         this.events$ = _events.asObservable();
@@ -33529,8 +33535,15 @@ __webpack_require__.r(__webpack_exports__);
 
 
 const platform = _shared_index__WEBPACK_IMPORTED_MODULE_2__.Platform.getInstance();
+let subscriptions = [];
 platform.events$.subscribe(event => {
-    platform.host.registerCommand('start-game-of-life', (body) => {
+    platform.host.registerCommand('ui.render-game-of-life', (body) => {
+        if (!body) {
+            console.error(`Invalid command call [start-game-of-life']. first item must be a dom element`);
+            return;
+        }
+        subscriptions.forEach(subs => subs.unsubscribe());
+        subscriptions = [];
         const container = platform.window.document.createElement('div');
         const win = body.ownerDocument.defaultView;
         const styles = new win.CSSStyleSheet();
@@ -33585,7 +33598,13 @@ platform.events$.subscribe(event => {
         body.appendChild(container);
         const root = (0,react_dom_client__WEBPACK_IMPORTED_MODULE_1__.createRoot)(container);
         root.render(react__WEBPACK_IMPORTED_MODULE_0___default().createElement(GameOfLife, { windowHeight: win.innerHeight, windowWidth: win.innerWidth }));
-    });
+        subscriptions.push({
+            unsubscribe: () => {
+                root.unmount();
+                container.remove();
+            }
+        });
+    }, { icon: 'eco' });
 });
 const cellWidth = 10;
 const gameMap = [

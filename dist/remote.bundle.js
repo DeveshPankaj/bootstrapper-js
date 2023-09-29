@@ -1077,17 +1077,19 @@ function reportUnhandledError(err) {
 
 /***/ }),
 
-/***/ "./src/modules.ts":
-/*!************************!*\
-  !*** ./src/modules.ts ***!
-  \************************/
+/***/ "./src/modules/modules.ts":
+/*!********************************!*\
+  !*** ./src/modules/modules.ts ***!
+  \********************************/
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   modules: () => (/* binding */ modules)
 /* harmony export */ });
-/* harmony import */ var _modules_json__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./modules.json */ "./src/modules.json");
+/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/BehaviorSubject.js");
+/* harmony import */ var _modules_json__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./modules.json */ "./src/modules/modules.json");
+
 
 //@ts-ignore
 const public_path = __webpack_require__.p;
@@ -1097,7 +1099,8 @@ let localParsedModule = null;
 if (localModules) {
     localParsedModule = JSON.parse(localModules);
 }
-const modules = localParsedModule || _modules_json__WEBPACK_IMPORTED_MODULE_0__ || {};
+const defaultModules = localParsedModule || _modules_json__WEBPACK_IMPORTED_MODULE_0__ || {};
+const modules = new rxjs__WEBPACK_IMPORTED_MODULE_1__.BehaviorSubject(defaultModules);
 
 
 /***/ }),
@@ -1134,13 +1137,19 @@ class Host {
     removeCSSStyleSheet(style) {
         this.window.document.adoptedStyleSheets = this.window.document.adoptedStyleSheets.filter(x => x !== style);
     }
-    registerCommand(command_name, callback, options = {}) {
-        this.commands.next([...this.commands.getValue(), { name: command_name, exec: callback }]);
+    registerCommand(command_name, callback, meta = {}) {
+        this.commands.next([...this.commands.getValue(), Object.freeze({ name: command_name, exec: callback, servicePlatformName: this.platform.name, meta })]);
+    }
+    callCommand(command_name, ...args) {
+        const allCommands = this.commands.getValue();
+        const commands = allCommands.filter(x => x.name === command_name);
+        commands.forEach(command => command.exec(...args));
     }
 }
 class Platform {
-    constructor(_events) {
+    constructor(_events, name) {
         this._events = _events;
+        this.name = name;
         this._services = new Map();
         this.window = window;
         this.events$ = _events.asObservable();
@@ -1577,13 +1586,13 @@ function __disposeResources(env) {
 
 /***/ }),
 
-/***/ "./src/modules.json":
-/*!**************************!*\
-  !*** ./src/modules.json ***!
-  \**************************/
+/***/ "./src/modules/modules.json":
+/*!**********************************!*\
+  !*** ./src/modules/modules.json ***!
+  \**********************************/
 /***/ ((module) => {
 
-module.exports = JSON.parse('{"core.layout":{"url":"https://deveshpankaj.github.io/bootstrapper-js/dist/layout.bundle.js","metedata":{"version":"0.0.1"},"params":[]},"app.game-of-life":{"url":"https://deveshpankaj.github.io/bootstrapper-js/dist/game-of-life.bundle.js","metedata":{"version":"0.0.1"},"params":[]}}');
+module.exports = JSON.parse('{"core.layout":{"url":"https://deveshpankaj.github.io/bootstrapper-js/dist/layout.bundle.js","metedata":{"version":"0.0.1"},"params":[]},"app.game-of-life":{"url":"https://deveshpankaj.github.io/bootstrapper-js/dist/game-of-life.bundle.js","metedata":{"version":"0.0.1"},"params":[]},"core.modules":{"url":"https://deveshpankaj.github.io/bootstrapper-js/dist/modules.bundle.js","metedata":{"version":"0.0.1"},"params":[]}}');
 
 /***/ })
 
@@ -1686,9 +1695,9 @@ var __webpack_exports__ = {};
   \***********************/
 __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _shared_index__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @shared/index */ "./src/shared/index.ts");
-/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/BehaviorSubject.js");
-/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/Subject.js");
-/* harmony import */ var _modules__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./modules */ "./src/modules.ts");
+/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/Subject.js");
+/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/BehaviorSubject.js");
+/* harmony import */ var _modules_modules__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./modules/modules */ "./src/modules/modules.ts");
 var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -1703,20 +1712,19 @@ var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _argume
 
 //@ts-ignore
 const public_path = __webpack_require__.p;
-const commands = new rxjs__WEBPACK_IMPORTED_MODULE_2__.BehaviorSubject([]);
 class WindowService {
     constructor(window, container) {
         this.window = window;
         this.container = container;
     }
-    createWindow() {
+    createWindow(uniqueName) {
         return __awaiter(this, void 0, void 0, function* () {
             return yield new Promise((resolve) => {
-                const iframe = this.window.document.createElement('iframe');
-                iframe.style.display = 'none';
+                const iframe = this.window.document.createElement("iframe");
+                iframe.style.display = "none";
                 iframe.onload = () => {
-                    const platformEventEmitter = new rxjs__WEBPACK_IMPORTED_MODULE_3__.Subject();
-                    const newPlatform = new _shared_index__WEBPACK_IMPORTED_MODULE_0__.Platform(platformEventEmitter);
+                    const platformEventEmitter = new rxjs__WEBPACK_IMPORTED_MODULE_2__.Subject();
+                    const newPlatform = new _shared_index__WEBPACK_IMPORTED_MODULE_0__.Platform(platformEventEmitter, uniqueName);
                     iframe.contentWindow.platform = newPlatform;
                     const host = new _shared_index__WEBPACK_IMPORTED_MODULE_0__.Host(this.window, newPlatform, commands);
                     newPlatform.setHost(host);
@@ -1729,7 +1737,7 @@ class WindowService {
     loadScript(src, window) {
         return __awaiter(this, void 0, void 0, function* () {
             return yield new Promise((resolve) => {
-                const script = window.document.createElement('script');
+                const script = window.document.createElement("script");
                 script.src = src;
                 script.onload = () => {
                     resolve(window.platform);
@@ -1739,32 +1747,49 @@ class WindowService {
         });
     }
 }
-const windowService = new WindowService(window, window.document.body);
 const dependenciesMap = new Map();
-const run = () => __awaiter(void 0, void 0, void 0, function* () {
+const loadModules = (modules) => __awaiter(void 0, void 0, void 0, function* () {
     const runAfterLoad = [];
     const Q = [];
-    for (let _module_name in _modules__WEBPACK_IMPORTED_MODULE_1__.modules) {
-        const _module = _modules__WEBPACK_IMPORTED_MODULE_1__.modules[_module_name];
+    for (let _module_name in modules) {
+        if (dependenciesMap.has(_module_name))
+            continue;
+        const _module = modules[_module_name];
         const loadScript = () => __awaiter(void 0, void 0, void 0, function* () {
-            const [win, eventEmitter] = yield windowService.createWindow();
+            const [win, eventEmitter] = yield windowService.createWindow(_module_name);
             dependenciesMap.set(_module_name, {
                 module: _module,
                 window: win,
                 eventEmitter,
-                platform: win.platform
+                platform: win.platform,
             });
             const _ = yield windowService.loadScript(_module.url, win);
-            runAfterLoad.push(() => eventEmitter.next({ type: 'loaded', payload: [] }));
+            runAfterLoad.push(() => eventEmitter.next({ type: "loaded", payload: [] }));
             // eventEmitter.next({type: 'exit', payload: []})
         });
         Q.push(loadScript());
     }
-    yield Promise.all(Q);
-    runAfterLoad.forEach(callback => callback());
+    if (Q.length)
+        yield Promise.all(Q);
+    runAfterLoad.forEach((callback) => callback());
     console.log(dependenciesMap);
 });
-run();
+// Load default variables
+const platformEventEmitter = new rxjs__WEBPACK_IMPORTED_MODULE_2__.Subject();
+const hostPlatform = new _shared_index__WEBPACK_IMPORTED_MODULE_0__.Platform(platformEventEmitter, "root");
+const platform = window.platform = hostPlatform;
+const commands = new rxjs__WEBPACK_IMPORTED_MODULE_3__.BehaviorSubject([]);
+const host = new _shared_index__WEBPACK_IMPORTED_MODULE_0__.Host(window, hostPlatform, commands);
+hostPlatform.setHost(host);
+// Init App
+platform.host.registerCommand('core.add-module', (namespace, mod) => {
+    const currentModules = _modules_modules__WEBPACK_IMPORTED_MODULE_1__.modules.getValue();
+    const nextModules = Object.assign(Object.assign({}, currentModules), { [namespace]: mod });
+    _modules_modules__WEBPACK_IMPORTED_MODULE_1__.modules.next(nextModules);
+    platformEventEmitter.next({ type: 'core.module-loaded', payload: nextModules });
+});
+const windowService = new WindowService(window, window.document.body);
+_modules_modules__WEBPACK_IMPORTED_MODULE_1__.modules.subscribe((modules) => loadModules(modules));
 
 })();
 

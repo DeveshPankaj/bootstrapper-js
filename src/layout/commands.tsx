@@ -1,12 +1,13 @@
-import { Platform } from '@shared/index'
+import { Command, Platform } from '@shared/index'
 import React from 'react'
+import { map } from 'rxjs'
 
 const platform = Platform.getInstance()
 
 
-export const Commands = ({onCommandClick}: {onCommandClick: (cmd: {name: string, exec: ()=>void}) => void}) => {
+export const Commands = ({onCommandClick}: {onCommandClick: (cmd: Command) => void}) => {
 
-    const [commands, setCommands] = React.useState<Array<{name: string, exec: ()=>void}>>([])
+    const [commands, setCommands] = React.useState<Array<Command>>([])
 
     const onClick = () => {
         console.log("clicked")
@@ -14,9 +15,9 @@ export const Commands = ({onCommandClick}: {onCommandClick: (cmd: {name: string,
 
     React.useEffect(() => {
 
-        const subscription = platform.host.commands$.subscribe(
-            _commands => setCommands(_commands)
-        )
+        const subscription = platform.host.commands$
+            .pipe(map(commands => commands.filter(command => command.name.startsWith('ui'))))
+            .subscribe(_commands => setCommands(_commands))
 
         return () => subscription.unsubscribe()
 
@@ -27,23 +28,27 @@ export const Commands = ({onCommandClick}: {onCommandClick: (cmd: {name: string,
             padding: '1rem',
             display: 'flex',
             flexDirection: 'column',
-            alignItems: 'center',
             gap: '0.3rem',
             height: '100%',
             background: '#292a2d',
             color: '#919191',
         }}>
             {
-                commands.map(command => (
-                    <div key={command.name} 
+                commands.map((command, idx) => (
+                    <div key={`[${idx}]${command.name}`} 
+                        aria-label={command.name}
                         style={{
                             cursor: 'pointer',
                             padding: '0.5rem',
-                            border: '1px solid'
+                            border: '1px solid',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '1rem'
                         }}
                         onClick={()=>onCommandClick(command)}
                     >
-                        {command.name}
+                        {(command.meta as any)?.icon ? <span className="material-symbols-outlined" style={{cursor: 'pointer'}} onClick={onClick}>{(command.meta as any)?.icon}</span>: null}
+                        {/* {command.name} */}
                     </div>
                 ))
             }

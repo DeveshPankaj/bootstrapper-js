@@ -1,5 +1,5 @@
 import {concatMap, delay, filter, of, range} from 'rxjs'
-import { Platform } from '@shared/index'
+import { Command, Platform } from '@shared/index'
 import { Header } from './header'
 import {createRoot} from 'react-dom/client'
 import React from 'react'
@@ -69,6 +69,13 @@ styles.replace(`
     .content-area {
         grid-area: content-area;
     }
+
+    .content-area > iframe {
+        border: 0;
+        width: -webkit-fill-available;
+        height: -webkit-fill-available;
+    }
+
     .right-nav {
         grid-area: right-nav;
     }
@@ -81,26 +88,33 @@ styles.replace(`
 export const render = (container: HTMLElement) => {
     platform.host.addCSSStyleSheet(styles)
 
-    const iframeRef = {current: null as HTMLIFrameElement | null}
-    const onCommandClick = (command: {name: string, exec: (...args: any[]) => void}) => {
-        const iframeBody = iframeRef.current?.contentWindow?.document?.body
-        if(!iframeBody) return;
+    const contentRef = {current: null as HTMLDivElement | null}
 
-        iframeBody.style.margin = '0'
-        command.exec(iframeBody)
+    const onCommandClick = (command: Command) => {
+        const iframe = platform.window.document.createElement('iframe')
+        iframe.onload = () => {
+            const iframeBody = iframe.contentWindow?.document?.body
+            if(!iframeBody) return;
+            iframeBody.style.margin = '0'
+            command.exec(iframeBody)
+        }
+
+        if(contentRef.current) {
+            contentRef.current.innerText = ''
+            contentRef.current.appendChild(iframe)
+        }
     }
 
     const root = createRoot(container)
     root.render(
         <>
             <div className="header">
-                <Header />
+                {/* <Header /> */}
             </div>
             <div className="left-nav">
                 <Commands onCommandClick={onCommandClick} />
             </div>
-            <div className="content-area">
-                <iframe ref={iframeRef} style={{border: 0, width: '-webkit-fill-available',height: '-webkit-fill-available'}} />
+            <div className="content-area" ref={contentRef}>
             </div>
             <div className="right-nav"></div>
             <div className="footer"></div>

@@ -4,9 +4,20 @@ import { Platform } from "@shared/index";
 
 const platform = Platform.getInstance()
 
+let subscriptions: Array<{unsubscribe: () => void}> = []
+
 platform.events$.subscribe(
     event => {
-        platform.host.registerCommand('start-game-of-life', (body: HTMLBodyElement) => {
+        platform.host.registerCommand('ui.render-game-of-life', (body: HTMLBodyElement) => {
+            if(!body) {
+                console.error(`Invalid command call [start-game-of-life']. first item must be a dom element`)
+                return
+            }
+
+
+            subscriptions.forEach(subs => subs.unsubscribe())
+            subscriptions = []
+            
             const container = platform.window.document.createElement('div')
 
             const win = body.ownerDocument.defaultView!
@@ -65,7 +76,13 @@ platform.events$.subscribe(
             body.appendChild(container)
             const root = createRoot(container)
             root.render(<GameOfLife windowHeight={win.innerHeight} windowWidth={win.innerWidth} />)
-        })
+            subscriptions.push({
+                unsubscribe: () => {
+                    root.unmount()
+                    container.remove()
+                }
+            })
+        }, {icon: 'eco'})
     }
 )
 
