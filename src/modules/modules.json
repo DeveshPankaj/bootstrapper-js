@@ -6,13 +6,6 @@
     },
     "params": []
   },
-  "app.game-of-life": {
-    "url": "https://deveshpankaj.github.io/bootstrapper-js/dist/game-of-life.bundle.js",
-    "metedata": {
-      "version": "0.0.1"
-    },
-    "params": []
-  },
   "core.modules": {
     "url": "https://deveshpankaj.github.io/bootstrapper-js/dist/modules.bundle.js",
     "metedata": {

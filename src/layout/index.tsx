@@ -116,7 +116,8 @@ export const render = (container: HTMLElement) => {
             </div>
             <div className="content-area" ref={contentRef}>
             </div>
-            <div className="right-nav"></div>
+            <div className="right-nav">
+            </div>
             <div className="footer"></div>
         </>
     )

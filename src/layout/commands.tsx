@@ -8,6 +8,7 @@ const platform = Platform.getInstance()
 export const Commands = ({onCommandClick}: {onCommandClick: (cmd: Command) => void}) => {
 
     const [commands, setCommands] = React.useState<Array<Command>>([])
+    const [expended, setExpended] = React.useState(false)
 
     const onClick = () => {
         console.log("clicked")
@@ -19,13 +20,21 @@ export const Commands = ({onCommandClick}: {onCommandClick: (cmd: Command) => vo
             .pipe(map(commands => commands.filter(command => command.name.startsWith('ui'))))
             .subscribe(_commands => setCommands(_commands))
 
-        return () => subscription.unsubscribe()
+
+        const {remove: removeToggleCommand} = platform.host.registerCommand('core.toggle-navbar', () => {
+            setExpended(state => !state)
+        }, {callable: true})
+
+        return () => {
+            subscription.unsubscribe()
+            removeToggleCommand()
+        }
 
     }, [])
 
     return (
         <div style={{
-            padding: '1rem',
+            padding: '.5rem',
             display: 'flex',
             flexDirection: 'column',
             gap: '0.3rem',
@@ -48,7 +57,7 @@ export const Commands = ({onCommandClick}: {onCommandClick: (cmd: Command) => vo
                         onClick={()=>onCommandClick(command)}
                     >
                         {(command.meta as any)?.icon ? <span className="material-symbols-outlined" style={{cursor: 'pointer'}} onClick={onClick}>{(command.meta as any)?.icon}</span>: null}
-                        {/* {command.name} */}
+                        {expended ? command.name : null}
                     </div>
                 ))
             }
