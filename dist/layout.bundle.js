@@ -34186,6 +34186,7 @@ __webpack_require__.r(__webpack_exports__);
 const platform = _shared_index__WEBPACK_IMPORTED_MODULE_0__.Platform.getInstance();
 const Commands = ({ onCommandClick }) => {
     const [commands, setCommands] = react__WEBPACK_IMPORTED_MODULE_1___default().useState([]);
+    const [expended, setExpended] = react__WEBPACK_IMPORTED_MODULE_1___default().useState(false);
     const onClick = () => {
         console.log("clicked");
     };
@@ -34193,10 +34194,16 @@ const Commands = ({ onCommandClick }) => {
         const subscription = platform.host.commands$
             .pipe((0,rxjs__WEBPACK_IMPORTED_MODULE_2__.map)(commands => commands.filter(command => command.name.startsWith('ui'))))
             .subscribe(_commands => setCommands(_commands));
-        return () => subscription.unsubscribe();
+        const { remove: removeToggleCommand } = platform.host.registerCommand('core.toggle-navbar', () => {
+            setExpended(state => !state);
+        }, { callable: true });
+        return () => {
+            subscription.unsubscribe();
+            removeToggleCommand();
+        };
     }, []);
     return (react__WEBPACK_IMPORTED_MODULE_1___default().createElement("div", { style: {
-            padding: '1rem',
+            padding: '.5rem',
             display: 'flex',
             flexDirection: 'column',
             gap: '0.3rem',
@@ -34212,7 +34219,9 @@ const Commands = ({ onCommandClick }) => {
                 display: 'flex',
                 alignItems: 'center',
                 gap: '1rem'
-            }, onClick: () => onCommandClick(command) }, ((_a = command.meta) === null || _a === void 0 ? void 0 : _a.icon) ? react__WEBPACK_IMPORTED_MODULE_1___default().createElement("span", { className: "material-symbols-outlined", style: { cursor: 'pointer' }, onClick: onClick }, (_b = command.meta) === null || _b === void 0 ? void 0 : _b.icon) : null));
+            }, onClick: () => onCommandClick(command) },
+            ((_a = command.meta) === null || _a === void 0 ? void 0 : _a.icon) ? react__WEBPACK_IMPORTED_MODULE_1___default().createElement("span", { className: "material-symbols-outlined", style: { cursor: 'pointer' }, onClick: onClick }, (_b = command.meta) === null || _b === void 0 ? void 0 : _b.icon) : null,
+            expended ? command.name : null));
     })));
 };
 
@@ -34252,7 +34261,13 @@ class Host {
         this.window.document.adoptedStyleSheets = this.window.document.adoptedStyleSheets.filter(x => x !== style);
     }
     registerCommand(command_name, callback, meta = {}) {
-        this.commands.next([...this.commands.getValue(), Object.freeze({ name: command_name, exec: callback, servicePlatformName: this.platform.name, meta })]);
+        const newCommandObject = Object.freeze({ name: command_name, exec: callback, servicePlatformName: this.platform.name, meta });
+        this.commands.next([...this.commands.getValue(), newCommandObject]);
+        return {
+            remove: () => {
+                this.commands.next(this.commands.getValue().filter(x => x !== newCommandObject));
+            }
+        };
     }
     callCommand(command_name, ...args) {
         const allCommands = this.commands.getValue();

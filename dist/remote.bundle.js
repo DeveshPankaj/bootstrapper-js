@@ -1138,7 +1138,13 @@ class Host {
         this.window.document.adoptedStyleSheets = this.window.document.adoptedStyleSheets.filter(x => x !== style);
     }
     registerCommand(command_name, callback, meta = {}) {
-        this.commands.next([...this.commands.getValue(), Object.freeze({ name: command_name, exec: callback, servicePlatformName: this.platform.name, meta })]);
+        const newCommandObject = Object.freeze({ name: command_name, exec: callback, servicePlatformName: this.platform.name, meta });
+        this.commands.next([...this.commands.getValue(), newCommandObject]);
+        return {
+            remove: () => {
+                this.commands.next(this.commands.getValue().filter(x => x !== newCommandObject));
+            }
+        };
     }
     callCommand(command_name, ...args) {
         const allCommands = this.commands.getValue();
@@ -1592,7 +1598,7 @@ function __disposeResources(env) {
   \**********************************/
 /***/ ((module) => {
 
-module.exports = JSON.parse('{"core.layout":{"url":"https://deveshpankaj.github.io/bootstrapper-js/dist/layout.bundle.js","metedata":{"version":"0.0.1"},"params":[]},"app.game-of-life":{"url":"https://deveshpankaj.github.io/bootstrapper-js/dist/game-of-life.bundle.js","metedata":{"version":"0.0.1"},"params":[]},"core.modules":{"url":"https://deveshpankaj.github.io/bootstrapper-js/dist/modules.bundle.js","metedata":{"version":"0.0.1"},"params":[]}}');
+module.exports = JSON.parse('{"core.layout":{"url":"https://deveshpankaj.github.io/bootstrapper-js/dist/layout.bundle.js","metedata":{"version":"0.0.1"},"params":[]},"core.modules":{"url":"https://deveshpankaj.github.io/bootstrapper-js/dist/modules.bundle.js","metedata":{"version":"0.0.1"},"params":[]}}');
 
 /***/ })
 

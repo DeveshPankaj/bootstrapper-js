@@ -33407,7 +33407,13 @@ class Host {
         this.window.document.adoptedStyleSheets = this.window.document.adoptedStyleSheets.filter(x => x !== style);
     }
     registerCommand(command_name, callback, meta = {}) {
-        this.commands.next([...this.commands.getValue(), Object.freeze({ name: command_name, exec: callback, servicePlatformName: this.platform.name, meta })]);
+        const newCommandObject = Object.freeze({ name: command_name, exec: callback, servicePlatformName: this.platform.name, meta });
+        this.commands.next([...this.commands.getValue(), newCommandObject]);
+        return {
+            remove: () => {
+                this.commands.next(this.commands.getValue().filter(x => x !== newCommandObject));
+            }
+        };
     }
     callCommand(command_name, ...args) {
         const allCommands = this.commands.getValue();
@@ -33586,12 +33592,14 @@ const ModulesComponent = () => {
     //         }
     //     )
     return (react__WEBPACK_IMPORTED_MODULE_0___default().createElement((react__WEBPACK_IMPORTED_MODULE_0___default().Fragment), null,
-        react__WEBPACK_IMPORTED_MODULE_0___default().createElement("div", { style: { padding: '1rem' } }, commans.map((command, idx) => (react__WEBPACK_IMPORTED_MODULE_0___default().createElement("div", { key: `[${idx}]${command.name}` },
-            react__WEBPACK_IMPORTED_MODULE_0___default().createElement("span", { style: { color: 'green' } },
-                "[",
-                command.servicePlatformName,
-                "]"),
-            command.name)))),
+        react__WEBPACK_IMPORTED_MODULE_0___default().createElement("div", { style: { padding: '1rem' } },
+            react__WEBPACK_IMPORTED_MODULE_0___default().createElement("h4", null, "Commands"),
+            commans.map((command, idx) => (react__WEBPACK_IMPORTED_MODULE_0___default().createElement("div", { key: `[${idx}]${command.name}` },
+                react__WEBPACK_IMPORTED_MODULE_0___default().createElement("span", { style: { color: 'green' } },
+                    "[",
+                    command.servicePlatformName,
+                    "]"),
+                command.meta.callable ? react__WEBPACK_IMPORTED_MODULE_0___default().createElement("button", { onClick: _ => command.exec() }, command.name) : command.name)))),
         react__WEBPACK_IMPORTED_MODULE_0___default().createElement("div", { style: {
                 display: "flex",
                 gap: "0.5rem",
@@ -33599,9 +33607,11 @@ const ModulesComponent = () => {
                 width: "30rem",
                 padding: "1rem",
             } },
+            react__WEBPACK_IMPORTED_MODULE_0___default().createElement("h4", null, "Load dunamic module"),
             react__WEBPACK_IMPORTED_MODULE_0___default().createElement("input", { placeholder: "namespace", defaultValue: form.namespace, onChange: ev => form.namespace = ev.target.value }),
             react__WEBPACK_IMPORTED_MODULE_0___default().createElement("textarea", { placeholder: configPlacegholder, style: { height: '10rem' }, defaultValue: configPlacegholder, onChange: ev => form.config = ev.target.value }),
-            react__WEBPACK_IMPORTED_MODULE_0___default().createElement("button", { onClick: _ => loadModule() }, "Load Module"))));
+            react__WEBPACK_IMPORTED_MODULE_0___default().createElement("button", { onClick: _ => loadModule() }, "Load Module")),
+        react__WEBPACK_IMPORTED_MODULE_0___default().createElement("pre", null)));
 };
 
 })();
