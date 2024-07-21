@@ -9,7 +9,12 @@ module.exports = {
     bootstrapper: "./src/index.ts",
     remote: "./src/remote.ts",
     layout: "./src/layout/",
-    'game-of-life': "./src/game-of-life/",
+    sw: "./src/sw.ts",
+    iframe: "./src/projects/iframe/",
+    notepad: "./src/projects/notepad/",
+    'game-of-life': "./src/projects/game-of-life/",
+    'file-explorer': "./src/projects/file-explorer/",
+    'xml-parser': "./src/projects/xml-parser/",
     'modules': "./src/modules/",
   },
   output: {
@@ -24,8 +29,9 @@ module.exports = {
       directory: path.join(__dirname, "public"),
     },
     compress: true,
-    port: 9000,
-    allowedHosts: ["deveshpankaj.github.io"],
+    port: 443,
+    host: '0.0.0.0',
+    allowedHosts: ["all"],
     headers: {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
@@ -46,13 +52,15 @@ module.exports = {
     alias: {
       "@shared": path.resolve(__dirname, 'src/shared/'),
       "@layout": path.resolve(__dirname, 'src/layout/'),
-      "@game-of-life": path.resolve(__dirname, 'src/game-of-life/'),
+      "@game-of-life": path.resolve(__dirname, 'src/projects/game-of-life/'),
+      "@xml-parser": path.resolve(__dirname, 'src/projects/xml-parser/'),
       "@modules": path.resolve(__dirname, 'src/modules'),
     }
   },
   plugins: [
     new HtmlWebpackPlugin({
       path: 'index.html',
+      template: 'public/index.html',
       minify: false,
       chunks: ['bootstrapper']
     }),

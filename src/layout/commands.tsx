@@ -2,27 +2,35 @@ import { Command, Platform } from '@shared/index'
 import React from 'react'
 import { map } from 'rxjs'
 
+
 const platform = Platform.getInstance()
 
-
-export const Commands = ({onCommandClick}: {onCommandClick: (cmd: Command) => void}) => {
+export const Commands = ({onCommandClick, vertical, align='start'}: {onCommandClick: (cmd: Command) => void, vertical?: boolean, align?: 'start'|'center'|'end'}) => {
 
     const [commands, setCommands] = React.useState<Array<Command>>([])
-    const [expended, setExpended] = React.useState(false)
+    const [expended, setExpended] = React.useState(localStorage.getItem('show_taskbar_title') === 'true')
+    const defaultCommands = [
+        'ui.file-explorer', 
+        // 'ui.iframe',
+        'ui.view-commands', 
+        // 'ui.notepad',
+        // 'ui.game',
+        'ui.game-of-life',
+        'ui.xml-parser',
 
-    const onClick = () => {
-        console.log("clicked")
-    }
+    ]
+
 
     React.useEffect(() => {
 
         const subscription = platform.host.commands$
-            .pipe(map(commands => commands.filter(command => command.name.startsWith('ui'))))
+            .pipe(map(commands => defaultCommands.map(cmd => commands.find(command => command.name === cmd)!).filter(x => x)))
             .subscribe(_commands => setCommands(_commands))
 
 
         const {remove: removeToggleCommand} = platform.host.registerCommand('core.toggle-navbar', () => {
             setExpended(state => !state)
+            localStorage.setItem('show_taskbar_title', expended ? 'false' : 'true')
         }, {callable: true})
 
         return () => {
@@ -32,15 +40,17 @@ export const Commands = ({onCommandClick}: {onCommandClick: (cmd: Command) => vo
 
     }, [])
 
+
     return (
         <div style={{
             padding: '.5rem',
             display: 'flex',
-            flexDirection: 'column',
+            flexDirection:  vertical?'column':'row',
             gap: '0.3rem',
             height: '100%',
-            background: '#292a2d',
-            color: '#919191',
+            // background: '#292a2d',
+            color: 'white',
+            justifyContent: align,
         }}>
             {
                 commands.map((command, idx) => (
@@ -55,9 +65,10 @@ export const Commands = ({onCommandClick}: {onCommandClick: (cmd: Command) => vo
                             gap: '1rem'
                         }}
                         onClick={()=>onCommandClick(command)}
+                        title={command.meta?.title as string || command.name}
                     >
-                        {(command.meta as any)?.icon ? <span className="material-symbols-outlined" style={{cursor: 'pointer'}} onClick={onClick}>{(command.meta as any)?.icon}</span>: null}
-                        {expended ? command.name : null}
+                        {(command.meta as any)?.icon ? <span className="material-symbols-outlined" style={{cursor: 'pointer'}}>{(command.meta as any)?.icon}</span>: null}
+                        {expended ? (command.meta?.title as string || command.name) : null}
                     </div>
                 ))
             }

@@ -1,16 +1,46 @@
 {
-  "core.layout": {
-    "url": "https://deveshpankaj.github.io/bootstrapper-js/dist/layout.bundle.js",
+  "001-core.layout": {
+    "url": "/layout.bundle.js",
     "metedata": {
       "version": "0.0.1"
     },
     "params": []
   },
-  "core.modules": {
-    "url": "https://deveshpankaj.github.io/bootstrapper-js/dist/modules.bundle.js",
+  "002-core.modules": {
+    "url": "/modules.bundle.js",
     "metedata": {
       "version": "0.0.1"
     },
     "params": []
+  },
+  "003-core.iframe": {
+      "url": "/iframe.bundle.js",
+      "metedata": {
+        "version": "0.0.1"
+      }
+  },
+  "004-ui.game-of-life": {
+    "url": "/game-of-life.bundle.js",
+    "metedata": {
+      "version": "0.0.1"
+    }
+  },
+  "005-ui.notepad": {
+    "url": "/notepad.bundle.js",
+    "metedata": {
+      "version": "0.0.1"
+    }
+  },
+  "006-ui.xml": {
+    "url": "/xml-parser.bundle.js",
+    "metedata": {
+      "version": "0.0.1"
+    }
+  },
+  "007-ui.file-explorer": {
+    "url": "/file-explorer.bundle.js",
+    "metedata": {
+      "version": "0.0.1"
+    }
   }
 }

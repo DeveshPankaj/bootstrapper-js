@@ -1,0 +1,14 @@
+[
+    {
+        "path": "/usr/desktop/index.html",
+        "file": "usr/desktop/index.html"
+    },
+    {
+        "path": "/usr/desktop/wallpaper.png",
+        "file": "../wp-6.jpeg"
+    },
+    {
+        "path": "/usr/desktop/terminal.png",
+        "file": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/51/Windows_Terminal_logo.svg/1280px-Windows_Terminal_logo.svg.png"
+    }
+]
