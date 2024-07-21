@@ -1,5 +1,5 @@
 import React from "react";
-import { Command, Platform } from "@shared/index";
+import { Command, Platform, UICallbackProps } from "@shared/index";
 import { createRoot } from "react-dom/client";
 
 
@@ -8,7 +8,7 @@ const platform = Platform.getInstance()
 
 let subscriptions: Array<{unsubscribe: () => void}> = []
 
-platform.host.registerCommand('ui.view-commands', (body: HTMLBodyElement) => {
+platform.host.registerCommand('ui.view-commands', (body: HTMLBodyElement, props: UICallbackProps) => {
     subscriptions.forEach(subs => subs.unsubscribe())
     subscriptions = []
 
@@ -22,15 +22,17 @@ platform.host.registerCommand('ui.view-commands', (body: HTMLBodyElement) => {
     body.appendChild(container)
 
     const root = createRoot(container)
+    props.setWindowView(true)
     root.render(<ModulesComponent />)
     subscriptions.push({
         unsubscribe: () => {
             root.unmount()
             container.remove()
+            props.close()
         }
     })
 
-}, {icon: 'code'})
+}, {icon: 'code', title: 'Services explorer'})
 
 
 const ModulesComponent = () => {
@@ -90,6 +92,12 @@ const ModulesComponent = () => {
           ))}
         </div>
 
+        <pre>
+          {
+            JSON.stringify(platform.host.getModulesDetails(), null , 4)
+          }
+        </pre>
+
         <div
           style={{
             display: "flex",
@@ -99,7 +107,7 @@ const ModulesComponent = () => {
             padding: "1rem",
           }}
         >
-          <h4>Load dunamic module</h4>
+          <h4>Load module</h4>
           <input placeholder="namespace" defaultValue={form.namespace} onChange={ev => form.namespace=ev.target.value}></input>
           <textarea placeholder={configPlacegholder} style={{height: '10rem'}} defaultValue={configPlacegholder} onChange={ev => form.config=ev.target.value}></textarea>
           <button onClick={_ => loadModule()}>Load Module</button>

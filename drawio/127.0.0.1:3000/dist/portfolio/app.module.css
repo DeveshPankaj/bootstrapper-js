@@ -1,0 +1,11 @@
+@scope ([id="portfolio"]) {
+  :scope {
+    background: black;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+  > header {
+    background: grey;
+  }
+}
