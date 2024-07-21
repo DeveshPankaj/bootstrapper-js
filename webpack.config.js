@@ -11,6 +11,7 @@ module.exports = {
     layout: "./src/layout/",
     sw: "./src/sw.ts",
     iframe: "./src/projects/iframe/",
+    vscode: "./src/projects/vs-code/",
     notepad: "./src/projects/notepad/",
     'game-of-life': "./src/projects/game-of-life/",
     'file-explorer': "./src/projects/file-explorer/",
@@ -29,8 +30,8 @@ module.exports = {
       directory: path.join(__dirname, "public"),
     },
     compress: true,
-    port: 443,
-    host: '0.0.0.0',
+    // port: 443,
+    // host: '0.0.0.0',
     allowedHosts: ["all"],
     headers: {
       "Access-Control-Allow-Origin": "*",

@@ -12,12 +12,12 @@ export const Commands = ({onCommandClick, vertical, align='start'}: {onCommandCl
     const defaultCommands = [
         'ui.file-explorer', 
         // 'ui.iframe',
+        'ui.vs-code',
         'ui.view-commands', 
         // 'ui.notepad',
         // 'ui.game',
         'ui.game-of-life',
         'ui.xml-parser',
-
     ]
 
 
