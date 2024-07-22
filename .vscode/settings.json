@@ -1,0 +1,6 @@
+{
+    "workbench.colorTheme": "Office Theme (Excel)",
+    "workbench.iconTheme": "vscode-icons",
+    "files.autoSave": "onWindowChange",
+    "editor.formatOnSave": true
+}
