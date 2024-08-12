@@ -142,10 +142,10 @@ const runInitCommands = () => {
   // }
 
   const _commands: Array<string> = [
-    `service('001-core.layout', 'open-window') (command('ui.iframe'), '/usr/desktop/index.html')`,
+    // `service('001-core.layout', 'open-window') (command('ui.iframe'), '/usr/desktop/index.html')`,
     // `service('001-core.layout', 'open-window') (command('ui.notepad'))`,
-    `service('003-core.iframe', 'fullscreen') () `,
-  ]
+    // `service('003-core.iframe', 'fullscreen') () `,
+  ];
   _commands.forEach(runCommand)
 
 
