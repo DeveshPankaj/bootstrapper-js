@@ -120,8 +120,76 @@ const initWindow = () => {
 
 }
 
+const channelRef = {current: null as null | BroadcastChannel}
+const initChannel = () => {
+    type ChannelMessage = {type: string, data: string}
+    const channel = new BroadcastChannel('my_channel')
+    channel.onmessage = (event) => {
+        const data: ChannelMessage = JSON.parse(event.data)
+        // console.log(data)
+        workerRef.current?.postMessage(data)
+    }
+    channel.postMessage(JSON.stringify({type: 'msg', data: 'New tab created'}))
+    channel.postMessage(JSON.stringify({type: 'cmd', data: 'this.getuser()'}))
+    channelRef.current = channel
+}
+
+
+const workerRef = {current: null as null | Worker}
+const initWorker = () => {
+    function startWorker() {
+        const workerCode = `
+            onmessage = function(event) {
+                const receivedMessage = event.data;
+                
+                if(receivedMessage.type === 'reply') console.log(receivedMessage)
+
+                if(receivedMessage.type === 'cmd') {
+                    const factory = new Function('a', 'b', 'return ' + receivedMessage.data)
+                    const context = {
+                        getuser: () => 'Admin'
+                    }
+                    const res = factory.apply(context, [10, 20])
+                    // console.log(res)
+                    // postMessage(res);
+                    const channel = new BroadcastChannel('my_channel')
+                    channel.postMessage(JSON.stringify({type: 'reply', data: res}))
+
+
+                }
+
+                // postMessage(receivedMessage);
+            }
+        `;
+
+        const blob = new Blob([workerCode], { type: "application/javascript" });
+        const workerUrl = URL.createObjectURL(blob);
+        const worker = new Worker(workerUrl);
+
+
+        worker.onmessage = function(event) {
+            console.log(event.data)
+        }
+
+        workerRef.current = worker
+
+
+
+        return worker
+    }
+
+    function stopWorker(worker: Worker) {
+        worker.terminate();
+    }
+
+    const worker = startWorker()
+
+}
+
 window.addEventListener('load', () => {
     initWindow()
+    initWorker()
+    initChannel()
     loadBootstrapScript(localStorage)
 })
 

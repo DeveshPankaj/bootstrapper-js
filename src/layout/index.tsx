@@ -51,7 +51,8 @@ styles.replace(`
     .layout-default {
         // background: #292a2d;
         // color: #919191;
-        height: -webkit-fill-available;
+        // height: -webkit-fill-available;
+        height: 100%;
 
         display: grid;
         grid-template-columns: auto 1fr auto;
@@ -80,6 +81,8 @@ styles.replace(`
 
     .window > iframe {
         border: 0;
+        flex-grow: 1;
+        width: 100%
         width: -webkit-fill-available;
         height: -webkit-fill-available;
     }

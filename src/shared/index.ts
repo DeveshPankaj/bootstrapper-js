@@ -94,25 +94,29 @@ export class Host {
     }
 
     public execCommand(command: string) {
-        console.log(`%c> ${command}`, 'color: green;background:black;font-size:12px')
+      console.log(
+        `%c> ${command}`,
+        "color: green;background:black;font-size:12px"
+      );
 
-        const context = {
-            window: null,
-            document: null,
-            global: null,
-            globalThis: null,
-            service: (moduleName: string, serviceName: string) => {
-              return this.getService(moduleName, serviceName)
-            },
-            command: (commandName: string) => {
-              const allCommands = this.commands.getValue()
-              const _cmd = allCommands.find(x => x.name === commandName);
-              if(!_cmd) throw `Command: [${commandName}] not found`
-              return _cmd
-            }
-          }
-          const factory = new Function(...Object.keys(context), 'return '+command);
-          console.log(factory.call({}, ...Object.values(context)))
+      const context = {
+        window: null,
+        document: null,
+        global: null,
+        globalThis: null,
+        service: (moduleName: string, serviceName: string) => {
+          return this.getService(moduleName, serviceName);
+        },
+        command: (commandName: string) => {
+          const allCommands = this.commands.getValue();
+          const _cmd = allCommands.find((x) => x.name === commandName);
+          if (!_cmd) throw `Command: [${commandName}] not found`;
+          return _cmd;
+        },
+      };
+      //   const factory = new Function(...Object.keys(context), 'return '+command);
+      const factory = new Function(...Object.keys(context), command);
+      console.log(factory.call({}, ...Object.values(context)));
     }
 
     public exec(filepath: string, ...args: string[]) {
@@ -136,13 +140,14 @@ export class Host {
             const fileExt = filepath.split('.').at(-1);
 
             const appExtMap: Record<string, string> = {
-                '': 'ui.notepad',
-                'html': 'ui.iframe',
-                'ts': 'ui.notepad',
-                'png': 'ui.iframe',
-                'txt': 'ui.notepad',
-                'md': 'ui.notepad',
-            }
+              "": "ui.notepad",
+              html: "ui.iframe",
+              ts: "ui.notepad",
+              png: "ui.iframe",
+              txt: "ui.notepad",
+              md: "ui.notepad",
+              run: "ui.notepad",
+            };
 
 
             script = `service('001-core.layout', 'open-window') (command('${appExtMap[fileExt as string]??appExtMap['']}'), '${filepath}'${args.length?', ':''}${args.map(x => `"${x}"`).join(', ')})`;

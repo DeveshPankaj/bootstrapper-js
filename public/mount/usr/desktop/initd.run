@@ -1,0 +1,2 @@
+service('001-core.layout', 'open-window') (command('ui.iframe'), '/usr/desktop/index.html')
+// service('001-core.layout', 'open-window') (command('ui.iframe'), '/usr/desktop/three.html')
