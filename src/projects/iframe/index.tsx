@@ -124,7 +124,7 @@ const App = (props: UICallbackProps & {url: string}) => {
 
     return (
         <div style={{display: 'flex', height: '100%'}}>
-            <iframe src={props.url} ref={iframeRef} style={{border: 0,width: '-webkit-fill-available', height: '-webkit-fill-available'}} />
+            <iframe src={props.url} ref={iframeRef} style={{border: 0,width: '100%', height: '-webkit-fill-available'}} />
         </div>
     )
 }

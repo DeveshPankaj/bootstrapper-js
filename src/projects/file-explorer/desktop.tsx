@@ -17,6 +17,7 @@ export const ListDirConponent = ({ dir, openFile, showFileActions}: { dir?: stri
         '.proj': '/game-icon.png',
         '.html': '/html-icon.png',
         '.png': '/png-icon.png',
+        '.run': '/bash.png',
         '.': '/folder-icon.png',
         '': '/invalid-file-icon.png'
     }

@@ -175,6 +175,12 @@ const App = (props: UICallbackProps & {file: FileType}) => {
     const openIframe = () => {
         platform.host.execCommand(`service('001-core.layout', 'open-window') (command('ui.iframe'), '${props.file.path}')`)
     }
+    
+    const runSource = () => {
+        const code = editorRef.current?.state.doc.toString() || '';
+        console.log(code)
+        platform.host.execCommand(code)
+    }
 
     const ref = React.useRef<HTMLDivElement>(null)
     React.useEffect(() => {
@@ -244,6 +250,7 @@ const App = (props: UICallbackProps & {file: FileType}) => {
                 
                 {props.file.name.endsWith('.html') ? <span className="material-symbols-outlined" style={{cursor: 'pointer'}} onClick={openIframe} aria-label="open_in_browser" title="open in iframe">open_in_browser</span> : null}
                 {props.file.name.endsWith('.png') ? <span className="material-symbols-outlined" style={{cursor: 'pointer'}} onClick={openIframe} aria-label="open_in_browser" title="open in iframe">open_in_browser</span> : null}
+                {props.file.name.endsWith('.run') ? <span className="material-symbols-outlined" style={{cursor: 'pointer'}} onClick={runSource} aria-label="terminal" title="open in terminal">terminal</span> : null}
                 {/* {props.file.name.endsWith('.ts') ? <span className="material-symbols-outlined" style={{cursor: 'pointer'}} onClick={compileTs} aria-label="compile" title="compile">token</span> : null} */}
                 
                 

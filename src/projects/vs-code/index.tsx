@@ -35,7 +35,8 @@ platform.host.registerCommand('ui.vs-code', (body: HTMLBodyElement, props: UICal
         return
     }
 
-    const url = 'https://code-public.pankajdevesh.com/?folder=/config/workspace/react-app';
+    // const url = 'https://code-public.pankajdevesh.com/?folder=/config/workspace/react-app';
+    const url = 'https://vscode.dev';
     
 
     // subscriptions.forEach(subs => subs.unsubscribe())
