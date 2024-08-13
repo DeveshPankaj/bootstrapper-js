@@ -8,19 +8,19 @@ module.exports = {
   entry: {
     bootstrapper: "./src/index.ts",
     remote: "./src/remote.ts",
-    layout: "./src/layout/",
+    layout: "./src/core/layout/",
     sw: "./src/sw.ts",
-    iframe: "./src/projects/iframe/",
-    vscode: "./src/projects/vs-code/",
-    notepad: "./src/projects/notepad/",
-    'game-of-life': "./src/projects/game-of-life/",
-    'file-explorer': "./src/projects/file-explorer/",
-    'xml-parser': "./src/projects/xml-parser/",
-    'modules': "./src/modules/",
+    iframe: "./src/core/iframe/",
+    vscode: "./src/apps/vs-code/",
+    notepad: "./src/apps/notepad/",
+    "game-of-life": "./src/apps/game-of-life/",
+    "file-explorer": "./src/apps/file-explorer/",
+    "xml-parser": "./src/apps/xml-parser/",
+    modules: "./src/modules/",
   },
   output: {
-    filename: '[name].bundle.js',
-    path: path.resolve(__dirname, 'dist'),
+    filename: "[name].bundle.js",
+    path: path.resolve(__dirname, "dist"),
     // publicPath: "http://127.0.0.1:9000"
   },
   devServer: {
@@ -36,34 +36,35 @@ module.exports = {
     headers: {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
-      "Access-Control-Allow-Headers": "X-Requested-With, content-type, Authorization"
-    }
+      "Access-Control-Allow-Headers":
+        "X-Requested-With, content-type, Authorization",
+    },
   },
   module: {
     rules: [
       {
         test: /\.tsx?$/,
-        use: 'ts-loader',
+        use: "ts-loader",
         exclude: /node_modules/,
       },
     ],
   },
   resolve: {
-    extensions: ['.tsx', '.ts', '.js', '.json'],
+    extensions: [".tsx", ".ts", ".js", ".json"],
     alias: {
-      "@shared": path.resolve(__dirname, 'src/shared/'),
-      "@layout": path.resolve(__dirname, 'src/layout/'),
-      "@game-of-life": path.resolve(__dirname, 'src/projects/game-of-life/'),
-      "@xml-parser": path.resolve(__dirname, 'src/projects/xml-parser/'),
-      "@modules": path.resolve(__dirname, 'src/modules'),
-    }
+      "@shared": path.resolve(__dirname, "src/shared/"),
+      "@layout": path.resolve(__dirname, "src/layout/"),
+      "@game-of-life": path.resolve(__dirname, "src/projects/game-of-life/"),
+      "@xml-parser": path.resolve(__dirname, "src/projects/xml-parser/"),
+      "@modules": path.resolve(__dirname, "src/modules"),
+    },
   },
   plugins: [
     new HtmlWebpackPlugin({
-      path: 'index.html',
-      template: 'public/index.html',
+      path: "index.html",
+      template: "public/index.html",
       minify: false,
-      chunks: ['bootstrapper']
+      chunks: ["bootstrapper"],
     }),
   ],
 };

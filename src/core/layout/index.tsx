@@ -1,12 +1,12 @@
-import {filter} from 'rxjs'
+import { filter } from 'rxjs'
 import { Command, Platform } from '@shared/index'
-import {createRoot} from 'react-dom/client'
+import { createRoot } from 'react-dom/client'
 import React from 'react'
 import { Commands } from './commands'
 import { ContextMenu, ContextMenuItem } from './contextmenu'
-import { DESKTOP_CONTAINER_CLASS, WINDOWS_CONTAINER_CLASS, WindowManager } from '../services/window-manager'
-import { FileType } from '../shared/types'
-import { ListDirConponent } from '../projects/file-explorer/desktop'
+import { DESKTOP_CONTAINER_CLASS, WINDOWS_CONTAINER_CLASS, WindowManager } from '../window-manager'
+import { FileType } from '../../shared/types'
+import { ListDirComponent } from '../../apps/file-explorer/desktop'
 import { Header } from './header'
 
 const platform = Platform.getInstance()
@@ -64,7 +64,8 @@ styles.replace(`
             "left-nav content-area right-nav"
             "footer footer footer";
 
-        background-image: url(/wp-8.jpeg);
+        // background-image: url(/wp-8.jpeg);
+        background-image: url(/ubuntu.jpg);
         background-repeat: no-repeat;
         background-size: cover;
 
@@ -232,10 +233,10 @@ export const render = (container: HTMLElement) => {
     container.addEventListener('click', ev => {
         const clickTarget = ev.target as HTMLDivElement;
         const contextTarget = contextMenuRef.current as HTMLDivElement;
-        if(!contextTarget) return;
+        if (!contextTarget) return;
 
 
-        if(!contextTarget.contains(clickTarget)) {
+        if (!contextTarget.contains(clickTarget)) {
             contextTarget.style.display = 'none';
         }
     })
@@ -252,27 +253,27 @@ export const render = (container: HTMLElement) => {
 
     const contextMenuComponentRef = ({
         current: {
-            setItems: (items: Array<ContextMenuItem>) => {},
-            setOnClick: (callback: (item: ContextMenuItem) => void) => {}
+            setItems: (items: Array<ContextMenuItem>) => { },
+            setOnClick: (callback: (item: ContextMenuItem) => void) => { }
         }
     })
 
     const showFileActionsHandler = (file: FileType, event: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
         showContextMenuHandler(event.clientX, event.clientY, [
-            {id: 'edit_file', type:'action', title: 'Edit', cmd: `service('001-core.layout', 'open-window') (command('ui.notepad'), '${file.path}')`},
-            {id: 'open_file', type:'action', title: 'Open', cmd: `service('001-core.layout', 'open-window') (command('ui.iframe'), '${file.path}')`},
-            {id: 'delete_file', type:'action', title: 'Delete', cmd: `service('root', 'fs')('rm', '${file.path}')`},
+            { id: 'edit_file', type: 'action', title: 'Edit', cmd: `service('001-core.layout', 'open-window') (command('ui.notepad'), '${file.path}')` },
+            { id: 'open_file', type: 'action', title: 'Open', cmd: `service('001-core.layout', 'open-window') (command('ui.iframe'), '${file.path}')` },
+            { id: 'delete_file', type: 'action', title: 'Delete', cmd: `service('root', 'fs')('rm', '${file.path}')` },
         ]);
     }
 
 
     const showContextMenuHandler = (x: number, y: number, items: Array<ContextMenuItem>) => {
-        if(!contextMenuRef.current)return;
+        if (!contextMenuRef.current) return;
 
         contextMenuComponentRef.current.setItems(items);
         contextMenuComponentRef.current.setOnClick(item => {
             contextMenuRef.current!.style.display = 'none';
-            if(item.cmd) {
+            if (item.cmd) {
                 platform.host.execCommand(item.cmd)
             }
         });
@@ -287,7 +288,7 @@ export const render = (container: HTMLElement) => {
 
 
     const onCommandClickHandler = (command: Command, ...args: string[]) => {
-        platform.host.execCommand(`service('001-core.layout', 'open-window') (command('${command.name}')${args.length?',':''} ${args.map(x => "'"+x+"'").join(', ')})`)
+        platform.host.execCommand(`service('001-core.layout', 'open-window') (command('${command.name}')${args.length ? ',' : ''} ${args.map(x => "'" + x + "'").join(', ')})`)
 
     }
     root.render(
@@ -297,41 +298,41 @@ export const render = (container: HTMLElement) => {
                 {/* <Commands onCommandClick={onCommandClick} align='end'/> */}
             </div>
             <div className="left-nav">
-                {/* <Commands onCommandClick={onCommandClick} vertical/> */}
+                {/* <Commands onCommandClick={onCommandClick} vertical /> */}
             </div>
             <div className="content-area" ref={contentRef}>
                 <div className={DESKTOP_CONTAINER_CLASS}>
-                    <ListDirConponent openFile={openFile} showFileActions={showFileActionsHandler} />
+                    <ListDirComponent openFile={openFile} showFileActions={showFileActionsHandler} />
                 </div>
                 <div className={WINDOWS_CONTAINER_CLASS}></div>
             </div>
             <div className="right-nav">
-                {/* <Commands onCommandClick={onCommandClick} vertical align='start'/> */}
+                <Commands onCommandClick={onCommandClick} vertical align='start' />
             </div>
             <div className="footer">
-                <Commands onCommandClick={onCommandClickHandler} align='center'/>
+                {/* <Commands onCommandClick={onCommandClickHandler} align='center' /> */}
             </div>
             {/* <div className='toolbar'>
                 <Commands onCommandClick={onCommandClick}/>
             </div> */}
             <div className='contextmenu' ref={contextMenuRef}>
-                <ContextMenu componentRef={obj => contextMenuComponentRef.current = obj}/>
+                <ContextMenu componentRef={obj => contextMenuComponentRef.current = obj} />
             </div>
             {/* <div className='overlay'>
                 <div style={{position: 'absolute', top: '10rem', left: '9rem'}}></div>
             </div> */}
         </>
     )
-    
+
 }
 
 
 // TODO: convert registerContextMenu to ReactHook, to prevent multiple addEventListener
-const registerContextMenu = (container: HTMLElement, ref: React.RefObject<HTMLDivElement>) =>{
+const registerContextMenu = (container: HTMLElement, ref: React.RefObject<HTMLDivElement>) => {
     container.addEventListener('contextmenu', event => {
         event.preventDefault();
         // console.log(event)
-        if(ref.current) {
+        if (ref.current) {
             ref.current.style.display = 'block'
             ref.current.style.top = `${event.clientY}px`
             ref.current.style.left = `${event.clientX}px`
