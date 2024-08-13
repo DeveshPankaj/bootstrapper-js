@@ -1,26 +1,34 @@
 [
-    {
-        "path": "/usr/desktop/index.html",
-        "file": "usr/desktop/index.html"
-    },
-    {
-        "path": "/usr/desktop/three.html",
-        "file": "usr/desktop/three.html"
-    },
-    {
-        "path": "/usr/desktop/three-js-2.html",
-        "file": "usr/desktop/three-js-2.html"
-    },
-    {
-        "path": "/usr/desktop/initd.run",
-        "file": "usr/desktop/initd.run"
-    },
-    {
-        "path": "/usr/desktop/wallpaper.png",
-        "file": "../wp-6.jpeg"
-    },
-    {
-        "path": "/usr/desktop/terminal.png",
-        "file": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/51/Windows_Terminal_logo.svg/1280px-Windows_Terminal_logo.svg.png"
-    }
+  {
+    "path": "/usr/desktop/index.html",
+    "file": "usr/desktop/index.html"
+  },
+  {
+    "path": "/usr/desktop/three.html",
+    "file": "usr/desktop/three.html"
+  },
+  {
+    "path": "/usr/desktop/three-js-2.html",
+    "file": "usr/desktop/three-js-2.html"
+  },
+  {
+    "path": "/usr/desktop/initd.run",
+    "file": "usr/desktop/initd.run"
+  },
+  {
+    "path": "/usr/desktop/temp.html",
+    "file": "usr/desktop/temp.html"
+  },
+  {
+    "path": "/usr/desktop/explorer.js",
+    "file": "usr/desktop/explorer.js"
+  },
+  {
+    "path": "/usr/desktop/wallpaper.png",
+    "file": "../wp-6.jpeg"
+  },
+  {
+    "path": "/usr/desktop/terminal.png",
+    "file": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/51/Windows_Terminal_logo.svg/1280px-Windows_Terminal_logo.svg.png"
+  }
 ]

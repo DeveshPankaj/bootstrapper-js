@@ -3,11 +3,11 @@ import { Platform } from "@shared/index";
 import { FileType } from "@shared/types";
 import { DESKTOP_PATH, appendStyleSheet, getFileExtension } from "@shared/utils";
 
-import { DESKTOP_CONTAINER_CLASS } from "../../services/window-manager";
+import { DESKTOP_CONTAINER_CLASS } from "../../core/window-manager";
 
 const platform = Platform.getInstance()
 
-export const ListDirConponent = ({ dir, openFile, showFileActions}: { dir?: string, openFile: (file: FileType) => void , showFileActions: (file: FileType, event: React.MouseEvent<HTMLDivElement, MouseEvent>) => void}) => {
+export const ListDirComponent = ({ dir, openFile, showFileActions }: { dir?: string, openFile: (file: FileType) => void, showFileActions: (file: FileType, event: React.MouseEvent<HTMLDivElement, MouseEvent>) => void }) => {
 
     dir ??= DESKTOP_PATH;
 
@@ -79,7 +79,7 @@ export const ListDirConponent = ({ dir, openFile, showFileActions}: { dir?: stri
     const rightClickHandler = (file: FileType, event: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
         // console.log(event);
         event.preventDefault();
-        const customEvent = new CustomEvent('showmenu', {detail: {}});
+        const customEvent = new CustomEvent('showmenu', { detail: {} });
         event.target.dispatchEvent(customEvent);
         showFileActions(file, event)
     }

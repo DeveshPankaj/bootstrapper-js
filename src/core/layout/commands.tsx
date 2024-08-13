@@ -5,19 +5,20 @@ import { map } from 'rxjs'
 
 const platform = Platform.getInstance()
 
-export const Commands = ({onCommandClick, vertical, align='start'}: {onCommandClick: (cmd: Command) => void, vertical?: boolean, align?: 'start'|'center'|'end'}) => {
+export const Commands = ({ onCommandClick, vertical, align = 'start' }: { onCommandClick: (cmd: Command) => void, vertical?: boolean, align?: 'start' | 'center' | 'end' }) => {
 
     const [commands, setCommands] = React.useState<Array<Command>>([])
     const [expended, setExpended] = React.useState(localStorage.getItem('show_taskbar_title') === 'true')
     const defaultCommands = [
-        'ui.file-explorer', 
+        'ui.file-explorer',
         // 'ui.iframe',
         'ui.vs-code',
-        'ui.view-commands', 
+        'ui.view-commands',
         // 'ui.notepad',
         // 'ui.game',
         'ui.game-of-life',
         'ui.xml-parser',
+        'explorer'
     ]
 
 
@@ -28,10 +29,10 @@ export const Commands = ({onCommandClick, vertical, align='start'}: {onCommandCl
             .subscribe(_commands => setCommands(_commands))
 
 
-        const {remove: removeToggleCommand} = platform.host.registerCommand('core.toggle-navbar', () => {
+        const { remove: removeToggleCommand } = platform.host.registerCommand('core.toggle-navbar', () => {
             setExpended(state => !state)
             localStorage.setItem('show_taskbar_title', expended ? 'false' : 'true')
-        }, {callable: true})
+        }, { callable: true })
 
         return () => {
             subscription.unsubscribe()
@@ -40,12 +41,11 @@ export const Commands = ({onCommandClick, vertical, align='start'}: {onCommandCl
 
     }, [])
 
-
     return (
         <div style={{
             padding: '.5rem',
             display: 'flex',
-            flexDirection:  vertical?'column':'row',
+            flexDirection: vertical ? 'column' : 'row',
             gap: '0.3rem',
             height: '100%',
             // background: '#292a2d',
@@ -54,7 +54,7 @@ export const Commands = ({onCommandClick, vertical, align='start'}: {onCommandCl
         }}>
             {
                 commands.map((command, idx) => (
-                    <div key={`[${idx}]${command.name}`} 
+                    <div key={`[${idx}]${command.name}`}
                         aria-label={command.name}
                         style={{
                             cursor: 'pointer',
@@ -64,10 +64,10 @@ export const Commands = ({onCommandClick, vertical, align='start'}: {onCommandCl
                             alignItems: 'center',
                             gap: '1rem'
                         }}
-                        onClick={()=>onCommandClick(command)}
+                        onClick={() => onCommandClick(command)}
                         title={command.meta?.title as string || command.name}
                     >
-                        {(command.meta as any)?.icon ? <span className="material-symbols-outlined" style={{cursor: 'pointer'}}>{(command.meta as any)?.icon}</span>: null}
+                        {(command.meta as any)?.icon ? <span className="material-symbols-outlined" style={{ cursor: 'pointer' }}>{(command.meta as any)?.icon}</span> : null}
                         {expended ? (command.meta?.title as string || command.name) : null}
                     </div>
                 ))

@@ -17,7 +17,7 @@ const Babel = require('./babel.js');
 const platform = Platform.getInstance()
 
 const cacheName = 'MyFancyCacheName_v1';
-const cacheRef = {current: null as Cache|null}
+const cacheRef = { current: null as Cache | null }
 
 // caches.open(cacheName).then((cache) => {cacheRef.current = cache})
 const putCache = (key: string, value: string) => {
@@ -27,39 +27,39 @@ const putCache = (key: string, value: string) => {
         '.png': 'image/png'
     } as const
     const ext = getFileExtension(key)
-    cacheRef.current?.put(key, 
-        new Response(value, { headers: {'Content-Type': (extContentTypeMap[ext as keyof typeof extContentTypeMap] || 'text/html')}})
+    cacheRef.current?.put(key,
+        new Response(value, { headers: { 'Content-Type': (extContentTypeMap[ext as keyof typeof extContentTypeMap] || 'text/html') } })
     )
 }
 
 
 const fullScreenCallbackRef = {
-    current: (...args: any[]) => {}
+    current: (...args: any[]) => { }
 }
 const resizeCallbackRef = {
-    current: (...args: any[]) => {}
+    current: (...args: any[]) => { }
 }
 platform.register('fullscreen', (...args: any[]) => fullScreenCallbackRef.current(...args))
 platform.register('resize', (...args: any[]) => resizeCallbackRef.current(...args))
 
 platform.host.registerCommand('ui.notepad', (body: HTMLBodyElement, props: UICallbackProps, file?: FileType) => {
-    
 
-    if(typeof file === 'string') {
+
+    if (typeof file === 'string') {
         const fs = platform.host.getFS()
         file = {
             name: (file as string).split('/').at(-1)!,
             path: file,
-            meta: {ext: getFileExtension(file)},
+            meta: { ext: getFileExtension(file) },
             type: fs.statSync(file).isDirectory() ? 'dir' : 'file'
-        }       
+        }
     }
 
-    if(!file) {
+    if (!file) {
         file = {
             name: '123.js',
             path: '/123.js',
-            meta: {ext: '.html'},
+            meta: { ext: '.html' },
             type: 'file'
         }
     }
@@ -118,26 +118,26 @@ platform.host.registerCommand('ui.notepad', (body: HTMLBodyElement, props: UICal
 
     body.ownerDocument.adoptedStyleSheets.push(styles)
 
-    const move = (diff: {[key in 'left'|'right'|'top'|'bottom']?: number}) => {
+    const move = (diff: { [key in 'left' | 'right' | 'top' | 'bottom']?: number }) => {
         return () => {
             const rect = props.getBoundingClientRect()
-            const dir = {left:0, right:0, top: 0, bottom: 0, ...diff}
-            const newPosition = {...rect, left: rect.left+dir.left, right: rect.right+dir.right, top: rect.top+dir.top, bottom: rect.bottom+dir.bottom}
+            const dir = { left: 0, right: 0, top: 0, bottom: 0, ...diff }
+            const newPosition = { ...rect, left: rect.left + dir.left, right: rect.right + dir.right, top: rect.top + dir.top, bottom: rect.bottom + dir.bottom }
             props.setBoundingClientRect(newPosition)
         }
     }
 
-    move({right:100, left:100, top: 100, bottom: 100})();
+    move({ right: 100, left: 100, top: 100, bottom: 100 })();
 
     props.setTitle(file.path)
     props.setWindowView(true)
-    render(container, {...props, file})
+    render(container, { ...props, file })
     fullScreenCallbackRef.current = props.toggleFullScreen
     resizeCallbackRef.current = props.setBoundingClientRect
 
-}, {icon: 'edit_note', title: 'Edit (about.html)', fullScreen: false})
+}, { icon: 'edit_note', title: 'Edit (about.html)', fullScreen: false })
 
-const render = (container: HTMLElement, props: UICallbackProps & {file: FileType}) => {
+const render = (container: HTMLElement, props: UICallbackProps & { file: FileType }) => {
 
     const root = createRoot(container)
 
@@ -145,29 +145,29 @@ const render = (container: HTMLElement, props: UICallbackProps & {file: FileType
 }
 
 
-const App = (props: UICallbackProps & {file: FileType}) => {
+const App = (props: UICallbackProps & { file: FileType }) => {
     const fs = platform.host.getFS();
     const scriptRef = useRef<string>(fs.readFileSync(props.file.path).toString() || '')
-    const editorRef = useRef<EditorView|null>(null);
+    const editorRef = useRef<EditorView | null>(null);
     const save = () => {
-        if(editorRef.current){
+        if (editorRef.current) {
             scriptRef.current = editorRef.current.state.doc.toString()
         }
-        
+
         fs.writeFileSync(props.file.path, scriptRef.current);
-        
+
         // localStorage.setItem(props.file.path, scriptRef.current)
         // putCache(`/cache${props.file.path}`, scriptRef.current)
 
         // platform.host.getServiceWorker()?.postMessage({type: "OPEN_SOCKET", payload: {id: 1}});
     }
-    
 
-    const move = (diff: {[key in 'left'|'right'|'top'|'bottom']?: number}) => {
+
+    const move = (diff: { [key in 'left' | 'right' | 'top' | 'bottom']?: number }) => {
         return () => {
             const rect = props.getBoundingClientRect()
-            const dir = {left:0, right:0, top: 0, bottom: 0, ...diff}
-            const newPosition = {...rect, left: rect.left+dir.left, right: rect.right+dir.right, top: rect.top+dir.top, bottom: rect.bottom+dir.bottom}
+            const dir = { left: 0, right: 0, top: 0, bottom: 0, ...diff }
+            const newPosition = { ...rect, left: rect.left + dir.left, right: rect.right + dir.right, top: rect.top + dir.top, bottom: rect.bottom + dir.bottom }
             props.setBoundingClientRect(newPosition)
         }
     }
@@ -175,26 +175,42 @@ const App = (props: UICallbackProps & {file: FileType}) => {
     const openIframe = () => {
         platform.host.execCommand(`service('001-core.layout', 'open-window') (command('ui.iframe'), '${props.file.path}')`)
     }
-    
+
     const runSource = () => {
         const code = editorRef.current?.state.doc.toString() || '';
-        console.log(code)
         platform.host.execCommand(code)
+    }
+
+
+    const runningInstencesRef = React.useRef<Array<() => void>>([])
+    const runJS = () => {
+        runningInstencesRef.current.forEach(ref => ref())
+
+        const code = editorRef.current?.state.doc.toString() || '';
+
+        const ctx = { platform, React, ReactDOM: { createRoot } }
+        const program = Babel.transform(code, { presets: ['env', "react"] });
+        // console.log(program);
+        // const factory = new Function(...Object.keys(ctx), program.code);
+        // factory.call(ctx, ...Object.values(ctx));
+
+        const destroy = platform.host.execString(program.code)
+        runningInstencesRef.current.push(destroy)
     }
 
     const ref = React.useRef<HTMLDivElement>(null)
     React.useEffect(() => {
-        if(!ref.current)return;
+        if (!ref.current) return;
 
         editorRef.current = new EditorView({
             parent: ref.current,
             state: EditorState.create({
-              doc: scriptRef.current,
-              extensions: [
-                basicSetup,
-                props.file.name.endsWith('.html') ? html() : javascript({typescript: props.file.name.endsWith('.ts')||props.file.name.endsWith('.tsx')}),
-                placeholder("Type something here...")
-              ]
+                doc: scriptRef.current,
+                extensions: [
+                    basicSetup,
+                    props.file.name.endsWith('.html') ? html() : javascript({ typescript: props.file.name.endsWith('.ts') || props.file.name.endsWith('.tsx') }),
+                    placeholder("Type something here...")
+                ]
             })
         });
 
@@ -221,8 +237,8 @@ const App = (props: UICallbackProps & {file: FileType}) => {
     //     const jsBlob = new Blob([code], {type: 'application/javascript'});
     //     const url = URL.createObjectURL(jsBlob)
 
-       
-    
+
+
     //     const loadModule = () => {
     //         const configPlacegholder = `{
     //             "url": "${url}",
@@ -244,16 +260,17 @@ const App = (props: UICallbackProps & {file: FileType}) => {
     // }
 
     return (
-        <div style={{display: 'flex', height: '100%'}}>
-            <div style={{width: '3rem', height: '100%', background: 'black', color: 'white', flexShrink: '0', display: 'flex', flexDirection:'column', alignItems: 'center', gap: '.5rem'}}>
-                <span className="material-symbols-outlined" style={{cursor: 'pointer'}} onClick={save} aria-label="save" title="save">save</span>
-                
-                {props.file.name.endsWith('.html') ? <span className="material-symbols-outlined" style={{cursor: 'pointer'}} onClick={openIframe} aria-label="open_in_browser" title="open in iframe">open_in_browser</span> : null}
-                {props.file.name.endsWith('.png') ? <span className="material-symbols-outlined" style={{cursor: 'pointer'}} onClick={openIframe} aria-label="open_in_browser" title="open in iframe">open_in_browser</span> : null}
-                {props.file.name.endsWith('.run') ? <span className="material-symbols-outlined" style={{cursor: 'pointer'}} onClick={runSource} aria-label="terminal" title="open in terminal">terminal</span> : null}
+        <div style={{ display: 'flex', height: '100%' }}>
+            <div style={{ width: '3rem', height: '100%', background: 'black', color: 'white', flexShrink: '0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '.5rem' }}>
+                <span className="material-symbols-outlined" style={{ cursor: 'pointer' }} onClick={save} aria-label="save" title="save">save</span>
+
+                {props.file.name.endsWith('.html') ? <span className="material-symbols-outlined" style={{ cursor: 'pointer' }} onClick={openIframe} aria-label="open_in_browser" title="open in iframe">open_in_browser</span> : null}
+                {props.file.name.endsWith('.png') ? <span className="material-symbols-outlined" style={{ cursor: 'pointer' }} onClick={openIframe} aria-label="open_in_browser" title="open in iframe">open_in_browser</span> : null}
+                {props.file.name.endsWith('.run') ? <span className="material-symbols-outlined" style={{ cursor: 'pointer' }} onClick={runSource} aria-label="terminal" title="open in terminal">terminal</span> : null}
+                {props.file.name.endsWith('.js') ? <span className="material-symbols-outlined" style={{ cursor: 'pointer' }} onClick={runJS} aria-label="run" title="Run">terminal</span> : null}
                 {/* {props.file.name.endsWith('.ts') ? <span className="material-symbols-outlined" style={{cursor: 'pointer'}} onClick={compileTs} aria-label="compile" title="compile">token</span> : null} */}
-                
-                
+
+
                 {/* <button onClick={save} >save</button> */}
                 {/* <button onClick={props.close} >close</button> */}
                 {/* <button onClick={props.toggleFullScreen} >toggleFullScreen</button> */}
@@ -263,7 +280,7 @@ const App = (props: UICallbackProps & {file: FileType}) => {
                 {/* <button onClick={move({top:10, bottom: 10})} >moveDown</button> */}
 
             </div>
-            <div ref={ref} style={{width: 'calc(100% - 3rem)', height: '100%'}}></div>
+            <div ref={ref} style={{ width: 'calc(100% - 3rem)', height: '100%' }}></div>
             {/* <textarea defaultValue={scriptRef.current} onChange={ev => scriptRef.current=ev.target.value}></textarea> */}
         </div>
     )

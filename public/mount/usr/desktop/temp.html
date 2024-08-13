@@ -1,0 +1,72 @@
+<script type="module">
+    const platform = window.platform || null
+    let exec = () => { }
+    if (platform) {
+        const openProfileCommand = `service('001-core.layout', 'open-window') (command('ui.iframe'), '/usr/desktop/index.html');`
+        const openThreeJSCommand = `service('001-core.layout', 'open-window') (command('ui.iframe'), '/usr/desktop/three.html');`
+        // const command = `service('001-core.layout', 'open-window') (command('ui.iframe'), '/usr/desktop/temp.html');`
+        document.getElementById('openProfileButton').onclick = () => platform.host.execCommand(openProfileCommand);
+        document.getElementById('openThreeJSButton').onclick = () => platform.host.execCommand(openThreeJSCommand);
+    } const code = `
+    
+    onmessage = function(event) {
+      const { id, type, payload } = event.data;
+
+      const {url} = payload
+      fetch(url)
+          .then(res => res.json())
+          .then(data => {
+              const result = { status: 'success', data: data };
+              postMessage({ id, result });
+          })
+          
+
+      
+      // const result = { status: 'success', data: payload };
+      // postMessage({ id, result }); // Return response to caller with the same id
+    }
+  `;
+
+    const blob = new Blob([code], { type: "application/javascript" });
+    const workerUrl = URL.createObjectURL(blob);
+    const worker = new Worker(workerUrl);
+
+    function postMessageToWorker(worker, message) {
+        return new Promise((resolve, reject) => {
+            const id = Date.now() + Math.random(); // Unique ID for each request
+
+            const handler = function (event) {
+                if (event.data.id === id) {
+                    resolve(event.data.result); // Resolve the promise with worker's response
+                    worker.removeEventListener('message', handler); // Clean up event listener
+                }
+            };
+
+            worker.addEventListener('message', handler);
+
+            worker.onerror = function (error) {
+                reject(error); // Reject the promise if there's an error
+                worker.removeEventListener('message', handler); // Clean up on error
+            };
+
+            worker.postMessage({ ...message, id }); // Send the message to the worker with the unique id
+        });
+    }
+
+    // const url = 'https://jsonplaceholder.org/posts/1';
+    // postMessageToWorker(worker, { type: 'GET', payload: { url: url } })
+    //   .then(response => {
+    //     console.log('Worker response 1:', response);
+    //   })
+    //   .catch(error => {
+    //     console.error('Worker error 1:', error);
+    //   });
+
+</script>
+
+<button id="openProfileButton">
+    Open Profile
+</button>
+<button id="openThreeJSButton">
+    Open ThreeJS
+</button>

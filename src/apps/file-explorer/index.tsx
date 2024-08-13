@@ -10,12 +10,12 @@ import { createRoot } from "react-dom/client";
 // import { placeholder } from "@codemirror/view";
 import { FileType } from '@shared/types';
 import { getFileExtension } from "@shared/utils";
-import { ListDirConponent } from "./desktop";
+import { ListDirComponent } from "./desktop";
 
 const platform = Platform.getInstance()
 
 const cacheName = 'MyFancyCacheName_v1';
-const cacheRef = {current: null as Cache|null}
+const cacheRef = { current: null as Cache | null }
 
 // caches.open(cacheName).then((cache) => {cacheRef.current = cache})
 // const putCache = (key: string, value: string) => {
@@ -25,30 +25,30 @@ const cacheRef = {current: null as Cache|null}
 // }
 
 const fullScreenCallbackRef = {
-    current: (...args: any[]) => {}
+    current: (...args: any[]) => { }
 }
 const resizeCallbackRef = {
-    current: (...args: any[]) => {}
+    current: (...args: any[]) => { }
 }
 platform.register('fullscreen', (...args: any[]) => fullScreenCallbackRef.current(...args))
 platform.register('resize', (...args: any[]) => resizeCallbackRef.current(...args))
 platform.host.registerCommand('ui.file-explorer', (body: HTMLBodyElement, props: UICallbackProps, file: FileType) => {
     const container = platform.window.document.createElement('div')
-    if(typeof file === 'string') {
+    if (typeof file === 'string') {
         const fs = platform.host.getFS()
         file = {
             name: (file as string).split('/').at(-1)!,
             path: file,
-            meta: {ext: getFileExtension(file)},
+            meta: { ext: getFileExtension(file) },
             type: fs.statSync(file).isDirectory() ? 'dir' : 'file'
-        }       
+        }
     }
-    
-    if(!file) {
+
+    if (!file) {
         file = {
             name: '',
             path: '/',
-            meta: {ext: '.'},
+            meta: { ext: '.' },
             type: 'dir'
         }
     }
@@ -126,27 +126,27 @@ platform.host.registerCommand('ui.file-explorer', (body: HTMLBodyElement, props:
 
     body.ownerDocument.adoptedStyleSheets.push(styles)
 
-    const move = (diff: {[key in 'left'|'right'|'top'|'bottom']?: number}) => {
+    const move = (diff: { [key in 'left' | 'right' | 'top' | 'bottom']?: number }) => {
         return () => {
             const rect = props.getBoundingClientRect()
-            const dir = {left:0, right:0, top: 0, bottom: 0, ...diff}
-            const newPosition = {...rect, left: rect.left+dir.left, right: rect.right+dir.right, top: rect.top+dir.top, bottom: rect.bottom+dir.bottom}
+            const dir = { left: 0, right: 0, top: 0, bottom: 0, ...diff }
+            const newPosition = { ...rect, left: rect.left + dir.left, right: rect.right + dir.right, top: rect.top + dir.top, bottom: rect.bottom + dir.bottom }
             props.setBoundingClientRect(newPosition)
         }
     }
 
-    move({right:100, left:100, top: 100, bottom: 100})();
+    move({ right: 100, left: 100, top: 100, bottom: 100 })();
 
     // props.setTitle(`File Explorer (${file.path})`)
 
     props.setWindowView(true)
-    render(container, {...props, file})
+    render(container, { ...props, file })
     fullScreenCallbackRef.current = props.toggleFullScreen
     resizeCallbackRef.current = props.setBoundingClientRect
 
-}, {icon: 'folder', title: 'File explorer', fullScreen: false})
+}, { icon: 'folder', title: 'File explorer', fullScreen: false })
 
-const render = (container: HTMLElement, props: UICallbackProps & {file: FileType}) => {
+const render = (container: HTMLElement, props: UICallbackProps & { file: FileType }) => {
 
     const root = createRoot(container)
     root.render(<App {...props} />)
@@ -154,7 +154,7 @@ const render = (container: HTMLElement, props: UICallbackProps & {file: FileType
 
 
 
-const App = (props: UICallbackProps & {file: FileType}) => {
+const App = (props: UICallbackProps & { file: FileType }) => {
     const fs = platform.host.getFS()
     const dirRef = React.useRef(props.file.path || '/')
     const [dirList, setDirList] = React.useState<Array<string>>(fs.readdirSync(dirRef.current || '/'))
@@ -163,7 +163,7 @@ const App = (props: UICallbackProps & {file: FileType}) => {
         const selectedFilePath = fs.realpathSync(dirRef.current.endsWith('/') ? `${dirRef.current}${file}` : `${dirRef.current}/${file}`);
         const stat = fs.statSync(selectedFilePath);
 
-        if(stat.isDirectory()) {
+        if (stat.isDirectory()) {
             dirRef.current = selectedFilePath;
             console.log(selectedFilePath)
             setDirList(fs.readdirSync(dirRef.current))
@@ -178,14 +178,14 @@ const App = (props: UICallbackProps & {file: FileType}) => {
 
     const makeDirClick = () => {
         const dirName = prompt('Dir name?')
-        if(!dirName) return;
+        if (!dirName) return;
         const dirPath = dirRef.current.endsWith('/') ? `${dirRef.current}${dirName}` : `${dirRef.current}/${dirName}`
         fs.mkdirSync(dirPath)
         setDirList(fs.readdirSync(dirRef.current))
     }
     const makeFileClick = () => {
         const fileName = prompt('File name?')
-        if(!fileName) return;
+        if (!fileName) return;
         const filePath = dirRef.current.endsWith('/') ? `${dirRef.current}${fileName}` : `${dirRef.current}/${fileName}`
         fs.writeFileSync(filePath, '')
         setDirList(fs.readdirSync(dirRef.current))
@@ -196,42 +196,42 @@ const App = (props: UICallbackProps & {file: FileType}) => {
     }
     const showFileActionsHandler = (file: FileType, event: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
         const openContextMenu = platform.host.getService('001-core.layout', 'show-context-menu') as Function;
-        if(!openContextMenu)return;
+        if (!openContextMenu) return;
         const rect = props.getBoundingClientRect()
 
 
         const actions = [];
         const stats = fs.statSync(file.path)
-        if(stats.isFile()) {
-            actions.push({id: 'edit_file', type:'action', title: 'Edit', cmd: `service('001-core.layout', 'open-window') (command('ui.notepad'), '${file.path}')`})
-            actions.push({id: 'open_file', type:'action', title: 'Open', cmd: `service('001-core.layout', 'open-window') (command('ui.iframe'), '${file.path}')`})
-            actions.push({id: 'delete_file', type:'action', title: 'Delete', cmd: `service('root', 'fs')('rm', '${file.path}')`})
+        if (stats.isFile()) {
+            actions.push({ id: 'edit_file', type: 'action', title: 'Edit', cmd: `service('001-core.layout', 'open-window') (command('ui.notepad'), '${file.path}')` })
+            actions.push({ id: 'open_file', type: 'action', title: 'Open', cmd: `service('001-core.layout', 'open-window') (command('ui.iframe'), '${file.path}')` })
+            actions.push({ id: 'delete_file', type: 'action', title: 'Delete', cmd: `service('root', 'fs')('rm', '${file.path}')` })
         }
 
         else {
-            actions.push({id: 'open_file', type:'action', title: 'Open in explorer', cmd: `service('001-core.layout', 'open-window') (command('ui.file-explorer'), '${file.path}')`})
+            actions.push({ id: 'open_file', type: 'action', title: 'Open in explorer', cmd: `service('001-core.layout', 'open-window') (command('ui.file-explorer'), '${file.path}')` })
         }
 
-        openContextMenu(event.clientX+rect.x, event.clientY+rect.y, actions)
+        openContextMenu(event.clientX + rect.x, event.clientY + rect.y, actions)
     }
 
 
 
     return (
-        <div style={{display: 'flex', height: '100%', flexDirection: 'column'}} className="file-explorer">
+        <div style={{ display: 'flex', height: '100%', flexDirection: 'column' }} className="file-explorer">
             <header>
-                <div style={{display: 'flex', alignItems: "center", gap: '.5rem'}}>
-                    {dirRef.current != '/' ? <span className="material-symbols-outlined" style={{cursor: 'pointer'}} onClick={() => open('..')} aria-label="back" title="back">reply</span> : null}
+                <div style={{ display: 'flex', alignItems: "center", gap: '.5rem' }}>
+                    {dirRef.current != '/' ? <span className="material-symbols-outlined" style={{ cursor: 'pointer' }} onClick={() => open('..')} aria-label="back" title="back">reply</span> : null}
                     <span>{dirRef.current}</span>
                 </div>
-                <div style={{display: 'flex', alignItems: "center"}} >
-                    <span className="material-symbols-outlined" style={{cursor: 'pointer'}} onClick={makeDirClick} aria-label="create_new_folder" title="create folder">create_new_folder</span>
-                    <span className="material-symbols-outlined" style={{cursor: 'pointer'}} onClick={makeFileClick} aria-label="create_file" title="create file">post_add</span>
+                <div style={{ display: 'flex', alignItems: "center" }} >
+                    <span className="material-symbols-outlined" style={{ cursor: 'pointer' }} onClick={makeDirClick} aria-label="create_new_folder" title="create folder">create_new_folder</span>
+                    <span className="material-symbols-outlined" style={{ cursor: 'pointer' }} onClick={makeFileClick} aria-label="create_file" title="create file">post_add</span>
                 </div>
                 {/* <div>
                     <span className="material-symbols-outlined" style={{cursor: 'pointer'}} onClick={props.close} aria-label="create_file" title="create file">close</span>
                 </div> */}
-                
+
                 {/* <button onClick={makeDirClick}>New Diractory</button>
                 <button onClick={makeFileClick}>New File</button> */}
             </header>
@@ -241,7 +241,7 @@ const App = (props: UICallbackProps & {file: FileType}) => {
                     dirList.map(file => <div key={`${dirRef.current}/${file}`} onClick={() => open(file)}>{file}</div>)
                 } */}
 
-                <ListDirConponent dir={dirRef.current} openFile={openFile} showFileActions={showFileActionsHandler}/>
+                <ListDirComponent dir={dirRef.current} openFile={openFile} showFileActions={showFileActionsHandler} />
             </section>
         </div>
     )
