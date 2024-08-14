@@ -1,5 +1,8 @@
-service('001-core.layout', 'open-window') (command('ui.iframe'), '/usr/desktop/index.html');
-service('003-core.iframe', 'fullscreen') ();
+// Load file explorer
+service('root', 'exec') ('/usr/desktop/explorer.js');
+
+// service('001-core.layout', 'open-window') (command('ui.iframe'), '/usr/desktop/index.html');
+// service('003-core.iframe', 'fullscreen') ();
 
 
 // service('001-core.layout', 'open-window') (command('ui.iframe'), '/usr/desktop/three.html');

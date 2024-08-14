@@ -12,7 +12,7 @@ import { placeholder } from "@codemirror/view";
 import { FileType } from '@shared/types';
 import { getFileExtension } from "@shared/utils";
 
-const Babel = require('./babel.js');
+// const Babel = require('./babel.js');
 
 const platform = Platform.getInstance()
 
@@ -188,13 +188,13 @@ const App = (props: UICallbackProps & { file: FileType }) => {
 
         const code = editorRef.current?.state.doc.toString() || '';
 
-        const ctx = { platform, React, ReactDOM: { createRoot } }
-        const program = Babel.transform(code, { presets: ['env', "react"] });
+        // const ctx = { platform, React, ReactDOM: { createRoot } }
+        // const program = Babel.transform(code, { presets: ['env', "react"] });
         // console.log(program);
         // const factory = new Function(...Object.keys(ctx), program.code);
         // factory.call(ctx, ...Object.values(ctx));
 
-        const destroy = platform.host.execString(program.code)
+        const destroy = platform.host.execString(code)
         runningInstencesRef.current.push(destroy)
     }
 

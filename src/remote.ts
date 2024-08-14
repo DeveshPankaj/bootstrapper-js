@@ -151,10 +151,11 @@ const runInitCommands = () => {
 
 
 
-  // const initd: Array<Array<string>> = [
-  //   ['/usr/desktop/index.html']
-  // ];
-  // initd.forEach(command => host.exec(command[0], ...command.slice(1)))
+  const initd: Array<Array<string>> = [
+    // ['/usr/desktop/index.html'],
+    ['/usr/desktop/initd.run']
+  ];
+  initd.forEach(command => host.exec(command[0], ...command.slice(1)))
 
 }
 
@@ -206,8 +207,6 @@ platform.register('fs', (cmd: string, ...args: string[]) => {
   console.log(cmd, args);
   //@ts-ignore
   const _fs = window.fs as typeof fs;
-
-
   switch(cmd) {
     case "rm":
       for(let filePath of args) {
@@ -217,8 +216,8 @@ platform.register('fs', (cmd: string, ...args: string[]) => {
       }
       break;
   }
-
 })
+platform.register('exec', platform.host.exec.bind(platform.host))
 
 const windowService = new WindowService(window, window.document.body);
 modules.subscribe((modules) => loadModules(modules));
