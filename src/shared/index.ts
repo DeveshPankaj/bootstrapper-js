@@ -1,6 +1,8 @@
 import { Module } from "@modules/modules"
 import { BehaviorSubject, Observable, Subject } from "rxjs"
 import type fs from 'fs'
+const Babel = require('./babel.js');
+
 
 declare global{
     interface Window {
@@ -162,8 +164,10 @@ export class Host {
       return () => {};
     }
 
-    const loadModule = (source: string) => {
-      const jsBlob = new Blob([source], { type: "application/javascript" });
+    const runJS = (source: string) => {
+      const program = Babel.transform(source, { presets: ['env', "react"] });
+
+      const jsBlob = new Blob([program.code], { type: "application/javascript" });
       const url = URL.createObjectURL(jsBlob);
       const configPlacegholder = `{
               "url": "${url}",
@@ -185,7 +189,7 @@ export class Host {
 
     // const worker = runAsRoot(source);
     // const worker = startWorker(source);
-    const worker = loadModule(source);
+    const worker = runJS(source);
     return worker;
   }
 
@@ -218,14 +222,27 @@ export class Host {
         png: "ui.iframe",
         txt: "ui.notepad",
         md: "ui.notepad",
-        run: "ui.notepad",
       };
 
-      script = `service('001-core.layout', 'open-window') (command('${
-        appExtMap[fileExt as string] ?? appExtMap[""]
-      }'), '${filepath}'${args.length ? ", " : ""}${args
-        .map((x) => `"${x}"`)
-        .join(", ")})`;
+      if (fileExt === 'js') {
+        const fs = this.getFS()
+        const source = fs.readFileSync(filepath)
+        this.execString(source.toString())
+        console.log(this.platform)
+        return;
+      }
+
+      else if (fileExt === 'run') {
+        const fs = this.getFS()
+        const source = fs.readFileSync(filepath)
+        this.execCommand(source.toString())
+        return;
+      }
+
+      else {
+        script = `service('001-core.layout', 'open-window') (command('${appExtMap[fileExt as string] ?? appExtMap[""]}'), '${filepath}'${args.length ? ", " : ""}${args.map((x) => `"${x}"`).join(", ")})`;
+      }
+
 
       // console.log(fileExt)
       // this.execCommand(script)

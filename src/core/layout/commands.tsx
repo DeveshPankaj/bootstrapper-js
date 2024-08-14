@@ -10,7 +10,8 @@ export const Commands = ({ onCommandClick, vertical, align = 'start' }: { onComm
     const [commands, setCommands] = React.useState<Array<Command>>([])
     const [expended, setExpended] = React.useState(localStorage.getItem('show_taskbar_title') === 'true')
     const defaultCommands = [
-        'ui.file-explorer',
+        'explorer',
+        // 'ui.file-explorer',
         // 'ui.iframe',
         'ui.vs-code',
         'ui.view-commands',
@@ -18,7 +19,6 @@ export const Commands = ({ onCommandClick, vertical, align = 'start' }: { onComm
         // 'ui.game',
         'ui.game-of-life',
         'ui.xml-parser',
-        'explorer'
     ]
 
 
