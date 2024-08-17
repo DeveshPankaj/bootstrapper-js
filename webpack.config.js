@@ -20,7 +20,7 @@ module.exports = {
   },
   output: {
     filename: "[name].bundle.js",
-    path: path.resolve(__dirname, "dist"),
+    path: path.resolve(__dirname, "docs"),
     // publicPath: "http://127.0.0.1:9000"
   },
   devServer: {
