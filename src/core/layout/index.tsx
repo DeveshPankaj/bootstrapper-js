@@ -65,7 +65,7 @@ styles.replace(`
             "footer footer footer";
 
         // background-image: url(/wp-8.jpeg);
-        background-image: url(/ubuntu.jpg);
+        background-image: url(/public/ubuntu.jpg);
         background-repeat: no-repeat;
         background-size: cover;
 
