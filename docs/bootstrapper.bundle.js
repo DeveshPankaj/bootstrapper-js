@@ -91,11 +91,11 @@ const initWindow = () => {
                     fs.mkdirSync(dir);
                 }
             });
-            const defaultFiles = yield (yield fetch('/mount/meta.json')).json();
+            const defaultFiles = yield (yield fetch('/public/mount/meta.json')).json();
             defaultFiles.forEach((item) => __awaiter(void 0, void 0, void 0, function* () {
                 if (fs.existsSync(item.path) && !item.force_reload)
                     return;
-                const path = item.file.startsWith('http') ? item.file : `/mount/${item.file}`;
+                const path = item.file.startsWith('http') ? item.file : `/public/mount/${item.file}`;
                 const fileData = yield (yield fetch(path)).arrayBuffer();
                 fs.writeFileSync(item.path, Buffer.from(fileData));
                 // navigator.serviceWorker.controller?.postMessage({type: 'fs/file-added', payload: {file: item.path}});
