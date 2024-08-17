@@ -79,7 +79,7 @@ const initWindow = () => {
             
             defaultFiles.forEach(async item => {
                 if(fs.existsSync(item.path) && !item.force_reload) return;
-                const path = item.file.startsWith('http') ? item.file : `/mount/${item.file}`;
+                const path = item.file.startsWith('http') ? item.file : `/public/mount/${item.file}`;
                 const fileData = await (await fetch(path)).arrayBuffer() as any;
                 fs.writeFileSync(item.path, Buffer.from(fileData));
 
