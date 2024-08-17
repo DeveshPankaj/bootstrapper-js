@@ -1,14 +1,15 @@
 [
   {
     "path": "/usr/desktop/index.html",
-    "file": "usr/desktop/index.html"
+    "file": "usr/desktop/index.html",
+    "force_reload": false
   },
   {
-    "path": "/usr/desktop/three.html",
+    "path": "/usr/desktop/projects/WebGL-Earth.html",
     "file": "usr/desktop/three.html"
   },
   {
-    "path": "/usr/desktop/three-js-2.html",
+    "path": "/usr/desktop/projects/WebGL.html",
     "file": "usr/desktop/three-js-2.html"
   },
   {
@@ -20,15 +21,19 @@
     "file": "usr/desktop/temp.html"
   },
   {
-    "path": "/usr/desktop/explorer.js",
+    "path": "/usr/desktop/temp.js",
+    "file": "usr/desktop/temp.js"
+  },
+  {
+    "path": "/usr/desktop/apps/explorer.js",
     "file": "usr/desktop/explorer.js"
   },
   {
-    "path": "/usr/desktop/wallpaper.png",
-    "file": "../wp-6.jpeg"
+    "path": "/usr/desktop/projects/Analyze.html",
+    "file": "usr/desktop/projects/Analyze.html"
   },
   {
-    "path": "/usr/desktop/terminal.png",
-    "file": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/51/Windows_Terminal_logo.svg/1280px-Windows_Terminal_logo.svg.png"
+    "path": "/usr/desktop/projects/Anova.html",
+    "file": "usr/desktop/projects/Anova.html"
   }
 ]

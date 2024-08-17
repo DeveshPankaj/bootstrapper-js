@@ -181,7 +181,6 @@ export class Host {
         config: configPlacegholder,
       };
       const config = JSON.parse(form.config);
-      console.log({ ...form, config });
       this.callCommand("core.add-module", form.namespace, config);
 
       return () => {};
@@ -228,7 +227,7 @@ export class Host {
         const fs = this.getFS()
         const source = fs.readFileSync(filepath)
         this.execString(source.toString())
-        console.log(this.platform)
+
         return;
       }
 
@@ -290,7 +289,7 @@ export class Platform {
     public readonly events$: Observable<PlatformEvent>
     public host!: Host
     public window: Window = window
-    constructor(private readonly _events: Subject<PlatformEvent>, public readonly name: string) {
+    constructor(private readonly _events: Subject<PlatformEvent>, public readonly name: string, public readonly cwd='/') {
         this.events$ = _events.asObservable()
     }
 
@@ -313,6 +312,28 @@ export class Platform {
         console.log(`Resolving service [${serviceName}]`)
         // this.host.getService(serviceName)
         return this._services.get(serviceName) as T;
+    }
+
+    public require(filepath: string) {
+      const fs = this.host.getFS()
+
+      if(filepath.startsWith('.')) {
+        // TODO: prefix current program working directory
+        filepath = (this.cwd || '') + filepath
+      }
+      try {
+        if(!fs.existsSync(filepath)) return undefined;
+
+        const code = fs.readFileSync(filepath).toString()
+        const _ctx = {exports: {}}
+        const factory = new Function(...Object.keys(_ctx), code)
+        console.log(this)
+        factory.call(this, ...Object.values(_ctx))
+        return _ctx.exports
+      } catch (error) {
+        return undefined
+      }
+      
     }
 
 }

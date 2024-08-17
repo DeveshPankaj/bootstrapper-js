@@ -1,9 +1,11 @@
-import { Platform, UICallbackProps } from "@shared/index";
+import { Platform, UICallbackProps, PlatformEvent } from "@shared/index";
 import React from "react";
 import mime from 'mime'
 import { createRoot } from "react-dom/client";
 import * as utils from '@shared/utils'
 import { DESKTOP_CONTAINER_CLASS, WINDOWS_CONTAINER_CLASS } from '../window-manager'
+import { Subject } from "rxjs";
+
 
 const platform = Platform.getInstance()
 
@@ -107,31 +109,36 @@ const App = (props: UICallbackProps & { url: string }) => {
     // const popup = window.open(props.url, '_blank','height=300,width=600,location=no,toolbar=no');
 
     const iframeRef = React.useRef<HTMLIFrameElement>(null)
+    const [key, setKey] = React.useState(1)
 
     React.useEffect(() => {
         if (!iframeRef.current) return;
 
         if (iframeRef.current.contentWindow) {
-            iframeRef.current!.contentWindow!.platform = platform
-            //TODO: set platform on iframe window reload
-            // iframeRef.current.contentWindow!.onload = () => {
-            //     iframeRef.current!.contentWindow!.platform = platform
-            // }
+            const platformEventEmitter = new Subject<PlatformEvent>();
+            const newPlatform = new Platform(platformEventEmitter, props.url, '/');
+            newPlatform.setHost(platform.host);
+            iframeRef.current!.contentWindow!.platform = newPlatform
         }
 
-        iframeRef.current.contentWindow?.addEventListener('load', () => {
+        const onLoad = () => {
             props.setTitle(iframeRef.current?.contentWindow?.document?.title || '');
-        })
+        }
+
+        iframeRef.current.addEventListener('load', onLoad)
+
+        return () => {
+            iframeRef.current?.removeEventListener('load', onLoad)
+        }
 
     }, [iframeRef.current])
-
+    
     React.useEffect(() => {
         const { remove } = props.appendActionButton({
             icon: 'refresh',
             title: 'refresh',
             onClick: () => {
-                if (!iframeRef.current) return;
-                iframeRef.current?.contentWindow?.location.reload();
+                setKey(x => x+1)
             }
         })
 
@@ -140,7 +147,7 @@ const App = (props: UICallbackProps & { url: string }) => {
 
     return (
         <div style={{ display: 'flex', height: '100%' }}>
-            <iframe src={props.url} ref={iframeRef} style={{ border: 0, width: '100%', height: '-webkit-fill-available' }} />
+            <iframe key={key} src={props.url} ref={iframeRef} style={{ border: 0, width: '100%', height: '-webkit-fill-available' }} />
         </div>
     )
 }
