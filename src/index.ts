@@ -47,7 +47,7 @@ const initWindow = () => {
     window.BrowserFS.install(window)
 
     const defaultDirs = [
-        '/usr', '/usr/desktop', '/usr/downloads',
+        '/usr', '/usr/desktop', '/usr/desktop/apps', '/usr/desktop/projects', '/usr/downloads',
 
         '/bin',
         '/root',
@@ -75,10 +75,10 @@ const initWindow = () => {
                 }
             })
 
-            const defaultFiles: Array<{file: string, path: string}> = await (await fetch('/mount/meta.json')).json();
+            const defaultFiles: Array<{file: string, path: string, force_reload?:boolean}> = await (await fetch('/mount/meta.json')).json();
             
             defaultFiles.forEach(async item => {
-                if(fs.existsSync(item.path)) return;
+                if(fs.existsSync(item.path) && !item.force_reload) return;
                 const path = item.file.startsWith('http') ? item.file : `/mount/${item.file}`;
                 const fileData = await (await fetch(path)).arrayBuffer() as any;
                 fs.writeFileSync(item.path, Buffer.from(fileData));
