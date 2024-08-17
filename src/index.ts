@@ -75,7 +75,7 @@ const initWindow = () => {
                 }
             })
 
-            const defaultFiles: Array<{file: string, path: string, force_reload?:boolean}> = await (await fetch('/mount/meta.json')).json();
+            const defaultFiles: Array<{file: string, path: string, force_reload?:boolean}> = await (await fetch('/public/mount/meta.json')).json();
             
             defaultFiles.forEach(async item => {
                 if(fs.existsSync(item.path) && !item.force_reload) return;
