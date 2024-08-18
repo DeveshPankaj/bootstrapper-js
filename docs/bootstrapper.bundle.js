@@ -103,7 +103,7 @@ const initWindow = () => {
         }
     }));
     if (navigator.serviceWorker) {
-        navigator.serviceWorker.register('/sw.bundle.js', { scope: '/' }).then(function (reg) {
+        navigator.serviceWorker.register('/docs/sw.bundle.js', { scope: '/' }).then(function (reg) {
             if (reg.active)
                 console.log('serviceworker installed');
             navigator.serviceWorker.addEventListener('message', event => {
