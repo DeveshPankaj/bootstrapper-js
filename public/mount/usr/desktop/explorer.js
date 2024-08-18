@@ -362,7 +362,7 @@ const ListDirConponent = ({ dir, openFile, showFileActions }) => {
 };
 
 const { remove } = platform.host.registerCommand("explorer", run, {
-  callable: true,
+  callable: false,
   icon: "folder",
   title: "Files",
 });
