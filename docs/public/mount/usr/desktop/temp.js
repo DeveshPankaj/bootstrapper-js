@@ -1,0 +1,19 @@
+const platform = this
+const React = window.platform.getService('React')
+const ReactDOM = window.platform.getService('ReactDOM')
+console.log(platform)
+
+
+exports.React = React
+exports.ReactDOM = ReactDOM
+
+
+
+const el = document.createElement('div')
+const root = ReactDOM.createRoot(el)
+platform.window.document.body.appendChild(el)
+
+const App = () => {
+    return React.createElement('div', {}, ["Hello"])
+}
+root.render(App())
