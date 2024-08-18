@@ -31,7 +31,7 @@ const __BOOTSTRAP_SCRIPT_PATH_KEY__ = '__BOOTSTRAP_SCRIPT_PATH__';
 })();
 
 const loadBootstrapScript = (storage: Storage) => {
-    const bootstrap_script_path = storage.getItem(__BOOTSTRAP_SCRIPT_PATH_KEY__) || "/docs/remote.bundle.js"
+    const bootstrap_script_path = storage.getItem(__BOOTSTRAP_SCRIPT_PATH_KEY__) || "/remote.bundle.js"
     if(!bootstrap_script_path) return
 
     const script = window.document.createElement('script')
@@ -93,7 +93,7 @@ const initWindow = () => {
 
 
     if (navigator.serviceWorker) {
-        navigator.serviceWorker.register('/docs/sw.bundle.js', {scope: '/'}).then(function(reg){
+        navigator.serviceWorker.register('/sw.bundle.js', {scope: '/'}).then(function(reg){
             if (reg.active) console.log('serviceworker installed');
             navigator.serviceWorker.addEventListener('message', event => {
                 // console.log(event.data)
