@@ -1,50 +1,50 @@
 {
   "001-core.layout": {
-    "url": "/layout.bundle.js",
+    "url": "/docs/layout.bundle.js",
     "metedata": {
       "version": "0.0.1"
     },
     "params": []
   },
   "002-core.modules": {
-    "url": "/modules.bundle.js",
+    "url": "/docs/modules.bundle.js",
     "metedata": {
       "version": "0.0.1"
     },
     "params": []
   },
   "003-core.iframe": {
-      "url": "/iframe.bundle.js",
+      "url": "/docs/iframe.bundle.js",
       "metedata": {
         "version": "0.0.1"
       }
   },
   "008-core.vs-code": {
-      "url": "/vscode.bundle.js",
+      "url": "/docs/vscode.bundle.js",
       "metedata": {
         "version": "0.0.1"
       }
   },
   "004-ui.game-of-life": {
-    "url": "/game-of-life.bundle.js",
+    "url": "/docs/game-of-life.bundle.js",
     "metedata": {
       "version": "0.0.1"
     }
   },
   "005-ui.notepad": {
-    "url": "/notepad.bundle.js",
+    "url": "/docs/notepad.bundle.js",
     "metedata": {
       "version": "0.0.1"
     }
   },
   "006-ui.xml": {
-    "url": "/xml-parser.bundle.js",
+    "url": "/docs/xml-parser.bundle.js",
     "metedata": {
       "version": "0.0.1"
     }
   },
   "007-ui.file-explorer": {
-    "url": "/file-explorer.bundle.js",
+    "url": "/docs/file-explorer.bundle.js",
     "metedata": {
       "version": "0.0.1"
     }
