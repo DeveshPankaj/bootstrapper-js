@@ -12,14 +12,14 @@ export const ListDirComponent = ({ dir, openFile, showFileActions }: { dir?: str
     dir ??= DESKTOP_PATH;
 
     const extIconMap: Record<string, string> = {
-        '.js': '/js-icon.png',
-        '.ts': '/ts-icon.png',
-        '.proj': '/game-icon.png',
-        '.html': '/html-icon.png',
-        '.png': '/png-icon.png',
-        '.run': '/bash.png',
-        '.': '/folder-icon.png',
-        '': '/invalid-file-icon.png'
+        '.js': '/public/js-icon.png',
+        '.ts': '/public/ts-icon.png',
+        '.proj': '/public/game-icon.png',
+        '.html': '/public/html-icon.png',
+        '.png': '/public/png-icon.png',
+        '.run': '/public/bash.png',
+        '.': '/public/folder-icon.png',
+        '': '/public/invalid-file-icon.png'
     }
 
     const fs = platform.host.getFS()

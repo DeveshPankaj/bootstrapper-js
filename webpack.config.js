@@ -1,5 +1,6 @@
 const path = require("path");
-const HtmlWebpackPlugin = require('html-webpack-plugin');
+const HtmlWebpackPlugin = require("html-webpack-plugin");
+const CopyWebpackPlugin = require("copy-webpack-plugin");
 
 /** @type {import('webpack').Configuration} */
 module.exports = {
@@ -21,17 +22,15 @@ module.exports = {
   output: {
     filename: "[name].bundle.js",
     path: path.resolve(__dirname, "docs"),
-    // publicPath: "http://127.0.0.1:9000"
+    publicPath: "docs/", // Adjust the public path to match the final location of the assets
   },
   devServer: {
     webSocketServer: false,
     client: false,
     static: {
-      directory: path.join(__dirname, "public"),
+      directory: path.join(__dirname),
     },
     compress: true,
-    // port: 443,
-    // host: '0.0.0.0',
     allowedHosts: ["all"],
     headers: {
       "Access-Control-Allow-Origin": "*",
@@ -61,10 +60,24 @@ module.exports = {
   },
   plugins: [
     new HtmlWebpackPlugin({
-      path: "index.html",
+      filename: "index.html", // Generates index.html inside the docs folder
       template: "public/index.html",
       minify: false,
       chunks: ["bootstrapper"],
+      publicPath: "./docs", // This ensures the JS paths are relative to the current directory
+    }),
+    new CopyWebpackPlugin({
+      patterns: [
+        {
+          from: path.resolve(__dirname, "docs/index.html"),
+          to: path.resolve(__dirname, "index.html"),
+          transform(content) {
+            // Adjust paths in the copied index.html file
+            return content.toString().replace(/src="\//g, 'src="docs/');
+          },
+          noErrorOnMissing: true,
+        },
+      ],
     }),
   ],
 };
