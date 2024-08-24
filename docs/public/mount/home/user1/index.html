@@ -19,6 +19,11 @@
          <h3 class="w3-padding-64 w3-center"><b>PANKAJ<br>DEVESH</b></h3>
          <a href="javascript:void(0)" onclick="w3_close()" class="w3-bar-item w3-button w3-padding w3-hide-large">CLOSE</a>
          <a href="#" onclick="w3_close()" class="w3-bar-item w3-button">PORTFOLIO</a> 
+         <a href="#" id='open-projects-link' class="w3-bar-item w3-button">PROJECTS</a> 
+        <script>
+              const openProfileCommand = `service('001-core.layout', 'open-window') (command('ui.iframe'), '/home/temp.html');`
+              document.getElementById('open-projects-link').onclick = () => window.platform.host.execCommand(openProfileCommand);
+        </script>
          <a href="#about" onclick="w3_close()" class="w3-bar-item w3-button">ABOUT ME</a> 
          <a href="#contact" onclick="w3_close()" class="w3-bar-item w3-button">CONTACT</a>
       </nav>

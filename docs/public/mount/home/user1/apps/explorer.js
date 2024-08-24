@@ -3,8 +3,10 @@ const fs = platform.host.getFS();
 
 const React = platform.host.getService("003-core.iframe", "React");
 const { createRoot } = platform.host.getService("003-core.iframe", "ReactDOM");
-const { DESKTOP_PATH, appendStyleSheet, getFileExtension } = platform.host.getService("003-core.iframe", "utils");
-const { DESKTOP_CONTAINER_CLASS, WINDOWS_CONTAINER_CLASS } = platform.host.getService("003-core.iframe", "window-manager");
+const { DESKTOP_PATH, appendStyleSheet, getFileExtension } =
+  platform.host.getService("003-core.iframe", "utils");
+const { DESKTOP_CONTAINER_CLASS, WINDOWS_CONTAINER_CLASS } =
+  platform.host.getService("003-core.iframe", "window-manager");
 
 const run = (...args) => {
   const [body, props, dir = "/"] = args;
@@ -86,6 +88,23 @@ const run = (...args) => {
   body.ownerDocument.adoptedStyleSheets.push(styles);
 
   root.render(<App {...props} dir={dir} />);
+
+  const move = (diff) => {
+    return () => {
+      const rect = props.getBoundingClientRect();
+      const dir = { left: 0, right: 0, top: 0, bottom: 0, ...diff };
+      const newPosition = {
+        ...rect,
+        left: rect.left + dir.left,
+        right: rect.right + dir.right,
+        top: rect.top + dir.top,
+        bottom: rect.bottom + dir.bottom,
+      };
+      props.setBoundingClientRect(newPosition);
+    };
+  };
+
+  move({ right: 100, left: 100, top: 100, bottom: 100 })();
   props.setWindowView(true);
 };
 
@@ -146,6 +165,7 @@ const App = (props) => {
     const rect = props.getBoundingClientRect();
 
     const actions = [];
+    file.path = file.path.replace(/\/\//g, '/')
     const stats = fs.statSync(file.path);
     if (stats.isFile()) {
       actions.push({
@@ -173,6 +193,7 @@ const App = (props) => {
         title: "Open in explorer",
         cmd: `service('001-core.layout', 'open-window') (command('ui.file-explorer'), '${file.path}')`,
       });
+      actions.push({ id: 'delete_file', type: 'action', title: 'Delete', cmd: `service('root', 'fs')('rmdir', '${file.path}')` })
     }
 
     openContextMenu(event.clientX + rect.x, event.clientY + rect.y, actions);

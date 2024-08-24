@@ -8,23 +8,40 @@
       body {
         margin: 0;
       }
+      #fps {
+        position: absolute;
+        top: 0;
+        left: 0;
+        padding: 5px;
+        background: rgba(0, 0, 0, 0.7);
+        color: white;
+        font-family: Arial, sans-serif;
+        font-size: 14px;
+        z-index: 100;
+      }
     </style>
   </head>
   <body>
+    <script src="https://cdn.jsdelivr.net/npm/stats.js@0.17/build/stats.min.js"></script> <!-- Include stats.js -->
     <script type="module">
       import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.118/build/three.module.js";
       import { OrbitControls } from "https://cdn.jsdelivr.net/npm/three@0.118/examples/jsm/controls/OrbitControls.js";
 
       let paused = true;
-      const w = window.innerWidth;
-      const h = window.innerHeight;
+
       const scene = new THREE.Scene();
-      const camera = new THREE.PerspectiveCamera(75, w / h, 0.1, 1000);
+      const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
       camera.position.z = 10;
       camera.position.y = 4;
-      const renderer = new THREE.WebGLRenderer({ antiAlias: true });
-      renderer.setSize(w, h);
+
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
       document.body.appendChild(renderer.domElement);
+
+      // Initialize Stats.js
+      const stats = new Stats();
+      stats.showPanel(0); // 0: fps, 1: ms, 2: memory
+      document.body.appendChild(stats.dom);
 
       // Orbit Controls
       const controls = new OrbitControls(camera, renderer.domElement);
@@ -41,8 +58,8 @@
       scene.add(pointLight);
 
       // Point Light Helper
-    //   const pointLightHelper = new THREE.PointLightHelper(pointLight, 1);
-    //   scene.add(pointLightHelper);
+      // const pointLightHelper = new THREE.PointLightHelper(pointLight, 1);
+      // scene.add(pointLightHelper);
 
       const radius = 1.0;
       const geometry = new THREE.SphereGeometry(radius);
@@ -102,11 +119,17 @@
       }
 
       function animate() {
-        requestAnimationFrame(animate);
+        stats.begin(); // Start measuring performance
+
         if (paused === false) {
           balls.forEach((b) => b.update(balls));
         }
+
         renderer.render(scene, camera);
+
+        stats.end(); // Stop measuring performance
+
+        requestAnimationFrame(animate);
       }
 
       animate();
@@ -136,6 +159,15 @@
       }
 
       window.addEventListener("keydown", keyHandler);
+
+      // Handle window resize
+      window.addEventListener("resize", () => {
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+        renderer.setSize(width, height);
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+      });
     </script>
   </body>
 </html>

@@ -1,43 +1,35 @@
 [
   {
-    "path": "/usr/desktop/index.html",
-    "file": "usr/desktop/index.html",
-    "force_reload": false
+    "path": "/home/user1/index.html",
+    "file": "/home/user1/index.html",
+    "force_reload": true
   },
   {
-    "path": "/usr/desktop/projects/WebGL-Earth.html",
-    "file": "usr/desktop/three.html"
+    "path": "/home/user1/initd.run",
+    "file": "/home/user1/initd.run"
   },
   {
-    "path": "/usr/desktop/projects/WebGL.html",
-    "file": "usr/desktop/three-js-2.html"
+    "path": "/home/user1/temp.html",
+    "file": "/home/user1/temp.html"
   },
   {
-    "path": "/usr/desktop/initd.run",
-    "file": "usr/desktop/initd.run"
+    "path": "/home/user1/temp.js",
+    "file": "/home/user1/temp.js"
   },
   {
-    "path": "/usr/desktop/temp.html",
-    "file": "usr/desktop/temp.html"
+    "path": "/home/user1/apps/explorer.js",
+    "file": "/home/user1/apps/explorer.js"
   },
   {
-    "path": "/usr/desktop/temp.js",
-    "file": "usr/desktop/temp.js"
+    "path": "/home/user1/projects/Snake.html",
+    "file": "/home/user1/projects/Snake.html"
   },
   {
-    "path": "/usr/desktop/apps/explorer.js",
-    "file": "usr/desktop/explorer.js"
+    "path": "/home/user1/projects/WebGL.html",
+    "file": "/home/user1/projects/WebGL.html"
   },
   {
-    "path": "/usr/desktop/projects/Analyze.html",
-    "file": "usr/desktop/projects/Analyze.html"
-  },
-  {
-    "path": "/usr/desktop/projects/Snake.html",
-    "file": "usr/desktop/projects/Snake.html"
-  },
-  {
-    "path": "/usr/desktop/projects/Anova.html",
-    "file": "usr/desktop/projects/Anova.html"
+    "path": "/home/user1/projects/WebGL-Earth.html",
+    "file": "/home/user1/projects/WebGL-Earth.html"
   }
 ]

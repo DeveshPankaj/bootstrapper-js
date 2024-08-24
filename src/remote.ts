@@ -153,7 +153,7 @@ const runInitCommands = () => {
 
   const initd: Array<Array<string>> = [
     // ['/usr/desktop/index.html'],
-    ['/usr/desktop/initd.run']
+    ['/home/user1/initd.run']
   ];
   initd.forEach(command => host.exec(command[0], ...command.slice(1)))
 
@@ -215,9 +215,15 @@ platform.register('fs', (cmd: string, ...args: string[]) => {
         }
       }
       break;
+    case "rmdir":
+      for(let filePath of args) {
+        if(_fs.existsSync(filePath)){
+          _fs.rmdirSync(filePath, { recursive: true });
+        }
+      }
   }
 })
 platform.register('exec', platform.host.exec.bind(platform.host))
 
-const windowService = new WindowService(window, window.document.body);
+export const windowService = new WindowService(window, window.document.body);
 modules.subscribe((modules) => loadModules(modules));

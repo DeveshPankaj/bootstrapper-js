@@ -1,6 +1,4 @@
-import { Platform } from "@shared/index";
-
-
+import { Platform } from "./index";
 
 
 export const draggable = (elmnt: HTMLDivElement, header: HTMLDivElement) => {
