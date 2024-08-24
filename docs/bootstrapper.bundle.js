@@ -67,12 +67,32 @@ const initWindow = () => {
     // @ts-ignore
     window.BrowserFS.install(window);
     const defaultDirs = [
-        '/usr', '/usr/desktop', '/usr/desktop/apps', '/usr/desktop/projects', '/usr/downloads',
+        '/home',
+        '/home/user1',
+        '/home/user1/apps',
+        '/home/user1/projects',
+        // '/home/user1/projects/Snake.html', // Specific project file (not a directory, but included for completeness)
+        // '/home/user1/projects/WebGL.html', // Specific project file (not a directory, but included for completeness)
+        // '/home/user1/projects/WebGL-Earth.html', // Specific project file (not a directory, but included for completeness)
+        '/usr',
+        '/usr/bin',
+        '/usr/lib',
+        '/usr/local',
         '/bin',
         '/root',
         '/media',
         '/etc',
-        '/proc'
+        '/proc',
+        '/lib',
+        '/mnt',
+        '/opt',
+        '/run',
+        '/srv',
+        '/sys',
+        '/tmp',
+        '/var',
+        '/var/log',
+        '/var/spool'
     ];
     // @ts-ignore
     window.BrowserFS.configure({ fs: "LocalStorage" }, (err) => __awaiter(void 0, void 0, void 0, function* () {
@@ -95,7 +115,7 @@ const initWindow = () => {
             defaultFiles.forEach((item) => __awaiter(void 0, void 0, void 0, function* () {
                 if (fs.existsSync(item.path) && !item.force_reload)
                     return;
-                const path = item.file.startsWith('http') ? item.file : `/public/mount/${item.file}`;
+                const path = item.file.startsWith('http') ? item.file : `/public/mount${item.file.startsWith('/') ? '' : '/'}${item.file}`;
                 const fileData = yield (yield fetch(path)).arrayBuffer();
                 fs.writeFileSync(item.path, Buffer.from(fileData));
                 // navigator.serviceWorker.controller?.postMessage({type: 'fs/file-added', payload: {file: item.path}});
