@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snake Game with LSTM Q-Learning</title>
+    <style>
+        body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .container { display: flex; }
+        .game-container, .graph-container { margin: 10px; }
+        canvas { border: 1px solid #000; }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="game-container">
+            <h1>Snake Game</h1>
+            <p id="status">Training in progress...</p>
+            <canvas id="gameCanvas" width="400" height="400"></canvas>
+        </div>
+        <div class="graph-container">
+            <h1>Training Accuracy</h1>
+            <canvas id="accuracyChart" width="400" height="400"></canvas>
+        </div>
+    </div>
+
+    <script>
+        // Game variables
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const gridSize = 20;
+        const canvasSize = 400;
+        let snake = [{x: gridSize * 5, y: gridSize * 5}];
+        let food = {x: gridSize * 10, y: gridSize * 10};
+        let direction = {x: 1, y: 0};
+        let score = 0;
+        let stepsSinceFood = 0;
+
+        // Q-learning variables
+        const numActions = 4; // Right, Left, Up, Down
+        const learningRate = 0.001;
+        const discountFactor = 0.9;
+        const epsilon = 0.1; // Exploration rate
+        const replayBuffer = [];
+        const bufferSize = 10000;
+        const batchSize = 12; // Updated batch size
+
+        // Define the LSTM model
+        const model = tf.sequential();
+        model.add(tf.layers.lstm({inputShape: [1, 4], units: 24, returnSequences: true}));
+        model.add(tf.layers.lstm({units: 24}));
+        model.add(tf.layers.dense({units: numActions, activation: 'linear'}));
+        model.compile({optimizer: tf.train.adam(learningRate), loss: 'meanSquaredError'});
+
+        // Load model from local storage if it exists
+        async function loadModel() {
+            const modelUrl = 'localstorage://model';
+            try {
+                const loadedModel = await tf.loadLayersModel(modelUrl);
+                model.setWeights(loadedModel.getWeights());
+                console.log('Model loaded from local storage.');
+            } catch (error) {
+                console.log('No model found in local storage. Starting with a new model.');
+            }
+        }
+
+        // Save model to local storage
+        async function saveModel() {
+            const modelUrl = 'localstorage://model';
+            await model.save(modelUrl);
+            console.log('Model saved to local storage.');
+        }
+
+        // Training accuracy graph setup
+        const ctxChart = document.getElementById('accuracyChart').getContext('2d');
+        const accuracyChart = new Chart(ctxChart, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Total Reward',
+                    data: [],
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                scales: {
+                    x: { beginAtZero: true },
+                    y: { beginAtZero: true }
+                }
+            }
+        });
+
+        function createState() {
+            return [
+                snake[0].x / canvasSize, 
+                snake[0].y / canvasSize, 
+                food.x / canvasSize, 
+                food.y / canvasSize
+            ];
+        }
+
+        function getQValues(state) {
+            return model.predict(tf.tensor3d(state, [1, 1, 4])).dataSync();
+        }
+
+        function chooseAction(state) {
+            if (Math.random() < epsilon) {
+                return Math.floor(Math.random() * numActions); // Explore
+            } else {
+                const qValues = getQValues(state);
+                return qValues.indexOf(Math.max(...qValues)); // Exploit
+            }
+        }
+
+        function storeExperience(state, action, reward, nextState, done) {
+            if (replayBuffer.length >= bufferSize) {
+                replayBuffer.shift();
+            }
+            replayBuffer.push({state, action, reward, nextState, done});
+        }
+
+  async function trainModel() {
+    if (replayBuffer.length < batchSize) return;
+
+    const batch = [];
+    for (let i = 0; i < batchSize; i++) {
+        const index = Math.floor(Math.random() * replayBuffer.length);
+        batch.push(replayBuffer[index]);
+    }
+
+    const states = [];
+    const targets = [];
+    for (const experience of batch) {
+        const {state, action, reward, nextState, done} = experience;
+
+        // Ensure state is a tensor-like 3D array: [batchSize, 1, 4]
+        states.push([state]);  // Wrap the state in an extra array to make it 3D
+
+        const qValues = getQValues(state);
+        const qTarget = done ? reward : reward + discountFactor * Math.max(...getQValues(nextState));
+        qValues[action] = qTarget;
+        targets.push(qValues);
+    }
+
+    
+    // Convert states and targets to tensors
+    const reshapedStates = tf.tensor3d(states, [batchSize, 1, 4]);  // No need for tf.stack
+    const targetTensor = tf.tensor2d(targets, [batchSize, numActions]);
+    console.log(reshapedStates, targets)
+
+    await model.fit(reshapedStates, targets, {epochs: 1});
+
+    // Cleanup
+    reshapedStates.dispose();
+    targetTensor.dispose();
+}
+
+
+
+        function drawGame() {
+            ctx.clearRect(0, 0, canvasSize, canvasSize);
+
+            // Draw snake
+            ctx.fillStyle = 'green';
+            snake.forEach(segment => {
+                ctx.fillRect(segment.x, segment.y, gridSize, gridSize);
+            });
+
+            // Draw food
+            ctx.fillStyle = 'red';
+            ctx.fillRect(food.x, food.y, gridSize, gridSize);
+
+            // Update snake position
+            const head = {x: snake[0].x + direction.x * gridSize, y: snake[0].y + direction.y * gridSize};
+
+            // Calculate distance to food
+            const distanceToFood = Math.sqrt(Math.pow(food.x - head.x, 2) + Math.pow(food.y - head.y, 2));
+            const prevDistanceToFood = Math.sqrt(Math.pow(food.x - snake[0].x, 2) + Math.pow(food.y - snake[0].y, 2));
+
+            // Reward and penalty
+            let reward = -0.1; // Small penalty for each move
+            let grew = false;
+
+            if (head.x === food.x && head.y === food.y) {
+                reward = 1; // Reward for eating the food
+                score++;
+                placeFood();
+                stepsSinceFood = 0;
+                grew = true; // Snake will grow
+            } else {
+                // Penalty for long lives without food
+                reward -= 0.01 * stepsSinceFood;
+                stepsSinceFood++;
+            }
+
+            // Reward for moving towards food
+            const newDistanceToFood = Math.sqrt(Math.pow(food.x - head.x, 2) + Math.pow(food.y - head.y, 2));
+            if (newDistanceToFood < prevDistanceToFood) {
+                reward += 0.1;
+            }
+
+            // Add the new head to the snake
+            snake.unshift(head);
+
+            // Remove the tail if the snake did not grow
+            if (!grew) {
+                snake.pop();
+            }
+
+            // Check for collisions
+            if (checkCollision(head)) {
+                reward = -1; // Penalty for collision
+                resetGame();
+                return reward;
+            }
+
+            return reward;
+        }
+
+        function placeFood() {
+            food.x = Math.floor(Math.random() * (canvasSize / gridSize)) * gridSize;
+            food.y = Math.floor(Math.random() * (canvasSize / gridSize)) * gridSize;
+        }
+
+        function checkCollision(head) {
+            // Check wall collisions
+            if (head.x < 0 || head.x >= canvasSize || head.y < 0 || head.y >= canvasSize) {
+                return true;
+            }
+
+            // Check self-collision
+            for (let i = 1; i < snake.length; i++) {
+                if (head.x === snake[i].x && head.y === snake[i].y) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function resetGame() {
+            snake = [{x: gridSize * 5, y: gridSize * 5}];
+            direction = {x: 1, y: 0};
+            score = 0;
+            placeFood();
+            stepsSinceFood = 0;
+        }
+
+        function getDirectionFromAction(action) {
+            switch(action) {
+                case 0: return {x: 1, y: 0}; // Right
+                case 1: return {x: -1, y: 0}; // Left
+                case 2: return {x: 0, y: -1}; // Up
+                case 3: return {x: 0, y: 1}; // Down
+                default: return {x: 1, y: 0};
+            }
+        }
+
+        async function trainAndPlay(episodes) {
+            const rewards = [];
+            for (let episode = 0; episode < episodes; episode++) {
+                resetGame();
+                let state = createState();
+                let totalReward = 0;
+                let steps = 0;
+                let done = false;
+
+                while (!done) {
+                    const action = chooseAction(state);
+                    direction = getDirectionFromAction(action);
+
+                    const reward = drawGame();
+                    totalReward += reward;
+                    const nextState = createState();
+                    done = reward === -1;
+
+                    storeExperience(state, action, reward, nextState, done);
+                    await trainModel();
+
+                    state = nextState;
+                    steps++;
+
+                    if (steps > 1000) done = true; // End of episode
+                }
+
+                rewards.push(totalReward);
+                document.getElementById('status').innerText = `Episode ${episode + 1}: Total Reward = ${totalReward}`;
+
+                // Update the accuracy graph
+                accuracyChart.data.labels.push(episode + 1);
+                accuracyChart.data.datasets[0].data.push(totalReward);
+                accuracyChart.update();
+
+                // Save model after every episode
+                await saveModel();
+            }
+
+            document.getElementById('status').innerText = 'Training completed! Now playing...';
+            playGame();
+        }
+
+        function playGame() {
+            resetGame();
+            setInterval(() => {
+                const state = createState();
+                const action = chooseAction(state);
+                direction = getDirectionFromAction(action);
+
+                drawGame();
+            }, 200); // Adjust speed as needed
+        }
+
+        // Load model and start training
+        loadModel().then(() => trainAndPlay(100));
+    </script>
+</body>
+</html>

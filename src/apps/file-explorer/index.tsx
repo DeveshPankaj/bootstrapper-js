@@ -201,6 +201,7 @@ const App = (props: UICallbackProps & { file: FileType }) => {
 
 
         const actions = [];
+        file.path = file.path.replace(/\/\//g, '/')
         const stats = fs.statSync(file.path)
         if (stats.isFile()) {
             actions.push({ id: 'edit_file', type: 'action', title: 'Edit', cmd: `service('001-core.layout', 'open-window') (command('ui.notepad'), '${file.path}')` })
@@ -210,6 +211,7 @@ const App = (props: UICallbackProps & { file: FileType }) => {
 
         else {
             actions.push({ id: 'open_file', type: 'action', title: 'Open in explorer', cmd: `service('001-core.layout', 'open-window') (command('ui.file-explorer'), '${file.path}')` })
+            actions.push({ id: 'delete_file', type: 'action', title: 'Delete', cmd: `service('root', 'fs')('rmdir', '${file.path}')` })
         }
 
         openContextMenu(event.clientX + rect.x, event.clientY + rect.y, actions)

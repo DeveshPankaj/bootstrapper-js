@@ -115,10 +115,20 @@ const App = (props: UICallbackProps & { url: string }) => {
         if (!iframeRef.current) return;
 
         if (iframeRef.current.contentWindow) {
+            // Add Platform
             const platformEventEmitter = new Subject<PlatformEvent>();
             const newPlatform = new Platform(platformEventEmitter, props.url, '/');
             newPlatform.setHost(platform.host);
             iframeRef.current!.contentWindow!.platform = newPlatform
+
+            // Patch fetch and import
+            // @ts-ignore
+            // iframeRef.current.contentWindow.import = (module_path: string) => {
+            //     return import(module_path)
+            // }
+            iframeRef.current.contentWindow.fetch = (...args: any[]) => {
+                console.log(args)
+            }
         }
 
         const onLoad = () => {

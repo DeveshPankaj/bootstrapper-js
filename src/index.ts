@@ -47,14 +47,34 @@ const initWindow = () => {
     window.BrowserFS.install(window)
 
     const defaultDirs = [
-        '/usr', '/usr/desktop', '/usr/desktop/apps', '/usr/desktop/projects', '/usr/downloads',
-
+        '/home',
+        '/home/user1',                 // New home directory for user files
+        '/home/user1/apps',            // Subdirectory for apps
+        '/home/user1/projects',        // Subdirectory for projects
+        // '/home/user1/projects/Snake.html', // Specific project file (not a directory, but included for completeness)
+        // '/home/user1/projects/WebGL.html', // Specific project file (not a directory, but included for completeness)
+        // '/home/user1/projects/WebGL-Earth.html', // Specific project file (not a directory, but included for completeness)
+        '/usr',                        // Existing system directories
+        '/usr/bin',
+        '/usr/lib',
+        '/usr/local',
         '/bin',
         '/root',
         '/media',
         '/etc',
-        '/proc'
-    ]
+        '/proc',
+        '/lib',                        // Existing system directories
+        '/mnt',
+        '/opt',
+        '/run',
+        '/srv',
+        '/sys',
+        '/tmp',
+        '/var',
+        '/var/log',
+        '/var/spool'
+    ];
+    
 
 
     // @ts-ignore
@@ -79,7 +99,7 @@ const initWindow = () => {
             
             defaultFiles.forEach(async item => {
                 if(fs.existsSync(item.path) && !item.force_reload) return;
-                const path = item.file.startsWith('http') ? item.file : `/public/mount/${item.file}`;
+                const path = item.file.startsWith('http') ? item.file : `/public/mount${item.file.startsWith('/')?'':'/'}${item.file}`;
                 const fileData = await (await fetch(path)).arrayBuffer() as any;
                 fs.writeFileSync(item.path, Buffer.from(fileData));
 

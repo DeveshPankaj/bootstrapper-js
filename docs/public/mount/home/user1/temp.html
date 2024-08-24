@@ -1,5 +1,6 @@
 <title>Testing...</title>
 <script type="module" defer>
+  // const React = window.platform.getService('React')
   const {React, ReactDOM} = window.platform.require('/usr/desktop/temp.js')
   const {createRoot} = ReactDOM
 
@@ -17,10 +18,10 @@
     let exec = () => { }
 
     const openProfileCommand = `service('001-core.layout', 'open-window') (command('ui.iframe'), '/usr/desktop/index.html');`
-    const openThreeJSCommand = `service('001-core.layout', 'open-window') (command('ui.iframe'), '/usr/desktop/projects/WebGL-Earth.html');`
+    // const openThreeJSCommand = `service('001-core.layout', 'open-window') (command('ui.iframe'), '/usr/desktop/projects/WebGL-Earth.html');`
     // const command = `service('001-core.layout', 'open-window') (command('ui.iframe'), '/usr/desktop/temp.html');`
     document.getElementById('openProfileButton').onclick = () => window.platform.host.execCommand(openProfileCommand);
-    document.getElementById('openThreeJSButton').onclick = () => window.platform.host.execCommand(openThreeJSCommand);
+    // document.getElementById('openThreeJSButton').onclick = () => window.platform.host.execCommand(openThreeJSCommand);
 
     const code = `
     
@@ -90,6 +91,6 @@
 <button id="openProfileButton">
     Portfolio
 </button>
-<button id="openThreeJSButton">
+<!-- <button id="openThreeJSButton">
     Open ThreeJS
-</button>
+</button> -->

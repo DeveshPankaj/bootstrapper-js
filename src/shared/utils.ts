@@ -1,5 +1,5 @@
 
-export const DESKTOP_PATH = '/usr/desktop'
+export const DESKTOP_PATH = '/home/user1'
 
 export const getFileExtension = (fileName: string) => {
     const ext = fileName.split('.').at(-1)

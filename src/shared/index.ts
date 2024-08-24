@@ -252,10 +252,17 @@ export class Host {
   }
 
   public getService(moduleName: string, serviceName: string): unknown {
-    const mod = this.modulesMap.get(moduleName)!;
-    if (!mod) return;
 
-    const srv = mod.platform.getService(serviceName)!;
+    const callerPlatform = (this.getService as any).callerPlatform as Platform;
+
+    const isMatch = (key: string, value: Platform) => moduleName ? key === moduleName && value.getServiceSync(serviceName) : value.getServiceSync(serviceName)
+
+    const srv = Array.from(this.modulesMap).filter(([key, _]) => key !== callerPlatform?.name).find(([key, value]) => isMatch(key, value.platform))?.[1]?.platform?.getService(serviceName);
+
+    // const mod = this.modulesMap.get(moduleName)!;
+    // if (!mod) return;
+
+    // const srv = mod.platform.getService(serviceName)!;
     if (!srv) throw `Servive: [${moduleName}/${serviceName}] not found`;
 
     return srv;
@@ -308,10 +315,21 @@ export class Platform {
     public getServiceList() {
         return Array.from(this._services.keys());
     }
+
+    public getServiceSync<T>(serviceName: string) {
+      return this._services.get(serviceName) as T;
+    }
     public getService<T>(serviceName: string) {
         console.log(`Resolving service [${serviceName}]`)
         // this.host.getService(serviceName)
-        return this._services.get(serviceName) as T;
+        if(this._services.has(serviceName)) return this._services.get(serviceName) as T;
+
+        // FIXME: BUG - service should not update other service function diractly, use shared point of memory for communication
+        const oldCallerPlatform = (this.host.getService as any).callerPlatform;
+        (this.host.getService as any).callerPlatform = this;
+        const result = this.host.getService('', serviceName);
+        (this.host.getService as any).callerPlatform = oldCallerPlatform;
+        return result
     }
 
     public require(filepath: string) {
@@ -324,13 +342,19 @@ export class Platform {
       try {
         if(!fs.existsSync(filepath)) return undefined;
 
-        const code = fs.readFileSync(filepath).toString()
+        let code = fs.readFileSync(filepath).toString()
+
+        if(filepath.endsWith('.js')) {
+          const program = Babel.transform(code, { presets: ['env', "react"] });
+          code = program.code
+        }
+
         const _ctx = {exports: {}}
         const factory = new Function(...Object.keys(_ctx), code)
-        console.log(this)
         factory.call(this, ...Object.values(_ctx))
         return _ctx.exports
       } catch (error) {
+        console.error(error)
         return undefined
       }
       

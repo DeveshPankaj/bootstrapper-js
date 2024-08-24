@@ -1,4 +1,4 @@
-import { draggable } from "./layout/draggable";
+import { draggable } from "@shared/draggable";
 import { Command, Platform } from "@shared/index";
 const platform = Platform.getInstance();
 

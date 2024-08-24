@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AgroStat</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        .table-container {
+            width: 100%;
+            height: 300px;
+            overflow: auto;
+            border: 1px solid black;
+            margin-bottom: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        table, th, td {
+            border: 1px solid black;
+        }
+        th, td {
+            padding: 10px;
+            text-align: center;
+            white-space: nowrap; /* Prevent text from wrapping */
+        }
+        .checkbox-container {
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- <h2>Upload CSV to Create Matrix (Header Ignored)</h2>
+    <input type="file" id="csvFileInput" accept=".csv" />
+    
+    <div class="checkbox-container" id="checkboxContainer"></div>
+    
+    <button id="applyOperationButton" disabled>Apply Operation</button>
+    
+    <h3>Original Matrix (without Header):</h3>
+    <div class="table-container" id="matrixContainer"></div>
+
+    <h3>Matrix Operations Result:</h3>
+    <div class="table-container" id="resultContainer"></div>
+ -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.8.1/math.min.js"></script>
+    <div id="react-root"></div>
+    <script>
+        const {App} = window.platform.require('/usr/desktop/agrostat.js')
+        const {React, ReactDOM} = window.platform.require('/usr/desktop/temp.js')
+        const {createRoot} = ReactDOM
+
+        const dom = document.getElementById('react-root')
+        const root = createRoot(dom)
+      
+        const program = {}
+        root.render(React.createElement(App, program, []))
+
+        // while (!program.done) {
+        //     [program.state, program.done] = stateMachine.execute(program.state);
+        //     console.log(program);
+        // }
+      
+        // let filteredRows = [];
+
+        // document.getElementById('csvFileInput').addEventListener('change', function(event) {
+        //     const file = event.target.files[0];
+        //     if (file) {
+        //         const reader = new FileReader();
+        //         reader.onload = function(e) {
+        //             const text = e.target.result;
+        //             const rows = text.split('\n');
+                    
+        //             // Get the header row and ignore it
+        //             const headers = rows[0].split(',');
+
+        //             // Generate checkboxes for each column
+        //             generateCheckboxes(headers);
+
+        //             // Parse and filter rows to ensure consistent dimensions
+        //             filteredRows = rows.slice(1) // Ignore the first row (header)
+        //                 .map(row => row.split(',').map(Number))
+        //                 .filter(row => row.length === headers.length);
+                    
+        //             if (filteredRows.length === 0) {
+        //                 document.getElementById('matrixContainer').innerHTML = '<p>No valid rows found in the CSV.</p>';
+        //                 return;
+        //             }
+
+        //             // Render the initial matrix before any operations
+        //             renderTable(filteredRows, 'matrixContainer');
+                    
+        //             // Enable the apply operation button
+        //             document.getElementById('applyOperationButton').disabled = false;
+        //         };
+        //         reader.readAsText(file);
+        //     }
+        // });
+
+        // document.getElementById('applyOperationButton').addEventListener('click', function() {
+        //     // Get selected columns
+        //     const selectedColumns = getSelectedColumns();
+        //     const selectedData = filteredRows.map(row => selectedColumns.map(index => row[index]));
+
+        //     // Create a math.js matrix
+        //     const matrix = math.matrix(selectedData);
+
+        //     // Example operation: matrix multiplication by 2
+        //     const result = math.multiply(matrix, 2);
+
+        //     // Convert result matrix to a regular array
+        //     const resultArray = result.toArray();
+
+        //     // Render the result matrix as a table
+        //     renderTable(resultArray, 'resultContainer');
+        // });
+
+        // function generateCheckboxes(headers) {
+        //     const container = document.getElementById('checkboxContainer');
+        //     container.innerHTML = ''; // Clear previous checkboxes
+
+        //     headers.forEach((header, index) => {
+        //         const label = document.createElement('label');
+        //         label.style.marginRight = '10px';
+                
+        //         const checkbox = document.createElement('input');
+        //         checkbox.type = 'checkbox';
+        //         checkbox.value = index;
+        //         checkbox.checked = true; // Default to checked
+                
+        //         label.appendChild(checkbox);
+        //         label.appendChild(document.createTextNode(header));
+                
+        //         container.appendChild(label);
+        //     });
+        // }
+
+        // function getSelectedColumns() {
+        //     const checkboxes = document.querySelectorAll('#checkboxContainer input[type="checkbox"]');
+        //     const selectedColumns = [];
+        //     checkboxes.forEach(checkbox => {
+        //         if (checkbox.checked) {
+        //             selectedColumns.push(Number(checkbox.value));
+        //         }
+        //     });
+        //     return selectedColumns;
+        // }
+
+        // function renderTable(matrix, containerId) {
+        //     const container = document.getElementById(containerId);
+        //     container.innerHTML = ''; // Clear previous content
+        //     const table = document.createElement('table');
+        //     const tbody = document.createElement('tbody');
+
+        //     // Create table rows and cells
+        //     matrix.forEach(function(row) {
+        //         const tr = document.createElement('tr');
+        //         row.forEach(function(cell) {
+        //             const td = document.createElement('td');
+        //             td.textContent = cell;
+        //             tr.appendChild(td);
+        //         });
+        //         tbody.appendChild(tr);
+        //     });
+
+        //     table.appendChild(tbody);
+        //     container.appendChild(table);
+        // }
+    </script>
+
+</body>
+</html>
