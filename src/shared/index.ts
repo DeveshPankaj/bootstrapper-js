@@ -174,7 +174,8 @@ export class Host {
               "metedata": {
                   "version": "0.0.1"
               },
-              "params": []
+              "params": [],
+              "preload": true
           }`;
       const form = {
         namespace: "dynamic",
@@ -199,7 +200,7 @@ export class Host {
 
     let script: string = "";
     if (stat.isDirectory()) {
-      script = `service('001-core.layout', 'open-window') (command('ui.file-explorer'), '${filepath}' ${
+      script = `service('001-core.layout', 'open-window') (command('explorer'), '${filepath}' ${
         args.length ? "," : ""
       } ${args.map((x) => `"${x}"`).join(", ")})`;
       // console.log(script)

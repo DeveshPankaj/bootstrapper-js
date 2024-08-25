@@ -57,7 +57,8 @@ const ModulesComponent = () => {
         "metedata": {
             "version": "0.0.1"
         },
-        "params": []
+        "params": [],
+        "preload": true
     }`
     const form = {
         namespace: 'new-app',

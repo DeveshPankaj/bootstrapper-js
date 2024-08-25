@@ -4,49 +4,57 @@
     "metedata": {
       "version": "0.0.1"
     },
-    "params": []
+    "params": [],
+    "preload": true
   },
   "002-core.modules": {
     "url": "/modules.bundle.js",
     "metedata": {
       "version": "0.0.1"
     },
-    "params": []
+    "params": [],
+    "preload": true
   },
   "003-core.iframe": {
       "url": "/iframe.bundle.js",
       "metedata": {
         "version": "0.0.1"
-      }
+      },
+      "preload": true
   },
   "008-core.vs-code": {
       "url": "/vscode.bundle.js",
       "metedata": {
         "version": "0.0.1"
-      }
+      },
+      "preload": false
   },
   "004-ui.game-of-life": {
     "url": "/game-of-life.bundle.js",
     "metedata": {
       "version": "0.0.1"
-    }
+    },
+    "preload": false
   },
   "005-ui.notepad": {
     "url": "/notepad.bundle.js",
     "metedata": {
       "version": "0.0.1"
-    }
+    },
+    "preload": true
   },
   "006-ui.xml": {
     "url": "/xml-parser.bundle.js",
     "metedata": {
       "version": "0.0.1"
-    }
+    },
+    "preload": false
   },
   "007-ui.file-explorer": {
     "url": "/file-explorer.bundle.js",
     "metedata": {
       "version": "0.0.1"
-    }
+    },
+    "preload": false
   }
 }

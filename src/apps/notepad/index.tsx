@@ -1,18 +1,16 @@
 import { Platform, UICallbackProps } from "@shared/index";
+import { FileType } from '@shared/types';
+import { getFileExtension } from "@shared/utils";
+
 import React, { useRef } from "react";
 import { createRoot } from "react-dom/client";
-
 
 import { EditorView, basicSetup } from "codemirror";
 import { EditorState } from "@codemirror/state";
 import { javascript, typescriptLanguage } from "@codemirror/lang-javascript";
 import { html } from "@codemirror/lang-html";
-
 import { placeholder } from "@codemirror/view";
-import { FileType } from '@shared/types';
-import { getFileExtension } from "@shared/utils";
 
-// const Babel = require('./babel.js');
 
 const platform = Platform.getInstance()
 
@@ -208,7 +206,10 @@ const App = (props: UICallbackProps & { file: FileType }) => {
                 doc: scriptRef.current,
                 extensions: [
                     basicSetup,
-                    props.file.name.endsWith('.html') ? html() : javascript({ typescript: props.file.name.endsWith('.ts') || props.file.name.endsWith('.tsx') }),
+                    props.file.name.endsWith('.html') ? html() : javascript({ 
+                        typescript: props.file.name.endsWith('.js') || props.file.name.endsWith('.jsx') || props.file.name.endsWith('.ts') || props.file.name.endsWith('.tsx'),
+                        jsx: true
+                    }),
                     placeholder("Type something here...")
                 ]
             })
