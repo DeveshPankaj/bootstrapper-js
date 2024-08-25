@@ -66,6 +66,7 @@ const loadModules = async (modules: { [name: string]: Module }) => {
     if (modulesMap.has(_module_name)) continue;
 
     const _module = modules[_module_name];
+    if(!_module.preload) continue;
     const loadScript = async () => {
       const [win, eventEmitter] = await windowService.createWindow(_module_name);
       modulesMap.set(_module_name, {

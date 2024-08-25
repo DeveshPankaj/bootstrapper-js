@@ -9,7 +9,8 @@ export type Module = {
     metedata: {
         version: `${string}.${string}.${string}` | string
     }
-    params: Array<any>
+    params: Array<any>,
+    preload: boolean
 }
 
 

@@ -3,13 +3,11 @@ const fs = platform.host.getFS();
 
 const React = platform.host.getService("003-core.iframe", "React");
 const { createRoot } = platform.host.getService("003-core.iframe", "ReactDOM");
-const { DESKTOP_PATH, appendStyleSheet, getFileExtension } =
-  platform.host.getService("003-core.iframe", "utils");
-const { DESKTOP_CONTAINER_CLASS, WINDOWS_CONTAINER_CLASS } =
-  platform.host.getService("003-core.iframe", "window-manager");
+const { DESKTOP_PATH, appendStyleSheet, getFileExtension } = platform.host.getService("003-core.iframe", "utils");
+const { DESKTOP_CONTAINER_CLASS, WINDOWS_CONTAINER_CLASS } = platform.host.getService("003-core.iframe", "window-manager");
 
 const run = (...args) => {
-  const [body, props, dir = "/"] = args;
+  const [body, props, dir = DESKTOP_PATH] = args;
 
   const container = platform.window.document.createElement("div");
   const root = createRoot(container);
@@ -191,7 +189,7 @@ const App = (props) => {
         id: "open_file",
         type: "action",
         title: "Open in explorer",
-        cmd: `service('001-core.layout', 'open-window') (command('ui.file-explorer'), '${file.path}')`,
+        cmd: `service('001-core.layout', 'open-window') (command('explorer'), '${file.path}')`,
       });
       actions.push({ id: 'delete_file', type: 'action', title: 'Delete', cmd: `service('root', 'fs')('rmdir', '${file.path}')` })
     }
