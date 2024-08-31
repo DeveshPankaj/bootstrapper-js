@@ -128,6 +128,8 @@ const App = (props: UICallbackProps & { url: string }) => {
             // }
             iframeRef.current.contentWindow.fetch = (...args: any[]) => {
                 console.log(args)
+                // @ts-ignore
+                return fetch(...args)
             }
         }
 

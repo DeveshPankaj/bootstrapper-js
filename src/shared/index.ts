@@ -165,9 +165,13 @@ export class Host {
     }
 
     const runJS = (source: string) => {
-      const program = Babel.transform(source, { presets: ['env', "react"] });
+      const program = Babel.transform(source, { presets: [['env', { modules: false }], "react", 'typescript'],  sourceMaps: true, filename: 'dynamic.js' });
+      const base64SourceMap = btoa(unescape(encodeURIComponent(JSON.stringify(program.map))));
+      const codeWithSourceMap = `${program.code}\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,${base64SourceMap}`;
 
-      const jsBlob = new Blob([program.code], { type: "application/javascript" });
+
+
+      const jsBlob = new Blob([codeWithSourceMap], { type: "application/javascript" });
       const url = URL.createObjectURL(jsBlob);
       const configPlacegholder = `{
               "url": "${url}",
@@ -341,16 +345,31 @@ export class Platform {
         filepath = (this.cwd || '') + filepath
       }
       try {
-        if(!fs.existsSync(filepath)) return undefined;
+
+        if(filepath.startsWith('https://')) {
+          return fetch(filepath).then(res => res.text()).then(code => Babel.transform(code, { presets: ['env', "react"] }).code)
+            .then(
+              code => {
+                const _ctx: any = {exports: {}, require: this.require.bind(this)}
+                const factory = new Function(...Object.keys(_ctx), code)
+                factory.call(this, ...Object.values(_ctx))
+                return _ctx.exports
+              }
+            )
+        }
+
+        if(!fs.existsSync(filepath)) return this.getService(filepath);
 
         let code = fs.readFileSync(filepath).toString()
 
         if(filepath.endsWith('.js')) {
-          const program = Babel.transform(code, { presets: ['env', "react"] });
-          code = program.code
-        }
+          const program = Babel.transform(code, { presets: [['env', { modules: false }], "react", 'typescript'],  sourceMaps: true, filename: 'dynamic.js' });
+          const base64SourceMap = btoa(unescape(encodeURIComponent(JSON.stringify(program.map))));
+          const codeWithSourceMap = `${program.code}\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,${base64SourceMap}`;
 
-        const _ctx = {exports: {}}
+          code = codeWithSourceMap
+        }
+        const _ctx: any = {exports: {}, require: this.require.bind(this)}
         const factory = new Function(...Object.keys(_ctx), code)
         factory.call(this, ...Object.values(_ctx))
         return _ctx.exports

@@ -11,6 +11,7 @@ self.addEventListener('install', (event: Event | any) => {
     //         })
     //     )
     // })
+
 });
   
 
@@ -47,8 +48,6 @@ self.addEventListener('message', event => {
     //     })
     // })
 }, {});
-
-
 
 
 

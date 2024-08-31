@@ -206,7 +206,7 @@ const initWorker = () => {
 
 }
 
-window.addEventListener('load', () => {
+window.addEventListener('load', async () => {
   initWindow();
   // initWorker()
   // initChannel()
