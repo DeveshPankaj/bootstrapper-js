@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GLSL</title>
+    <script>
+        const importMapLocal = {
+            "imports": {
+                "three": "./lib/three.module.js",
+                "jsm/": "./lib/jsm/"
+            }
+        }
+        const importMapProd = {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js",
+                "jsm/": "https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/"
+            }
+        }
+        const im = document.createElement('script');
+        im.type = 'importmap';
+        im.textContent = JSON.stringify(window.location.hostname === 'localhost' ? importMapLocal : importMapProd);
+        document.currentScript.after(im);
+    </script>
+    <script type="module" src="./index.js" defer></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+    </style>
+</head>
+<body>
+    
+</body>
+</html>

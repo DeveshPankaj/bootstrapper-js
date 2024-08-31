@@ -302,15 +302,15 @@ export const render = (container: HTMLElement) => {
             </div>
             <div className="content-area" ref={contentRef}>
                 <div className={DESKTOP_CONTAINER_CLASS}>
-                    <ListDirComponent openFile={openFile} showFileActions={showFileActionsHandler} />
+                    {/* <ListDirComponent openFile={openFile} showFileActions={showFileActionsHandler} /> */}
                 </div>
                 <div className={WINDOWS_CONTAINER_CLASS}></div>
             </div>
             <div className="right-nav">
-                <Commands onCommandClick={onCommandClick} vertical align='start' />
+                {/* <Commands onCommandClick={onCommandClick} vertical align='start' /> */}
             </div>
             <div className="footer">
-                {/* <Commands onCommandClick={onCommandClickHandler} align='center' /> */}
+                <Commands onCommandClick={onCommandClickHandler} align='center' />
             </div>
             {/* <div className='toolbar'>
                 <Commands onCommandClick={onCommandClick}/>
