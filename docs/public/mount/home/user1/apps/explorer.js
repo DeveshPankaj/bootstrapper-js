@@ -23,6 +23,7 @@ const run = (...args) => {
             font-family: monospace; 
             height: 100svh;
             // background: black;
+            backdrop-filter: blur(50px);
         }
 
         @font-face {
@@ -384,6 +385,7 @@ const { remove } = platform.host.registerCommand("explorer", run, {
   callable: false,
   icon: "folder",
   title: "Files",
+  fullScreen: false
 });
 
 // setTimeout(remove, 6000)

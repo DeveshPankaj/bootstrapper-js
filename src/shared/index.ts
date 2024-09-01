@@ -347,7 +347,7 @@ export class Platform {
       try {
 
         if(filepath.startsWith('https://')) {
-          return fetch(filepath).then(res => res.text()).then(code => Babel.transform(code, { presets: ['env', "react"] }).code)
+          return fetch(filepath).then(res => res.text()).then(code => Babel.transform(code,  { presets: [['env', { modules: false }], 'typescript', "react"],  sourceMaps: true, filename: 'dynamic.js' }).code)
             .then(
               code => {
                 const _ctx: any = {exports: {}, require: this.require.bind(this)}
@@ -363,7 +363,7 @@ export class Platform {
         let code = fs.readFileSync(filepath).toString()
 
         if(filepath.endsWith('.js')) {
-          const program = Babel.transform(code, { presets: [['env', { modules: false }], "react", 'typescript'],  sourceMaps: true, filename: 'dynamic.js' });
+          const program = Babel.transform(code, { presets: [['env', { modules: false }], 'typescript', "react"],  sourceMaps: true, filename: 'dynamic.js' });
           const base64SourceMap = btoa(unescape(encodeURIComponent(JSON.stringify(program.map))));
           const codeWithSourceMap = `${program.code}\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,${base64SourceMap}`;
 

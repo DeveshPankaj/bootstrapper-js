@@ -200,12 +200,12 @@ const initWorker = () => {
     }
     const worker = startWorker();
 };
-window.addEventListener('load', () => {
+window.addEventListener('load', () => __awaiter(void 0, void 0, void 0, function* () {
     initWindow();
     // initWorker()
     // initChannel()
     loadBootstrapScript(localStorage);
-});
+}));
 
 
 /******/ })()

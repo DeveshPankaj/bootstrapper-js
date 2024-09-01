@@ -33,7 +33,15 @@ export class WindowManager {
     container.classList.add("window");
     container.classList.add("hidden");
 
-    if (!command.meta.fullScreen) container.appendChild(head);
+    container.appendChild(head);
+    if (command.meta.fullScreen) {
+      head.style.display = 'none'
+    }
+    const toggleHeader = (flag?:boolean) => {
+      if(flag === undefined) head.style.display = head.style.display === 'none' ? '' : 'none'
+      if(flag === true)head.style.display = ''
+      if(flag === false)head.style.display = 'none'
+    }
 
     const iframe = platform.window.document.createElement("iframe");
     iframe.classList.add("draggable");
@@ -43,12 +51,22 @@ export class WindowManager {
       const iframeBody = iframe.contentWindow?.document?.body;
       if (!iframeBody) return;
       iframeBody.style.margin = "0";
+      const hostDimention = {
+        innerWidth: platform.window.innerWidth,
+        innerHeight: platform.window.innerHeight,
+      }
+
+      platform.window.addEventListener('resize', () => {
+        hostDimention.innerHeight = platform.window.innerHeight
+        hostDimention.innerWidth = platform.window.innerWidth
+      })
 
       command.exec(
         iframeBody,
         {
           close: () => this.closeWindow(windowRef),
           setTitle,
+          toggleHeader,
           appendActionButton,
           setWindowView: (show: boolean) =>
             show
@@ -58,13 +76,13 @@ export class WindowManager {
             toggleFullScreen(this.contentRef.current!, container),
           getBoundingClientRect: () => container.getBoundingClientRect(),
           setBoundingClientRect: (rect: Record<string, number>) => {
+            const newCord: Record<string, string> = {}
             Object.keys(rect).forEach(
-              (attr: any) =>
-                (container.style[attr] = `${rect[attr]}${
-                  typeof rect[attr] === "number" ? "px" : ""
-                }`)
+              (attr: any) =>(newCord[attr] = `${rect[attr]}${typeof rect[attr] === "number" ? "px" : ""}`)
             );
+            Object.assign(container.style, newCord);
           },
+          host: hostDimention
         },
         ...args
       );
@@ -195,8 +213,7 @@ const appendWindow = (
 const toggleFullScreen = (contentArea: HTMLElement, win: HTMLElement) => {
   const container = contentArea; // contentArea.querySelector(`:scope > .${WINDOWS_CONTAINER_CLASS}`)
 
-  const isFullScreen =
-    (win.getAttribute("data-fullscreen") || "false") === "true";
+  const isFullScreen = (win.getAttribute("data-fullscreen") || "false") === "true";
   win.setAttribute("data-fullscreen", isFullScreen ? "false" : "true");
 
   const mergeAttributes = ["height", "width", "left", "right", "top"] as const;

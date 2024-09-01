@@ -10,7 +10,8 @@ exports.ReactDOM = ReactDOM
 // const root = ReactDOM.createRoot(el)
 // platform.window.document.body.appendChild(el)
 
-// const App = () => {
-//     return React.createElement('div', {}, ["Hello"])
-// }
+const App = () => {
+    return React.createElement('div', {}, ["Hello World"])
+}
+exports.App = App
 // root.render(App())

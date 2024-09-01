@@ -73,7 +73,7 @@ platform.host.registerCommand('ui.notepad', (body: HTMLBodyElement, props: UICal
             padding:0;
             font-family: monospace;
             height: 100svh;
-            // background: black;
+            background: white;
         }
 
         @font-face {

@@ -34,8 +34,8 @@ export const ContextMenu: React.FC<{componentRef: (obj:{setItems:(arr: Array<Con
                     flex-direction: column;
 
                     gap: 1px;
-                    background-color: rgba(230, 230, 230, 0.5);
-                    box-shadow: rgba(0, 0, 0, 0.16) 0px 1px 4px;
+                    // background-color: rgba(230, 230, 230, 0.5);
+                    // box-shadow: rgba(0, 0, 0, 0.16) 0px 1px 4px;
 
                 }
 
@@ -54,6 +54,7 @@ export const ContextMenu: React.FC<{componentRef: (obj:{setItems:(arr: Array<Con
                 #${id} > button:hover {
                     background: black;
                     color: white;
+                    // border-radius: 12px;
                 }
 
 
