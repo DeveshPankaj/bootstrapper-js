@@ -1,20 +1,14 @@
 <title>Testing...</title>
 <script type="module" defer>
   // const React = window.platform.getService('React')
-  const {React, ReactDOM} = window.platform.require('/home/user1/temp.js')
+  const {React, ReactDOM, App} = window.platform.require('/home/user1/temp.js')
   const {createRoot} = ReactDOM
 
   const el = document.createElement('div')
   const root = createRoot(el)
   document.body.appendChild(el)
-
-  const App = () => {
-    return React.createElement('div', {}, ["Hello"])
-  }
   root.render(App())
 
-  
-  
     let exec = () => { }
 
     const openProfileCommand = `service('001-core.layout', 'open-window') (command('ui.iframe'), '/home/user1/index.html');`

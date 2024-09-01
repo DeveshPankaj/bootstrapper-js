@@ -1,0 +1,30 @@
+<style>
+    body {
+      margin: 0;
+    }
+  </style>
+  <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Raleway">
+  <style>
+  body,h1 {font-family: "Raleway", sans-serif}
+  body, html {height: 100%}
+  .bgimg {
+    background-image: url('https://www.w3schools.com/w3images/forestbridge.jpg');
+    min-height: 100%;
+    background-position: center;
+    background-size: cover;
+  }
+  </style>
+  <body>
+    <div id='react-root-1'></div>
+    <script type="module" defer>
+      onload = () => {
+        platform.require('/home/user1/welcome/index.js').default
+            .then(render => {
+              const container = document.getElementById('react-root-1')
+              render(container)
+            })
+      }
+    </script>
+  </body>
+  

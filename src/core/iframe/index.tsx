@@ -119,6 +119,7 @@ const App = (props: UICallbackProps & { url: string }) => {
             const platformEventEmitter = new Subject<PlatformEvent>();
             const newPlatform = new Platform(platformEventEmitter, props.url, '/');
             newPlatform.setHost(platform.host);
+            platform.register('props', props);
             iframeRef.current!.contentWindow!.platform = newPlatform
 
             // Patch fetch and import

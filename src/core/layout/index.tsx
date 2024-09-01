@@ -113,6 +113,13 @@ styles.replace(`
         resize: both;
         overflow: hidden;
         border-radius: 6px;
+
+
+        // padding: 4px;
+        background: rgba(255, 255, 255, 0.15);
+        backdrop-filter: blur(10px);
+        box-shadow: rgba(31, 38, 135, 0.37) 0px 8px 32px;
+        // border: 1px solid rgba(255, 255, 255, 0.18);
     }
     .window.hidden {
         display: none;
@@ -165,6 +172,13 @@ styles.replace(`
         // background: white;
         display: none;
         z-index: 300;
+
+        padding: 10px;
+        background: rgba(255, 255, 255, 0.15);
+        backdrop-filter: blur(10px);
+        border-radius: 15px;
+        box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+        border: 1px solid rgba(255, 255, 255, 0.18);
     }
 
 
@@ -291,6 +305,31 @@ export const render = (container: HTMLElement) => {
         platform.host.execCommand(`service('001-core.layout', 'open-window') (command('${command.name}')${args.length ? ',' : ''} ${args.map(x => "'" + x + "'").join(', ')})`)
 
     }
+
+    const onContextMenu: React.MouseEventHandler<HTMLDivElement>  = (event) => {
+        if(event.target !== contentRef.current) return;
+        event.preventDefault()
+        showContextMenuHandler(event.clientX, event.clientY, [
+            {
+                type: 'action',
+                id: '2',
+                title: 'Open Portfolio',
+                cmd: `service('001-core.layout', 'open-window') (command('ui.iframe'), '/home/user1/index.html')`
+            },
+            {
+                type: 'action',
+                id: '1',
+                title: 'Open Explorer',
+                cmd: `service('001-core.layout', 'open-window') (command('explorer'))`
+            },
+            {
+                type: 'action',
+                id: '3',
+                title: 'Fullscreen',
+                // cmd: `service('001-core.layout', 'open-window') (command('ui.iframe'), '/home/user1/index.html')`
+            }
+        ])
+    }
     root.render(
         <>
             <div className="header">
@@ -300,7 +339,7 @@ export const render = (container: HTMLElement) => {
             <div className="left-nav">
                 {/* <Commands onCommandClick={onCommandClick} vertical /> */}
             </div>
-            <div className="content-area" ref={contentRef}>
+            <div className="content-area" ref={contentRef} onContextMenu={onContextMenu}>
                 <div className={DESKTOP_CONTAINER_CLASS}>
                     {/* <ListDirComponent openFile={openFile} showFileActions={showFileActionsHandler} /> */}
                 </div>
@@ -310,7 +349,7 @@ export const render = (container: HTMLElement) => {
                 {/* <Commands onCommandClick={onCommandClick} vertical align='start' /> */}
             </div>
             <div className="footer">
-                <Commands onCommandClick={onCommandClickHandler} align='center' />
+                {/* <Commands onCommandClick={onCommandClickHandler} align='center' /> */}
             </div>
             {/* <div className='toolbar'>
                 <Commands onCommandClick={onCommandClick}/>

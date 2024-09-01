@@ -63,6 +63,7 @@ const loadModules = async (modules: { [name: string]: Module }) => {
   const Q: Array<Promise<any>> = [];
 
   for (let _module_name in modules) {
+    // TODO:  // if (modulesMap.has(_module_name) && modulesMap.get(_module_name)?.module.url === modules[_module_name].url) continue;
     if (modulesMap.has(_module_name)) continue;
 
     const _module = modules[_module_name];
