@@ -17,6 +17,11 @@
     "file": "/home/user1/temp.js"
   },
   {
+    "path": "/home/user1/info.html",
+    "file": "/home/user1/info.html",
+    "force_reload": true
+  },
+  {
     "path": "/home/user1/apps/explorer.js",
     "file": "/home/user1/apps/explorer.js"
   },
