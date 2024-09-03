@@ -93,26 +93,109 @@
       props.setBoundingClientRect(newRect);
     };
 
-    centerIframe()
-  };
-</script>
-<script type="text/React-Jsx">
-const React = require('React');
-exports.App = (props) => {
-  const onCloseHandler = () => {
-    props.close();
+    const centerAndResize = () => {
+      // Calculate new centered position
+      const newRect = {
+        left: '10%',
+        top: '5%',
+        height: '90%',
+        width: '80%',
+        borderRadius: '1.5rem'
+      };
+
+      props.setBoundingClientRect(newRect);
+    };
+
+    centerAndResize()
   };
 
-  return (
-    <>
-      <span
-        className="close-button"
-        title="Close window"
-        onClick={onCloseHandler}
-      ></span>
-    </>
-  );
-};
+</script>
+<script type="text/React-Jsx">
+  const React = require('React');
+  exports.App = (props) => {
+    const onCloseHandler = () => {
+      props.close();
+    };
+    const pages = [
+      {id: '1', name: 'about', label: 'About', component: About},
+      {id: '2', name: 'projects', label: 'Projects', component: Projects},
+      {id: '3', name: 'contact', label: 'Contact', component: Contact},
+    ]
+
+    const [currentPage, setCurrentPage] = React.useState(pages[0])
+  
+    return (
+      <>
+        <span
+          className="close-button"
+          title="Close window"
+          onClick={onCloseHandler}
+        ></span>
+        <div style={{
+          display: 'flex',
+          height: '100%',
+          width: '100%',
+          overflow: 'auto',
+          // background: '#212121'
+        }}>
+          <nav style={{
+            // background: '#2c2c2c',
+            display: 'flex',
+            flexDirection: 'column',
+            // justifyContent: 'space-evenly',
+            fontFamily: 'monospace',
+            cursor: 'pointer',
+            width: '13rem',
+            display: 'flex',
+            // height: 'fit-content',
+            // margin: '1rem',
+            // borderRadius: '1rem',
+            overflow: 'hidden',
+            boxShadow: 'rgba(0, 0, 0, 0.09) 0px 3px 12px'
+          }}>
+            {pages.map(page => {
+              return <a key={page.id} style={{
+                // flexGrow: '1', 
+                padding: '1rem', 
+                background: page.id===currentPage.id ? 'black' : '#ffffff52',
+                color: page.id===currentPage.id ? 'white' : 'black',
+                cursor: 'pointer'
+              }}
+              onClick={_ => setCurrentPage(page)}
+              >{page.label}</a>
+            })}
+          </nav>
+          <section style={{flexGrow: '1', padding: '1rem', fontFamily: 'monospace' }}>
+            {
+              <currentPage.component/>
+            }
+          </section>
+        </div>
+      </>
+    );
+  };
+
+
+  const About = () => {
+    return (<>About</>)
+  }
+  
+  const fs = platform.host.getFS()
+  const Projects = () => {
+    const projectsDir = '/home/user1/projects'
+    const [ls, setLs] = React.useState(fs.readdirSync(projectsDir))
+
+    const openProject = file => {
+      const cmd = `service('root', 'exec') ('${projectsDir}/${file}');`
+      platform.host.execCommand(cmd);
+    }
+    return (<>{ls.map(file => <div onClick={_=>openProject(file)} key={`${projectsDir}/${file}`} style={{padding: '1rem', cursor: 'pointer'}}>{file}</div>)}</>)
+  }
+
+  const Contact = () => {
+    return (<>Contact</>)
+  }
+
 </script>
 
 <style>
