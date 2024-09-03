@@ -117,7 +117,7 @@ const App = (props: UICallbackProps & { url: string }) => {
         if (iframeRef.current.contentWindow) {
             // Add Platform
             const platformEventEmitter = new Subject<PlatformEvent>();
-            const newPlatform = new Platform(platformEventEmitter, props.url, '/');
+            const newPlatform = new Platform(platformEventEmitter, props.url, props.url);
             newPlatform.setHost(platform.host);
             platform.register('props', props);
             iframeRef.current!.contentWindow!.platform = newPlatform

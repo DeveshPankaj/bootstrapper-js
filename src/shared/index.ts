@@ -171,24 +171,36 @@ export class Host {
 
 
 
-      const jsBlob = new Blob([codeWithSourceMap], { type: "application/javascript" });
-      const url = URL.createObjectURL(jsBlob);
-      const configPlacegholder = `{
-              "url": "${url}",
-              "metedata": {
-                  "version": "0.0.1"
-              },
-              "params": [],
-              "preload": true
-          }`;
-      const form = {
-        namespace: "dynamic",
-        config: configPlacegholder,
-      };
-      const config = JSON.parse(form.config);
-      this.callCommand("core.add-module", form.namespace, config);
+      // const jsBlob = new Blob([codeWithSourceMap], { type: "application/javascript" });
+      // const url = URL.createObjectURL(jsBlob);
+      // const configPlacegholder = `{
+      //         "url": "${url}",
+      //         "metedata": {
+      //             "version": "0.0.1"
+      //         },
+      //         "params": [],
+      //         "preload": true
+      //     }`;
+      // const form = {
+      //   namespace: "dynamic",
+      //   config: configPlacegholder,
+      // };
+      // const config = JSON.parse(form.config);
+      // this.callCommand("core.add-module", form.namespace, config);
 
-      return () => {};
+
+      // const program = Babel.transform(code, { presets: [['env', { modules: false }], 'typescript', "react"],  sourceMaps: true, filename: 'dynamic.js' });
+      //     const base64SourceMap = btoa(unescape(encodeURIComponent(JSON.stringify(program.map))));
+      //     const codeWithSourceMap = `${program.code}\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,${base64SourceMap}`;
+
+      //     code = codeWithSourceMap
+      //   }
+        const _ctx: any = {exports: {}, require: this.platform.require.bind(this.platform)}
+        const factory = new Function(...Object.keys(_ctx), codeWithSourceMap)
+        factory.call(this, ...Object.values(_ctx))
+
+        return _ctx.exports
+      // return () => {};
     };
 
     // const worker = runAsRoot(source);
@@ -363,7 +375,7 @@ export class Platform {
         let code = fs.readFileSync(filepath).toString()
 
         if(filepath.endsWith('.js')) {
-          const program = Babel.transform(code, { presets: [['env', { modules: false }], 'typescript', "react"],  sourceMaps: true, filename: 'dynamic.js' });
+          const program = Babel.transform(code, { presets: [['env', { modules: false }], 'typescript', "react"],  sourceMaps: true, filename: filepath });
           const base64SourceMap = btoa(unescape(encodeURIComponent(JSON.stringify(program.map))));
           const codeWithSourceMap = `${program.code}\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,${base64SourceMap}`;
 

@@ -1,10 +1,10 @@
 const platform = window.platform;
 const fs = platform.host.getFS();
 
-const React = platform.host.getService("003-core.iframe", "React");
-const { createRoot } = platform.host.getService("003-core.iframe", "ReactDOM");
-const { DESKTOP_PATH, appendStyleSheet, getFileExtension } = platform.host.getService("003-core.iframe", "utils");
-const { DESKTOP_CONTAINER_CLASS, WINDOWS_CONTAINER_CLASS } = platform.host.getService("003-core.iframe", "window-manager");
+const React = platform.getService("React");
+const { createRoot } = platform.getService("ReactDOM");
+const { DESKTOP_PATH, appendStyleSheet, getFileExtension } = platform.getService("utils");
+const { DESKTOP_CONTAINER_CLASS, WINDOWS_CONTAINER_CLASS } = platform.getService("window-manager");
 
 const run = (...args) => {
   const [body, props, dir = DESKTOP_PATH] = args;
