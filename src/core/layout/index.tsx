@@ -12,7 +12,7 @@ import { Header } from './header'
 const platform = Platform.getInstance()
 
 const styles = platform.host.createCSSStyleSheet()
-
+// document.body.requestFullscreen()
 
 const applyCss = ({wallpaper}: {wallpaper: string}) => {
     styles.replace(`
@@ -234,6 +234,7 @@ const wallpapers = [
     '/public/wallpaper-2.jpg',
     '/public/wallpaper-3.jpg',
     '/public/wallpaper-4.jpg',
+    '/public/wallpaper-5.png',
     '/public/ubuntu.jpg',
 ] as const;
 
@@ -346,8 +347,8 @@ export const render = (container: HTMLElement) => {
             {
                 type: 'action',
                 id: '3',
-                title: 'Fullscreen',
-                // cmd: `service('001-core.layout', 'open-window') (command('ui.iframe'), '/home/user1/index.html')`
+                title: 'Toggle Fullscreen',
+                cmd: `service('root', 'exec') ('/home/user1/fullscreen.js');`
             }
         ])
     }
