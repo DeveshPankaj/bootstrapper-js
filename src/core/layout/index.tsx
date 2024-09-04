@@ -12,218 +12,239 @@ import { Header } from './header'
 const platform = Platform.getInstance()
 
 const styles = platform.host.createCSSStyleSheet()
-styles.replace(`
-    html, body {
-        margin: 0;
-        padding:0;
-        font-family: monospace;
-        height: 100svh;
-        overflow: hidden;
-    }
 
-    * {
-        box-sizing: border-box;
-    }
 
-    @font-face {
-        font-family: 'Material Symbols Outlined';
-        font-style: normal;
-        font-weight: 100 700;
-        src: url(https://fonts.gstatic.com/s/materialsymbolsoutlined/v138/kJEhBvYX7BgnkSrUwT8OhrdQw4oELdPIeeII9v6oFsLjBuVY.woff2) format('woff2');
-    }
+const applyCss = ({wallpaper}: {wallpaper: string}) => {
+    styles.replace(`
+        html, body {
+            margin: 0;
+            padding:0;
+            font-family: monospace;
+            height: 100svh;
+            overflow: hidden;
+        }
     
-    .material-symbols-outlined {
-        font-family: 'Material Symbols Outlined';
-        font-weight: normal;
-        font-style: normal;
-        font-size: 24px;
-        line-height: 1;
-        letter-spacing: normal;
-        text-transform: none;
-        display: inline-block;
-        white-space: nowrap;
-        word-wrap: normal;
-        direction: ltr;
-        -webkit-font-feature-settings: 'liga';
-        -webkit-font-smoothing: antialiased;
-    }
-
-    .layout-default {
-        // background: #292a2d;
-        // color: #919191;
-        // height: -webkit-fill-available;
-        height: 100%;
-
-        display: grid;
-        grid-template-columns: auto 1fr auto;
-        grid-template-rows: auto 1fr auto;
-        // gap: 5px;
-        grid-auto-flow: row;
-        grid-template-areas:
-            "header header header"
-            "left-nav content-area right-nav"
-            "footer footer footer";
-
-        // background-image: url(/wp-8.jpeg);
-        background-image: url(/public/ubuntu.jpg);
-        background-repeat: no-repeat;
-        background-size: cover;
-
-    }
-    .header {
-        grid-area: header;
-    }
-    .left-nav {
-        grid-area: left-nav;
-    }
-    .content-area {
-        grid-area: content-area;
-    }
-
-    .window > iframe {
-        border: 0;
-        flex-grow: 1;
-        width: 100%
-        width: -webkit-fill-available;
-        height: -webkit-fill-available;
-    }
-
-    .right-nav {
-        grid-area: right-nav;
-    }
-    .footer {
-        grid-area: footer;
-    }
-
-
-
-    .window {
-        position: absolute;
-        z-index: 9;
-        background-color: #f1f1f1;
-        text-align: center;
-        display: flex;
-        flex-direction: column;
-        // border: 1px solid #d3d3d3;
-
-        width: 50rem;
-        height: 30rem;
-        top: 0;
-
-        resize: both;
-        overflow: hidden;
-        border-radius: 6px;
-
-
-        // padding: 4px;
-        background: rgba(255, 255, 255, 0.15);
-        backdrop-filter: blur(10px);
-        box-shadow: rgba(31, 38, 135, 0.37) 0px 8px 32px;
-        // border: 1px solid rgba(255, 255, 255, 0.18);
-    }
-    .window.hidden {
-        display: none;
-    }
-
-    .window.top {
-        z-index: 10;
-    }
-
-    .window::-webkit-resizer {
-        background-color: transparent;
-    }
-
-    .window.dragging {
-        outline: 1px solid #d3d3d3;
-        z-index: 200;
-        box-shadow: rgb(255 255 255) 0px 0px 4px;
-    }
-
-    .window.on-top {
-        z-index: 100;
-    }
-
-    .window-header {
-        padding: 7px;
-        cursor: move;
-        z-index: 9;
-        background-color: rgb(0 0 0);
-        color: #fff;
+        * {
+            box-sizing: border-box;
+        }
+    
+        @font-face {
+            font-family: 'Material Symbols Outlined';
+            font-style: normal;
+            font-weight: 100 700;
+            src: url(https://fonts.gstatic.com/s/materialsymbolsoutlined/v138/kJEhBvYX7BgnkSrUwT8OhrdQw4oELdPIeeII9v6oFsLjBuVY.woff2) format('woff2');
+        }
         
-        // position: absolute;
-        // bottom: 100%;
-        // width: 100%;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-    }
-    .window-header > .title {
-        display: inline-flex;
-        align-items: center;
-        gap: .5rem;
-    }
+        .material-symbols-outlined {
+            font-family: 'Material Symbols Outlined';
+            font-weight: normal;
+            font-style: normal;
+            font-size: 24px;
+            line-height: 1;
+            letter-spacing: normal;
+            text-transform: none;
+            display: inline-block;
+            white-space: nowrap;
+            word-wrap: normal;
+            direction: ltr;
+            -webkit-font-feature-settings: 'liga';
+            -webkit-font-smoothing: antialiased;
+        }
+    
+        .layout-default {
+            // background: #292a2d;
+            // color: #919191;
+            // height: -webkit-fill-available;
+            height: 100%;
+    
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            grid-template-rows: auto 1fr auto;
+            // gap: 5px;
+            grid-auto-flow: row;
+            grid-template-areas:
+                "header header header"
+                "left-nav content-area right-nav"
+                "footer footer footer";
+    
+            // background-image: url(/wp-8.jpeg);
+            background-image: url(${wallpaper});
+            background-repeat: no-repeat;
+            background-size: cover;
+    
+        }
+        .header {
+            grid-area: header;
+        }
+        .left-nav {
+            grid-area: left-nav;
+        }
+        .content-area {
+            grid-area: content-area;
+        }
+    
+        .window > iframe {
+            border: 0;
+            flex-grow: 1;
+            width: 100%
+            width: -webkit-fill-available;
+            height: -webkit-fill-available;
+        }
+    
+        .right-nav {
+            grid-area: right-nav;
+        }
+        .footer {
+            grid-area: footer;
+        }
+    
+    
+    
+        .window {
+            position: absolute;
+            z-index: 9;
+            background-color: #f1f1f1;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            // border: 1px solid #d3d3d3;
+    
+            width: 50rem;
+            height: 30rem;
+            top: 0;
+    
+            resize: both;
+            overflow: hidden;
+            border-radius: 6px;
+    
+    
+            // padding: 4px;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            box-shadow: rgba(31, 38, 135, 0.37) 0px 8px 32px;
+            // border: 1px solid rgba(255, 255, 255, 0.18);
+        }
+        .window.hidden {
+            display: none;
+        }
+    
+        .window.top {
+            z-index: 10;
+        }
+    
+        .window::-webkit-resizer {
+            background-color: transparent;
+        }
+    
+        .window.dragging {
+            outline: 1px solid #d3d3d3;
+            z-index: 200;
+            box-shadow: rgb(255 255 255) 0px 0px 4px;
+        }
+    
+        .window.on-top {
+            z-index: 100;
+        }
+    
+        .window-header {
+            padding: 7px;
+            cursor: move;
+            z-index: 9;
+            background-color: rgb(0 0 0);
+            color: #fff;
+            
+            // position: absolute;
+            // bottom: 100%;
+            // width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .window-header > .title {
+            display: inline-flex;
+            align-items: center;
+            gap: .5rem;
+        }
+    
+        iframe.dragging {
+            pointer-events: none;
+        }
+    
+        .contextmenu {
+            position: absolute;
+            // background: white;
+            display: none;
+            z-index: 300;
+    
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+        }
+    
+    
+    
+        .toolbar {
+            background: aliceblue;
+            position: absolute;
+            bottom: 1rem;
+            left: 50%;
+            transform: translateX(-50%);
+    
+            padding: 0 2rem;
+            border-radius: 2rem;
+        }
+    
+        .overlay {
+            // display: none;
+            background: rgba(255, 255, 255, 0.30);
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            pointer-events: none;
+        }
+    
+        .overlay>div {
+            width: 10rem;
+            height: 10rem;
+            outline: 1px solid #00BCD4;
+        }
+    
+        // .overlay {
+        //     position:absolute;
+        //     top:0;
+        //     height: 100vh;
+        //     -webkit-mask: radial-gradient(50px, #0000 100%, #000);
+        //             mask: radial-gradient(50px, #0000 100%, #000);
+        //     width: 100%;
+        //     backdrop-filter: blur(10px);
+        //     background:rgba(255, 0, 0, 0.1);
+        //   }
+    
+    `)
+}
 
-    iframe.dragging {
-        pointer-events: none;
-    }
+const wallpapers = [
+    '/public/wallpaper-1.webp',
+    '/public/wallpaper-2.jpg',
+    '/public/wallpaper-3.jpg',
+    '/public/wallpaper-4.jpg',
+    '/public/ubuntu.jpg',
+] as const;
 
-    .contextmenu {
-        position: absolute;
-        // background: white;
-        display: none;
-        z-index: 300;
+applyCss({wallpaper: wallpapers[0]})
 
-        padding: 10px;
-        background: rgba(255, 255, 255, 0.15);
-        backdrop-filter: blur(10px);
-        border-radius: 15px;
-        box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
-        border: 1px solid rgba(255, 255, 255, 0.18);
-    }
+platform.register('set-wallpaper', (wallpaperUrl: string) => {
+    // console.log(wallpaperUrl)
+    applyCss({wallpaper: wallpaperUrl})
+})
 
 
-
-    .toolbar {
-        background: aliceblue;
-        position: absolute;
-        bottom: 1rem;
-        left: 50%;
-        transform: translateX(-50%);
-
-        padding: 0 2rem;
-        border-radius: 2rem;
-    }
-
-    .overlay {
-        // display: none;
-        background: rgba(255, 255, 255, 0.30);
-        position: absolute;
-        top: 0;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        z-index: 100;
-        pointer-events: none;
-    }
-
-    .overlay>div {
-        width: 10rem;
-        height: 10rem;
-        outline: 1px solid #00BCD4;
-    }
-
-    // .overlay {
-    //     position:absolute;
-    //     top:0;
-    //     height: 100vh;
-    //     -webkit-mask: radial-gradient(50px, #0000 100%, #000);
-    //             mask: radial-gradient(50px, #0000 100%, #000);
-    //     width: 100%;
-    //     backdrop-filter: blur(10px);
-    //     background:rgba(255, 0, 0, 0.1);
-    //   }
-
-`)
 
 export const render = (container: HTMLElement) => {
     platform.host.addCSSStyleSheet(styles)
