@@ -182,7 +182,7 @@ const App = (props: UICallbackProps & { file: FileType }) => {
 
     const runningInstencesRef = React.useRef<Array<() => void>>([])
     const runJS = () => {
-        runningInstencesRef.current.forEach(ref => ref())
+        runningInstencesRef.current.forEach(ref => typeof ref === 'function' && ref())
 
         const code = editorRef.current?.state.doc.toString() || '';
 

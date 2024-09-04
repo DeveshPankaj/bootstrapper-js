@@ -205,7 +205,10 @@
         '/public/wallpaper-2.jpg',
         '/public/wallpaper-3.jpg',
         '/public/wallpaper-4.jpg',
+        '/public/wallpaper-5.png',
         '/public/ubuntu.jpg',
+        // 'https://cdn.hero.page/wallpapers/3bd8f3ae-e2b1-43ed-a6d8-0e629c522d20-soft-shades-and-sharp-edges-wallpaper-3.png',
+        // 'https://icanbecreative.com/resources/files/articles/40-high-resolution-wallpapers-for-minimalist-lovers/sources/everest-minimalist-wallpaper-blue.png'
     ];
 
     const origin = platform.window.location.origin || platform.window.location.ancestorOrigins[0] || ''
@@ -229,14 +232,18 @@
       console.log(wallpaper)
       if(!setWallpaper) return;
 
-      setWallpaper(`${origin}/${wallpaper}`);
+      wallpaper.startsWith('/') ? setWallpaper(`${origin}/${wallpaper}`) : setWallpaper(wallpaper);
     }
   
     return (
       <div style={gridStyle}>
         {wallpapers.map((url, index) => (
           <div key={index} onClick={_ => onClickHandler(url)}>
-            <img src={`${origin}/${url}`} alt={`Wallpaper ${index + 1}`} style={imageStyle} />
+            {
+              url.startsWith('/') ? 
+                <img src={`${origin}/${url}`} alt={`Wallpaper ${index + 1}`} style={imageStyle} /> :
+                <img src={url} alt={`Wallpaper ${index + 1}`} style={imageStyle} />
+            }
           </div>
         ))}
       </div>
