@@ -238,11 +238,14 @@ const wallpapers = [
     '/public/ubuntu.jpg',
 ] as const;
 
-applyCss({wallpaper: wallpapers[0]})
+const userPrefWallpaper = platform.userPref.getWallpaper()
+applyCss({wallpaper: userPrefWallpaper || wallpapers[0]})
 
 platform.register('set-wallpaper', (wallpaperUrl: string) => {
     // console.log(wallpaperUrl)
-    applyCss({wallpaper: wallpaperUrl})
+    applyCss({wallpaper: wallpaperUrl});
+    platform.userPref.setWallpaper(wallpaperUrl);
+
 })
 
 

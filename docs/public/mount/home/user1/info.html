@@ -45,7 +45,7 @@
       startRect = props.getBoundingClientRect();
       startX = event.clientX;
       startY = event.clientY;
-      event.preventDefault(); // Prevent default dragging behavior
+      if(event.target.localName === 'section') event.preventDefault(); // Prevent default dragging behavior
     };
 
     const onDrag = (event) => {
@@ -201,18 +201,18 @@
 
   const Wallpapers = () => {
     const wallpapers = [
-        '/public/wallpaper-1.webp',
-        '/public/wallpaper-2.jpg',
-        '/public/wallpaper-3.jpg',
-        '/public/wallpaper-4.jpg',
-        '/public/wallpaper-5.png',
-        '/public/ubuntu.jpg',
-        // 'https://cdn.hero.page/wallpapers/3bd8f3ae-e2b1-43ed-a6d8-0e629c522d20-soft-shades-and-sharp-edges-wallpaper-3.png',
-        // 'https://icanbecreative.com/resources/files/articles/40-high-resolution-wallpapers-for-minimalist-lovers/sources/everest-minimalist-wallpaper-blue.png'
+      '/public/wallpaper-1.webp',
+      '/public/wallpaper-2.jpg',
+      '/public/wallpaper-3.jpg',
+      '/public/wallpaper-4.jpg',
+      '/public/wallpaper-5.png',
+      '/public/ubuntu.jpg',
     ];
+  
+    const origin = platform.window.location.origin || platform.window.location.ancestorOrigins[0] || '';
+    const [inputValue, setInputValue] = React.useState('');
 
-    const origin = platform.window.location.origin || platform.window.location.ancestorOrigins[0] || ''
-
+  
     const gridStyle = {
       display: 'grid',
       gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
@@ -225,28 +225,79 @@
       height: '150px',
       objectFit: 'cover',
       borderRadius: '8px',
+      cursor: 'pointer',
     };
-
+  
+    const inputContainerStyle = {
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      position: 'fixed',
+      bottom: '10px',
+      width: '50%',
+    };
+  
+    const inputStyle = {
+      flexGrow: 1,
+      maxWidth: '600px',
+      padding: '0.5rem',
+      border: '1px solid #ccc',
+      borderRadius: '4px',
+    };
+  
+    const buttonStyle = {
+      marginLeft: '10px',
+      padding: '0.5rem 1rem',
+      backgroundColor: '#007bff',
+      color: 'white',
+      border: 'none',
+      borderRadius: '4px',
+      cursor: 'pointer',
+    };
+  
     const onClickHandler = (wallpaper) => {
       const setWallpaper = platform.getService('set-wallpaper');
-      console.log(wallpaper)
-      if(!setWallpaper) return;
+      if (!setWallpaper) return;
+  
+      wallpaper.startsWith('/') ? setWallpaper(`${origin}${wallpaper}`) : setWallpaper(wallpaper);
+    };
+  
+    const onFetchClick = () => {
+      // Fetch logic can be added here
+      console.log('Fetch button clicked');
 
-      wallpaper.startsWith('/') ? setWallpaper(`${origin}/${wallpaper}`) : setWallpaper(wallpaper);
-    }
+      if (inputValue) {
+        onClickHandler(inputValue);
+      }
+    };
   
     return (
-      <div style={gridStyle}>
-        {wallpapers.map((url, index) => (
-          <div key={index} onClick={_ => onClickHandler(url)}>
-            {
-              url.startsWith('/') ? 
-                <img src={`${origin}/${url}`} alt={`Wallpaper ${index + 1}`} style={imageStyle} /> :
+      <>
+        <div style={gridStyle}>
+          {wallpapers.map((url, index) => (
+            <div key={index} onClick={() => onClickHandler(url)}>
+              {url.startsWith('/') ? (
+                <img src={`${origin}${url}`} alt={`Wallpaper ${index + 1}`} style={imageStyle} />
+              ) : (
                 <img src={url} alt={`Wallpaper ${index + 1}`} style={imageStyle} />
-            }
-          </div>
-        ))}
-      </div>
+              )}
+            </div>
+          ))}
+        </div>
+        {/* Input section at the bottom center */}
+        <div style={inputContainerStyle}>
+          <input
+            type="text"
+            placeholder="Enter URL"
+            style={inputStyle}
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)} // Update state with input value
+          />
+          <button onClick={onFetchClick} style={buttonStyle}>
+            Fetch
+          </button>
+        </div>
+      </>
     );
   };
 

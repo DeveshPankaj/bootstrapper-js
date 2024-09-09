@@ -271,6 +271,7 @@ const ListDirConponent = ({ dir, openFile, showFileActions }) => {
     ".html": "/public/html-icon.png",
     ".png": "/public/png-icon.png",
     ".run": "/public/bash.png",
+    ".json": "/public/json.png",
     ".": "/public/folder-icon.png",
     "": "/public/invalid-file-icon.png",
   };

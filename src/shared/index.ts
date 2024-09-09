@@ -313,12 +313,14 @@ export class Platform {
     public readonly events$: Observable<PlatformEvent>
     public host!: Host
     public window: Window = window
+    public userPref!: UserPreference
     constructor(private readonly _events: Subject<PlatformEvent>, public readonly name: string, public readonly cwd='/') {
         this.events$ = _events.asObservable()
     }
 
     public setHost(host: Host) {
         this.host = host
+        this.userPref = new UserPreference('/user-preferences.json', this);
     }
 
     static getInstance() {
@@ -394,3 +396,63 @@ export class Platform {
 
 }
 
+type UserPreferences = {
+  wallpaper?: string;
+  [key: string]: any; // Allows for additional preference properties
+};
+
+class UserPreference {
+  private preferences: UserPreferences = {};
+  private filePath: string;
+
+  constructor(filePath: string, private platform: Platform) {
+    this.filePath = filePath;
+    this.loadPreferences();
+  }
+
+  // Load preferences from JSON file
+  private loadPreferences(): void {
+    const fs = this.platform.host.getFS();
+    try {
+      const data = fs.readFileSync(this.filePath, 'utf-8');
+      this.preferences = JSON.parse(data);
+    } catch (err: any) {
+      if (err.code === 'ENOENT') {
+        console.log('Preferences file not found, creating a new one.');
+        this.savePreferences();
+      } else {
+        console.error('Error loading preferences:', err);
+      }
+    }
+  }
+
+  // Save preferences to JSON file
+  private savePreferences(): void {
+    const fs = this.platform.host.getFS();
+    try {
+      const data = JSON.stringify(this.preferences, null, 2);
+      fs.writeFileSync(this.filePath, data);
+    } catch (err) {
+      console.error('Error saving preferences:', err);
+    }
+  }
+
+  // Get the current wallpaper setting
+  public getWallpaper(): string | undefined {
+    return this.preferences.wallpaper;
+  }
+
+  // Set a new wallpaper and save the preferences
+  public setWallpaper(wallpaper: string): void {
+    this.preferences.wallpaper = wallpaper;
+    this.savePreferences();
+  }
+
+  // Require method for specific preference key
+  public require(key: string): any {
+    if (!this.preferences[key]) {
+      throw new Error(`Preference for ${key} is required but not found.`);
+    }
+    return this.preferences[key];
+  }
+}
