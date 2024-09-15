@@ -10,17 +10,11 @@
     }],
     "screenshots" : [
         {
-          "src": "Screenshot-1.png",
-          "sizes": "3348x1704",
-          "type": "image/png",
+          "src": "wallpaper-2.jpg",
+          "sizes": "1536x864",
+          "type": "image/jpg",
           "form_factor": "wide",
           "label": "Homescreen of Awesome App"
-        },
-        {
-            "src": "Screenshot-1.png",
-            "sizes": "3348x1704",
-            "type": "image/png",
-            "label": "Homescreen"
         }
     ],
     "scope": "/",
