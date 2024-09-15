@@ -2,8 +2,8 @@ import { Platform, UICallbackProps } from "@shared/index";
 import { FileType } from '@shared/types';
 import { getFileExtension } from "@shared/utils";
 
-import React, { useRef } from "react";
-import { createRoot } from "react-dom/client";
+import _React from "react";
+import { createRoot as _createRoot } from "react-dom/client";
 
 import { EditorView, basicSetup } from "codemirror";
 import { EditorState } from "@codemirror/state";
@@ -12,7 +12,11 @@ import { html } from "@codemirror/lang-html";
 import { placeholder } from "@codemirror/view";
 
 
-const platform = Platform.getInstance()
+const platform: Platform = window.platform
+// const React = platform.getService('react') as typeof _React
+// const {createRoot} = platform.getService('ReactDOM') as {createRoot: typeof _createRoot}
+let React: typeof _React
+let createRoot: typeof _createRoot
 
 const cacheName = 'MyFancyCacheName_v1';
 const cacheRef = { current: null as Cache | null }
@@ -41,6 +45,9 @@ platform.register('fullscreen', (...args: any[]) => fullScreenCallbackRef.curren
 platform.register('resize', (...args: any[]) => resizeCallbackRef.current(...args))
 
 platform.host.registerCommand('ui.notepad', (body: HTMLBodyElement, props: UICallbackProps, file?: FileType) => {
+
+    React = platform.getService('React') as typeof _React
+    createRoot = (platform.getService('ReactDOM') as {createRoot: typeof _createRoot}).createRoot;
 
 
     if (typeof file === 'string') {
@@ -145,8 +152,8 @@ const render = (container: HTMLElement, props: UICallbackProps & { file: FileTyp
 
 const App = (props: UICallbackProps & { file: FileType }) => {
     const fs = platform.host.getFS();
-    const scriptRef = useRef<string>(fs.readFileSync(props.file.path).toString() || '')
-    const editorRef = useRef<EditorView | null>(null);
+    const scriptRef = React.useRef<string>(fs.readFileSync(props.file.path).toString() || '')
+    const editorRef = React.useRef<EditorView | null>(null);
     const save = () => {
         if (editorRef.current) {
             scriptRef.current = editorRef.current.state.doc.toString()

@@ -13,7 +13,7 @@
       "version": "0.0.1"
     },
     "params": [],
-    "preload": true
+    "preload": false
   },
   "003-core.iframe": {
       "url": "/iframe.bundle.js",
@@ -41,7 +41,7 @@
     "metedata": {
       "version": "0.0.1"
     },
-    "preload": true
+    "preload": false
   },
   "006-ui.xml": {
     "url": "/xml-parser.bundle.js",
