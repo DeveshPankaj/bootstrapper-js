@@ -1,5 +1,7 @@
 const path = require("path");
 const HtmlWebpackPlugin = require("html-webpack-plugin");
+const { ModuleFederationPlugin } = require('webpack').container;
+
 // const CopyWebpackPlugin = require("copy-webpack-plugin");
 
 /** @type {import('webpack').Configuration} */
@@ -57,8 +59,13 @@ module.exports = {
       "@xml-parser": path.resolve(__dirname, "src/projects/xml-parser/"),
       "@modules": path.resolve(__dirname, "src/modules"),
     },
+    
   },
   plugins: [
+    // new ModuleFederationPlugin({
+    //   // adds date-fns as shared module
+    //   shared: ['@shared', 'react'],
+    // }),
     new HtmlWebpackPlugin({
       filename: "index.html", // Generates index.html inside the docs folder
       template: "/docs/public/index.html",

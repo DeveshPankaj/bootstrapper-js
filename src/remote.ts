@@ -2,7 +2,10 @@ import { Command, Host, Platform, PlatformEvent } from "@shared/index";
 import { BehaviorSubject, Subject } from "rxjs";
 import { Module, modules } from "./modules/modules";
 import type fs from 'fs'
-
+import React from "react";
+import { createRoot } from "react-dom/client";
+import * as utils from '@shared/utils'
+import { DESKTOP_CONTAINER_CLASS, WINDOWS_CONTAINER_CLASS } from './core/window-manager'
 
 //@ts-ignore
 const public_path = __webpack_public_path__ as string;
@@ -67,7 +70,8 @@ const loadModules = async (modules: { [name: string]: Module }) => {
     if (modulesMap.has(_module_name)) continue;
 
     const _module = modules[_module_name];
-    if(!_module.preload) continue;
+
+
     const loadScript = async () => {
       const [win, eventEmitter] = await windowService.createWindow(_module_name);
       modulesMap.set(_module_name, {
@@ -77,7 +81,11 @@ const loadModules = async (modules: { [name: string]: Module }) => {
         platform: win.platform,
       });
 
-      const _ = await windowService.loadScript(_module.url, win);
+      const _ = windowService.loadScript(_module.url, win);
+
+      if(_module.preload) {
+        await _;
+      }
 
       runAfterLoad.push(() =>
         eventEmitter.next({ type: "loaded", payload: [], module: _module})
@@ -195,6 +203,11 @@ hostPlatform.setHost(host);
 
 modulesMap.set('root', {platform} as any)
 
+
+platform.register('utils', utils)
+platform.register('window-manager', { DESKTOP_CONTAINER_CLASS, WINDOWS_CONTAINER_CLASS })
+platform.register('React', React)
+platform.register('ReactDOM', { createRoot })
 
 // Init App
 platform.host.registerCommand('core.add-module', (namespace: string, mod: Module) => {

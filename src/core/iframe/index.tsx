@@ -2,13 +2,13 @@ import { Platform, UICallbackProps, PlatformEvent } from "@shared/index";
 import React from "react";
 import mime from 'mime'
 import { createRoot } from "react-dom/client";
-import * as utils from '@shared/utils'
-import { DESKTOP_CONTAINER_CLASS, WINDOWS_CONTAINER_CLASS } from '../window-manager'
+// import * as utils from '@shared/utils'
+// import { DESKTOP_CONTAINER_CLASS, WINDOWS_CONTAINER_CLASS } from '../window-manager'
 import { Subject } from "rxjs";
 
 
-const platform = Platform.getInstance()
-
+// const platform = Platform.getInstance()
+const platform: Platform = window.platform
 
 
 const fullScreenCallbackRef = {
@@ -16,10 +16,10 @@ const fullScreenCallbackRef = {
 }
 platform.register('fullscreen', (...args: any[]) => fullScreenCallbackRef.current(...args))
 
-platform.register('utils', utils)
-platform.register('window-manager', { DESKTOP_CONTAINER_CLASS, WINDOWS_CONTAINER_CLASS })
-platform.register('React', React)
-platform.register('ReactDOM', { createRoot })
+// platform.register('utils', utils)
+// platform.register('window-manager', { DESKTOP_CONTAINER_CLASS, WINDOWS_CONTAINER_CLASS })
+// platform.register('React', React)
+// platform.register('ReactDOM', { createRoot })
 
 const getLocalFilePath = (path: string): string => {
     // return '/cache' + path
@@ -117,7 +117,9 @@ const App = (props: UICallbackProps & { url: string }) => {
         if (iframeRef.current.contentWindow) {
             // Add Platform
             const platformEventEmitter = new Subject<PlatformEvent>();
-            const newPlatform = new Platform(platformEventEmitter, props.url, props.url);
+            // const newPlatform = new Platform(platformEventEmitter, props.url, props.url);
+            //@ts-ignore
+            const newPlatform = new platform.constructor(platformEventEmitter, props.url, props.url);
             newPlatform.setHost(platform.host);
             platform.register('props', props);
             iframeRef.current!.contentWindow!.platform = newPlatform

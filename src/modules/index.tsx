@@ -53,7 +53,7 @@ const ModulesComponent = () => {
 
 
     const configPlacegholder = `{
-        "url": "https://deveshpankaj.github.io/bootstrapper-js/dist/game-of-life.bundle.js",
+        "url": "https://deveshpankaj.github.io/bootstrapper-js/docs/game-of-life.bundle.js",
         "metedata": {
             "version": "0.0.1"
         },
