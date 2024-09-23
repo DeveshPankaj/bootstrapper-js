@@ -340,22 +340,34 @@ export const render = (container: HTMLElement) => {
         showContextMenuHandler(event.clientX, event.clientY, [
             {
                 type: 'action',
-                id: '2',
-                title: 'Open Portfolio',
-                cmd: `service('001-core.layout', 'open-window') (command('ui.iframe'), '/home/user1/index.html')`
+                id: '0',
+                title: 'XTerm',
+               cmd: `service('root', 'exec') ('/home/user1/apps/xtermjs.html');`
             },
             {
                 type: 'action',
                 id: '1',
-                title: 'Open Explorer',
+                title: 'Explorer',
                 cmd: `service('001-core.layout', 'open-window') (command('explorer'))`
+            },
+            {
+                type: 'action',
+                id: '2',
+                title: 'Portfolio',
+                cmd: `service('001-core.layout', 'open-window') (command('ui.iframe'), '/home/user1/index.html')`
             },
             {
                 type: 'action',
                 id: '3',
                 title: 'Toggle Fullscreen',
                 cmd: `service('root', 'exec') ('/home/user1/fullscreen.js');`
-            }
+            },
+            {
+                type: 'action',
+                id: '4',
+                title: 'VsCode (password:demo)',
+                cmd: `service('root', 'exec') ('/home/user1/projects/VSCode.html');`
+            },
         ])
     }
     root.render(
