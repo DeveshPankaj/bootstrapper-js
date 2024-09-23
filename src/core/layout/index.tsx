@@ -365,6 +365,12 @@ export const render = (container: HTMLElement) => {
             {
                 type: 'action',
                 id: '4',
+                title: 'Settings',
+                cmd: `service('root', 'exec') ('/home/user1/info.html');`
+            },
+            {
+                type: 'action',
+                id: '5',
                 title: 'VsCode (password:demo)',
                 cmd: `service('root', 'exec') ('/home/user1/projects/VSCode.html');`
             },
