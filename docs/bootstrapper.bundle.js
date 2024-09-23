@@ -111,7 +111,17 @@ const initWindow = () => {
                     fs.mkdirSync(dir);
                 }
             });
-            const defaultFiles = yield (yield fetch('/public/mount/meta.json')).json();
+            const metaFilePath = '/meta.json';
+            const metaFileServerPath = '/public/mount/meta.json';
+            const isMetaFileExist = fs.existsSync(metaFilePath);
+            let defaultFiles = [];
+            if (isMetaFileExist) {
+                const metaFileRawContent = fs.readFileSync(metaFilePath);
+                defaultFiles = JSON.parse(metaFileRawContent);
+            }
+            const ignoreMetaReload = defaultFiles.find(item => item.path === metaFilePath && item.force_reload === false);
+            if (!ignoreMetaReload)
+                defaultFiles = yield (yield fetch(metaFileServerPath)).json();
             defaultFiles.forEach((item) => __awaiter(void 0, void 0, void 0, function* () {
                 if (fs.existsSync(item.path) && !item.force_reload)
                     return;

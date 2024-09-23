@@ -225,6 +225,9 @@
   
   
   const fs = platform.host.getFS()
+  const metaFileRawContent = fs.readFileSync('/user-preferences.json')
+  const configWallpapers = JSON.parse(metaFileRawContent).wallpapers ?? []
+
   const Projects = () => {
     const projectsDir = '/home/user1/projects'
     const [ls, setLs] = React.useState(fs.readdirSync(projectsDir))
@@ -241,17 +244,17 @@
   }
 
   const Wallpapers = () => {
-    const wallpapers = [
-      '/public/wallpaper-1.webp',
-      '/public/wallpaper-2.jpg',
-      '/public/wallpaper-3.jpg',
-      '/public/wallpaper-4.jpg',
-      '/public/wallpaper-5.png',
-      '/public/ubuntu.jpg',
-    ];
   
     const origin = platform.window.location.origin || platform.window.location.ancestorOrigins[0] || '';
     const [inputValue, setInputValue] = React.useState('');
+    const [wallpapers, setWallpapers] = React.useState(configWallpapers);
+
+    React.useEffect(() => {
+      const metaFileRawContent = fs.readFileSync('/user-preferences.json')
+      const configWallpapers = JSON.parse(metaFileRawContent).wallpapers ?? []
+      setWallpapers(configWallpapers)
+
+    }, [])
 
   
     const gridStyle = {
@@ -280,6 +283,7 @@
   
     const inputStyle = {
       flexGrow: 1,
+      marginLeft: '10px',
       maxWidth: '600px',
       padding: '0.5rem',
       border: '1px solid #ccc',
@@ -299,16 +303,27 @@
     const onClickHandler = (wallpaper) => {
       const setWallpaper = platform.getService('set-wallpaper');
       if (!setWallpaper) return;
-  
-      wallpaper.startsWith('/') ? setWallpaper(`${origin}${wallpaper}`) : setWallpaper(wallpaper);
+
+      const newWallpaper = wallpaper.startsWith('/') ? `${origin}${wallpaper}` : wallpaper;
+      if(!wallpapers.includes(wallpaper)) {
+        const addWallpaper = platform.getService('add-wallpaper');
+        setWallpapers(state => [...state, newWallpaper]);
+        addWallpaper(wallpaper);
+      }
+
+      setWallpaper(newWallpaper)
     };
   
     const onFetchClick = () => {
-      // Fetch logic can be added here
-      console.log('Fetch button clicked');
+      // if (inputValue) {
+      //   onClickHandler(inputValue);
+      // }
 
-      if (inputValue) {
-        onClickHandler(inputValue);
+      if(!wallpapers.includes(inputValue)) {
+        const addWallpaper = platform.getService('add-wallpaper');
+        setWallpapers(state => [...state, inputValue]);
+        addWallpaper(inputValue);
+        setInputValue('')
       }
     };
   
@@ -335,7 +350,7 @@
             onChange={(e) => setInputValue(e.target.value)} // Update state with input value
           />
           <button onClick={onFetchClick} style={buttonStyle}>
-            Fetch
+            Add Wallpaper
           </button>
         </div>
       </>

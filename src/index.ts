@@ -95,7 +95,17 @@ const initWindow = () => {
                 }
             })
 
-            const defaultFiles: Array<{file: string, path: string, force_reload?:boolean}> = await (await fetch('/public/mount/meta.json')).json();
+            const metaFilePath = '/meta.json'
+            const metaFileServerPath = '/public/mount/meta.json'
+            const isMetaFileExist = fs.existsSync(metaFilePath)
+            let defaultFiles: Array<{file: string, path: string, force_reload?:boolean}> = []
+            if(isMetaFileExist) {
+                const metaFileRawContent = fs.readFileSync(metaFilePath)
+                defaultFiles = JSON.parse(metaFileRawContent)
+            }
+
+            const ignoreMetaReload = defaultFiles.find(item => item.path === metaFilePath && item.force_reload===false);
+            if(!ignoreMetaReload) defaultFiles = await (await fetch(metaFileServerPath)).json();
             
             defaultFiles.forEach(async item => {
                 if(fs.existsSync(item.path) && !item.force_reload) return;

@@ -398,6 +398,7 @@ export class Platform {
 
 type UserPreferences = {
   wallpaper?: string;
+  wallpapers?: Array<string>;
   [key: string]: any; // Allows for additional preference properties
 };
 
@@ -444,7 +445,14 @@ class UserPreference {
 
   // Set a new wallpaper and save the preferences
   public setWallpaper(wallpaper: string): void {
+    this.loadPreferences();
     this.preferences.wallpaper = wallpaper;
+    this.savePreferences();
+  }
+
+  public addWallpaper(wallpaper: string): void {
+    this.loadPreferences();
+    this.preferences.wallpapers?.push(wallpaper);
     this.savePreferences();
   }
 
