@@ -111,7 +111,8 @@ const applyCss = ({wallpaper}: {wallpaper: string}) => {
     
             width: 50rem;
             height: 30rem;
-            top: 0;
+            top: min(10%, 30rem);
+            left: min(10%, 30rem);
     
             resize: both;
             overflow: hidden;
@@ -245,7 +246,9 @@ platform.register('set-wallpaper', (wallpaperUrl: string) => {
     // console.log(wallpaperUrl)
     applyCss({wallpaper: wallpaperUrl});
     platform.userPref.setWallpaper(wallpaperUrl);
-
+})
+platform.register('add-wallpaper', (wallpaperUrl: string) => {
+    platform.userPref.addWallpaper(wallpaperUrl);
 })
 
 

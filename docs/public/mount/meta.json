@@ -6,7 +6,8 @@
   },
   {
     "path": "/home/user1/initd.run",
-    "file": "/home/user1/initd.run"
+    "file": "/home/user1/initd.run",
+    "force_reload": false
   },
   {
     "path": "/home/user1/temp.html",
@@ -44,5 +45,20 @@
   {
     "path": "/home/user1/fullscreen.js",
     "file": "/home/user1/fullscreen.js"
+  },
+  {
+    "path": "/home/user1/apps/xtermjs.html",
+    "file": "/home/user1/apps/xtermjs.html",
+    "force_reload":true
+  },
+  {
+    "path": "/user-preferences.json",
+    "file": "/user-preferences.json",
+    "force_reload": false
+  },
+  {
+    "path": "/meta.json",
+    "file": "/meta.json",
+    "force_reload": true
   }
 ]
