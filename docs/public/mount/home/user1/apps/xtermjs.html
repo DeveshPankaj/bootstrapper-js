@@ -261,13 +261,32 @@ function processCommand(command) {
       }
       break;
 
+    case 'edit':
+      if (cmdArgs.length < 2) {
+        terminal.write('edit: missing operand\r\n');
+      } else {
+        let file_name = cmdArgs[1];
+        console.log(file_name)
+
+        try {
+          if (fs.statSync(`${pwd}/${file_name}`).isDirectory()) {
+            terminal.write(`edit: ${file_name}: Not a file\r\n`);
+          } else {
+            platform.host.execCommand(`service('001-core.layout', 'open-window') (command('ui.notepad'), '${pwd}/${file_name}')`)
+          }
+        } catch (err) {
+          terminal.write(`edit: ${file_name}: No such file or directory\r\n`);
+        }
+      }
+      break;
+
     case 'clear':
       clearTerminal();
       terminal.write(`\x1b[32mroot\x1b[0m\x1b[36m@pankajdevesh.com\x1b[0m: \x1b[33m~${pwd}$\x1b[0m `);
       break;
 
     case 'help':
-      terminal.write(`Available commands:\r\n - ls: List files\r\n - cd <dir>: Change directory\r\n - clear: Clear the terminal\r\n - help: Show this help\r\n - contact: Show contact info\r\n - ./<file_name>: Open a file\r\n`);
+      terminal.write(`Available commands:\r\n - ls: List files\r\n - edit: Edit file\r\n - cd <dir>: Change directory\r\n - clear: Clear the terminal\r\n - help: Show this help\r\n - contact: Show contact info\r\n - ./<file_name>: Open a file\r\n`);
       break;
 
     case 'contact':
