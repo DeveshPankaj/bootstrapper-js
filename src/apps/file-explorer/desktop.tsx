@@ -7,7 +7,7 @@ import { DESKTOP_CONTAINER_CLASS } from "../../core/window-manager";
 
 const platform = Platform.getInstance()
 
-export const ListDirComponent = ({ dir, openFile, showFileActions }: { dir?: string, openFile: (file: FileType) => void, showFileActions: (file: FileType, event: React.MouseEvent<HTMLDivElement, MouseEvent>) => void }) => {
+export const ListDirComponent = ({ dir, openFile, showFileActions, customClass }: { dir?: string, openFile: (file: FileType) => void, showFileActions: (file: FileType, event: React.MouseEvent<HTMLDivElement, MouseEvent>) => void , customClass?: string}) => {
 
     dir ??= DESKTOP_PATH;
 
@@ -54,8 +54,15 @@ export const ListDirComponent = ({ dir, openFile, showFileActions }: { dir?: str
             gap: 1rem;
             flex-wrap: wrap;
 
-
             // background: #3e3e3e;
+        }
+        .${DESKTOP_CONTAINER_CLASS} {
+            display: contents;
+        }
+        
+        .desktop-icons{
+            flex-direction: column;
+            width: min-content;
         }
     
         .${DESKTOP_CONTAINER_CLASS}-files .file[data-ext] {
@@ -86,7 +93,7 @@ export const ListDirComponent = ({ dir, openFile, showFileActions }: { dir?: str
     }
 
     return (
-        <main className={`${DESKTOP_CONTAINER_CLASS}-files`} ref={containerRef}>
+        <main className={`${DESKTOP_CONTAINER_CLASS}-files ${customClass??''}` } ref={containerRef}>
             {
                 files.map(file => (
                     <div key={file.path} onClick={() => openFile(file)} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'center' }}>
