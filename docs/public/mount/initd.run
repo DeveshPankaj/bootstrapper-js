@@ -1,0 +1,8 @@
+/**
+ * INFO:
+ * If you encounter a broken configuration, you can delete this file.
+ * It will be recreated on the next reload with default configurations.
+ */
+
+service('root', 'exec')('/home/user1/apps/xtermjs.html');
+
