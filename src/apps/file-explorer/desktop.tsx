@@ -63,6 +63,7 @@ export const ListDirComponent = ({ dir, openFile, showFileActions, customClass }
         .desktop-icons{
             flex-direction: column;
             width: min-content;
+            height: 100vh;
         }
     
         .${DESKTOP_CONTAINER_CLASS}-files .file[data-ext] {
