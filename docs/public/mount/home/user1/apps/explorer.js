@@ -386,7 +386,8 @@ const { remove } = platform.host.registerCommand("explorer", run, {
   callable: false,
   icon: "folder",
   title: "Files",
-  fullScreen: false
+  fullScreen: false,
+  header: {style: {backgroundColor: ''}}
 });
 
 // setTimeout(remove, 6000)

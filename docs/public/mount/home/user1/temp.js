@@ -13,16 +13,21 @@ const Counter = () => {
    return <button onClick={_ => setCounter(state => state+1)}>Clicked {counter} times</button>
 }
 
-const App = () => {
+const App = (props) => {
   const openThisFile = () => {
     const cmd = `service('001-core.layout', 'open-window') (command('ui.notepad'), '/home/user1/temp.js')`
     window.platform.host.execCommand(cmd)
+  }
+  
+  const changeHeaderStyles = (event) => {
+    props.setHeaderStyles({backgroundColor: event.target.value})
   }
   return (
     <>
         <h3>This Is Babel and React's magic!</h3>
         <Counter />
         <p>Edit <span style={{color: 'blue', cursor: 'pointer'}} onClick={openThisFile}>'/home/user1/temp1.js'</span> and save to see the changes</p>
+        <input type="color" onChange={changeHeaderStyles} />
     </>
   )
     // return React.createElement('div', {}, ["Hello World"])

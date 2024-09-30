@@ -19,7 +19,7 @@ export class WindowManager {
     }
 
     const container = platform.window.document.createElement("div");
-    const [head, closeButton, fullScreenButton, setTitle, appendActionButton] =
+    const [head, closeButton, fullScreenButton, setTitle, appendActionButton, setHeaderStyles] =
       createWindoeHeader(command);
 
     // this.closeWindow(command)
@@ -68,6 +68,7 @@ export class WindowManager {
           setTitle,
           toggleHeader,
           appendActionButton,
+          setHeaderStyles,
           setWindowView: (show: boolean) =>
             show
               ? container.classList.remove("hidden")
@@ -170,6 +171,13 @@ const createWindoeHeader = (command: Command) => {
 
   head.classList.add("window-header");
 
+  const setHeaderStyles = (styles: Record<string, string>) => {
+    Object.assign(head.style, styles)
+  }
+
+  const headerStyles = (command.meta?.header as any)?.style || {};
+  setHeaderStyles(headerStyles)
+
   const setTitle = (title: string) => {
     titleText.innerText = title;
   };
@@ -192,7 +200,7 @@ const createWindoeHeader = (command: Command) => {
     };
   };
 
-  return [head, close, fullScreen, setTitle, appendActionButton] as const;
+  return [head, close, fullScreen, setTitle, appendActionButton, setHeaderStyles] as const;
 };
 
 const appendWindow = (
