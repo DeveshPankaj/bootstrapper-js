@@ -1,20 +1,21 @@
-<title>Testing...</title>
+<title>ReactJS</title>
 <script type="module" defer>
   // const React = window.platform.getService('React')
   const {React, ReactDOM, App} = window.platform.require('/home/user1/temp.js')
   const {createRoot} = ReactDOM
 
   const el = document.createElement('div')
+  el.setAttribute('id', 'react-root')
   const root = createRoot(el)
   document.body.appendChild(el)
-  root.render(App())
+  root.render(React.createElement(App, {}, []))
 
     let exec = () => { }
 
-    const openProfileCommand = `service('001-core.layout', 'open-window') (command('ui.iframe'), '/home/user1/index.html');`
+    // const openProfileCommand = `service('001-core.layout', 'open-window') (command('ui.iframe'), '/home/user1/index.html');`
     // const openThreeJSCommand = `service('001-core.layout', 'open-window') (command('ui.iframe'), '/home/user1/projects/WebGL-Earth.html');`
     // const command = `service('001-core.layout', 'open-window') (command('ui.iframe'), '/home/user1/temp.html');`
-    document.getElementById('openProfileButton').onclick = () => window.platform.host.execCommand(openProfileCommand);
+    // document.getElementById('openProfileButton').onclick = () => window.platform.host.execCommand(openProfileCommand);
     // document.getElementById('openThreeJSButton').onclick = () => window.platform.host.execCommand(openThreeJSCommand);
 
     const code = `
@@ -81,10 +82,23 @@
 
 
 </script>
+<style>
+  body {
+    margin: 0;
+    height: 100vh;
+    background: white;
+  }
+  #react-root {
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+    font-family: system-ui;
+  }
+</style>
 
-<button id="openProfileButton">
+<!-- <button id="openProfileButton">
     Portfolio
-</button>
+</button> -->
 <!-- <button id="openThreeJSButton">
     Open ThreeJS
 </button> -->
