@@ -230,17 +230,8 @@ const applyCss = ({wallpaper}: {wallpaper: string}) => {
     `)
 }
 
-const wallpapers = [
-    '/public/wallpaper-1.webp',
-    '/public/wallpaper-2.jpg',
-    '/public/wallpaper-3.jpg',
-    '/public/wallpaper-4.jpg',
-    '/public/wallpaper-5.png',
-    '/public/ubuntu.jpg',
-] as const;
-
 const userPrefWallpaper = platform.userPref.getWallpaper()
-applyCss({wallpaper: userPrefWallpaper || wallpapers[0]})
+applyCss({wallpaper: userPrefWallpaper || '/public/wp-11.jpg'})
 
 platform.register('set-wallpaper', (wallpaperUrl: string) => {
     // console.log(wallpaperUrl)
