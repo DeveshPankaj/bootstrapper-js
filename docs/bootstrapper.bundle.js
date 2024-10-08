@@ -70,6 +70,7 @@ const initWindow = () => {
         '/home',
         '/home/user1',
         '/home/user1/apps',
+        '/home/user1/tools',
         '/home/user1/projects',
         // '/home/user1/projects/Snake.html', // Specific project file (not a directory, but included for completeness)
         // '/home/user1/projects/WebGL.html', // Specific project file (not a directory, but included for completeness)
