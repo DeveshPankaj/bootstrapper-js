@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,user-scalable=no">
+      <base href="https://totp.app/" >  
+        <meta name="description" content="TOTP.APP - is a online generator of one-time passwords, based on TOTP (RFC 6238) algorithm. A web-based analog of the Google Authenticator mobile application.">
+        <meta name="keywords" content="totp, google authenticator, one-time password, online">
+        <title>Google Authenticator</title>
+        <!--[if IE]><link rel="icon" href="/favicon.ico"><![endif]-->
+        <!-- <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css?family=Lobster|Roboto+Condensed:400,700&subset=cyrillic"> -->
+        <!-- <link href="/css/app.dd3adc11.css" rel="preload" as="style" crossorigin="anonymous">
+        <link href="/js/app.bd2b8333.js" rel="preload" as="script" crossorigin="anonymous">
+        <link href="/js/chunk-vendors.ca84d1a6.js" rel="preload" as="script" crossorigin="anonymous"> -->
+        <link href="/css/app.dd3adc11.css" rel="stylesheet" crossorigin="anonymous">
+        <link rel="icon" type="image/png" sizes="32x32" href="/img/icons/favicon-32x32.png" crossorigin="anonymous">
+        <link rel="icon" type="image/png" sizes="16x16" href="/img/icons/favicon-16x16.png" crossorigin="anonymous">
+        <link rel="manifest" href="/manifest.json" crossorigin="anonymous">
+        <meta name="theme-color" content="#ffffff">
+        <meta name="apple-mobile-web-app-capable" content="no">
+        <meta name="apple-mobile-web-app-status-bar-style" content="default">
+        <meta name="apple-mobile-web-app-title" content="TOTP.APP">
+        <link rel="apple-touch-icon" href="/img/icons/apple-touch-icon-152x152.png" crossorigin="anonymous">
+        <link rel="mask-icon" href="/img/icons/safari-pinned-tab.svg" color="#ffffff" crossorigin="anonymous">
+        <meta name="msapplication-TileImage" content="/img/icons/msapplication-icon-144x144.png">
+        <meta name="msapplication-TileColor" content="#ffffff">
+    </head>
+    <body>
+        <div id="app">
+            <noscript>Enable JavaScript to continue.</noscript>
+        </div>
+        <script src="/js/chunk-vendors.ca84d1a6.js" crossorigin="anonymous"></script>
+        <!-- <script src="/js/app.bd2b8333.js" crossorigin="anonymous"></script> -->
+        <script defer>
+          fetch('https://totp.app/js/app.bd2b8333.js')
+              .then(res => res.text())
+              .then(script => script.replace('this.sys.licount()', 'console.log(this)'))
+              .then(script => (new Function(script))())
+        </script>
+    </body>
+</html>

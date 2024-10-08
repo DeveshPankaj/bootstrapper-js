@@ -27,6 +27,21 @@
     "file": "/home/user1/apps/explorer.js"
   },
   {
+    "path": "/home/user1/apps/TOTP.html",
+    "file": "/home/user1/apps/TOTP.html",
+    "force_reload":true
+  },
+  {
+    "path": "/home/user1/apps/WAMP.html",
+    "file": "/home/user1/apps/WAMP.html",
+    "force_reload":true
+  },
+  {
+    "path": "/home/user1/tools/speed-test.html",
+    "file": "/home/user1/tools/speed-test.html",
+    "force_reload":true
+  },
+  {
     "path": "/home/user1/projects/Snake.html",
     "file": "/home/user1/projects/Snake.html"
   },
