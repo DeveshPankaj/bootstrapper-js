@@ -1,0 +1,78 @@
+const terminal = platform.getService('terminal')
+const [pwd, file, ...rest] = $args
+const write = terminal? terminal.write.bind(terminal) : console.log
+
+
+
+// Define colors (ANSI codes)
+const colors = [
+    '\x1b[31m',  // Red
+    '\x1b[32m',  // Green
+    '\x1b[33m',  // Yellow
+    '\x1b[34m',  // Blue
+    '\x1b[35m',  // Magenta
+    '\x1b[36m',  // Cyan
+    '\x1b[37m'   // White
+];
+const reset = '\x1b[0m';
+
+// Icon lines (ASCII art)
+const iconLines = [
+    `        .--.                  `,
+    `       |o_o |                 `,
+    `       |:_/ |                 `,
+    `      //   \\\\\\                `,
+    `     (|     | )               `,
+    `    /'\\_   _/\`\\               `,
+    `    \\___)=(___/               `
+];
+
+// Info lines
+const infoLines = [
+    `Pankaj Devesh`,
+    `Role: Senior Software Engineer`,
+    `Tech Stack: TypeScript, Python`,
+    `Portfolio: pankajdevesh.com`,
+    `Experience: 5 years`,
+    `Projects: Fullstack Development`,
+    `Tech Focus: Microservices, CLI`
+];
+
+// Function to display the animated icon with info
+function displayAnimatedProfile(iconLines, infoLines, colors) {
+    let colorIndex = 0; // Start with the first color
+
+    // Store the cursor position once before updating the icon area
+    terminal.write('\x1b7'); // Save the current cursor position (using ANSI escape code)
+
+    const animate = setInterval(() => {
+        // Restore cursor position to start updating the area
+        terminal.write('\x1b8'); // Restore the saved cursor position (using ANSI escape code)
+
+        // Cycle through the colors
+        const color = colors[colorIndex];
+        colorIndex = (colorIndex + 1) % colors.length; // Increment and loop back
+
+        // Generate the output for the current frame
+        let output = '';
+        for (let i = 0; i < iconLines.length; i++) {
+            const iconPart = `${color}${iconLines[i]}${reset}`; // Apply current color to icon line
+            const infoPart = infoLines[i] || '';  // Ensure info part aligns with icon
+            output += iconPart.padEnd(35) + infoPart + '\n';  // Pad and align
+        }
+
+        // Write the animated frame to the terminal
+        terminal.write(output);
+
+    }, 500); // Update every 500ms (can adjust speed)
+    
+    // Stop the animation after some time (optional)
+    setTimeout(() => {
+        clearInterval(animate);  // Stop animation after 10 seconds
+        write(`Type \x1b[33mhelp\x1b[0m to get available commands.
+\x1b[32mroot\x1b[0m\x1b[36m@pankajdevesh.com\x1b[0m: \x1b[33m~/home/user1$\x1b[0m`)
+    }, 2500);
+}
+
+// Call the function to start the animation
+displayAnimatedProfile(iconLines, infoLines, colors);

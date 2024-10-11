@@ -1,0 +1,29 @@
+<title>ReactJS</title>
+<script type="module" defer>
+  // const React = window.platform.getService('React')
+  const {React, ReactDOM, App} = window.platform.require('/home/user1/projects/temp.js')
+  const {createRoot} = ReactDOM
+
+  const el = document.createElement('div')
+  el.setAttribute('id', 'react-root')
+  const root = createRoot(el)
+  document.body.appendChild(el)
+
+  const props = platform.getService('props')
+  root.render(React.createElement(App, props || {}, []))
+
+</script>
+<style>
+  body {
+    margin: 0;
+    height: 100vh;
+    background: white;
+  }
+  #react-root {
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+    font-family: system-ui;
+    height: 100%;
+  }
+</style>

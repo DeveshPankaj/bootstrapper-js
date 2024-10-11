@@ -165,7 +165,7 @@ const runInitCommands = () => {
     // ['/usr/desktop/index.html'],
     ['/home/user1/initd.run']
   ];
-  initd.forEach(command => host.exec(command[0], ...command.slice(1)))
+  initd.forEach(command => host.exec(hostPlatform, command[0], ...command.slice(1)))
 
 }
 
@@ -238,7 +238,9 @@ platform.register('fs', (cmd: string, ...args: string[]) => {
       }
   }
 })
-platform.register('exec', platform.host.exec.bind(platform.host))
+platform.register('exec', 
+  (filepath: string, ...args: string[]) => platform.host.exec(platform, filepath, ...args)
+)
 
 export const windowService = new WindowService(window, window.document.body);
 modules.subscribe((modules) => loadModules(modules));

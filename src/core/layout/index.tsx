@@ -86,7 +86,7 @@ const applyCss = ({wallpaper}: {wallpaper: string}) => {
         .window > iframe {
             border: 0;
             flex-grow: 1;
-            width: 100%
+            width: 100%;
             width: -webkit-fill-available;
             height: -webkit-fill-available;
         }
@@ -238,10 +238,19 @@ platform.register('set-wallpaper', (wallpaperUrl: string) => {
     applyCss({wallpaper: wallpaperUrl});
     platform.userPref.setWallpaper(wallpaperUrl);
 })
+
 platform.register('add-wallpaper', (wallpaperUrl: string) => {
     platform.userPref.addWallpaper(wallpaperUrl);
 })
 
+platform.host.registerCommand('set-wallpaper', (wallpaperUrl: string) => {
+    applyCss({wallpaper: wallpaperUrl});
+    platform.userPref.setWallpaper(wallpaperUrl);
+})
+
+platform.host.registerCommand('add-wallpaper', (wallpaperUrl: string) => {
+    platform.userPref.addWallpaper(wallpaperUrl);
+})
 
 
 export const render = (container: HTMLElement) => {
@@ -275,7 +284,7 @@ export const render = (container: HTMLElement) => {
     })
 
     const openFile = (file: FileType) => {
-        platform.host.exec(file.path)
+        platform.host.exec(platform, file.path)
     }
 
     const contextMenuItems: Array<ContextMenuItem> = [
@@ -307,7 +316,7 @@ export const render = (container: HTMLElement) => {
         contextMenuComponentRef.current.setOnClick(item => {
             contextMenuRef.current!.style.display = 'none';
             if (item.cmd) {
-                platform.host.execCommand(item.cmd)
+                platform.host.execCommand(item.cmd, platform)
             }
         });
 
@@ -321,7 +330,7 @@ export const render = (container: HTMLElement) => {
 
 
     const onCommandClickHandler = (command: Command, ...args: string[]) => {
-        platform.host.execCommand(`service('001-core.layout', 'open-window') (command('${command.name}')${args.length ? ',' : ''} ${args.map(x => "'" + x + "'").join(', ')})`)
+        platform.host.execCommand(`service('001-core.layout', 'open-window') (command('${command.name}')${args.length ? ',' : ''} ${args.map(x => "'" + x + "'").join(', ')})`, platform)
 
     }
 
@@ -351,13 +360,13 @@ export const render = (container: HTMLElement) => {
                 type: 'action',
                 id: '3',
                 title: 'Toggle Fullscreen',
-                cmd: `service('root', 'exec') ('/home/user1/fullscreen.js');`
+                cmd: `service('root', 'exec') ('/usr/bin/fullscreen.js');`
             },
             {
                 type: 'action',
                 id: '4',
                 title: 'Settings',
-                cmd: `service('root', 'exec') ('/home/user1/info.html');`
+                cmd: `service('root', 'exec') ('/home/user1/settings.html');`
             },
             {
                 type: 'action',

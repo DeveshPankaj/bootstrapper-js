@@ -24,6 +24,7 @@ const run = (...args) => {
             height: 100svh;
             // background: black;
             backdrop-filter: blur(50px);
+            background: #ffffff55;
         }
 
         @font-face {
@@ -129,7 +130,7 @@ const App = (props) => {
 
       // props.setTitle(`File Explorer (${dirRef.current})`)
     } else {
-      platform.host.exec(selectedFilePath);
+      platform.host.exec(platform, selectedFilePath);
     }
   };
 

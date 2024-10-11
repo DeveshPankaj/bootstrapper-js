@@ -79,7 +79,7 @@ const initWindow = () => {
 
 
     // @ts-ignore
-    window.BrowserFS.configure({ fs: "LocalStorage" }, async err => {
+    window.BrowserFS.configure({ fs: "LocalStorage", options: {} }, async err => {
         if (err) {
           alert(err);
         } else {

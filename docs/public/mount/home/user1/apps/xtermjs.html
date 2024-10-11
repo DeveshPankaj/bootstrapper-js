@@ -154,7 +154,7 @@ root@pankajdevesh.com: ~/projects$`;
       neofetchMessage6,
       neofetchMessage7
     ]
-    terminal.write(welcome_msgs[6]);
+    // terminal.write(welcome_msgs[6]);
 
     // Handle window resize events
     window.addEventListener('resize', () => {
@@ -164,6 +164,7 @@ root@pankajdevesh.com: ~/projects$`;
     let pwd = '/home/user1';
 const fs = platform.host.getFS();
 let files = fs.readdirSync(pwd);
+processCommand('info')
 
 // Command history and index
 let commandHistory = [];
@@ -196,7 +197,7 @@ terminal.onData(data => {
       historyIndex = commandHistory.length;
     }
     inputBuffer = '';
-    terminal.write(`\x1b[32mroot\x1b[0m\x1b[36m@pankajdevesh.com\x1b[0m: \x1b[33m~${pwd}$\x1b[0m `);
+    terminal.write(`\n\x1b[32mroot\x1b[0m\x1b[36m@pankajdevesh.com\x1b[0m: \x1b[33m~${pwd}$\x1b[0m `);
   } else if (data === '\u007F') {  // Backspace key
     if (inputBuffer.length > 0) {
       inputBuffer = inputBuffer.slice(0, -1);
@@ -231,10 +232,18 @@ terminal.onData(data => {
 function processCommand(command) {
   const cmdArgs = command.split(' ');
 
+  const commandFile = `/bin/${cmdArgs[0]}.run`
+  const commaindExist = fs.existsSync(commandFile)
+  if(commaindExist) {
+    platform.register('terminal', terminal)
+    platform.host.exec(platform, commandFile, pwd, ...cmdArgs.slice(1));
+    return;
+  }
+
   switch (cmdArgs[0]) {
-    case 'ls':
-      terminal.write(`${files.join(' ')}\r\n`);
-      break;
+    // case 'ls':
+    //   terminal.write(`${files.join(' ')}\r\n`);
+    //   break;
 
     case 'cd':
       if (cmdArgs.length < 2) {
@@ -298,7 +307,7 @@ function processCommand(command) {
       if (command.startsWith('./')) {
         const fileName = command.slice(2);
         if (files.includes(fileName)) {
-          platform.host.exec(`${pwd}/${fileName}`);
+          platform.host.exec(platform, `${pwd}/${fileName}`);
         } else {
           terminal.write(`Error: ${fileName} not found\r\n`);
         }

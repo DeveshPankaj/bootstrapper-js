@@ -1,0 +1,19 @@
+const terminal = platform.getService('terminal')
+const fs = platform.host.getFS()
+const [pwd, file, ...rest] = $args
+const write = terminal? terminal.write.bind(terminal) : console.log
+console.log($args)
+
+if(!file) {
+  write(`filename require!`)
+  return
+}
+
+if(!fs.existsSync(`${pwd}/${file}`)) {
+  write(`file does not exist.`)
+  return
+}
+
+const fileContent = fs.readFileSync(`${pwd}/${file}`)
+write(fileContent.toString().replace(/\\x1b/g, '\x1b'))
+
