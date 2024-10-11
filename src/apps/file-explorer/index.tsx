@@ -172,7 +172,7 @@ const App = (props: UICallbackProps & { file: FileType }) => {
         }
 
         else {
-            platform.host.exec(selectedFilePath)
+            platform.host.exec(platform, selectedFilePath)
         }
     }
 

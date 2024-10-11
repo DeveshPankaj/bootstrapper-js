@@ -35074,8 +35074,8 @@ const fullScreenCallbackRef = {
 platform.register('fullscreen', (...args) => fullScreenCallbackRef.current(...args));
 // platform.register('utils', utils)
 // platform.register('window-manager', { DESKTOP_CONTAINER_CLASS, WINDOWS_CONTAINER_CLASS })
-// platform.register('React', React)
-// platform.register('ReactDOM', { createRoot })
+platform.register('React', (react__WEBPACK_IMPORTED_MODULE_0___default()));
+platform.register('ReactDOM', { createRoot: react_dom_client__WEBPACK_IMPORTED_MODULE_2__.createRoot });
 const getLocalFilePath = (path) => {
     // return '/cache' + path
     const fs = platform.host.getFS();
@@ -35157,7 +35157,9 @@ const App = (props) => {
             //@ts-ignore
             const newPlatform = new platform.constructor(platformEventEmitter, props.url, props.url);
             newPlatform.setHost(platform.host);
-            platform.register('props', props);
+            newPlatform.register('props', props);
+            newPlatform.register('React', (react__WEBPACK_IMPORTED_MODULE_0___default()));
+            newPlatform.register('ReactDOM', { createRoot: react_dom_client__WEBPACK_IMPORTED_MODULE_2__.createRoot });
             iframeRef.current.contentWindow.platform = newPlatform;
             // Patch fetch and import
             // @ts-ignore

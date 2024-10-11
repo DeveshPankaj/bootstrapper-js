@@ -121,19 +121,27 @@ export class Host {
     commands.forEach((command) => command.exec(...args));
   }
 
-  public execCommand(command: string) {
-    console.log(
-      `%c> ${command}`,
-      "color: green;background:black;font-size:12px"
-    );
+  public execCommand(command: string, platform: Platform, ...args: string[]) {
+    // console.log(
+    //   `%c> ${command}`,
+    //   "color: green;background:black;font-size:12px"
+    // );
 
     const context = {
       window: null,
       document: null,
       global: null,
       globalThis: null,
+      platform,
       service: (moduleName: string, serviceName: string) => {
-        return this.getService(moduleName, serviceName);
+
+        // try {
+        //   const moduleResult = plarform.getService(moduleName)
+        //   if(moduleResult) return moduleResult;
+        // } catch (error) {}
+        
+        const hostResult = this.getService(moduleName, serviceName);
+        return hostResult
       },
       command: (commandName: string) => {
         const allCommands = this.commands.getValue();
@@ -141,6 +149,7 @@ export class Host {
         if (!_cmd) throw `Command: [${commandName}] not found`;
         return _cmd;
       },
+      $args: args
     };
     //   const factory = new Function(...Object.keys(context), 'return '+command);
     const factory = new Function(...Object.keys(context), command);
@@ -209,7 +218,7 @@ export class Host {
     return worker;
   }
 
-  public exec(filepath: string, ...args: string[]) {
+  public exec(plarform: Platform, filepath: string, ...args: string[]) {
     console.log(`$${filepath}`);
     const fs = this.getFS();
     const stat = fs.statSync(filepath);
@@ -251,7 +260,7 @@ export class Host {
       else if (fileExt === 'run') {
         const fs = this.getFS()
         const source = fs.readFileSync(filepath)
-        this.execCommand(source.toString())
+        this.execCommand(source.toString(), plarform, ...args)
         return;
       }
 
@@ -265,21 +274,22 @@ export class Host {
     }
 
     // console.log(`%c> ${script}`, 'color: green;background:black;font-size:12px')
-    this.execCommand(script);
+    this.execCommand(script, plarform, ...args);
   }
 
   public getService(moduleName: string, serviceName: string): unknown {
 
-    const callerPlatform = (this.getService as any).callerPlatform as Platform;
+    // const callerPlatform = (this.getService as any).callerPlatform as Platform;
+    // const isMatch = (key: string, value: Platform) => moduleName ? key === moduleName && value.getServiceSync(serviceName) : value.getServiceSync(serviceName)
+    // const srv = Array.from(this.modulesMap).filter(([key, _]) => key !== callerPlatform?.name).find(([key, value]) => isMatch(key, value.platform))?.[1]?.platform?.getService(serviceName);
 
-    const isMatch = (key: string, value: Platform) => moduleName ? key === moduleName && value.getServiceSync(serviceName) : value.getServiceSync(serviceName)
+    if(!moduleName) return;
 
-    const srv = Array.from(this.modulesMap).filter(([key, _]) => key !== callerPlatform?.name).find(([key, value]) => isMatch(key, value.platform))?.[1]?.platform?.getService(serviceName);
+    const mod = this.modulesMap.get(moduleName)!;
+    if (!mod) return;
+    // return mod.platform.getService(serviceName)
 
-    // const mod = this.modulesMap.get(moduleName)!;
-    // if (!mod) return;
-
-    // const srv = mod.platform.getService(serviceName)!;
+    const srv = mod.platform.getServiceSync(serviceName)!;
     if (!srv) throw `Servive: [${moduleName}/${serviceName}] not found`;
 
     return srv;
@@ -346,7 +356,7 @@ export class Platform {
         // FIXME: BUG - service should not update other service function diractly, use shared point of memory for communication
         const oldCallerPlatform = (this.host.getService as any).callerPlatform;
         (this.host.getService as any).callerPlatform = this;
-        const result = this.host.getService('', serviceName);
+        const result = this.host.getService('root', serviceName);
         (this.host.getService as any).callerPlatform = oldCallerPlatform;
         return result
     }

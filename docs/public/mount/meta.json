@@ -5,21 +5,41 @@
     "force_reload": true
   },
   {
+    "path": "/bin/help.run",
+    "file": "/bin/help.run",
+    "force_reload": true
+  },
+  {
+    "path": "/bin/info.run",
+    "file": "/bin/info.run",
+    "force_reload": true
+  },
+  {
+    "path": "/bin/ls.run",
+    "file": "/bin/ls.run",
+    "force_reload": true
+  },
+  {
+    "path": "/bin/cat.run",
+    "file": "/bin/cat.run",
+    "force_reload": true
+  },
+  {
     "path": "/home/user1/initd.run",
     "file": "/home/user1/initd.run",
     "force_reload": true
   },
   {
-    "path": "/home/user1/temp.html",
-    "file": "/home/user1/temp.html"
+    "path": "/home/user1/projects/temp.html",
+    "file": "/home/user1/projects/temp.html"
   },
   {
-    "path": "/home/user1/temp.js",
-    "file": "/home/user1/temp.js"
+    "path": "/home/user1/projects/temp.js",
+    "file": "/home/user1/projects/temp.js"
   },
   {
-    "path": "/home/user1/info.html",
-    "file": "/home/user1/info.html",
+    "path": "/home/user1/settings.html",
+    "file": "/home/user1/settings.html",
     "force_reload": true
   },
   {
@@ -66,7 +86,7 @@
     "file": "/home/user1/projects/3js-flow.html"
   },
   {
-    "path": "/home/user1/fullscreen.js",
+    "path": "/usr/bin/fullscreen.js",
     "file": "/home/user1/fullscreen.js"
   },
   {

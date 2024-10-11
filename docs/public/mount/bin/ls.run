@@ -1,0 +1,16 @@
+// $args = [pwd, ...args]
+const terminal = platform.getService('terminal')
+const fs = platform.host.getFS()
+const [pwd, dir, ...rest] = $args
+const write = terminal? terminal.write.bind(terminal) : console.log
+console.log($args)
+
+const lsDir = dir ?? pwd
+
+
+const dirExist = fs.existsSync(lsDir)
+if(!dirExist) return;
+
+const ls = fs.readdirSync(lsDir)
+write(ls.join('\t'))
+

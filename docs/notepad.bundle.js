@@ -30780,12 +30780,12 @@ const App = (props) => {
         };
     };
     const openIframe = () => {
-        platform.host.execCommand(`service('001-core.layout', 'open-window') (command('ui.iframe'), '${props.file.path}')`);
+        platform.host.execCommand(`service('001-core.layout', 'open-window') (command('ui.iframe'), '${props.file.path}')`, platform);
     };
     const runSource = () => {
         var _a;
         const code = ((_a = editorRef.current) === null || _a === void 0 ? void 0 : _a.state.doc.toString()) || '';
-        platform.host.execCommand(code);
+        platform.host.execCommand(code, platform);
     };
     const runningInstencesRef = React.useRef([]);
     const runJS = () => {

@@ -18,8 +18,8 @@ platform.register('fullscreen', (...args: any[]) => fullScreenCallbackRef.curren
 
 // platform.register('utils', utils)
 // platform.register('window-manager', { DESKTOP_CONTAINER_CLASS, WINDOWS_CONTAINER_CLASS })
-// platform.register('React', React)
-// platform.register('ReactDOM', { createRoot })
+platform.register('React', React)
+platform.register('ReactDOM', { createRoot })
 
 const getLocalFilePath = (path: string): string => {
     // return '/cache' + path
@@ -122,7 +122,10 @@ const App = (props: UICallbackProps & { url: string }) => {
             //@ts-ignore
             const newPlatform = new platform.constructor(platformEventEmitter, props.url, props.url);
             newPlatform.setHost(platform.host);
-            platform.register('props', props);
+            newPlatform.register('props', props);
+            newPlatform.register('React', React)
+            newPlatform.register('ReactDOM', { createRoot })
+
             iframeRef.current!.contentWindow!.platform = newPlatform
 
             // Patch fetch and import

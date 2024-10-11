@@ -178,12 +178,12 @@ const App = (props: UICallbackProps & { file: FileType }) => {
     }
 
     const openIframe = () => {
-        platform.host.execCommand(`service('001-core.layout', 'open-window') (command('ui.iframe'), '${props.file.path}')`)
+        platform.host.execCommand(`service('001-core.layout', 'open-window') (command('ui.iframe'), '${props.file.path}')`, platform)
     }
 
     const runSource = () => {
         const code = editorRef.current?.state.doc.toString() || '';
-        platform.host.execCommand(code)
+        platform.host.execCommand(code, platform)
     }
 
 

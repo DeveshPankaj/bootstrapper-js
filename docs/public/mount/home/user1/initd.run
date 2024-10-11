@@ -7,7 +7,7 @@
 
 // Load file explorer
 service('root', 'exec')('/home/user1/apps/explorer.js');
-// service('root', 'exec')('/home/user1/info.html');
+// service('root', 'exec')('/home/user1/settings.html');
 // service('root', 'exec')('/home/user1/apps/xtermjs.html');
 
 // service('001-core.layout', 'open-window')(command('ui.iframe'), '/home/user1/index.html');

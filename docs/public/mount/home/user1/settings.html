@@ -1,0 +1,407 @@
+<style>
+  body {
+    margin: 0;
+  }
+
+  #dragger {
+    width: 10rem;
+    height: 10rem;
+    background: #c2c2c2;
+    cursor: pointer;
+    display: none;
+  }
+</style>
+<script type="module" defer>
+  onload = () => {
+    const React = platform.getService('React');
+    const ReactDOM = platform.getService('ReactDOM');
+    const props = platform.getService('props');
+
+    // console.log(props, React, ReactDOM);
+
+    props.toggleHeader(false);
+    
+    const dom = document.getElementById('react-root');
+    const root = ReactDOM.createRoot(dom);
+    const appModuleSource = document.querySelector('script[type="text/React-Jsx"]').innerText;
+
+    const {App} = platform.host.execString(appModuleSource);
+    root.render(React.createElement(App, props, []));
+    
+
+
+    // document.getElementById('render-btn').addEventListener('click', () => {
+    //   props.close();
+    // });
+
+    // const dragger = document.getElementById('dragger');
+    const dragger = dom
+    
+    let isDragging = false;
+    let startX, startY, startRect;
+
+    const onDragStart = (event) => {
+      isDragging = true;
+      startRect = props.getBoundingClientRect();
+      startX = event.clientX;
+      startY = event.clientY;
+      if(event.target.localName === 'section') event.preventDefault(); // Prevent default dragging behavior
+    };
+
+    const onDrag = (event) => {
+      if (!isDragging) return;
+
+      const deltaX = event.clientX - startX;
+      const deltaY = event.clientY - startY;
+
+      const newRect = {
+        left: startRect.left + deltaX,
+        top: startRect.top + deltaY,
+        right: startRect.right + deltaX,
+        bottom: startRect.bottom + deltaY
+      };
+
+      props.setBoundingClientRect(newRect);
+    };
+
+    const onDragEnd = () => {
+      isDragging = false;
+    };
+
+    dragger.addEventListener('mousedown', onDragStart);
+    window.addEventListener('mousemove', onDrag);
+    window.addEventListener('mouseup', onDragEnd);
+
+    // Function to center the iframe
+    const centerIframe = () => {
+      const currentRect = props.getBoundingClientRect();
+      const iframeWidth = currentRect.right - currentRect.left;
+      const iframeHeight = currentRect.bottom - currentRect.top;
+
+      // Parent dimensions based on iframe size and offsets, using props.host dimensions
+      const parentWidth = iframeWidth + currentRect.left + (props.host.innerWidth - currentRect.right);
+      const parentHeight = iframeHeight + currentRect.top + (props.host.innerHeight - currentRect.bottom);
+
+      // Calculate new centered position
+      const newRect = {
+        left: (parentWidth - iframeWidth) / 2,
+        top: (parentHeight - iframeHeight) / 2,
+        right: (parentWidth + iframeWidth) / 2,
+        bottom: (parentHeight + iframeHeight) / 2
+      };
+
+      props.setBoundingClientRect(newRect);
+    };
+
+    const centerAndResize = () => {
+      // Calculate new centered position
+      const newRect = {
+        left: '15%',
+        top: '5%',
+        height: '90%',
+        width: '70%',
+        borderRadius: '1.5rem'
+      };
+
+      props.setBoundingClientRect(newRect);
+    };
+
+    centerAndResize()
+  };
+
+</script>
+<script type="text/React-Jsx">
+  const React = require('React');
+  exports.App = (props) => {
+    const origin = platform.window.location.origin || platform.window.location.ancestorOrigins[0] || '';
+
+    const onCloseHandler = () => {
+      props.close();
+    };
+    const pages = [
+      {id: '1', name: 'about', label: 'About', component: About},
+      {id: '2', name: 'projects', label: 'Projects', component: Projects},
+      {id: '3', name: 'contact', label: 'Contact', component: Contact},
+      {id: '4', name: 'wallpapers', label: 'Wallpapers', component: Wallpapers, marginTop: 'auto'},
+    ]
+
+    const [currentPage, setCurrentPage] = React.useState(pages[0])
+  
+    return (
+      <>
+        <span
+          className="close-button"
+          title="Close window"
+          onClick={onCloseHandler}
+        ></span>
+        <div style={{
+          display: 'flex',
+          height: '100%',
+          width: '100%',
+          overflow: 'auto',
+          // background: '#212121'
+        }}>
+          <nav style={{
+            // background: '#2c2c2c',
+            display: 'flex',
+            flexDirection: 'column',
+            // justifyContent: 'space-evenly',
+            fontFamily: 'monospace',
+            cursor: 'pointer',
+            width: '13rem',
+            display: 'flex',
+            // height: 'fit-content',
+            // margin: '1rem',
+            // borderRadius: '1rem',
+            overflow: 'hidden',
+            boxShadow: 'rgba(0, 0, 0, 0.09) 0px 3px 12px',
+            flexShrink: 0
+          }}>
+            {pages.map(page => {
+              return <a key={page.id} style={{
+                // flexGrow: '1', 
+                padding: '1rem', 
+                background: page.id===currentPage.id ? 'black' : '#ffffff52',
+                color: page.id===currentPage.id ? 'white' : 'black',
+                cursor: 'pointer',
+                marginTop: page.marginTop
+              }}
+              onClick={_ => setCurrentPage(page)}
+              >{page.label}</a>
+            })}
+          </nav>
+          <section style={{flexGrow: '1', padding: '0rem', fontFamily: 'monospace', overflow: 'auto'}}>
+            {
+              <currentPage.component/>
+            }
+          </section>
+        </div>
+      </>
+    );
+  };
+
+
+  const About = () => {
+    const [minionImgId, setMinionImgId] = React.useState(0)
+
+    React.useEffect(() => {
+      const interval = setInterval(() => {
+        setMinionImgId(prevId => (prevId + 1) % 3);
+      }, 30000);
+    
+      return () => clearInterval(interval);
+    }, []);
+    
+    return (
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        // justifyContent: 'center',
+        // alignItems: 'center',
+        height: '-webkit-fill-available',
+        fontFamily: 'Arial, sans-serif',
+        // textAlign: 'center',
+        color: '#333',
+        padding: '1rem',
+        backgroundImage: `url(${origin}/public/minion-${minionImgId}.png)`,
+        backgroundSize: `auto`,
+        // filter: 'grayscale(100%)',
+        backgroundPosition: 'bottom right',
+        backgroundRepeat: 'no-repeat',
+      }}>
+        <h1 style={{ fontSize: '2rem', marginBottom: '1rem' }}>Hi! I'm Pankaj devesh</h1>
+        <p style={{ fontSize: '1.1rem', maxWidth: '30rem', lineHeight: '1.6' }}>
+          We are a passionate team dedicated to providing innovative solutions. 
+          Our focus is on delivering quality products and services that make a difference. 
+          Our mission is to enhance the lives of our users through technology.
+        </p>
+        <p style={{ fontSize: '1.1rem', maxWidth: '20rem', lineHeight: '1.6' }}>
+          With years of experience in the industry, we prioritize customer satisfaction 
+          and continuous improvement, ensuring that our offerings meet and exceed expectations.
+        </p>
+      </div>
+    );
+  };
+  
+  
+  const fs = platform.host.getFS()
+  const metaFileRawContent = fs.readFileSync('/user-preferences.json')
+  const configWallpapers = JSON.parse(metaFileRawContent).wallpapers ?? []
+
+  const Projects = () => {
+    const projectsDir = '/home/user1/projects'
+    const [ls, setLs] = React.useState(fs.readdirSync(projectsDir))
+
+    const openProject = file => {
+      const cmd = `service('root', 'exec') ('${projectsDir}/${file}');`
+      platform.host.execCommand(cmd, platform);
+    }
+    return (<>{ls.map(file => <div onClick={_=>openProject(file)} key={`${projectsDir}/${file}`} style={{padding: '1rem', cursor: 'pointer'}}>{file}</div>)}</>)
+  }
+
+  const Contact = () => {
+    return (<>Contact</>)
+  }
+
+  const Wallpapers = () => {
+  
+    const origin = platform.window.location.origin || platform.window.location.ancestorOrigins[0] || '';
+    const [inputValue, setInputValue] = React.useState('');
+    const [wallpapers, setWallpapers] = React.useState(configWallpapers);
+
+    React.useEffect(() => {
+      const metaFileRawContent = fs.readFileSync('/user-preferences.json')
+      const configWallpapers = JSON.parse(metaFileRawContent).wallpapers ?? []
+      setWallpapers(configWallpapers)
+
+    }, [])
+
+  
+    const gridStyle = {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+      gap: '20px',
+      padding: '20px',
+    };
+  
+    const imageStyle = {
+      width: '100%',
+      height: '150px',
+      objectFit: 'cover',
+      borderRadius: '8px',
+      cursor: 'pointer',
+    };
+  
+    const inputContainerStyle = {
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      position: 'fixed',
+      bottom: '10px',
+      width: '50%',
+    };
+  
+    const inputStyle = {
+      flexGrow: 1,
+      marginLeft: '10px',
+      maxWidth: '600px',
+      padding: '0.5rem',
+      border: '1px solid #ccc',
+      borderRadius: '4px',
+    };
+  
+    const buttonStyle = {
+      marginLeft: '10px',
+      padding: '0.5rem 1rem',
+      backgroundColor: '#007bff',
+      color: 'white',
+      border: 'none',
+      borderRadius: '4px',
+      cursor: 'pointer',
+    };
+  
+    const onClickHandler = (wallpaper) => {
+      const newWallpaper = wallpaper.startsWith('/') ? `${origin}${wallpaper}` : wallpaper;
+      if(!wallpapers.includes(wallpaper)) {
+        const addWallpaper = platform.getService('add-wallpaper');
+        setWallpapers(state => [...state, newWallpaper]);
+        platform.host.callCommand('add-wallpaper', wallpaper);
+      }
+
+      platform.host.callCommand('set-wallpaper', newWallpaper);
+    };
+  
+    const onFetchClick = () => {
+      // if (inputValue) {
+      //   onClickHandler(inputValue);
+      // }
+
+      if(!wallpapers.includes(inputValue)) {
+        setWallpapers(state => [...state, inputValue]);
+        platform.host.callCommand('add-wallpaper', inputValue);
+        setInputValue('')
+      }
+    };
+  
+    return (
+      <>
+        <div style={gridStyle}>
+          {wallpapers.map((url, index) => (
+            <div key={index} onClick={() => onClickHandler(url)}>
+              {url.startsWith('/') ? (
+                <img src={`${origin}${url}`} alt={`Wallpaper ${index + 1}`} style={imageStyle} />
+              ) : (
+                <img src={url} alt={`Wallpaper ${index + 1}`} style={imageStyle} />
+              )}
+            </div>
+          ))}
+        </div>
+        {/* Input section at the bottom center */}
+        <div style={inputContainerStyle}>
+          <input
+            type="text"
+            placeholder="Enter URL"
+            style={inputStyle}
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)} // Update state with input value
+          />
+          <button onClick={onFetchClick} style={buttonStyle}>
+            Add Wallpaper
+          </button>
+        </div>
+      </>
+    );
+  };
+
+</script>
+
+<style>
+.close-button {
+  position: absolute;
+  top: 10px;  /* Distance from the top of the container */
+  right: 10px;  /* Distance from the right of the container */
+  cursor: pointer;
+  width: 24px;  /* Button size */
+  height: 24px;
+  display: inline-block;
+  border-radius: 50%;
+  background-color: transparent;
+  transition: background-color 0.3s, transform 0.3s;
+  z-index: 1000;  /* Ensure it stays on top */
+}
+
+.close-button::before,
+.close-button::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 16px;  /* Length of the "X" lines */
+  height: 2px;  /* Thickness of the "X" lines */
+  background-color: #333;
+  transition: background-color 0.3s;
+}
+
+.close-button::before {
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.close-button::after {
+  transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+.close-button:hover {
+  background-color: #ffffff;
+  transform: scale(1.1);
+}
+
+.close-button:hover::before,
+.close-button:hover::after {
+  background-color: #000;
+}
+</style>
+
+<div draggable id="react-root" style="background: #ffffff66;height: 100%;width: 100%;"></div>
+<div draggable id="dragger"></div>
+<!-- <button id="render-btn">Render</button> -->
+

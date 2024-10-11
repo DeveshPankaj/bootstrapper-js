@@ -1,0 +1,53 @@
+const terminal = platform.getService('terminal')
+const fs = platform.host.getFS()
+const [pwd, ...rest] = $args
+const write = terminal? terminal.write.bind(terminal) : console.log
+
+
+
+// ANSI color codes for styling
+const colors = {
+    blue: '\x1b[34m',   // Blue for command names
+    yellow: '\x1b[33m', // Yellow for descriptions
+    reset: '\x1b[0m'    // Reset to default
+};
+
+const commands = [
+    { name: 'ls', message: 'List files' },
+    { name: 'edit', message: 'Edit file' },
+    { name: 'cat', message: 'Print file content' },
+    { name: 'cd <dir>', message: 'Change directory' },
+    { name: 'clear', message: 'Clear the terminal' },
+    { name: 'contact', message: 'Show contact info' },
+    { name: './<file_name>', message: 'Open a file' }
+];
+
+// Calculate the maximum width of the command names and messages separately
+const maxNameLength = Math.max(...commands.map(cmd => cmd.name.length));
+const maxMessageLength = Math.max(...commands.map(cmd => cmd.message.length));
+
+// Create a function to draw the message within a rectangle with colors
+function createRectangleMessage(commands) {
+    // Calculate total width for the rectangle (including padding and separators)
+    const totalWidth = maxNameLength + maxMessageLength + 5; // 5 accounts for ": " and padding
+
+    // Create the horizontal border
+    const horizontalBorder = '+' + '-'.repeat(totalWidth) + '+';
+    let rectangleMessage = horizontalBorder + '\n';
+
+    // Format each line with colors
+    commands.forEach(({ name, message }) => {
+        const namePadding = ' '.repeat(maxNameLength - name.length);
+        const messagePadding = ' '.repeat(maxMessageLength - message.length);
+        rectangleMessage += `| ${colors.blue}${name}${namePadding}${colors.reset} : ${colors.yellow}${message}${messagePadding}${colors.reset} |\n`;
+    });
+
+    rectangleMessage += horizontalBorder;
+    return rectangleMessage;
+}
+
+
+const message = createRectangleMessage(commands)
+
+write(message.replace(/\\x1b/g, '\x1b'))
+
