@@ -14,6 +14,7 @@ const colors = {
 
 const commands = [
     { name: 'ls', message: 'List files' },
+    { name: 'files [?<filder-path>]', message: 'Open file explorer' },
     { name: 'edit', message: 'Edit file' },
     { name: 'cat', message: 'Print file content' },
     { name: 'cd <dir>', message: 'Change directory' },

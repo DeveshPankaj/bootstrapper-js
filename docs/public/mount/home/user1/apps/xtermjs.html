@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>xterm</title>
+  <title>Xterm</title>
   <link rel="stylesheet" href="https://unpkg.com/xterm/css/xterm.css">
   <style>
     * {
@@ -161,9 +161,13 @@ root@pankajdevesh.com: ~/projects$`;
       terminal.resize(Math.floor(window.innerWidth / 9), Math.floor(window.innerHeight / 18));
     });
 
-    let pwd = '/home/user1';
+    const context = {
+      pwd:'/home/user1',
+      PATH: '/bin:/usr/bin'
+    }
+    
 const fs = platform.host.getFS();
-let files = fs.readdirSync(pwd);
+let files = fs.readdirSync(context.pwd);
 processCommand('info')
 
 // Command history and index
@@ -176,9 +180,9 @@ let inputBuffer = '';
 // Function to update the command line display
 function updateCommandLine() {
   // Clear current line
-  terminal.write(`\r\x1b[32mroot\x1b[0m\x1b[36m@pankajdevesh.com\x1b[0m: \x1b[33m~${pwd}$\x1b[0m ${' '.repeat(inputBuffer.length)}\r`);
+  terminal.write(`\r\x1b[32mroot\x1b[0m\x1b[36m@pankajdevesh.com\x1b[0m: \x1b[33m~${context.pwd}$\x1b[0m ${' '.repeat(inputBuffer.length)}\r`);
   // Rewrite prompt and current input buffer
-  terminal.write(`\x1b[32mroot\x1b[0m\x1b[36m@pankajdevesh.com\x1b[0m: \x1b[33m~${pwd}$\x1b[0m ${inputBuffer}`);
+  terminal.write(`\x1b[32mroot\x1b[0m\x1b[36m@pankajdevesh.com\x1b[0m: \x1b[33m~${context.pwd}$\x1b[0m ${inputBuffer}`);
 }
 
 // Function to clear the terminal screen
@@ -197,7 +201,7 @@ terminal.onData(data => {
       historyIndex = commandHistory.length;
     }
     inputBuffer = '';
-    terminal.write(`\n\x1b[32mroot\x1b[0m\x1b[36m@pankajdevesh.com\x1b[0m: \x1b[33m~${pwd}$\x1b[0m `);
+    terminal.write(`\n\x1b[32mroot\x1b[0m\x1b[36m@pankajdevesh.com\x1b[0m: \x1b[33m~${context.pwd}$\x1b[0m `);
   } else if (data === '\u007F') {  // Backspace key
     if (inputBuffer.length > 0) {
       inputBuffer = inputBuffer.slice(0, -1);
@@ -221,7 +225,7 @@ terminal.onData(data => {
     }
   } else if (data === '\u000C') {  // Ctrl + L key (form feed, ASCII 12)
     clearTerminal();
-    terminal.write(`\x1b[32mroot\x1b[0m\x1b[36m@pankajdevesh.com\x1b[0m: \x1b[33m~${pwd}$\x1b[0m `);
+    terminal.write(`\x1b[32mroot\x1b[0m\x1b[36m@pankajdevesh.com\x1b[0m: \x1b[33m~${context.pwd}$\x1b[0m `);
   } else {
     inputBuffer += data;
     terminal.write(data);
@@ -232,11 +236,20 @@ terminal.onData(data => {
 function processCommand(command) {
   const cmdArgs = command.split(' ');
 
-  const commandFile = `/bin/${cmdArgs[0]}.run`
-  const commaindExist = fs.existsSync(commandFile)
-  if(commaindExist) {
+  let commandFile = ''
+  const binDirs = context.PATH.split(':')
+  for(const dir of binDirs) {
+    const _commandFile = `${dir}/${cmdArgs[0]}.run`
+    
+    if(!fs.existsSync(_commandFile)) continue;
+    commandFile = _commandFile
+    break
+  }
+  
+  if(commandFile) {
     platform.register('terminal', terminal)
-    platform.host.exec(platform, commandFile, pwd, ...cmdArgs.slice(1));
+    platform.register('context', context)
+    platform.host.exec(platform, commandFile, context.pwd, ...cmdArgs.slice(1));
     return;
   }
 
@@ -252,16 +265,16 @@ function processCommand(command) {
         let newDir = cmdArgs[1];
 
         if (newDir === '..') {
-          const parentDir = pwd.split('/').slice(0, -1).join('/');
+          const parentDir = context.pwd.split('/').slice(0, -1).join('/');
           newDir = parentDir || '/';
         } else if (!newDir.startsWith('/')) {
-          newDir = `${pwd}/${newDir}`;
+          newDir = `${context.pwd}/${newDir}`;
         }
 
         try {
           if (fs.statSync(newDir).isDirectory()) {
-            pwd = newDir;
-            files = fs.readdirSync(pwd);
+            context.pwd = newDir;
+            files = fs.readdirSync(context.pwd);
           } else {
             terminal.write(`cd: ${newDir}: Not a directory\r\n`);
           }
@@ -279,10 +292,10 @@ function processCommand(command) {
         console.log(file_name)
 
         try {
-          if (fs.statSync(`${pwd}/${file_name}`).isDirectory()) {
+          if (fs.statSync(`${context.pwd}/${file_name}`).isDirectory()) {
             terminal.write(`edit: ${file_name}: Not a file\r\n`);
           } else {
-            platform.host.execCommand(`service('001-core.layout', 'open-window') (command('ui.notepad'), '${pwd}/${file_name}')`)
+            platform.host.execCommand(`service('001-core.layout', 'open-window') (command('ui.notepad'), '${context.pwd}/${file_name}')`)
           }
         } catch (err) {
           terminal.write(`edit: ${file_name}: No such file or directory\r\n`);
@@ -292,7 +305,7 @@ function processCommand(command) {
 
     case 'clear':
       clearTerminal();
-      terminal.write(`\x1b[32mroot\x1b[0m\x1b[36m@pankajdevesh.com\x1b[0m: \x1b[33m~${pwd}$\x1b[0m `);
+      terminal.write(`\x1b[32mroot\x1b[0m\x1b[36m@pankajdevesh.com\x1b[0m: \x1b[33m~${context.pwd}$\x1b[0m `);
       break;
 
     case 'help':
@@ -307,7 +320,7 @@ function processCommand(command) {
       if (command.startsWith('./')) {
         const fileName = command.slice(2);
         if (files.includes(fileName)) {
-          platform.host.exec(platform, `${pwd}/${fileName}`);
+          platform.host.exec(platform, `${context.pwd}/${fileName}`);
         } else {
           terminal.write(`Error: ${fileName} not found\r\n`);
         }

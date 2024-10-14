@@ -15,6 +15,11 @@
     "force_reload": true
   },
   {
+    "path": "/bin/echo.run",
+    "file": "/bin/echo.run",
+    "force_reload": true
+  },
+  {
     "path": "/bin/ls.run",
     "file": "/bin/ls.run",
     "force_reload": true
@@ -22,6 +27,11 @@
   {
     "path": "/bin/cat.run",
     "file": "/bin/cat.run",
+    "force_reload": true
+  },
+  {
+    "path": "/usr/bin/files.run",
+    "file": "/usr/bin/files.run",
     "force_reload": true
   },
   {
