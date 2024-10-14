@@ -1,0 +1,22 @@
+const terminal = platform.getService('terminal')
+const [pwd, ...rest] = $args
+const write = terminal? terminal.write.bind(terminal) : console.log
+const context = platform.getService('context') ?? {}
+
+const res = []
+
+
+for(const item of rest) {
+  if(!item.startsWith('$')) {
+    res.push(item)
+    continue
+  }
+
+  const varName = item.slice(1)
+  const value = context[varName] ?? ''
+
+  res.push(value)
+}
+
+write(res.join(' ').replace(/\\x1b/g, '\x1b'))
+

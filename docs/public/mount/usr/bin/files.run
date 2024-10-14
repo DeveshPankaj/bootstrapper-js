@@ -1,0 +1,31 @@
+const terminal = platform.getService('terminal')
+const context = platform.getService('context') ?? {}
+const fs = platform.host.getFS()
+
+const [pwd, path=context.pwd??'/', ...rest] = $args
+const write = terminal? terminal.write.bind(terminal) : console.log
+const colors = [
+    '\x1b[31m',  // Red
+    '\x1b[32m',  // Green
+    '\x1b[33m',  // Yellow
+    '\x1b[34m',  // Blue
+    '\x1b[35m',  // Magenta
+    '\x1b[36m',  // Cyan
+    '\x1b[37m'   // White
+];
+const reset = '\x1b[0m';
+
+if(!fs.existsSync()) {
+  write(`${colors[0]}Error: ${colors[6]}[${path}] does not a exist!${reset}`)
+  return
+}
+
+const isDir = fs.statSync(path).isDirectory()
+if(!isDir) {
+  write(`${colors[0]}Error: ${colors[6]}[${path}] is not a file!${reset}`)
+  return  
+}
+
+
+platform.host.exec(platform, path)
+

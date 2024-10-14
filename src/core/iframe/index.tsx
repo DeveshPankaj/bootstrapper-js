@@ -90,7 +90,7 @@ platform.host.registerCommand('ui.iframe', (body: HTMLBodyElement, props: UICall
             // props.close()
         }
     })
-}, { icon: 'box', title: 'About', fullScreen: false })
+}, { icon: 'box', title: '', fullScreen: false })
 
 const render = (container: HTMLElement, props: UICallbackProps, url: string) => {
     const root = createRoot(container)
