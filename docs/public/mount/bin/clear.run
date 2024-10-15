@@ -1,0 +1,4 @@
+const terminal = platform.getService('terminal')
+const write = terminal ? terminal.write.bind(terminal) : console.log
+
+write('\x1b[2J\x1b[0;0H') // Clear the screen and reset cursor position

@@ -15,9 +15,44 @@
     "force_reload": true
   },
   {
+    "path": "/bin/rm.run",
+    "file": "/bin/rm.run",
+    "force_reload": false
+  },
+  {
+    "path": "/bin/pwd.run",
+    "file": "/bin/pwd.run",
+    "force_reload": false
+  },
+  {
+    "path": "/bin/cp.run",
+    "file": "/bin/cp.run",
+    "force_reload": false
+  },
+  {
+    "path": "/bin/cp.run",
+    "file": "/bin/cp.run",
+    "force_reload": false
+  },
+  {
+    "path": "/bin/clear.run",
+    "file": "/bin/clear.run",
+    "force_reload": false
+  },
+  {
+    "path": "/bin/edit.run",
+    "file": "/bin/edit.run",
+    "force_reload": false
+  },
+  {
+    "path": "/bin/history.run",
+    "file": "/bin/history.run",
+    "force_reload": false
+  },
+  {
     "path": "/bin/echo.run",
     "file": "/bin/echo.run",
-    "force_reload": false
+    "force_reload": true
   },
   {
     "path": "/bin/ls.run",

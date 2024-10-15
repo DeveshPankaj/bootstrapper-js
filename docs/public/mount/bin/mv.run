@@ -1,0 +1,24 @@
+const terminal = platform.getService('terminal')
+const fs = platform.host.getFS()
+const [pwd, sourceFile, targetFile, ...rest] = $args
+const write = terminal ? terminal.write.bind(terminal) : console.log
+
+if (!sourceFile || !targetFile) {
+  write(`source and target filenames required!\n`)
+  return
+}
+
+const sourcePath = `${pwd}/${sourceFile}`
+const targetPath = `${pwd}/${targetFile}`
+
+if (!fs.existsSync(sourcePath)) {
+  write(`source file does not exist.\n`)
+  return
+}
+
+try {
+  fs.renameSync(sourcePath, targetPath)
+  write(`${sourceFile} moved/renamed to ${targetFile}.\n`)
+} catch (err) {
+  write(`Error: ${err.message}\n`)
+}

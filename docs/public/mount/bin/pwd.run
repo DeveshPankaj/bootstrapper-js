@@ -1,0 +1,5 @@
+const terminal = platform.getService('terminal')
+const [pwd] = $args
+const write = terminal ? terminal.write.bind(terminal) : console.log
+
+write(`${pwd}\n`)

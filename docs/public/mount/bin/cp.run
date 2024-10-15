@@ -1,0 +1,40 @@
+/** /bin/cp.run */
+const terminal = platform.getService('terminal');
+const fs = platform.host.getFS();
+const [pwd, src, dest, ...rest] = $args;
+const write = terminal ? terminal.write.bind(terminal) : console.log;
+
+if (!src || !dest) {
+  write('Source and destination paths are required.');
+  return;
+}
+
+// Construct absolute paths
+const srcPath = `${pwd}/${src}`;
+const destPath = `${pwd}/${dest}`;
+
+// Check if the source file exists
+fs.exists(srcPath, (exists) => {
+  if (!exists) {
+    write(`Source file '${src}' does not exist.`);
+    return;
+  }
+
+  // Read the source file
+  fs.readFile(srcPath, (err, data) => {
+    if (err) {
+      write(`Error reading source file: ${err.message}`);
+      return;
+    }
+
+    // Write the content to the destination file
+    fs.writeFile(destPath, data, (err) => {
+      if (err) {
+        write(`Error writing to destination: ${err.message}`);
+        return;
+      }
+
+      write(`File '${src}' copied to '${dest}'.`);
+    });
+  });
+});

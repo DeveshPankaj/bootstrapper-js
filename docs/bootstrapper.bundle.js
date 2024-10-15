@@ -96,7 +96,13 @@ const initWindow = () => {
         '/var/spool'
     ];
     // @ts-ignore
-    window.BrowserFS.configure({ fs: "LocalStorage", options: {} }, (err) => __awaiter(void 0, void 0, void 0, function* () {
+    window.BrowserFS.configure({
+        fs: 'MountableFileSystem',
+        options: {
+            '/': { fs: 'LocalStorage', options: {} },
+            // '/proc': { fs: 'InMemory', options: {} } 
+        }
+    }, (err) => __awaiter(void 0, void 0, void 0, function* () {
         if (err) {
             alert(err);
         }
