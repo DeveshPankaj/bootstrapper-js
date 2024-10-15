@@ -5,9 +5,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bootstrapper</title>
     <link rel="manifest" href="/public/manifest.json">
+    <style>
+        body {
+            margin: 0;
+        }
+        #loading {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+
+            background-image: url(/public/loading-1.gif);
+            background-position: center;
+            background-size: cover;
+            background-repeat: no-repeat;
+        }
+        body:has(.layout-default) #loading {
+            display: none;
+        }
+    </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/BrowserFS/2.0.0/browserfs.min.js" integrity="sha512-mz0EI+Ay1uIJP7rZEX8C/JlTAcHRIQ8Sny4vxmmj8MSzDJgG9NxxY2pUmOGv1lO7imFIFMyjjCzEXEywNgaUdQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script defer src="bootstrapper.bundle.js"></script></head>
 <body>
-    <div id="react"></div>
+    <div id="loading"></div>
 </body>
 </html>

@@ -17,22 +17,22 @@
   {
     "path": "/bin/echo.run",
     "file": "/bin/echo.run",
-    "force_reload": true
+    "force_reload": false
   },
   {
     "path": "/bin/ls.run",
     "file": "/bin/ls.run",
-    "force_reload": true
+    "force_reload": false
   },
   {
     "path": "/bin/cat.run",
     "file": "/bin/cat.run",
-    "force_reload": true
+    "force_reload": false
   },
   {
     "path": "/usr/bin/files.run",
     "file": "/usr/bin/files.run",
-    "force_reload": true
+    "force_reload": false
   },
   {
     "path": "/home/user1/initd.run",
@@ -64,12 +64,12 @@
   {
     "path": "/home/user1/apps/WAMP.html",
     "file": "/home/user1/apps/WAMP.html",
-    "force_reload":true
+    "force_reload":false
   },
   {
     "path": "/home/user1/tools/speed-test.html",
     "file": "/home/user1/tools/speed-test.html",
-    "force_reload":true
+    "force_reload":false
   },
   {
     "path": "/home/user1/projects/Snake.html",
