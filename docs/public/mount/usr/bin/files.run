@@ -15,7 +15,7 @@ const colors = [
 ];
 const reset = '\x1b[0m';
 
-if(!fs.existsSync()) {
+if(!fs.existsSync(path)) {
   write(`${colors[0]}Error: ${colors[6]}[${path}] does not a exist!${reset}`)
   return
 }
