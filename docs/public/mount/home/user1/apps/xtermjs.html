@@ -23,9 +23,9 @@
     .xterm {
       width: 100%;
       height: 100%;
-      font-family: 'Courier New', Courier, monospace; /* Monospace font to handle spacing */
+      font-family: 'Courier New', Courier, monospace;
       font-size: 14px;
-      line-height: 1; /* Ensures no extra vertical spacing */
+      line-height: 1;
       background-color: black;
     }
   </style>
@@ -35,303 +35,242 @@
 
   <script type="module">
     import 'https://unpkg.com/xterm/lib/xterm.js';
-    const Terminal = window.Terminal;
 
-    // Create a terminal instance with proper settings
-    const terminal = new Terminal({
-      cursorBlink: true,
-      convertEol: true,
-      fontSize: 14,
-      fontFamily: 'Courier New', // Set monospace font to fix spacing issues
-      theme: {
-        background: '#000000', // Black background
-        foreground: '#00FF00', // Green text
-      }
-    });
-
-    // Attach the terminal to the DOM element
-    terminal.open(document.getElementById('terminal'));
-
-    // Ensure the terminal resizes to full screen
-    terminal.resize(Math.floor(window.innerWidth / 9), Math.floor(window.innerHeight / 18));
-
-    // Neofetch-style message with correct spacing
-const neofetchMessage = `
-\x1b[33m        .--.                  \x1b[0m\x1b[34mLinux Terminal\x1b[0m
-\x1b[33m       |o_o |                 \x1b[34mOS: Linux x86_64\x1b[0m
-\x1b[33m       |:_/ |                 \x1b[34mShell: xterm.js\x1b[0m
-\x1b[33m      //   \\ \\                \x1b[34mUptime: 10m\x1b[0m
-\x1b[33m     (|     | )               \x1b[34mPackages: 1024\x1b[0m
-\x1b[33m    /'\\_   _/\`\\               \x1b[34mMemory: 512MB / 2048MB\x1b[0m
-\x1b[33m    \\___)=(___/               \x1b[34mCPU: Intel i5\x1b[0m
-
-root@pankajdevesh.com: ~/home$`;
-
-const neofetchMessage1 = `
-\x1b[34m         .-^-.\n        /_._._\\\n       |  o o  |\x1b[0m\x1b[36m Mac Terminal\x1b[0m
-\x1b[34m       |   \\_/  |                \x1b[36mOS: macOS Monterey\x1b[0m
-\x1b[34m        \\  ~~~  /                \x1b[36mShell: zsh\x1b[0m
-\x1b[34m         '-...-'                 \x1b[36mUptime: 5h 30m\x1b[0m
-\x1b[34m                                   \x1b[36mPackages: 67\x1b[0m
-\x1b[34m                                   \x1b[36mMemory: 8GB / 16GB\x1b[0m
-\x1b[34m                                   \x1b[36mCPU: M1 Pro\x1b[0m
-
-user@macbook: ~\$`;
-
-    
-const neofetchMessage2 = `
-\x1b[36m         .--.\n        |o_o |\n        |:_/ |\x1b[0m\x1b[32m Linux Terminal\x1b[0m
-\x1b[36m       _/   \\_                \x1b[32mOS: Ubuntu 22.04\x1b[0m
-\x1b[36m      (|     | )              \x1b[32mShell: bash\x1b[0m
-\x1b[36m       \\_   _/                \x1b[32mUptime: 1h 45m\x1b[0m
-\x1b[36m         | |                  \x1b[32mPackages: 1500\x1b[0m
-\x1b[36m        /   \\                 \x1b[32mMemory: 4GB / 16GB\x1b[0m
-\x1b[36m       |     |                \x1b[32mCPU: Intel i7\x1b[0m
-
-user@ubuntu: ~\$`;
-
-const neofetchMessage3 = `
-\x1b[35m         /\\_/\\\n        ( o.o )\n         > ^ < \x1b[0m\x1b[33m Windows Terminal\x1b[0m
-\x1b[35m        ~~~~~~~~               \x1b[33mOS: Windows 11\x1b[0m
-\x1b[35m                               \x1b[33mShell: PowerShell\x1b[0m
-\x1b[35m                               \x1b[33mUptime: 2d 12h\x1b[0m
-\x1b[35m                               \x1b[33mPackages: 112\x1b[0m
-\x1b[35m                               \x1b[33mMemory: 16GB / 32GB\x1b[0m
-\x1b[35m                               \x1b[33mCPU: Ryzen 7\x1b[0m
-
-Admin@windows: C:\\Users\\Admin\$`;
-
-const neofetchMessage4 = `
-\x1b[31m         /\\     /\\\n        {  \`---'  }\n        {  O   O  }\x1b[0m\x1b[35m Fedora Terminal\x1b[0m
-\x1b[31m        ~~~~~~~~                \x1b[35mOS: Fedora 36\x1b[0m
-\x1b[31m                               \x1b[35mShell: fish\x1b[0m
-\x1b[31m                               \x1b[35mUptime: 3h 20m\x1b[0m
-\x1b[31m                               \x1b[35mPackages: 980\x1b[0m
-\x1b[31m                               \x1b[35mMemory: 2GB / 8GB\x1b[0m
-\x1b[31m                               \x1b[35mCPU: AMD Ryzen 5\x1b[0m
-
-fedora@localhost: ~\$`;
-
-const neofetchMessage5 = `
-\x1b[36m         .--.\n        |o_o |\n        |:_/ |\x1b[0m\x1b[32m  Linux Terminal 😎\x1b[0m
-\x1b[36m       _/   \\_                \x1b[32mOS: Ubuntu 22.04 🐧\x1b[0m
-\x1b[36m      (|     | )              \x1b[32mShell: bash 🐚\x1b[0m
-\x1b[36m       \\_   _/                \x1b[32mUptime: 1h 45m ⏳\x1b[0m
-\x1b[36m         | |                  \x1b[32mPackages: 1500 📦\x1b[0m
-\x1b[36m        /   \\                 \x1b[32mMemory: 4GB / 16GB 🧠\x1b[0m
-\x1b[36m       |     |                \x1b[32mCPU: Intel i7 💻\x1b[0m
-
-user@ubuntu: ~\$`;
-
-const neofetchMessage6 = `
-\x1b[33m        .--.                  \x1b[0m\x1b[34mPankaj Devesh\x1b[0m
-\x1b[33m       |o_o |                 \x1b[34mRole: Senior Software Engineer\x1b[0m
-\x1b[33m       |:_/ |                 \x1b[34mTech Stack: TypeScript, Python\x1b[0m
-\x1b[33m      //   \\\\\\                \x1b[34mPortfolio: pankajdevesh.com\x1b[0m
-\x1b[33m     (|     | )               \x1b[34mExperience: 5 years\x1b[0m
-\x1b[33m    /'\\_   _/\`\\               \x1b[34mProjects: Fullstack Development\x1b[0m
-\x1b[33m    \\___)=(___/               \x1b[34mTech Focus: Microservices, CLI\x1b[0m
-
-Type \x1b[33mhelp\x1b[0m to get available commands.
-\x1b[32mroot\x1b[0m\x1b[36m@pankajdevesh.com\x1b[0m: \x1b[33m~/home/user1$\x1b[0m `;
-
-const neofetchMessage7 = `
-\x1b[33m     \\   ^__^               \x1b[0m\x1b[34mPankaj Devesh's Cow\x1b[0m
-\x1b[33m      \\  (oo)\\_______       \x1b[34mSays: Hello World!\x1b[0m
-\x1b[33m         (__)\\       )\\/\\    \x1b[34mMooing about Code!\x1b[0m
-\x1b[33m             ||----w |        \x1b[34mTech Stack: TypeScript, Python\x1b[0m
-\x1b[33m             ||     ||        \x1b[34mRole: Senior Software Engineer\x1b[0m
-
-root@pankajdevesh.com: ~/projects$`;
-
-    const welcome_msgs = [
-      neofetchMessage,
-      neofetchMessage1,
-      neofetchMessage2,
-      neofetchMessage3,
-      neofetchMessage4,
-      neofetchMessage5,
-      neofetchMessage6,
-      neofetchMessage7
-    ]
-    // terminal.write(welcome_msgs[6]);
-
-    // Handle window resize events
-    window.addEventListener('resize', () => {
-      terminal.resize(Math.floor(window.innerWidth / 9), Math.floor(window.innerHeight / 18));
-    });
-
-    const context = {
-      pwd:'/home/user1',
-      PATH: '/bin:/usr/bin'
-    }
-    
-const fs = platform.host.getFS();
-let files = fs.readdirSync(context.pwd);
-processCommand('info')
-
-// Command history and index
-let commandHistory = [];
-let historyIndex = -1;
-
-// Buffer to hold user input
-let inputBuffer = '';
-
-// Function to update the command line display
-function updateCommandLine() {
-  // Clear current line
-  terminal.write(`\r\x1b[32mroot\x1b[0m\x1b[36m@pankajdevesh.com\x1b[0m: \x1b[33m~${context.pwd}$\x1b[0m ${' '.repeat(inputBuffer.length)}\r`);
-  // Rewrite prompt and current input buffer
-  terminal.write(`\x1b[32mroot\x1b[0m\x1b[36m@pankajdevesh.com\x1b[0m: \x1b[33m~${context.pwd}$\x1b[0m ${inputBuffer}`);
-}
-
-// Function to clear the terminal screen
-function clearTerminal() {
-  terminal.write('\x1b[2J\x1b[H');  // ANSI escape codes to clear the screen and move cursor to the top
-}
-
-// Handle user input
-terminal.onData(data => {
-  if (data === '\r') {  // Enter key
-    terminal.write('\r\n');
-    if (inputBuffer.trim() !== '') {
-      processCommand(inputBuffer.trim());
-      // Save command to history and reset index
-      commandHistory.push(inputBuffer.trim());
-      historyIndex = commandHistory.length;
-    }
-    inputBuffer = '';
-    terminal.write(`\n\x1b[32mroot\x1b[0m\x1b[36m@pankajdevesh.com\x1b[0m: \x1b[33m~${context.pwd}$\x1b[0m `);
-  } else if (data === '\u007F') {  // Backspace key
-    if (inputBuffer.length > 0) {
-      inputBuffer = inputBuffer.slice(0, -1);
-      terminal.write('\b \b');
-    }
-  } else if (data === '\u001b[A') {  // Up arrow key
-    if (historyIndex > 0) {
-      historyIndex--;
-      inputBuffer = commandHistory[historyIndex];
-      updateCommandLine();
-    }
-  } else if (data === '\u001b[B') {  // Down arrow key
-    if (historyIndex < commandHistory.length - 1) {
-      historyIndex++;
-      inputBuffer = commandHistory[historyIndex];
-      updateCommandLine();
-    } else {
-      historyIndex = commandHistory.length;
-      inputBuffer = '';
-      updateCommandLine();  // Clear the input buffer
-    }
-  } else if (data === '\u000C') {  // Ctrl + L key (form feed, ASCII 12)
-    clearTerminal();
-    terminal.write(`\x1b[32mroot\x1b[0m\x1b[36m@pankajdevesh.com\x1b[0m: \x1b[33m~${context.pwd}$\x1b[0m `);
-  } else {
-    inputBuffer += data;
-    terminal.write(data);
-  }
-});
-
-// Process the entered command
-function processCommand(command) {
-  const cmdArgs = command.split(' ');
-
-  let commandFile = ''
-  const binDirs = context.PATH.split(':')
-  for(const dir of binDirs) {
-    const _commandFile = `${dir}/${cmdArgs[0]}.run`
-    
-    if(!fs.existsSync(_commandFile)) continue;
-    commandFile = _commandFile
-    break
-  }
-  
-  if(commandFile) {
-    platform.register('terminal', terminal)
-    platform.register('context', context)
-    platform.host.exec(platform, commandFile, context.pwd, ...cmdArgs.slice(1));
-    return;
-  }
-
-  switch (cmdArgs[0]) {
-    // case 'ls':
-    //   terminal.write(`${files.join(' ')}\r\n`);
-    //   break;
-
-    case 'cd':
-      if (cmdArgs.length < 2) {
-        terminal.write('cd: missing operand\r\n');
-      } else {
-        let newDir = cmdArgs[1];
-
-        if (newDir === '..') {
-          const parentDir = context.pwd.split('/').slice(0, -1).join('/');
-          newDir = parentDir || '/';
-        } else if (!newDir.startsWith('/')) {
-          newDir = `${context.pwd}/${newDir}`;
-        }
-
-        try {
-          if (fs.statSync(newDir).isDirectory()) {
-            context.pwd = newDir;
-            files = fs.readdirSync(context.pwd);
-          } else {
-            terminal.write(`cd: ${newDir}: Not a directory\r\n`);
+    class TerminalManager {
+      constructor() {
+        this.terminal = new Terminal({
+          cursorBlink: true,
+          convertEol: true,
+          fontSize: 14,
+          fontFamily: 'Courier New',
+          theme: {
+            background: '#000000',
+            foreground: '#00FF00',
           }
-        } catch (err) {
-          terminal.write(`cd: ${newDir}: No such file or directory\r\n`);
-        }
+        });
+        this.context = {
+          pwd: '/home/user1',
+          PATH: '/bin:/usr/bin'
+        };
+        this.commandHistory = [];
+        this.historyIndex = -1;
+        this.inputBuffer = '';
+        this.neofetchMessages = this.initializeMessages();
+        this.fs = platform.host.getFS();
+        this.files = this.fs.readdirSync(this.context.pwd);
       }
-      break;
 
-    case 'edit':
-      if (cmdArgs.length < 2) {
-        terminal.write('edit: missing operand\r\n');
-      } else {
-        let file_name = cmdArgs[1];
-        console.log(file_name)
-
-        try {
-          if (fs.statSync(`${context.pwd}/${file_name}`).isDirectory()) {
-            terminal.write(`edit: ${file_name}: Not a file\r\n`);
-          } else {
-            platform.host.execCommand(`service('001-core.layout', 'open-window') (command('ui.notepad'), '${context.pwd}/${file_name}')`)
-          }
-        } catch (err) {
-          terminal.write(`edit: ${file_name}: No such file or directory\r\n`);
-        }
+      initializeTerminal() {
+        this.terminal.open(document.getElementById('terminal'));
+        this.resizeTerminal();
+        this.handleTerminalInput();
+        this.processCommand('info');
+        window.addEventListener('resize', () => this.resizeTerminal());
       }
-      break;
 
-    case 'clear':
-      clearTerminal();
-      terminal.write(`\x1b[32mroot\x1b[0m\x1b[36m@pankajdevesh.com\x1b[0m: \x1b[33m~${context.pwd}$\x1b[0m `);
-      break;
+      resizeTerminal() {
+        this.terminal.resize(Math.floor(window.innerWidth / 9), Math.floor(window.innerHeight / 18));
+      }
 
-    case 'help':
-      terminal.write(`Available commands:\r\n - ls: List files\r\n - edit: Edit file\r\n - cd <dir>: Change directory\r\n - clear: Clear the terminal\r\n - help: Show this help\r\n - contact: Show contact info\r\n - ./<file_name>: Open a file\r\n`);
-      break;
+      handleTerminalInput() {
+        this.terminal.onData(data => this.processInput(data));
+      }
 
-    case 'contact':
-      terminal.write('Contact: pankaj.devesh@oracle.com\r\n');
-      break;
-
-    default:
-      if (command.startsWith('./')) {
-        const fileName = command.slice(2);
-        if (files.includes(fileName)) {
-          platform.host.exec(platform, `${context.pwd}/${fileName}`);
+      processInput(data) {
+        if (data === '\r') {
+          this.processEnterKey();
+        } else if (data === '\u007F') {
+          this.processBackspace();
+        } else if (data === '\u001b[A') {
+          this.processUpArrow();
+        } else if (data === '\u001b[B') {
+          this.processDownArrow();
+        } else if (data === '\u000C') {
+          this.clearTerminal();
         } else {
-          terminal.write(`Error: ${fileName} not found\r\n`);
+          this.inputBuffer += data;
+          this.terminal.write(data);
         }
-      } else {
-        terminal.write(`Command not found: ${command}\r\n`);
       }
-      break;
-  }
-}
+
+      processEnterKey() {
+        this.terminal.write('\r\n');
+        if (this.inputBuffer.trim() !== '') {
+          this.processCommand(this.inputBuffer.trim());
+          this.commandHistory.push(this.inputBuffer.trim());
+          this.appendHistory(this.inputBuffer.trim());
+          this.historyIndex = this.commandHistory.length;
+        }
+        this.inputBuffer = '';
+        this.terminal.write('\r\n'); // Ensure the cursor moves to the next empty line
+        this.displayPrompt();
+      }
+      
+      appendHistory(command) {
+        const historyFile = `${this.context.pwd}/.bash_history`;
+        const fs = this.fs
+        // Append the command to the history file
+        if (fs.existsSync(historyFile)) {
+          fs.appendFileSync(historyFile, `${command}\n`);
+        } else {
+          fs.writeFileSync(historyFile, `${command}\n`);
+        }
+      }
 
 
+      processBackspace() {
+        if (this.inputBuffer.length > 0) {
+          this.inputBuffer = this.inputBuffer.slice(0, -1);
+          this.terminal.write('\b \b');
+        }
+      }
+
+      processUpArrow() {
+        if (this.historyIndex > 0) {
+          this.historyIndex--;
+          this.inputBuffer = this.commandHistory[this.historyIndex];
+          this.updateCommandLine();
+        }
+      }
+
+      processDownArrow() {
+        if (this.historyIndex < this.commandHistory.length - 1) {
+          this.historyIndex++;
+          this.inputBuffer = this.commandHistory[this.historyIndex];
+          this.updateCommandLine();
+        } else {
+          this.historyIndex = this.commandHistory.length;
+          this.inputBuffer = '';
+          this.updateCommandLine();
+        }
+      }
+
+      updateCommandLine() {
+        this.terminal.write(`\r\x1b[32mroot\x1b[0m\x1b[36m@pankajdevesh.com\x1b[0m: \x1b[33m~${this.context.pwd}$\x1b[0m ${' '.repeat(this.inputBuffer.length)}\r`);
+        this.displayPrompt();
+      }
+
+      clearTerminal() {
+        this.terminal.write('\x1b[2J\x1b[H');
+        this.displayPrompt();
+      }
+
+      displayPrompt() {
+        this.terminal.write(`\x1b[32mroot\x1b[0m\x1b[36m@pankajdevesh.com\x1b[0m: \x1b[33m~${this.context.pwd}$\x1b[0m ${this.inputBuffer}`);
+      }
+
+      processCommand(command) {
+        const cmdArgs = command.split(' ');
+        const commandFile = this.findCommandFile(cmdArgs[0]);
+
+        if (commandFile) {
+          platform.register('terminal', this.terminal);
+          platform.register('context', this.context);
+          platform.host.exec(platform, commandFile, this.context.pwd, ...cmdArgs.slice(1));
+        } else {
+          this.handleInternalCommands(cmdArgs);
+        }
+      }
+
+      findCommandFile(command) {
+        let commandFile = '';
+        const binDirs = this.context.PATH.split(':');
+        for (const dir of binDirs) {
+          const _commandFile = `${dir}/${command}.run`;
+          if (!this.fs.existsSync(_commandFile)) continue;
+          commandFile = _commandFile;
+          break;
+        }
+        return commandFile;
+      }
+
+      handleInternalCommands(cmdArgs) {
+        switch (cmdArgs[0]) {
+          case 'cd':
+            this.changeDirectory(cmdArgs);
+            break;
+          case 'edit':
+            this.editFile(cmdArgs);
+            break;
+          default:
+            this.terminal.write(`Command not found: ${cmdArgs[0]}\r\n`);
+            break;
+        }
+      }
+
+      changeDirectory(cmdArgs) {
+        if (cmdArgs.length < 2) {
+          this.terminal.write('cd: missing operand\r\n');
+        } else {
+          let newDir = cmdArgs[1];
+          newDir = this.resolveDirectory(newDir);
+          try {
+            if (this.fs.statSync(newDir).isDirectory()) {
+              this.context.pwd = newDir;
+              this.files = this.fs.readdirSync(this.context.pwd);
+            } else {
+              this.terminal.write(`cd: ${newDir}: Not a directory\r\n`);
+            }
+          } catch (err) {
+            this.terminal.write(`cd: ${newDir}: No such file or directory\r\n`);
+          }
+        }
+      }
+
+      resolveDirectory(dir) {
+        if (dir === '..') {
+          const parentDir = this.context.pwd.split('/').slice(0, -1).join('/');
+          return parentDir || '/';
+        } else if (!dir.startsWith('/')) {
+          return `${this.context.pwd}/${dir}`;
+        }
+        return dir;
+      }
+
+      editFile(cmdArgs) {
+        if (cmdArgs.length < 2) {
+          this.terminal.write('edit: missing operand\r\n');
+        } else {
+          // Handle edit logic here
+        }
+      }
+
+      initializeMessages() {
+        return [
+          this.createNeofetchMessage('Linux Terminal', 'Linux x86_64', 'xterm.js', '10m', '1024', '512MB / 2048MB', 'Intel i5'),
+          this.createNeofetchMessage('Mac Terminal', 'macOS Monterey', 'zsh', '5h 30m', '67', '8GB / 16GB', 'M1 Pro'),
+          this.createNeofetchMessage('Linux Terminal', 'Ubuntu 22.04', 'bash', '1h 45m', '1500', '4GB / 16GB', 'Intel i7'),
+          this.createNeofetchMessage('Windows Terminal', 'Windows 11', 'PowerShell', '2d 12h', '112', '16GB / 32GB', 'Ryzen 7'),
+          this.createNeofetchMessage('Fedora Terminal', 'Fedora 36', 'fish', '3h 20m', '980', '2GB / 8GB', 'AMD Ryzen 5'),
+          this.createNeofetchMessage('Linux Terminal 😎', 'Ubuntu 22.04 🐧', 'bash 🐚', '1h 45m ⏳', '1500 📦', '4GB / 16GB 🧠', 'Intel i7 💻'),
+          this.createCustomMessage('Pankaj Devesh', 'Senior Software Engineer', 'TypeScript, Python', 'pankajdevesh.com', '5 years', 'Fullstack Development', 'Microservices, CLI'),
+          this.createCustomMessage('Pankaj Devesh\'s Cow', 'Senior Software Engineer', 'TypeScript, Python', 'Hello World!', 'Mooing about Code!', 'Senior Software Engineer', 'TypeScript, Python')
+        ];
+      }
+
+      createNeofetchMessage(name, os, shell, uptime, packages, memory, cpu) {
+        return `\x1b[33m        .--.                  \x1b[0m\x1b[34m${name}\x1b[0m
+\x1b[33m       |o_o |                 \x1b[34mOS: ${os}\x1b[0m
+\x1b[33m       |:_/ |                 \x1b[34mShell: ${shell}\x1b[0m
+\x1b[33m      //   \\ \\                \x1b[34mUptime: ${uptime}\x1b[0m
+\x1b[33m     (|     | )               \x1b[34mPackages: ${packages}\x1b[0m
+\x1b[33m    /'\\_   _/\`\\              \x1b[34mMemory: ${memory}\x1b[0m
+\x1b[33m    \\___)=(___/               \x1b[34mCPU: ${cpu}\x1b[0m\r\n`;
+      }
+
+      createCustomMessage(name, role, techStack, website, experience, specialty, areaOfFocus) {
+        return `\x1b[33m        .--.                  \x1b[0m\x1b[34m${name}\x1b[0m
+\x1b[33m       |o_o |                 \x1b[34mRole: ${role}\x1b[0m
+\x1b[33m       |:_/ |                 \x1b[34mTech Stack: ${techStack}\x1b[0m
+\x1b[33m      //   \\ \\                \x1b[34mWebsite: ${website}\x1b[0m
+\x1b[33m     (|     | )               \x1b[34mExperience: ${experience}\x1b[0m
+\x1b[33m    /'\\_   _/\`\\              \x1b[34mSpecialty: ${specialty}\x1b[0m
+\x1b[33m    \\___)=(___/               \x1b[34mArea of Focus: ${areaOfFocus}\x1b[0m\r\n`;
+      }
+    }
+
+    const terminalManager = new TerminalManager();
+    terminalManager.initializeTerminal();
   </script>
 </body>
 </html>

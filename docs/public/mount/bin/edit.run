@@ -1,0 +1,30 @@
+/** /bin/edit.run */
+const terminal = platform.getService('terminal');
+const fs = platform.host.getFS();
+const [pwd, fileName, ...rest] = $args;
+const write = terminal ? terminal.write.bind(terminal) : console.log;
+
+if (!fileName) {
+  write('edit: missing operand\r\n');
+  return;
+}
+
+// Construct the full file path
+const filePath = `${pwd}/${fileName}`;
+
+try {
+  // Check if the path exists and it's not a directory
+  const stats = fs.statSync(filePath);
+
+  if (stats.isDirectory()) {
+    write(`edit: ${fileName}: Not a file\r\n`);
+  } else {
+    // Open the file in the notepad editor
+    platform.host.execCommand(
+      service('001-core.layout', 'open-window')(command('ui.notepad'), filePath)
+    );
+  }
+} catch (err) {
+  // Handle cases where the file doesn't exist
+  write(`edit: ${fileName}: No such file or directory\r\n`);
+}

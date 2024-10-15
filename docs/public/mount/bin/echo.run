@@ -1,22 +1,21 @@
-const terminal = platform.getService('terminal')
-const [pwd, ...rest] = $args
-const write = terminal? terminal.write.bind(terminal) : console.log
-const context = platform.getService('context') ?? {}
+/** /bin/echo.run */
+const terminal = platform.getService('terminal');
+const fs = platform.host.getFS();
+const context = platform.getService('context') ?? {};  // Dictionary object for environment variables
+const [pwd, ...args] = $args;
+const write = terminal ? terminal.write.bind(terminal) : console.log;
 
-const res = []
+// Function to resolve environment variables from context
+const resolveVariable = (arg) => {
+  // Replace both ${VAR_NAME} and $VAR_NAME with their corresponding values
+  return arg.replace(/\$\{(\w+)\}|\$\((\w+)\)/g, (_, varName1, varName2) => {
+    const varName = varName1 || varName2; // Use either matched variable name
+    return context[varName] ?? ''; // Return variable value or empty string if not found
+  });
+};
 
+// Process each argument to handle variable substitution
+const res = args.map(arg => resolveVariable(arg));
 
-for(const item of rest) {
-  if(!item.startsWith('$')) {
-    res.push(item)
-    continue
-  }
-
-  const varName = item.slice(1)
-  const value = context[varName] ?? ''
-
-  res.push(value)
-}
-
-write(res.join(' ').replace(/\\x1b/g, '\x1b'))
-
+// Write the result to the terminal
+write(res.join(' ') + '\r\n');

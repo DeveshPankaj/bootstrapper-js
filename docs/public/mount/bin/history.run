@@ -1,0 +1,24 @@
+/** /bin/history.run */
+const terminal = platform.getService('terminal');
+const fs = platform.host.getFS();
+const write = terminal ? terminal.write.bind(terminal) : console.log;
+const [pwd, ...rest] = $args;
+
+const historyFile = `${pwd}/.bash_history`;  // History file path
+
+// Ensure the history file exists
+if (!fs.existsSync(historyFile)) {
+  fs.writeFileSync(historyFile, '');
+}
+
+// Read and display command history from the file
+const history = fs.readFileSync(historyFile, 'utf8').split('\n').filter(Boolean);
+
+if (history.length === 0) {
+  write('No command history.\r\n');
+} else {
+  // Display each command in the history with an index number
+  history.forEach((cmd, index) => {
+    write(`${index + 1}  ${cmd}\r\n`);
+  });
+}

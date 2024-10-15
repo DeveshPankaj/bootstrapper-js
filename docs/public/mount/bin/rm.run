@@ -1,0 +1,22 @@
+const terminal = platform.getService('terminal')
+const fs = platform.host.getFS()
+const [pwd, file, ...rest] = $args
+const write = terminal ? terminal.write.bind(terminal) : console.log
+
+if (!file) {
+  write(`filename required!\n`)
+  return
+}
+
+const filePath = `${pwd}/${file}`
+if (!fs.existsSync(filePath)) {
+  write(`file does not exist.\n`)
+  return
+}
+
+try {
+  fs.unlinkSync(filePath)
+  write(`${file} removed.\n`)
+} catch (err) {
+  write(`Error: ${err.message}\n`)
+}
