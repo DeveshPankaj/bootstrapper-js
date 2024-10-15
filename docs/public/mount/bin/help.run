@@ -1,9 +1,7 @@
-const terminal = platform.getService('terminal')
-const fs = platform.host.getFS()
-const [pwd, ...rest] = $args
-const write = terminal? terminal.write.bind(terminal) : console.log
-
-
+const terminal = platform.getService('terminal');
+const fs = platform.host.getFS();
+const [pwd, ...rest] = $args;
+const write = terminal ? terminal.write.bind(terminal) : console.log;
 
 // ANSI color codes for styling
 const colors = {
@@ -14,13 +12,19 @@ const colors = {
 
 const commands = [
     { name: 'ls', message: 'List files' },
-    { name: 'files [?<filder-path>]', message: 'Open file explorer' },
-    { name: 'edit', message: 'Edit file' },
-    { name: 'cat', message: 'Print file content' },
+    { name: 'files [?<folder-path>]', message: 'Open file explorer' },
+    { name: 'edit <file_name>', message: 'Edit a file' },
+    { name: 'cat <file>', message: 'Print file content' },
     { name: 'cd <dir>', message: 'Change directory' },
     { name: 'clear', message: 'Clear the terminal' },
     { name: 'contact', message: 'Show contact info' },
-    { name: './<file_name>', message: 'Open a file' }
+    { name: './<file_name>', message: 'Open a file' },
+    { name: 'echo <message>', message: 'Print a message and variable' },
+    { name: 'pwd', message: 'Print current working directory' },
+    { name: 'cp <source> <destination>', message: 'Copy a file' },
+    { name: 'mv <source> <destination>', message: 'Move or rename a file' },
+    { name: 'rm <file>', message: 'Remove a file' },
+    { name: 'history', message: 'Show command history' }
 ];
 
 // Calculate the maximum width of the command names and messages separately
@@ -47,8 +51,5 @@ function createRectangleMessage(commands) {
     return rectangleMessage;
 }
 
-
-const message = createRectangleMessage(commands)
-
-write(message.replace(/\\x1b/g, '\x1b'))
-
+const message = createRectangleMessage(commands);
+write(message.replace(/\\x1b/g, '\x1b'));
