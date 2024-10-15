@@ -220,7 +220,7 @@ const initWorker = () => {
 window.addEventListener('load', async () => {
   initWindow();
   // initWorker()
-  // initChannel()
+//   initChannel()
   loadBootstrapScript(localStorage);
 })
 

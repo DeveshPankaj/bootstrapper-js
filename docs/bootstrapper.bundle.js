@@ -214,7 +214,7 @@ const initWorker = () => {
 window.addEventListener('load', () => __awaiter(void 0, void 0, void 0, function* () {
     initWindow();
     // initWorker()
-    // initChannel()
+    //   initChannel()
     loadBootstrapScript(localStorage);
 }));
 
