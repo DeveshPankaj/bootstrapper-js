@@ -188,7 +188,7 @@ const applyCss = ({wallpaper}: {wallpaper: string}) => {
     
     
         .toolbar {
-            background: aliceblue;
+            background: #f0f8ff55;
             position: absolute;
             bottom: 1rem;
             left: 50%;
@@ -387,7 +387,7 @@ export const render = (container: HTMLElement) => {
             </div>
             <div className="content-area" ref={contentRef} onContextMenu={onContextMenu}>
                 <div className={DESKTOP_CONTAINER_CLASS}>
-                    <ListDirComponent openFile={openFile} showFileActions={showFileActionsHandler}  customClass='desktop-icons'/>
+                    {/* <ListDirComponent openFile={openFile} showFileActions={showFileActionsHandler}  customClass='desktop-icons'/> */}
                 </div>
                 <div className={WINDOWS_CONTAINER_CLASS}></div>
             </div>
@@ -397,9 +397,9 @@ export const render = (container: HTMLElement) => {
             <div className="footer">
                 {/* <Commands onCommandClick={onCommandClickHandler} align='center' /> */}
             </div>
-            {/* <div className='toolbar'>
+            <div className='toolbar'>
                 <Commands onCommandClick={onCommandClick}/>
-            </div> */}
+            </div>
             <div className='contextmenu' ref={contextMenuRef}>
                 <ContextMenu componentRef={obj => contextMenuComponentRef.current = obj} />
             </div>
