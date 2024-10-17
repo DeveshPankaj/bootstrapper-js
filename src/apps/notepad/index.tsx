@@ -48,10 +48,10 @@ platform.host.registerCommand('ui.notepad', (body: HTMLBodyElement, props: UICal
 
     React = platform.getService('React') as typeof _React
     createRoot = (platform.getService('ReactDOM') as {createRoot: typeof _createRoot}).createRoot;
-
+    const fs = platform.host.getFS()
 
     if (typeof file === 'string') {
-        const fs = platform.host.getFS()
+        
         file = {
             name: (file as string).split('/').at(-1)!,
             path: file,
@@ -62,10 +62,14 @@ platform.host.registerCommand('ui.notepad', (body: HTMLBodyElement, props: UICal
 
     if (!file) {
         file = {
-            name: '123.js',
-            path: '/123.js',
+            name: '123.html',
+            path: '/tmp/123.html',
             meta: { ext: '.html' },
             type: 'file'
+        }
+
+        if(!fs.existsSync(file.path)) {
+            fs.writeFileSync(file.path, '')
         }
     }
 

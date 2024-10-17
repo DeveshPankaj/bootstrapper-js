@@ -13,9 +13,9 @@ export const Commands = ({ onCommandClick, vertical, align = 'start' }: { onComm
         'explorer',
         // 'ui.file-explorer',
         // 'ui.iframe',
-        // 'ui.vs-code',
-        'ui.view-commands',
-        // 'ui.notepad',
+        'ui.vs-code',
+        // 'ui.view-commands',
+        'ui.notepad',
         // 'ui.game',
         // 'ui.game-of-life',
         // 'ui.xml-parser',
@@ -59,7 +59,7 @@ export const Commands = ({ onCommandClick, vertical, align = 'start' }: { onComm
                         style={{
                             cursor: 'pointer',
                             padding: '0.5rem',
-                            border: '1px solid',
+                            // border: '1px solid',
                             display: 'flex',
                             alignItems: 'center',
                             gap: '1rem'

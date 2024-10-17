@@ -30671,8 +30671,8 @@ platform.register('resize', (...args) => resizeCallbackRef.current(...args));
 platform.host.registerCommand('ui.notepad', (body, props, file) => {
     React = platform.getService('React');
     createRoot = platform.getService('ReactDOM').createRoot;
+    const fs = platform.host.getFS();
     if (typeof file === 'string') {
-        const fs = platform.host.getFS();
         file = {
             name: file.split('/').at(-1),
             path: file,
@@ -30682,11 +30682,14 @@ platform.host.registerCommand('ui.notepad', (body, props, file) => {
     }
     if (!file) {
         file = {
-            name: '123.js',
-            path: '/123.js',
+            name: '123.html',
+            path: '/tmp/123.html',
             meta: { ext: '.html' },
             type: 'file'
         };
+        if (!fs.existsSync(file.path)) {
+            fs.writeFileSync(file.path, '');
+        }
     }
     const container = platform.window.document.createElement('div');
     body.appendChild(container);
