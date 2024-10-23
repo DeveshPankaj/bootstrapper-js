@@ -290,9 +290,9 @@ export class Host {
     // return mod.platform.getService(serviceName)
 
     const srv = mod.platform.getServiceSync(serviceName)!;
-    if (!srv) throw `Servive: [${moduleName}/${serviceName}] not found`;
+    if (!srv) console.warn(`Servive: [${moduleName}/${serviceName}] not found`);
 
-    return srv;
+    return undefined;
   }
 
   public getFS() {
