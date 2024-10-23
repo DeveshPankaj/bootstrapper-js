@@ -67,7 +67,7 @@
   {
     "path": "/usr/bin/files.run",
     "file": "/usr/bin/files.run",
-    "force_reload": false
+    "force_reload": true
   },
   {
     "path": "/home/user1/initd.run",
