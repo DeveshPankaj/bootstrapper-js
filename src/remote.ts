@@ -178,7 +178,7 @@ const runCommand = (cmd: string) => {
       const mod = modulesMap.get(moduleName)!;
       const srv = mod.platform.getService(serviceName)!
       if (!srv) console.warn(`Servive: [${moduleName}/${serviceName}] not found`);
-      return undefined
+      return srv
     },
     command: (commandName: string) => {
       const allCommands = commands.getValue()

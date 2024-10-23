@@ -292,7 +292,7 @@ export class Host {
     const srv = mod.platform.getServiceSync(serviceName)!;
     if (!srv) console.warn(`Servive: [${moduleName}/${serviceName}] not found`);
 
-    return undefined;
+    return srv;
   }
 
   public getFS() {
