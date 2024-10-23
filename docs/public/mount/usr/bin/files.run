@@ -2,7 +2,7 @@ const terminal = platform.getService('terminal')
 const context = platform.getService('context') ?? {}
 const fs = platform.host.getFS()
 
-const [pwd, path=context.pwd??'/', ...rest] = $args
+let [pwd, path=context.pwd??'/', ...rest] = $args
 const write = terminal? terminal.write.bind(terminal) : console.log
 const colors = [
     '\x1b[31m',  // Red
@@ -14,6 +14,10 @@ const colors = [
     '\x1b[37m'   // White
 ];
 const reset = '\x1b[0m';
+
+if(!['/'].includes(path[0])){
+  path = pwd + '/' + path
+}
 
 if(!fs.existsSync(path)) {
   write(`${colors[0]}Error: ${colors[6]}[${path}] does not a exist!${reset}`)
