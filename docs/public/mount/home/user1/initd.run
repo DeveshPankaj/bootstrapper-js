@@ -7,6 +7,10 @@
 
 // Load file explorer
 service('root', 'exec')('/home/user1/apps/explorer.js');
+
+// Load Markdown reader
+service('root', 'exec')('/home/user1/apps/markdown.js');
+
 // service('root', 'exec')('/home/user1/settings.html');
 // service('root', 'exec')('/home/user1/apps/xtermjs.html');
 

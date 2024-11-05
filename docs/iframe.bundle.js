@@ -35087,7 +35087,7 @@ const getLocalFilePath = (path) => {
     return blobURL;
 };
 let subscriptions = [];
-platform.host.registerCommand('ui.iframe', (body, props, url) => {
+platform.host.registerCommand('ui.iframe', (body, props, url, ...args) => {
     if (!body) {
         console.error(`Invalid command call. first item must be a dom element`);
         return;
@@ -35123,7 +35123,7 @@ platform.host.registerCommand('ui.iframe', (body, props, url) => {
     `);
     body.ownerDocument.adoptedStyleSheets.push(styles);
     props.setWindowView(true);
-    render(container, props, url);
+    render(container, props, url, ...args);
     fullScreenCallbackRef.current = (...args) => {
         setTimeout(() => props.toggleFullScreen(), 0);
     };
@@ -35133,9 +35133,9 @@ platform.host.registerCommand('ui.iframe', (body, props, url) => {
         }
     });
 }, { icon: 'box', title: '', fullScreen: false });
-const render = (container, props, url) => {
+const render = (container, props, url, ...args) => {
     const root = (0,react_dom_client__WEBPACK_IMPORTED_MODULE_2__.createRoot)(container);
-    root.render(react__WEBPACK_IMPORTED_MODULE_0___default().createElement(App, Object.assign({}, props, { url: url })));
+    root.render(react__WEBPACK_IMPORTED_MODULE_0___default().createElement(App, Object.assign({}, props, { "$args": args, url: url })));
     subscriptions.push({
         unsubscribe: () => {
             root.unmount();
@@ -35158,6 +35158,7 @@ const App = (props) => {
             const newPlatform = new platform.constructor(platformEventEmitter, props.url, props.url);
             newPlatform.setHost(platform.host);
             newPlatform.register('props', props);
+            newPlatform.register('$args', props.$args);
             newPlatform.register('React', (react__WEBPACK_IMPORTED_MODULE_0___default()));
             newPlatform.register('ReactDOM', { createRoot: react_dom_client__WEBPACK_IMPORTED_MODULE_2__.createRoot });
             iframeRef.current.contentWindow.platform = newPlatform;
@@ -35167,7 +35168,7 @@ const App = (props) => {
             //     return import(module_path)
             // }
             iframeRef.current.contentWindow.fetch = (...args) => {
-                console.log(args);
+                // console.log(args)
                 // @ts-ignore
                 return fetch(...args);
             };

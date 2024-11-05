@@ -38,7 +38,7 @@ export type UICallbackProps = {
     toggleFullScreen: () => void
     getBoundingClientRect: () => Record<string, number>
     setBoundingClientRect: (rect: Record<string, number>) => void
-    
+    $args?: any[]
 }
 
 export class Host {
@@ -246,7 +246,7 @@ export class Host {
         ts: "ui.notepad",
         png: "ui.iframe",
         txt: "ui.notepad",
-        md: "ui.notepad",
+        md: "ui.markdown",
       };
 
       if (fileExt === 'js') {

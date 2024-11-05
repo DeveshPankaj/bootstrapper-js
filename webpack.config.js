@@ -34,6 +34,7 @@ module.exports = {
     },
     compress: true,
     allowedHosts: ["all"],
+    https: false,
     headers: {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
