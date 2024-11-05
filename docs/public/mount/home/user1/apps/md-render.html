@@ -30,20 +30,24 @@
 
     
     const reactRoot = document.getElementById('react-root');
-    const computedStyles = reactRoot.computedStyleMap();
-    const backgroundColor = computedStyles.get('background-color').toString();
-    const color = computedStyles.get('color').toString();
-    document.body.style.backgroundColor = backgroundColor;
 
-    props.setHeaderStyles({
-      backgroundColor,
-      color
-    })
+    if('computedStyleMap' in reactRoot) {
+        const computedStyles = reactRoot.computedStyleMap();
+        const backgroundColor = computedStyles.get('background-color').toString();
+        const color = computedStyles.get('color').toString();
+        document.body.style.backgroundColor = backgroundColor;
 
-    // props.setHeaderStyles({
-    //   backgroundColor: 'rgb(249, 249, 249)',
-    //   color: 'black'
-    // })
+        props.setHeaderStyles({backgroundColor, color})
+    }
+    else {
+        props.setHeaderStyles({
+            backgroundColor: 'rgb(249, 249, 249)',
+            color: 'black'
+        })
+    }
+    
+
+   
     // console.log(props)
     
      const ReactDOM = platform.getService('ReactDOM');
