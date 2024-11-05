@@ -92,6 +92,18 @@
     "file": "/home/user1/apps/explorer.js"
   },
   {
+    "path": "/home/user1/apps/markdown.js",
+    "file": "/home/user1/apps/markdown.js"
+  },
+  {
+    "path": "/home/user1/apps/md-render.html",
+    "file": "/home/user1/apps/md-render.html"
+  },
+  {
+    "path": "/home/user1/Notes.md",
+    "file": "/home/user1/Notes.md"
+  },
+  {
     "path": "/home/user1/apps/TOTP.html",
     "file": "/home/user1/apps/TOTP.html",
     "force_reload":true

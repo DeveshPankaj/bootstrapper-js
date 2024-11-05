@@ -37,7 +37,7 @@ const getLocalFilePath = (path: string): string => {
 
 let subscriptions: Array<{ unsubscribe: () => void }> = []
 
-platform.host.registerCommand('ui.iframe', (body: HTMLBodyElement, props: UICallbackProps, url: string) => {
+platform.host.registerCommand('ui.iframe', (body: HTMLBodyElement, props: UICallbackProps, url: string, ...args: any) => {
 
     if (!body) {
         console.error(`Invalid command call. first item must be a dom element`)
@@ -79,7 +79,7 @@ platform.host.registerCommand('ui.iframe', (body: HTMLBodyElement, props: UICall
     body.ownerDocument.adoptedStyleSheets.push(styles)
     props.setWindowView(true)
     
-    render(container, props, url)
+    render(container, props, url, ...args)
     fullScreenCallbackRef.current = (...args: any[]) => {
         setTimeout(() => props.toggleFullScreen(), 0);
     }
@@ -92,9 +92,9 @@ platform.host.registerCommand('ui.iframe', (body: HTMLBodyElement, props: UICall
     })
 }, { icon: 'box', title: '', fullScreen: false })
 
-const render = (container: HTMLElement, props: UICallbackProps, url: string) => {
+const render = (container: HTMLElement, props: UICallbackProps, url: string, ...args: any) => {
     const root = createRoot(container)
-    root.render(<App {...props} url={url} />)
+    root.render(<App {...props} $args={args} url={url} />)
     subscriptions.push({
         unsubscribe: () => {
             root.unmount()
@@ -123,6 +123,7 @@ const App = (props: UICallbackProps & { url: string }) => {
             const newPlatform = new platform.constructor(platformEventEmitter, props.url, props.url);
             newPlatform.setHost(platform.host);
             newPlatform.register('props', props);
+            newPlatform.register('$args', props.$args);
             newPlatform.register('React', React)
             newPlatform.register('ReactDOM', { createRoot })
 
@@ -134,7 +135,7 @@ const App = (props: UICallbackProps & { url: string }) => {
             //     return import(module_path)
             // }
             iframeRef.current.contentWindow.fetch = (...args: any[]) => {
-                console.log(args)
+                // console.log(args)
                 // @ts-ignore
                 return fetch(...args)
             }
