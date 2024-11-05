@@ -13,7 +13,7 @@
       box-sizing: border-box;
       /* max-width: 800px; Maximum width */
       /* width: 100%; Full width for responsiveness */
-      padding: 20px;
+      /* padding: 20px; */
       /* border: 1px solid #ddd; Optional border for visual clarity */
       /* border-radius: 8px; Rounded corners */
       /* background-color: white; Background color */
@@ -27,12 +27,24 @@
   <script type="module">
     const props = platform.getService('props')
     const fs = platform.host.getFS();
+
     
+    const reactRoot = document.getElementById('react-root');
+    const computedStyles = reactRoot.computedStyleMap();
+    const backgroundColor = computedStyles.get('background-color').toString();
+    const color = computedStyles.get('color').toString();
+    document.body.style.backgroundColor = backgroundColor;
+
     props.setHeaderStyles({
-      backgroundColor: 'rgb(249, 249, 249)',
-      color: 'black'
+      backgroundColor,
+      color
     })
-    console.log(props)
+
+    // props.setHeaderStyles({
+    //   backgroundColor: 'rgb(249, 249, 249)',
+    //   color: 'black'
+    // })
+    // console.log(props)
     
      const ReactDOM = platform.getService('ReactDOM');
      const React = platform.getService('React');
@@ -41,11 +53,7 @@
     // import ReactDOM from 'https://esm.sh/stable/react-dom@18.2.0/es2022/react-dom.mjs';
     import Markdown from 'https://esm.sh/react-markdown@9?bundle';
     import remarkGfm from 'https://esm.sh/remark-gfm';
-  
     
-  
-    const reactRoot = document.getElementById('react-root');
-  
     const content = fs.readFileSync(props.$args[0])
     // Render the Markdown component
     ReactDOM.createRoot(reactRoot).render(
