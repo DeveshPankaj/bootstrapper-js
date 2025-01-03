@@ -4,5 +4,5 @@
  * It will be recreated on the next reload with default configurations.
  */
 
-service('root', 'exec')('/home/user1/apps/xtermjs.html');
+// service('root', 'exec')('/home/user1/apps/xtermjs.html');
 

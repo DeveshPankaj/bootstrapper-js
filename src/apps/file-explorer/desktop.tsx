@@ -74,8 +74,8 @@ export const ListDirComponent = ({ dir, openFile, showFileActions, customClass }
             box-sizing: border-box;
             display: inline-block;
             padding: .5rem;
-            width: 3rem;
-            height: 3rem;
+            width: 4rem;
+            height: 4rem;
             overflow: hidden;
             cursor: pointer;
         }
