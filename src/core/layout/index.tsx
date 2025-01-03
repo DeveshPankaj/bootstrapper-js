@@ -387,7 +387,7 @@ export const render = (container: HTMLElement) => {
             </div>
             <div className="content-area" ref={contentRef} onContextMenu={onContextMenu}>
                 <div className={DESKTOP_CONTAINER_CLASS}>
-                    {/* <ListDirComponent openFile={openFile} showFileActions={showFileActionsHandler}  customClass='desktop-icons'/> */}
+                    <ListDirComponent openFile={openFile} showFileActions={showFileActionsHandler}  customClass='desktop-icons'/>
                 </div>
                 <div className={WINDOWS_CONTAINER_CLASS}></div>
             </div>

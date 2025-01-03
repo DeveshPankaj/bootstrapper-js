@@ -60,14 +60,14 @@ const initWindow = () => {
         '/usr/lib',
         '/usr/local',
         '/bin',
-        '/root',
-        '/media',
-        '/etc',
+        // '/root',
+        // '/media',
+        // '/etc',
         '/proc',
-        '/lib',                        // Existing system directories
-        '/mnt',
-        '/opt',
-        '/run',
+        // '/lib',                        // Existing system directories
+        // '/mnt',
+        // '/opt',
+        // '/run',
         '/srv',
         '/sys',
         '/tmp',
@@ -83,7 +83,17 @@ const initWindow = () => {
         fs: 'MountableFileSystem',
         options: {
             '/': { fs: 'LocalStorage', options: {} },
-            // '/proc': { fs: 'InMemory', options: {} } 
+            // '/home': { fs: 'LocalStorage', options: {} },
+            // '/bin': { fs: 'LocalStorage', options: {} },
+            // '/usr': { fs: 'LocalStorage', options: {} },
+            // '/srv': { fs: 'LocalStorage', options: {} },
+            // '/tmp': { fs: 'InMemory', options: {} },
+            // '/proc': { fs: 'InMemory', options: {} },
+            // '/var': { fs: 'InMemory', options: {} },
+            // '/sys': { fs: 'InMemory', options: {} },
+            // '/bin': { fs: 'IndexedDB', options: {} },
+            // '/usr': { fs: 'IndexedDB', options: {} },
+            // '/tmp': { fs: 'InMemory', options: {} } 
         } 
     }, async err => {
         if (err) {
