@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Browser File System API Example</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+    #fileList {
+      list-style-type: none;
+      margin: 0;
+      padding: 0;
+      overflow-y: auto;
+      width: 30%;
+      background-color: #f4f4f4;
+      border-right: 1px solid #ddd;
+    }
+    #fileList li {
+      padding: 10px;
+      cursor: pointer;
+      color: blue;
+    }
+    #fileList li:hover {
+      background-color: #ddd;
+    }
+    #contentArea {
+      flex-grow: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+    #fileContent {
+      flex-grow: 1;
+      width: 100%;
+      margin-bottom: 10px;
+      padding: 10px;
+      font-family: monospace;
+    }
+    #controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    #controls input {
+      flex-grow: 1;
+      padding: 5px;
+    }
+  </style>
+</head>
+<body>
+  <ul id="fileList"></ul>
+
+  <div id="contentArea">
+    <div id="controls">
+      <button id="selectFolder">Select Folder</button>
+      <input id="fileName" type="text" placeholder="Enter file name" />
+      <button id="saveFile">Save as File</button>
+    </div>
+    <textarea id="fileContent" placeholder="Type some content..."></textarea>
+  </div>
+
+  <script>
+    const selectFolderButton = document.getElementById('selectFolder');
+    const fileListElement = document.getElementById('fileList');
+    const saveFileButton = document.getElementById('saveFile');
+    const fileContentTextArea = document.getElementById('fileContent');
+    const fileNameInput = document.getElementById('fileName');
+
+    let currentDirHandle;
+    let parentDirHandles = [];
+
+    const DB_NAME = 'fileHandlesDB';
+    const STORE_NAME = 'directoryHandles';
+
+    async function openDB() {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, 1);
+
+        request.onupgradeneeded = (event) => {
+          const db = event.target.result;
+          if (!db.objectStoreNames.contains(STORE_NAME)) {
+            db.createObjectStore(STORE_NAME);
+          }
+        };
+
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    async function saveToDB(key, value) {
+      const db = await openDB();
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const store = tx.objectStore(STORE_NAME);
+      store.put(value, key);
+      return tx.complete;
+    }
+
+    async function getFromDB(key) {
+      const db = await openDB();
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const store = tx.objectStore(STORE_NAME);
+      return store.get(key);
+    }
+
+    async function restoreFolderAccess() {
+      return new Promise(async () => {
+        const savedName = await getFromDB('directoryName');
+      savedName.onsuccess = async() => {
+        if (savedName) {
+    const userConfirmed = confirm(
+      `Do you want to restore access to the previously selected folder: "${savedName?.result}"?`
+    );
+    if (userConfirmed) {
+      try {
+        currentDirHandle = await window.showDirectoryPicker({ writable: true });
+        if (currentDirHandle.name === savedName?.result) {
+          parentDirHandles = [];
+          await listFiles();
+        } else {
+          alert('The selected folder does not match the previously saved folder.');
+        }
+      } catch (error) {
+        console.error('Error restoring folder access:', error);
+      }
+    }
+      } 
+  
+  }
+      })
+      
+  
+}
+
+async function handleSelectFolder() {
+  try {
+    await restoreFolderAccess();
+    // if(!currentDirHandle) currentDirHandle = await window.showDirectoryPicker({ writable: true });
+    parentDirHandles = [];
+    await saveToDB('directoryName', currentDirHandle.name); // Save only the folder name
+    await listFiles();
+  } catch (error) {
+    console.error('Error selecting folder:', error);
+  }
+}
+
+
+    async function listFiles() {
+      fileListElement.innerHTML = '';
+
+      if (parentDirHandles.length > 0) {
+        const backItem = document.createElement('li');
+        backItem.textContent = '[Parent Directory] ..';
+        backItem.style.color = 'purple';
+        backItem.addEventListener('click', () => navigateToParentDirectory());
+        fileListElement.appendChild(backItem);
+      }
+
+      try {
+        for await (const [name, handle] of currentDirHandle.entries()) {
+          const listItem = document.createElement('li');
+          listItem.textContent = handle.kind === 'file' ? name : `[Folder] ${name}`;
+          listItem.style.color = handle.kind === 'file' ? 'blue' : 'green';
+          listItem.addEventListener('click', () => {
+            if (handle.kind === 'file') {
+              loadFileContent(handle);
+            } else {
+              navigateToFolder(handle);
+            }
+          });
+          fileListElement.appendChild(listItem);
+        }
+      } catch (error) {
+        console.error('Error listing files:', error);
+      }
+    }
+
+    async function navigateToFolder(folderHandle) {
+      parentDirHandles.push(currentDirHandle);
+      currentDirHandle = folderHandle;
+      await listFiles();
+    }
+
+    async function navigateToParentDirectory() {
+      if (parentDirHandles.length > 0) {
+        currentDirHandle = parentDirHandles.pop();
+        await listFiles();
+      }
+    }
+
+    async function loadFileContent(fileHandle) {
+      try {
+        const file = await fileHandle.getFile();
+        fileContentTextArea.value = await file.text();
+      } catch (error) {
+        console.error('Error reading file:', error);
+      }
+    }
+
+    async function handleSaveFile() {
+      if (!currentDirHandle) {
+        alert('Please select a folder first.');
+        return;
+      }
+
+      const fileName = fileNameInput.value.trim();
+      if (!fileName) {
+        alert('Please enter a file name.');
+        return;
+      }
+
+      try {
+        const fileHandle = await currentDirHandle.getFileHandle(fileName, { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(fileContentTextArea.value);
+        await writable.close();
+
+        alert(`File "${fileName}" saved successfully!`);
+        await listFiles();
+      } catch (error) {
+        console.error('Error saving file:', error);
+      }
+    }
+
+    selectFolderButton.addEventListener('click', handleSelectFolder);
+    saveFileButton.addEventListener('click', handleSaveFile);
+
+    // Restore folder access on page load
+    // restoreFolderAccess();
+  </script>
+</body>
+</html>
