@@ -152,6 +152,11 @@
     "force_reload":true
   },
   {
+    "path": "/home/user1/apps/WebRTC.html",
+    "file": "/home/user1/apps/WebRTC.html",
+    "force_reload": false
+  },
+  {
     "path": "/user-preferences.json",
     "file": "/user-preferences.json",
     "force_reload": false

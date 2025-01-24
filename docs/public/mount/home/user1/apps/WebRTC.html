@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebRTC File Transfer</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      background-color: white;
+      margin: 0;
+    }
+    textarea, input {
+      width: calc(100% - 2rem);
+      margin: 1rem;
+    }
+    button {
+      margin: 5px;
+    }
+    #fileInput {
+      width: 90%;
+      margin: 10px 0;
+    }
+  </style>
+</head>
+<body>
+  <!-- <h1>WebRTC File Transfer with Manual Signaling</h1> -->
+  <div id="settings">
+    <textarea id="offerTextarea" placeholder="Offer will appear here. Copy and share it with the other peer."></textarea>
+    <textarea id="answerTextarea" placeholder="Paste the answer from the other peer here."></textarea>
+    <div>
+    <button id="startButton">Start</button>
+    <button id="createOfferButton" disabled>Create Offer</button>
+    <button id="setAnswerButton" disabled>Set Answer</button>
+    <button id="hangupButton" disabled>Hang Up</button>
+    </div>
+  </div>
+  <div>
+    <h2>Chat</h2>
+    <textarea id="chatLog" readonly rows="10" placeholder="Chat log will appear here"></textarea>
+    <input id="messageInput" placeholder="Type a message" disabled>
+    <button id="sendButton" disabled>Send</button>
+    <input type="file" id="fileInput" disabled>
+    <button id="sendFileButton" disabled>Send File</button>
+  </div>
+
+  <script>
+    const offerTextarea = document.getElementById('offerTextarea');
+    const answerTextarea = document.getElementById('answerTextarea');
+    const startButton = document.getElementById('startButton');
+    const createOfferButton = document.getElementById('createOfferButton');
+    const setAnswerButton = document.getElementById('setAnswerButton');
+    const hangupButton = document.getElementById('hangupButton');
+    const chatLog = document.getElementById('chatLog');
+    const messageInput = document.getElementById('messageInput');
+    const sendButton = document.getElementById('sendButton');
+    const fileInput = document.getElementById('fileInput');
+    const sendFileButton = document.getElementById('sendFileButton');
+
+    let pc, dataChannel;
+
+    const configuration = {
+      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] // Public STUN server
+    };
+
+    startButton.onclick = () => {
+      // Initialize RTCPeerConnection
+      pc = new RTCPeerConnection(configuration);
+
+      // Create the data channel
+      dataChannel = pc.createDataChannel("chat");
+      setupDataChannel();
+
+      // Handle ICE candidates
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          offerTextarea.value = JSON.stringify(pc.localDescription);
+        }
+      };
+
+      // Enable the "Create Offer" button
+      createOfferButton.disabled = false;
+      startButton.disabled = true;
+    };
+
+    createOfferButton.onclick = async () => {
+      // Create an offer and set local description
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+
+      // Display the offer in the textarea
+      offerTextarea.value = JSON.stringify(offer);
+
+      // Enable the "Set Answer" button
+      setAnswerButton.disabled = false;
+    };
+
+    setAnswerButton.onclick = async () => {
+      try {
+        // Read and parse the answer from the textarea
+        const answer = JSON.parse(answerTextarea.value);
+        await pc.setRemoteDescription(answer);
+
+        // Enable the "Hang Up" button
+        hangupButton.disabled = false;
+        setAnswerButton.disabled = true;
+      } catch (err) {
+        console.error("Error setting remote description:", err);
+      }
+    };
+
+    offerTextarea.oninput = async () => {
+      try {
+        const offer = JSON.parse(offerTextarea.value);
+        if (!pc.currentRemoteDescription) {
+          await pc.setRemoteDescription(offer);
+
+          // Create an SDP answer
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+
+          // Display the answer in the textarea
+          answerTextarea.value = JSON.stringify(answer);
+
+          // Listen for incoming data channels
+          pc.ondatachannel = (event) => {
+            dataChannel = event.channel;
+            setupDataChannel();
+          };
+        }
+      } catch (err) {
+        console.error("Error processing offer:", err);
+      }
+    };
+
+    let currentDataType = "MSG"
+    let currentData = ""
+    function setupDataChannel() {
+      dataChannel.onopen = () => {
+        logMessage("System", "Data channel is open.");
+        messageInput.disabled = false;
+        sendButton.disabled = false;
+        fileInput.disabled = false;
+        sendFileButton.disabled = false;
+      };
+
+      dataChannel.onmessage = (event) => {
+        if(event.data === "MSG") {
+          currentDataType = "MSG"
+          currentData = ""
+          return
+        }
+        
+        if(event.data === "IMG") {
+          currentDataType = "IMG"
+          currentData = []
+          return
+        }
+
+        if(event.data === "END") {
+          if(currentDataType === "IMG") {
+            renderFile(currentData);
+          }
+          if(currentDataType === "MSG") {
+            logMessage("Peer", currentData);
+          }
+          return
+        }
+        
+        // if (event.data instanceof ArrayBuffer) {
+        //   // Handle binary data (image file)
+        //   // renderFile(event.data);
+        //   currentData.push(event.data)
+        // } else {
+        //   currentData += event.data
+        //   // logMessage("Peer", event.data);
+        // }
+        if (currentDataType === "IMG") {
+          // Handle binary data (image file)
+          // renderFile(event.data);
+          currentData.push(event.data)
+        } else {
+          currentData += event.data
+          // logMessage("Peer", event.data);
+        }
+      };
+
+      dataChannel.onclose = () => {
+        logMessage("System", "Data channel is closed.");
+        messageInput.disabled = true;
+        sendButton.disabled = true;
+        fileInput.disabled = true;
+        sendFileButton.disabled = true;
+      };
+    }
+
+    sendButton.onclick = () => {
+      const message = messageInput.value;
+      if (message && dataChannel.readyState === "open") {
+        dataChannel.send("MSG");
+        dataChannel.send(message);
+        dataChannel.send("END");
+        logMessage("You", message);
+        messageInput.value = '';
+      }
+    };
+
+    hangupButton.onclick = () => {
+      if (pc) {
+        pc.close();
+        pc = null;
+      }
+
+      // Reset UI
+      startButton.disabled = false;
+      createOfferButton.disabled = true;
+      setAnswerButton.disabled = true;
+      hangupButton.disabled = true;
+      sendButton.disabled = true;
+      messageInput.disabled = true;
+      fileInput.disabled = true;
+      sendFileButton.disabled = true;
+
+      // Clear textareas
+      offerTextarea.value = '';
+      answerTextarea.value = '';
+      chatLog.value = '';
+    };
+
+    sendFileButton.onclick = () => {
+      const file = fileInput.files[0];
+      if (file && dataChannel.readyState === "open") {
+        sendFileInChunks(file);
+      }
+    };
+
+    function sendFileInChunks(file) {
+      const chunkSize = 16 * 1024; // 16KB per chunk
+      let offset = 0;
+      dataChannel.send("IMG");
+      function sendChunk() {
+        const reader = new FileReader();
+        reader.onload = () => {
+          dataChannel.send(reader.result);
+          offset += chunkSize;
+          if (offset < file.size) {
+            sendChunk();
+          } else {
+            logMessage("You", "File transfer complete.");
+            dataChannel.send("END");
+          }
+        };
+        const chunk = file.slice(offset, offset + chunkSize);
+        reader.readAsArrayBuffer(chunk);
+        // console.log(offset);
+      }
+      sendChunk();
+    }
+    // function sendFileInChunks(file) {
+
+    //   function sendChunk() {
+    //     const reader = new FileReader();
+    //     reader.onload = () => {
+    //       dataChannel.send(reader.result);
+    //       logMessage("You", "File transfer complete.");
+    //     };
+    //     reader.readAsArrayBuffer(file);
+    //   }
+
+    //   sendChunk();
+    // }
+
+    function renderFile(arrayBuffer) {
+      const blob = new Blob(arrayBuffer);
+      const url = URL.createObjectURL(blob);
+      const img = document.createElement('img');
+      img.style.width = "30rem"
+      img.src = url;
+      img.onload = () => {
+        chatLog.value += 'Peer: [Image received]\n';
+        chatLog.scrollTop = chatLog.scrollHeight;
+        document.body.appendChild(img);
+      };
+    }
+
+    function logMessage(sender, message) {
+      chatLog.value += `${sender}: ${message}\n`;
+      chatLog.scrollTop = chatLog.scrollHeight;
+    }
+  </script>
+</body>
+</html>
