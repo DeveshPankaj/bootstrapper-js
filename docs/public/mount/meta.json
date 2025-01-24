@@ -157,6 +157,11 @@
     "force_reload": false
   },
   {
+    "path": "/home/user1/apps/FS.html",
+    "file": "/home/user1/apps/FS.html",
+    "force_reload": false
+  },
+  {
     "path": "/user-preferences.json",
     "file": "/user-preferences.json",
     "force_reload": false
