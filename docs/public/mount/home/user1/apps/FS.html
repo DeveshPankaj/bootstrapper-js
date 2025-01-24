@@ -117,17 +117,17 @@
       savedName.onsuccess = async() => {
         if (savedName) {
     const userConfirmed = confirm(
-      `Do you want to restore access to the previously selected folder: "${savedName?.result}"?`
+      `Do you want to restore access to the previously selected folder: "${savedName?.result||""}"?`
     );
     if (userConfirmed) {
       try {
         currentDirHandle = await window.showDirectoryPicker({ writable: true });
-        if (currentDirHandle.name === savedName?.result) {
+        // if (currentDirHandle.name === savedName?.result) {
           parentDirHandles = [];
           await listFiles();
-        } else {
-          alert('The selected folder does not match the previously saved folder.');
-        }
+        // } else {
+        //   alert('The selected folder does not match the previously saved folder.');
+        // }
       } catch (error) {
         console.error('Error restoring folder access:', error);
       }
