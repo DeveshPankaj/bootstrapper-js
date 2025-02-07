@@ -55,16 +55,27 @@
     // Import React and ReactDOM
     // import React from 'https://esm.sh/stable/react@18.2.0/es2022/react.mjs';
     // import ReactDOM from 'https://esm.sh/stable/react-dom@18.2.0/es2022/react-dom.mjs';
-    import Markdown from 'https://esm.sh/react-markdown@9?bundle';
+    import Markdown from 'https://esm.sh/react-markdown@latest?bundle';
     import remarkGfm from 'https://esm.sh/remark-gfm';
     
-    const content = fs.readFileSync(props.$args[0])
+    const content = fs.readFileSync(props.$args[0]).toString();
+    console.log(content)
+
+    // const appModuleSource = `
+    // exports.App = function (React, Markdown, props) {
+    //   return <Markdown remarkPlugins={props.remarkPlugins}>{props.content}</Markdown>
+    // }
+    // `
+    // const {App} = platform.host.execString(appModuleSource);
+    // console.log(App)
+    // ReactDOM.createRoot(reactRoot).render(App(React, Markdown, {remarkPlugins: [remarkGfm], content}))
+
     // Render the Markdown component
     ReactDOM.createRoot(reactRoot).render(
       React.createElement(Markdown, {
         components:{},
         remarkPlugins: [remarkGfm],
-        children: content.toString()
+        children: content
       })
     );
   </script>

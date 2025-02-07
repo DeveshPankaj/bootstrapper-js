@@ -96,8 +96,9 @@
     "file": "/home/user1/apps/markdown.js"
   },
   {
-    "path": "/home/user1/apps/md-render.html",
-    "file": "/home/user1/apps/md-render.html"
+    "path": "/home/user1/apps/md-renderer.html",
+    "file": "/home/user1/apps/md-renderer.html",
+    "force_reload": true
   },
   {
     "path": "/home/user1/Notes.md",
