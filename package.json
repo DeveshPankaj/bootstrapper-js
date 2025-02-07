@@ -6,8 +6,10 @@
 	},
 	"devDependencies": {
 		"@types/node": "^20.7.0",
-		"@types/react": "^18.2.23",
-		"@types/react-dom": "^18.2.7",
+		"react": "^19.0.0",
+		"react-dom": "^19.0.0",
+		"@types/react": "^19.0.8",
+		"@types/react-dom": "^19.0.3",
 		"@types/serviceworker": "^0.0.79",
 		"copy-webpack-plugin": "^12.0.2",
 		"html-webpack-plugin": "^5.5.3",
@@ -26,8 +28,6 @@
 		"@types/mime": "^4.0.0",
 		"codemirror": "^6.0.1",
 		"mime": "^4.0.3",
-		"react": "^18.2.0",
-		"react-dom": "^18.2.0",
 		"rxjs": "^7.8.1",
 		"ts-node": "^10.9.1"
 	}
