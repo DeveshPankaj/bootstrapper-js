@@ -30822,6 +30822,12 @@ const App = (props) => {
             })
         });
     }, [ref.current]);
+    React.useEffect(() => {
+        const unsubscribeOnWindowDestroy = props.onDestroy(() => {
+            var _a;
+            (_a = editorRef.current) === null || _a === void 0 ? void 0 : _a.destroy();
+        });
+    }, []);
     // const compileTs = () => {
     //     const modules = {
     //         react: React,
