@@ -35,6 +35,7 @@ export type UICallbackProps = {
     setTitle: (title: string) => void
     appendActionButton: (props: {icon: string, title: string, onClick: () => void}) => {remove: ()=>void}
     close: () => void
+    onDestroy: (cb: Function) => void
     toggleFullScreen: () => void
     getBoundingClientRect: () => Record<string, number>
     setBoundingClientRect: (rect: Record<string, number>) => void

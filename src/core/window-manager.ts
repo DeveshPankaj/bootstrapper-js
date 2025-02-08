@@ -47,6 +47,13 @@ export class WindowManager {
     iframe.classList.add("draggable");
 
     iframe.setAttribute("allowfullscreen", "");
+
+    let onCloseCallbacks: Array<Function> = []
+    const closeFunction = () => {
+      onCloseCallbacks.forEach(cb => cb());
+      onCloseCallbacks = [];
+      this.closeWindow(windowRef);
+    }
     iframe.onload = () => {
       const iframeBody = iframe.contentWindow?.document?.body;
       if (!iframeBody) return;
@@ -64,7 +71,13 @@ export class WindowManager {
       command.exec(
         iframeBody,
         {
-          close: () => this.closeWindow(windowRef),
+          close: closeFunction,
+          onDestroy: (cb: Function) => {
+            onCloseCallbacks.push(cb);
+            return () => {
+              onCloseCallbacks = onCloseCallbacks.filter(x => x !== cb);
+            }
+          },
           setTitle,
           toggleHeader,
           appendActionButton,
@@ -97,7 +110,7 @@ export class WindowManager {
       // contentRef.current.innerText = ''
       container.appendChild(iframe);
       appendWindow(this.contentRef.current, container);
-      closeButton.onclick = () => container.remove();
+      closeButton.onclick = closeFunction;
       fullScreenButton.onclick = () =>
         toggleFullScreen(this.contentRef.current!, container);
     }

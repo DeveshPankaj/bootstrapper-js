@@ -228,6 +228,12 @@ const App = (props: UICallbackProps & { file: FileType }) => {
 
     }, [ref.current])
 
+    React.useEffect(() => {
+        const unsubscribeOnWindowDestroy = props.onDestroy(() => {
+            editorRef.current?.destroy()
+        });
+    }, []);
+
     // const compileTs = () => {
     //     const modules = {
     //         react: React,
