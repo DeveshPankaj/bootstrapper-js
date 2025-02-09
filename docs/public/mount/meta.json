@@ -101,6 +101,11 @@
     "force_reload": true
   },
   {
+    "path": "/home/user1/quotes/my.md",
+    "file": "/home/user1/quotes/my.md",
+    "force_reload": true
+  },
+  {
     "path": "/home/user1/Notes.md",
     "file": "/home/user1/Notes.md"
   },

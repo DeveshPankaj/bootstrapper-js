@@ -52,6 +52,7 @@ const initWindow = () => {
         '/home/user1/apps',            // Subdirectory for apps
         '/home/user1/tools',            // Subdirectory for tools
         '/home/user1/projects',        // Subdirectory for projects
+        '/home/user1/quotes',        
         // '/home/user1/projects/Snake.html', // Specific project file (not a directory, but included for completeness)
         // '/home/user1/projects/WebGL.html', // Specific project file (not a directory, but included for completeness)
         // '/home/user1/projects/WebGL-Earth.html', // Specific project file (not a directory, but included for completeness)
@@ -128,6 +129,7 @@ const initWindow = () => {
                 if(fs.existsSync(item.path) && !item.force_reload) return;
                 const path = item.file.startsWith('http') ? item.file : `/public/mount${item.file.startsWith('/')?'':'/'}${item.file}`;
                 const fileData = await (await fetch(path)).arrayBuffer() as any;
+                // FIXME: create folder if not exist
                 fs.writeFileSync(item.path, Buffer.from(fileData));
 
                 // navigator.serviceWorker.controller?.postMessage({type: 'fs/file-added', payload: {file: item.path}});
