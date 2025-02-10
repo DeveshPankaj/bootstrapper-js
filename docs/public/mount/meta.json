@@ -117,7 +117,12 @@
   {
     "path": "/home/user1/apps/WAMP.html",
     "file": "/home/user1/apps/WAMP.html",
-    "force_reload":false
+    "force_reload": false
+  },
+  {
+    "path": "/home/user1/apps/wamp.js",
+    "file": "/home/user1/apps/wamp.js",
+    "force_reload": true
   },
   {
     "path": "/home/user1/tools/speed-test.html",
@@ -151,6 +156,10 @@
   {
     "path": "/usr/bin/fullscreen.js",
     "file": "/home/user1/fullscreen.js"
+  },
+  {
+    "path": "/usr/lib/ui/menuItem.js",
+    "file": "/usr/lib/ui/menuItem.js"
   },
   {
     "path": "/home/user1/apps/xtermjs.html",

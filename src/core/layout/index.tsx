@@ -177,7 +177,8 @@ const applyCss = ({wallpaper}: {wallpaper: string}) => {
             display: none;
             z-index: 300;
     
-            padding: 10px;
+            // padding: 10px;
+            overflow: hidden;
             background: rgba(255, 255, 255, 0.15);
             backdrop-filter: blur(10px);
             border-radius: 15px;
@@ -340,15 +341,21 @@ export const render = (container: HTMLElement) => {
         showContextMenuHandler(event.clientX, event.clientY, [
             {
                 type: 'action',
-                id: '0',
-                title: 'XTerm',
-               cmd: `service('root', 'exec') ('/home/user1/apps/xtermjs.html');`
-            },
-            {
-                type: 'action',
                 id: '1',
                 title: 'Explorer',
                 cmd: `service('001-core.layout', 'open-window') (command('explorer'))`
+            },
+            {
+                type: 'action',
+                id: '4',
+                title: 'Settings',
+                cmd: `service('root', 'exec') ('/home/user1/settings.html');`
+            },
+            {
+                type: 'action',
+                id: '0',
+                title: 'XTerm',
+               cmd: `service('root', 'exec') ('/home/user1/apps/xtermjs.html');`
             },
             {
                 type: 'action',
@@ -361,12 +368,6 @@ export const render = (container: HTMLElement) => {
                 id: '3',
                 title: 'Toggle Fullscreen',
                 cmd: `service('root', 'exec') ('/usr/bin/fullscreen.js');`
-            },
-            {
-                type: 'action',
-                id: '4',
-                title: 'Settings',
-                cmd: `service('root', 'exec') ('/home/user1/settings.html');`
             },
             {
                 type: 'action',

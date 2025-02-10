@@ -1,4 +1,7 @@
-import React from "react"
+import { Platform } from '@shared/index'
+import React from 'react'
+
+const platform = Platform.getInstance()
 
 export type ContextMenuItem = {
     type: 'action' | 'group' | 'divider'
@@ -19,11 +22,26 @@ export const ContextMenu: React.FC<{componentRef: (obj:{setItems:(arr: Array<Con
     ]);
 
     const onClickRef = React.useRef<any>(null)
+    const [customModule, setCustomModule] = React.useState<any>(null)
+    const ComponentTemplateRef = React.useRef(({item, onClick}: {item: ContextMenuItem, onClick: Function}) => {
+        return <button className='action-default-btn' key={item.id} onClick={ev => onClick(ev)}>{item.title}</button>
+    })
 
 
     React.useEffect(()=> {
         componentRef({setItems, setOnClick: callback => onClickRef.current=callback})
-    }, [setItems])
+
+        const fs = platform.host.getFS();
+        const templateFilePath = '/usr/lib/ui/menuItem.js'
+        const fileExist = fs.existsSync(templateFilePath)
+        if(fileExist) {
+            const fileContent = fs.readFileSync(templateFilePath)
+            const mod = platform.host.execString(fileContent.toString())
+            setCustomModule(mod)
+            ComponentTemplateRef.current = mod.default || ComponentTemplateRef.current
+            // setCustomStyles(mod?.getStyles?.(id, items) || "")
+        }
+    }, [items])
     
     
     return (
@@ -39,7 +57,7 @@ export const ContextMenu: React.FC<{componentRef: (obj:{setItems:(arr: Array<Con
 
                 }
 
-                #${id} > button {
+                #${id} > button.action-default-btn {
                     cursor: pointer;
                     text-align: start;
 
@@ -48,24 +66,19 @@ export const ContextMenu: React.FC<{componentRef: (obj:{setItems:(arr: Array<Con
                     border: none;
 
                     background: transparent;
-                    
                 }
 
-                #${id} > button:hover {
+                #${id} > button.action-default-btn:hover {
                     background: black;
                     color: white;
                     // border-radius: 12px;
                 }
-
-
                 
-
+                ${customModule ? customModule.getStyles(id, items) : ''}
             `}} />
-
             {
-                items.map(item => <button key={item.id} onClick={ev => onClickRef.current ? onClickRef.current(item) : null}>{item.title}</button>)
+                items.map(item => <ComponentTemplateRef.current key={item.id} item={item} onClick={() => onClickRef.current ? onClickRef.current(item) : null} />)
             }
-
         </div>
     )
 }

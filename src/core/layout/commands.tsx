@@ -19,6 +19,7 @@ export const Commands = ({ onCommandClick, vertical, align = 'start' }: { onComm
         // 'ui.game',
         // 'ui.game-of-life',
         // 'ui.xml-parser',
+        'webamp',
     ]
 
 
@@ -27,6 +28,8 @@ export const Commands = ({ onCommandClick, vertical, align = 'start' }: { onComm
         const subscription = platform.host.commands$
             .pipe(map(commands => defaultCommands.map(cmd => commands.find(command => command.name === cmd)!).filter(x => x)))
             .subscribe(_commands => setCommands(_commands))
+
+        // platform.host.commands$.subscribe(_commands => console.log(_commands))
 
 
         const { remove: removeToggleCommand } = platform.host.registerCommand('core.toggle-navbar', () => {

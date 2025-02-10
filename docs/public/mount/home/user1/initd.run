@@ -8,6 +8,9 @@
 // Load file explorer
 service('root', 'exec')('/home/user1/apps/explorer.js');
 
+// Load WAMP
+service('root', 'exec')('/home/user1/apps/wamp.js');
+
 // Load Markdown reader
 service('root', 'exec')('/home/user1/apps/markdown.js');
 
