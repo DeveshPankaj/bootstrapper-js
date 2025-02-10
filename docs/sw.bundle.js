@@ -68,7 +68,7 @@ self.addEventListener('fetch', function (event) {
     //     )
     // }
     const _url = new URL(url);
-    console.log(_url.pathname);
+    // console.log(_url.pathname)
     if (_url.pathname.startsWith('/cache')) {
         event.respondWith(caches.open(cacheName).then((cache) => {
             // Respond with the image from the cache or from the network
