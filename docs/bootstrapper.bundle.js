@@ -145,7 +145,9 @@ const initWindow = () => {
                     return;
                 const path = item.file.startsWith('http') ? item.file : `/public/mount${item.file.startsWith('/') ? '' : '/'}${item.file}`;
                 const fileData = yield (yield fetch(path)).arrayBuffer();
-                // FIXME: create folder if not exist
+                const dir = item.path.slice(0, item.path.lastIndexOf('/')) || "/";
+                if (!fs.existsSync(dir))
+                    fs.mkdirSync(dir, { recursive: true });
                 fs.writeFileSync(item.path, Buffer.from(fileData));
                 // navigator.serviceWorker.controller?.postMessage({type: 'fs/file-added', payload: {file: item.path}});
             }));
