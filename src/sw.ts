@@ -76,7 +76,10 @@ self.addEventListener('fetch', function(event: Event | any) {
     //     )
     // }
     const _url = new URL(url)
-    // console.log(_url.pathname)
+    if(_url.pathname.startsWith('/(sw)/')) {
+        console.log(_url.pathname)
+        event.respondWith(new Response("<h1>we are working on interprocess message passing</h1>", {headers: {'Content-Type': "text/html"}}))
+    }
     if(_url.pathname.startsWith('/cache')) {
         event.respondWith(
             caches.open(cacheName).then((cache) => {

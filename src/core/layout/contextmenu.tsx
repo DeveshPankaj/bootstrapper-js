@@ -36,7 +36,7 @@ export const ContextMenu: React.FC<{componentRef: (obj:{setItems:(arr: Array<Con
         const fileExist = fs.existsSync(templateFilePath)
         if(fileExist) {
             const fileContent = fs.readFileSync(templateFilePath)
-            const mod = platform.host.execString(fileContent.toString())
+            const mod = platform.host.execString(fileContent.toString(), templateFilePath)
             setCustomModule(mod)
             ComponentTemplateRef.current = mod.default || ComponentTemplateRef.current
             // setCustomStyles(mod?.getStyles?.(id, items) || "")
