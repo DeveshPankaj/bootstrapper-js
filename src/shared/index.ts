@@ -157,7 +157,7 @@ export class Host {
     factory.call({}, ...Object.values(context));
   }
 
-  public execString(source: string) {
+  public execString(source: string, filenameAlias: string = 'dynamic.js') {
     function startWorker(source: string) {
       const blob = new Blob([source], { type: "application/javascript" });
       const workerUrl = URL.createObjectURL(blob);
@@ -175,7 +175,8 @@ export class Host {
     }
 
     const runJS = (source: string) => {
-      const program = Babel.transform(source, { presets: [['env', { modules: false }], "react", 'typescript'],  sourceMaps: true, filename: 'dynamic.js' });
+      const program = Babel.transform(source, { presets: [['env', { modules: false }], "react", 'typescript'],  sourceMaps: true, filename: filenameAlias, cwd: this.platform.cwd });
+      program.map.sources = ['babel://'+filenameAlias]
       const base64SourceMap = btoa(unescape(encodeURIComponent(JSON.stringify(program.map))));
       const codeWithSourceMap = `${program.code}\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,${base64SourceMap}`;
 
@@ -205,7 +206,20 @@ export class Host {
 
       //     code = codeWithSourceMap
       //   }
-        const _ctx: any = {exports: {}, require: this.platform.require.bind(this.platform)}
+        const platformEventEmitter = new Subject<PlatformEvent>();
+        const pwd = filenameAlias.slice(0, filenameAlias.lastIndexOf('/')) || "/"
+        const newPlatform = new Platform(platformEventEmitter, filenameAlias, pwd);
+        newPlatform.setHost(this);
+        newPlatform.register('props', {});
+        newPlatform.register('$args', []);
+        newPlatform.register('React', this.platform.getService('React'));
+        newPlatform.register('ReactDOM', this.platform.getService('ReactDOM'));
+        const _ctx: any = {
+          exports: {}, 
+          require: newPlatform.require.bind(newPlatform), 
+          window: {platform: newPlatform, document: this.window.document, top: this.window.top}, // FIXME: prevent passing root window object
+          // React: this.platform.getService('React')
+        }
         const factory = new Function(...Object.keys(_ctx), codeWithSourceMap)
         factory.call(this, ...Object.values(_ctx))
 
@@ -253,8 +267,7 @@ export class Host {
       if (fileExt === 'js') {
         const fs = this.getFS()
         const source = fs.readFileSync(filepath)
-        this.execString(source.toString())
-
+        this.execString(source.toString(), filepath)
         return;
       }
 
@@ -364,10 +377,9 @@ export class Platform {
 
     public require(filepath: string) {
       const fs = this.host.getFS()
-
-      if(filepath.startsWith('.')) {
+      if(filepath.startsWith('./')) {
         // TODO: prefix current program working directory
-        filepath = (this.cwd || '') + filepath
+        filepath = (this.cwd || '') + filepath.slice(1)
       }
       try {
 
@@ -375,7 +387,11 @@ export class Platform {
           return fetch(filepath).then(res => res.text()).then(code => Babel.transform(code,  { presets: [['env', { modules: false }], 'typescript', "react"],  sourceMaps: true, filename: 'dynamic.js' }).code)
             .then(
               code => {
-                const _ctx: any = {exports: {}, require: this.require.bind(this)}
+                const _ctx: any = {
+                  exports: {}, 
+                  require: this.require.bind(this), 
+                  // React: this.getService('React')
+                }
                 const factory = new Function(...Object.keys(_ctx), code)
                 factory.call(this, ...Object.values(_ctx))
                 return _ctx.exports
@@ -387,14 +403,19 @@ export class Platform {
 
         let code = fs.readFileSync(filepath).toString()
 
-        if(filepath.endsWith('.js')) {
-          const program = Babel.transform(code, { presets: [['env', { modules: false }], 'typescript', "react"],  sourceMaps: true, filename: filepath });
+        if(filepath.endsWith('.js') || filepath.endsWith('.ts') || filepath.endsWith('.tsx')) {
+          const program = Babel.transform(code, { presets: [['env', { modules: false }], 'typescript', "react"],  sourceMaps: true, filename: filepath, cwd: this.cwd });
           const base64SourceMap = btoa(unescape(encodeURIComponent(JSON.stringify(program.map))));
+          program.map.sources = ['babel://'+filepath]
           const codeWithSourceMap = `${program.code}\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,${base64SourceMap}`;
 
           code = codeWithSourceMap
         }
-        const _ctx: any = {exports: {}, require: this.require.bind(this)}
+        const _ctx: any = {
+          exports: {}, 
+          require: this.require.bind(this), 
+          // React: this.getService('React')
+        }
         const factory = new Function(...Object.keys(_ctx), code)
         factory.call(this, ...Object.values(_ctx))
         return _ctx.exports
