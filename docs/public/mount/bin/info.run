@@ -33,7 +33,7 @@ const infoLines = [
     `Role: Senior Software Engineer`,
     `Tech Stack: TypeScript, Python`,
     `Portfolio: pankajdevesh.com`,
-    `Experience: 5 years`,
+    `Experience: 6+ years`,
     `Projects: Fullstack Development`,
     `Tech Focus: Microservices, CLI`
 ];
