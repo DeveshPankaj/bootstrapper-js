@@ -30,7 +30,8 @@ const getLocalFilePath = (path: string): string => {
     const blob = new Blob([stringContent], { type: mime.getType(path) || undefined });
 
     // Step 3: Generate a Blob URL
-    const blobURL = URL.createObjectURL(blob);
+    // const blobURL = URL.createObjectURL(blob);
+    const blobURL = `/(sw)${path}`;
 
     return blobURL
 }

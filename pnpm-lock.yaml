@@ -23,24 +23,12 @@ dependencies:
   '@types/mime':
     specifier: ^4.0.0
     version: 4.0.0
-  '@types/react':
-    specifier: ^19.0.8
-    version: 19.0.8
-  '@types/react-dom':
-    specifier: ^19.0.3
-    version: 19.0.3(@types/react@19.0.8)
   codemirror:
     specifier: ^6.0.1
     version: 6.0.1(@lezer/common@1.1.1)
   mime:
     specifier: ^4.0.3
     version: 4.0.3
-  react:
-    specifier: ^19.0.0
-    version: 19.0.0
-  react-dom:
-    specifier: ^19.0.0
-    version: 19.0.0(react@19.0.0)
   rxjs:
     specifier: ^7.8.1
     version: 7.8.1
@@ -52,6 +40,12 @@ devDependencies:
   '@types/node':
     specifier: ^20.7.0
     version: 20.7.0
+  '@types/react':
+    specifier: ^19.0.8
+    version: 19.0.8
+  '@types/react-dom':
+    specifier: ^19.0.3
+    version: 19.0.3(@types/react@19.0.8)
   '@types/serviceworker':
     specifier: ^0.0.79
     version: 0.0.79
@@ -61,6 +55,12 @@ devDependencies:
   html-webpack-plugin:
     specifier: ^5.5.3
     version: 5.5.3(webpack@5.88.2)
+  react:
+    specifier: ^19.0.0
+    version: 19.0.0
+  react-dom:
+    specifier: ^19.0.0
+    version: 19.0.0(react@19.0.0)
   ts-loader:
     specifier: ^9.4.4
     version: 9.4.4(typescript@5.2.2)(webpack@5.88.2)
@@ -429,13 +429,13 @@ packages:
       '@types/react': ^19.0.0
     dependencies:
       '@types/react': 19.0.8
-    dev: false
+    dev: true
 
   /@types/react@19.0.8:
     resolution: {integrity: sha512-9P/o1IGdfmQxrujGbIMDyYaaCykhLKc0NGCtYcECNUr9UAaDe4gwvV9bR6tvd5Br1SG0j+PBpbKr2UYY8CwqSw==}
     dependencies:
       csstype: 3.1.2
-    dev: false
+    dev: true
 
   /@types/retry@0.12.0:
     resolution: {integrity: sha512-wWKOClTTiizcZhXnPY4wikVAwmdYHp8q6DmC+EJUzAMsycb7HB32Kh9RN4+0gExjmPmZSAQjgURXIGATPegAvA==}
@@ -1041,7 +1041,7 @@ packages:
 
   /csstype@3.1.2:
     resolution: {integrity: sha512-I7K1Uu0MBPzaFKg4nI5Q7Vs2t+3gWWW648spaF+Rg7pI9ds18Ugn+lvg4SHczUdKlHI5LWBXyqfS8+DufyBsgQ==}
-    dev: false
+    dev: true
 
   /debug@2.6.9:
     resolution: {integrity: sha512-bC7ElrdJaJnPbAP+1EotYvqZsb3ecl5wi6Bfi6BJTUcNowp6cvspg0jXznRTKDjm/E7AdgFBVeAPVMNcKGsHMA==}
@@ -2125,12 +2125,12 @@ packages:
     dependencies:
       react: 19.0.0
       scheduler: 0.25.0
-    dev: false
+    dev: true
 
   /react@19.0.0:
     resolution: {integrity: sha512-V8AVnmPIICiWpGfm6GLzCR/W5FXLchHop40W4nXBmdlEceh16rCN8O8LNWm5bh5XUX91fh7KpA+W0TgMKmgTpQ==}
     engines: {node: '>=0.10.0'}
-    dev: false
+    dev: true
 
   /readable-stream@2.3.8:
     resolution: {integrity: sha512-8p0AUk4XODgIewSi0l8Epjs+EVnWiK7NoDIEGU0HhE7+ZyY8D1IMY7odu5lRrFXGg71L15KG8QrPmum45RTtdA==}
@@ -2255,7 +2255,7 @@ packages:
 
   /scheduler@0.25.0:
     resolution: {integrity: sha512-xFVuu11jh+xcO7JOAGJNOXld8/TcEHK/4CituBUeUb5hqxJLj9YuemAEuvm9gQ/+pgXYfbQuqAkiYu+u7YEsNA==}
-    dev: false
+    dev: true
 
   /schema-utils@3.3.0:
     resolution: {integrity: sha512-pN/yOAvcC+5rQ5nERGuwrjLlYvLTbCibnZ1I7B1LaiAz9BRBlE9GMgE/eqV30P7aJQUf7Ddimy/RsbYO/GrVGg==}

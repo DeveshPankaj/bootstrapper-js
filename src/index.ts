@@ -152,13 +152,13 @@ const initWindow = () => {
                 //@ts-ignore
                 const fs = window.fs as typeof _fs;
                 if(!fs) {
-                    navigator.serviceWorker.controller?.postMessage({type: 'fs/reply', payload: {data: "File system not mounted!", request_id: event.data.payload.request_id}});
+                    navigator.serviceWorker.controller?.postMessage({type: 'fs/reply', payload: {data: "File system not mounted!", error: "File system not mounted!", request_id: event.data.payload.request_id}});
                 }
                 else if(fs.existsSync(event.data.payload.path)) {
-                    navigator.serviceWorker.controller?.postMessage({type: 'fs/reply', payload: {data: fs.readFileSync(event.data.payload.path), request_id: event.data.payload.request_id}});
+                    navigator.serviceWorker.controller?.postMessage({type: 'fs/reply', payload: {data: fs.readFileSync(event.data.payload.path), error: "", request_id: event.data.payload.request_id}});
                 }
                 else {
-                    navigator.serviceWorker.controller?.postMessage({type: 'fs/reply', payload: {data: `File not found! ${event.data.payload.path}`, request_id: event.data.payload.request_id}});
+                    navigator.serviceWorker.controller?.postMessage({type: 'fs/reply', payload: {data: `File not found! ${event.data.payload.path}`, error: "File not found!", request_id: event.data.payload.request_id}});
                 }
 
             })
