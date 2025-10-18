@@ -147,10 +147,11 @@ const { remove } = platform.host.registerCommand(
     if (win.Webamp) {
       openPlayer();
     } else {
-      import('https://unpkg.com/webamp').then(mod => {
-        console.log(mod);
-        win.Webamp = mod.default;
-        openPlayer();
+      import('https://unpkg.com/webamp@2.2.0/built/webamp.bundle.min.js').then(mod => {
+        setTimeout(async () => {
+          win.Webamp = (await mod.default).exports;
+          openPlayer();
+        }, 0)
       });
     }
   },
