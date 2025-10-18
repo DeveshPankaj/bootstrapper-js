@@ -112,7 +112,7 @@
   {
     "path": "/home/user1/apps/TOTP.html",
     "file": "/home/user1/apps/TOTP.html",
-    "force_reload":true
+    "force_reload": false
   },
   {
     "path": "/home/user1/apps/WAMP.html",
@@ -128,6 +128,11 @@
     "path": "/home/user1/tools/speed-test.html",
     "file": "/home/user1/tools/speed-test.html",
     "force_reload":false
+  },
+  {
+    "path": "/lib/utils.js",
+    "file": "/lib/utils.js",
+    "force_reload": false
   },
   {
     "path": "/home/user1/projects/Snake.html",

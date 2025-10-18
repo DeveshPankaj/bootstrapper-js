@@ -78,7 +78,9 @@ self.addEventListener('fetch', function(event: Event | any) {
     if(_url.pathname.startsWith('/(sw)/')) {
         // console.log(_url.pathname)
         clients.get(event.clientId).then(client => {
-            console.log(`${client?.url || '[root]'} --> ${_url.pathname}`)
+            if(!client) return;
+            const client_url = new URL(client.url)
+            console.log(`${client_url.href || '[root]'} --> ${_url.pathname}`)
         })
 
         // event.respondWith(new Response("<h1>we are working on interprocess message passing</h1>", {headers: {'Content-Type': "text/html"}}))
@@ -123,10 +125,6 @@ self.addEventListener('fetch', function(event: Event | any) {
             //     headers: {'Content-Type': 'text/html'}
             // })
         )
-
-
-
-
     }
     if(_url.pathname.startsWith('/cache')) {
         event.respondWith(
