@@ -38,7 +38,7 @@ self.addEventListener('message', event => {
     // console.log(event.data)
     if (event.data.type === 'fs/reply') {
         const callback = clientRequests.get(event.data.payload.request_id);
-        callback === null || callback === void 0 ? void 0 : callback(event.data.payload.data);
+        callback === null || callback === void 0 ? void 0 : callback(event.data.payload.data, event.data.payload.error);
     }
     // clients.matchAll().then(clients => {
     //     clients.forEach(client => {
@@ -69,8 +69,47 @@ self.addEventListener('fetch', function (event) {
     // }
     const _url = new URL(url);
     if (_url.pathname.startsWith('/(sw)/')) {
-        console.log(_url.pathname);
-        event.respondWith(new Response("<h1>we are working on interprocess message passing</h1>", { headers: { 'Content-Type': "text/html" } }));
+        // console.log(_url.pathname)
+        clients.get(event.clientId).then(client => {
+            if (!client)
+                return;
+            const client_url = new URL(client.url);
+            console.log(`${client_url.href || '[root]'} --> ${_url.pathname}`);
+        });
+        // event.respondWith(new Response("<h1>we are working on interprocess message passing</h1>", {headers: {'Content-Type': "text/html"}}))
+        event.respondWith(caches.open(cacheName).then((cache) => {
+            // Respond with the image from the cache or from the network
+            return cache.match(url).then((cachedResponse) => {
+                if (!cachedResponse) {
+                    return new Promise((resolve, reject) => {
+                        const request_id = getUUID();
+                        clientRequests.set(request_id, (fileData, error) => {
+                            if (error) {
+                                // resolve(new Response(`<h1>Error: ${error}</h1>`, {headers: {'Content-Type': getMIMEtype(url)!}}))
+                                resolve(fetch(_url.pathname.slice('/(sw)'.length)));
+                            }
+                            else {
+                                resolve(new Response(fileData, { headers: { 'Content-Type': getMIMEtype(url) } }));
+                            }
+                        });
+                        clients.matchAll().then(clients => {
+                            clients.forEach(client => {
+                                client.postMessage({ type: 'fs/file-request', payload: { path: _url.pathname.slice('/(sw)'.length), request_id } });
+                            });
+                            if (clients.length === 0) {
+                                resolve(new Response("<h1>ERROR: no client available to serve the request. (if it's first time you are seeing this error, then try reloding app after saving your changes)</h1>", { headers: { 'Content-Type': 'text/html' } }));
+                            }
+                        });
+                        // resolve(new Response("<h1>400</h1>", {headers: {'Content-Type': 'text/html'}}))
+                    });
+                }
+                return cachedResponse !== null && cachedResponse !== void 0 ? cachedResponse : new Response("<h1>404</h1>", { headers: { 'Content-Type': getMIMEtype(url) } });
+            });
+        })
+        // new Response(localStorage.getItem('__script_for_testing__')??"", {
+        //     headers: {'Content-Type': 'text/html'}
+        // })
+        );
     }
     if (_url.pathname.startsWith('/cache')) {
         event.respondWith(caches.open(cacheName).then((cache) => {

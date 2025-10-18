@@ -28893,7 +28893,8 @@ const getLocalFilePath = (path) => {
     // Step 2: Create a Blob from the string content
     const blob = new Blob([stringContent], { type: mime__WEBPACK_IMPORTED_MODULE_1__["default"].getType(path) || undefined });
     // Step 3: Generate a Blob URL
-    const blobURL = URL.createObjectURL(blob);
+    // const blobURL = URL.createObjectURL(blob);
+    const blobURL = `/(sw)${path}`;
     return blobURL;
 };
 let subscriptions = [];

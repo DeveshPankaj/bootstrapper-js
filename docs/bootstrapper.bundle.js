@@ -163,13 +163,13 @@ const initWindow = () => {
                 //@ts-ignore
                 const fs = window.fs;
                 if (!fs) {
-                    (_a = navigator.serviceWorker.controller) === null || _a === void 0 ? void 0 : _a.postMessage({ type: 'fs/reply', payload: { data: "File system not mounted!", request_id: event.data.payload.request_id } });
+                    (_a = navigator.serviceWorker.controller) === null || _a === void 0 ? void 0 : _a.postMessage({ type: 'fs/reply', payload: { data: "File system not mounted!", error: "File system not mounted!", request_id: event.data.payload.request_id } });
                 }
                 else if (fs.existsSync(event.data.payload.path)) {
-                    (_b = navigator.serviceWorker.controller) === null || _b === void 0 ? void 0 : _b.postMessage({ type: 'fs/reply', payload: { data: fs.readFileSync(event.data.payload.path), request_id: event.data.payload.request_id } });
+                    (_b = navigator.serviceWorker.controller) === null || _b === void 0 ? void 0 : _b.postMessage({ type: 'fs/reply', payload: { data: fs.readFileSync(event.data.payload.path), error: "", request_id: event.data.payload.request_id } });
                 }
                 else {
-                    (_c = navigator.serviceWorker.controller) === null || _c === void 0 ? void 0 : _c.postMessage({ type: 'fs/reply', payload: { data: `File not found! ${event.data.payload.path}`, request_id: event.data.payload.request_id } });
+                    (_c = navigator.serviceWorker.controller) === null || _c === void 0 ? void 0 : _c.postMessage({ type: 'fs/reply', payload: { data: `File not found! ${event.data.payload.path}`, error: "File not found!", request_id: event.data.payload.request_id } });
                 }
             });
         })
