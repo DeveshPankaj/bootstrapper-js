@@ -1,4 +1,4 @@
-import { Platform, UICallbackProps } from "@shared/index";
+import { Platform, PlatformEvent, UICallbackProps } from "@shared/index";
 import { FileType } from '@shared/types';
 import { getFileExtension } from "@shared/utils";
 
@@ -10,6 +10,7 @@ import { EditorState } from "@codemirror/state";
 import { javascript, typescriptLanguage } from "@codemirror/lang-javascript";
 import { html } from "@codemirror/lang-html";
 import { placeholder } from "@codemirror/view";
+import { Subject } from "rxjs";
 
 
 const platform: Platform = window.platform
@@ -203,7 +204,19 @@ const App = (props: UICallbackProps & { file: FileType }) => {
         // const factory = new Function(...Object.keys(ctx), program.code);
         // factory.call(ctx, ...Object.values(ctx));
 
-        const destroy = platform.host.execString(code)
+
+        // Add Platform
+        const platformEventEmitter = new Subject<PlatformEvent>();
+        // const newPlatform = new Platform(platformEventEmitter, props.url, props.url);
+        //@ts-ignore
+        const newPlatform = new platform.constructor(platformEventEmitter, props.url, props.file.path);
+        newPlatform.setHost(platform.host);
+        // newPlatform.register('props', props);
+        // newPlatform.register('$args', props.$args);
+        // newPlatform.register('React', React)
+        // newPlatform.register('ReactDOM', { createRoot })
+
+        const destroy = newPlatform.host.execString(code, props.file.path, newPlatform)
         runningInstencesRef.current.push(destroy)
     }
 

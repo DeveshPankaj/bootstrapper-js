@@ -66,5 +66,6 @@ export const base32ToBytes = (base32) => {
 //   base32ToBytes
 // })
 
+
 export default {getBase32Alphabet, base32ToBytes}
 

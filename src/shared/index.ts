@@ -157,7 +157,7 @@ export class Host {
     factory.call({}, ...Object.values(context));
   }
 
-  public execString(source: string, filenameAlias: string = 'dynamic.js') {
+  public execString(source: string, filenameAlias: string = '/tmp/dynamic.js', _platform?: Platform) {
     function startWorker(source: string) {
       const blob = new Blob([source], { type: "application/javascript" });
       const workerUrl = URL.createObjectURL(blob);
@@ -175,7 +175,7 @@ export class Host {
     }
 
     const runJS = (source: string) => {
-      const program = Babel.transform(source, { presets: [['env', { modules: false }], "react", 'typescript'],  sourceMaps: true, filename: filenameAlias, cwd: this.platform.cwd });
+      const program = Babel.transform(source, { presets: [['env', { modules: 'commonjs' }], "react", 'typescript'],  sourceMaps: true, filename: filenameAlias, cwd: this.platform.cwd });
       program.map.sources = ['babel://'+filenameAlias]
       const base64SourceMap = btoa(unescape(encodeURIComponent(JSON.stringify(program.map))));
       const codeWithSourceMap = `${program.code}\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,${base64SourceMap}`;
@@ -207,19 +207,24 @@ export class Host {
       //     code = codeWithSourceMap
       //   }
         const platformEventEmitter = new Subject<PlatformEvent>();
-        const pwd = filenameAlias.slice(0, filenameAlias.lastIndexOf('/')) || "/"
-        const newPlatform = new Platform(platformEventEmitter, filenameAlias, pwd);
-        newPlatform.setHost(this);
-        newPlatform.register('props', {});
-        newPlatform.register('$args', []);
-        newPlatform.register('React', this.platform.getService('React'));
-        newPlatform.register('ReactDOM', this.platform.getService('ReactDOM'));
+        // TODO: fix other usage of lastIndexOf for case when char not found
+        const pwd = filenameAlias.slice(0, filenameAlias.lastIndexOf('/') > -1 ? filenameAlias.lastIndexOf('/'): undefined) || "/"
+        let newPlatform = _platform ? _platform : new Platform(platformEventEmitter, filenameAlias, pwd);
+        if(!_platform) {
+          newPlatform.setHost(this);
+          newPlatform.register('props', {});
+          newPlatform.register('$args', []);
+          newPlatform.register('React', this.platform.getService('React'));
+          newPlatform.register('ReactDOM', this.platform.getService('ReactDOM'));
+        }
         const _ctx: any = {
           exports: {}, 
-          require: newPlatform.require.bind(newPlatform), 
+          require: (req_filename: string) => newPlatform.require.bind(newPlatform)(req_filename, filenameAlias, newPlatform), 
           window: {platform: newPlatform, document: this.window.document, top: this.window.top}, // FIXME: prevent passing root window object
+          platform: newPlatform,
           // React: this.platform.getService('React')
         }
+        _ctx.module = _ctx.exports
         const factory = new Function(...Object.keys(_ctx), codeWithSourceMap)
         factory.call(this, ...Object.values(_ctx))
 
@@ -267,7 +272,7 @@ export class Host {
       if (fileExt === 'js') {
         const fs = this.getFS()
         const source = fs.readFileSync(filepath)
-        this.execString(source.toString(), filepath)
+        this.execString(source.toString(), '/(sw)' + filepath)
         return;
       }
 
@@ -304,7 +309,7 @@ export class Host {
     // return mod.platform.getService(serviceName)
 
     const srv = mod.platform.getServiceSync(serviceName)!;
-    if (!srv) console.warn(`Servive: [${moduleName}/${serviceName}] not found`);
+    if (!srv) console.warn(`Service: [${moduleName}/${serviceName}] not found`);
 
     return srv;
   }
@@ -375,12 +380,24 @@ export class Platform {
         return result
     }
 
-    public require(filepath: string) {
-      const fs = this.host.getFS()
+    public require(filepath: string, by?: string, _platform?:Platform) {
       if(filepath.startsWith('./')) {
         // TODO: prefix current program working directory
-        filepath = (this.cwd || '') + filepath.slice(1)
+
+        let pwd = _platform ? _platform.cwd : this.cwd
+        if(by) {
+          pwd = by.slice(0, by.lastIndexOf('/') > -1 ? by.lastIndexOf('/'): undefined) || pwd
+        }
+        //FIXME: fallback to root (/) is not a good idea
+        filepath = (pwd || '/') + filepath.slice(1)
       }
+
+      if(filepath.startsWith('/(sw)/')){
+        filepath = filepath.slice('/(sw)'.length)
+      }
+
+      const fs = this.host.getFS()
+      
       try {
 
         if(filepath.startsWith('https://')) {
@@ -389,9 +406,11 @@ export class Platform {
               code => {
                 const _ctx: any = {
                   exports: {}, 
-                  require: this.require.bind(this), 
-                  // React: this.getService('React')
+                  require: (req_filename: string) => this.require.bind(this)(req_filename, filepath, _platform), 
+                  platform: _platform,
+                  // React: this.getService('React'),
                 }
+                _ctx.module = _ctx.exports
                 const factory = new Function(...Object.keys(_ctx), code)
                 factory.call(this, ...Object.values(_ctx))
                 return _ctx.exports
@@ -404,7 +423,7 @@ export class Platform {
         let code = fs.readFileSync(filepath).toString()
 
         if(filepath.endsWith('.js') || filepath.endsWith('.ts') || filepath.endsWith('.tsx')) {
-          const program = Babel.transform(code, { presets: [['env', { modules: false }], 'typescript', "react"],  sourceMaps: true, filename: filepath, cwd: this.cwd });
+          const program = Babel.transform(code, { presets: [['env', { modules: 'commonjs' }], 'typescript', "react"],  sourceMaps: true, filename: filepath, cwd: this.cwd });
           const base64SourceMap = btoa(unescape(encodeURIComponent(JSON.stringify(program.map))));
           program.map.sources = ['babel://'+filepath]
           const codeWithSourceMap = `${program.code}\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,${base64SourceMap}`;
@@ -413,7 +432,7 @@ export class Platform {
         }
         const _ctx: any = {
           exports: {}, 
-          require: this.require.bind(this), 
+          require: (req_filename: string) => this.require.bind(this)(req_filename, filepath, _platform), 
           // React: this.getService('React')
         }
         const factory = new Function(...Object.keys(_ctx), code)

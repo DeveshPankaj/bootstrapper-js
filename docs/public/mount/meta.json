@@ -85,6 +85,21 @@
     "force_reload": false
   },
   {
+    "path": "/lib/platform.js",
+    "file": "/lib/platform.js",
+    "force_reload": false
+  },
+  {
+    "path": "/lib/draggable.js",
+    "file": "/lib/draggable.js",
+    "force_reload": false
+  },
+  {
+    "path": "/opt/window-manager.js",
+    "file": "/opt/window-manager.js",
+    "force_reload": false
+  },
+  {
     "path": "/bin/cat.run",
     "file": "/bin/cat.run",
     "force_reload": false
