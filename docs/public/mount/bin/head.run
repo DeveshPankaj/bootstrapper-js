@@ -1,0 +1,26 @@
+/** /bin/head.run */
+const terminal = platform.getService('terminal')
+const fs = platform.host.getFS()
+const [pwd, file, lines = 10, ...rest] = $args
+const write = terminal ? terminal.write.bind(terminal) : console.log
+
+// ANSI color codes
+const colors = {
+    red: '\x1b[31m',    // Red for errors
+    yellow: '\x1b[33m', // Yellow for file content
+    reset: '\x1b[0m'    // Reset color
+};
+
+if (!file) {
+    write(`${colors.red}head: missing file${colors.reset}\n`);
+    return;
+}
+
+const filePath = `${pwd}/${file}`;
+if (!fs.existsSync(filePath)) {
+    write(`${colors.red}head: file does not exist${colors.reset}\n`);
+    return;
+}
+
+const fileContent = fs.readFileSync(filePath, 'utf-8').split('\n').slice(0, lines).join('\n');
+write(`${colors.yellow}${fileContent}${colors.reset}\n`);

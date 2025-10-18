@@ -1,0 +1,27 @@
+/** /bin/ls.run */
+const terminal = platform.getService('terminal')
+const fs = platform.host.getFS()
+const [pwd, dir, ...rest] = $args
+const write = terminal ? terminal.write.bind(terminal) : console.log
+
+// ANSI color codes
+const colors = {
+    blue: '\x1b[34m',  // Blue for directories
+    reset: '\x1b[0m'   // Reset to default
+};
+
+const lsDir = dir ?? pwd;
+const dirExist = fs.existsSync(lsDir);
+if (!dirExist) return;
+
+const ls = fs.readdirSync(lsDir).map(file => {
+    const stats = fs.statSync(`${lsDir}/${file}`);
+    const fileType = stats.isDirectory() ? 'd' : '-';
+    const permissions = stats.mode.toString(8).slice(-3);
+    const size = stats.size;
+    const modifiedTime = new Date(stats.mtime).toLocaleString();
+    const coloredFile = stats.isDirectory() ? `${colors.blue}${file}${colors.reset}` : file;
+    return `${fileType}rwxr-xr-x 1 user group ${size} ${modifiedTime} ${coloredFile}`;
+});
+
+write(ls.join('\n') + '\n');

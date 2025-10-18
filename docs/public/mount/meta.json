@@ -60,6 +60,31 @@
     "force_reload": false
   },
   {
+    "path": "/bin/date.run",
+    "file": "/bin/date.run",
+    "force_reload": false
+  },
+  {
+    "path": "/bin/editor.run",
+    "file": "/bin/editor.run",
+    "force_reload": false
+  },
+  {
+    "path": "/bin/head.run",
+    "file": "/bin/head.run",
+    "force_reload": false
+  },
+  {
+    "path": "/bin/ifconfig.run",
+    "file": "/bin/ifconfig.run",
+    "force_reload": false
+  },
+  {
+    "path": "/bin/tail.run",
+    "file": "/bin/tail.run",
+    "force_reload": false
+  },
+  {
     "path": "/bin/cat.run",
     "file": "/bin/cat.run",
     "force_reload": false
