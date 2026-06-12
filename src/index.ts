@@ -52,7 +52,8 @@ const initWindow = () => {
         '/home/user1/apps',            // Subdirectory for apps
         '/home/user1/tools',            // Subdirectory for tools
         '/home/user1/projects',        // Subdirectory for projects
-        '/home/user1/quotes',        
+        '/home/user1/quotes',
+        '/mnt',                         // Mount point for local folders
         // '/home/user1/projects/Snake.html', // Specific project file (not a directory, but included for completeness)
         // '/home/user1/projects/WebGL.html', // Specific project file (not a directory, but included for completeness)
         // '/home/user1/projects/WebGL-Earth.html', // Specific project file (not a directory, but included for completeness)
@@ -79,34 +80,38 @@ const initWindow = () => {
     
 
 
-    // @ts-ignore
-    window.BrowserFS.configure({ 
-        fs: 'MountableFileSystem',
-        options: {
-            '/': { fs: 'LocalStorage', options: {} },
-            // '/home': { fs: 'LocalStorage', options: {} },
-            // '/bin': { fs: 'LocalStorage', options: {} },
-            // '/usr': { fs: 'LocalStorage', options: {} },
-            // '/srv': { fs: 'LocalStorage', options: {} },
-            // '/tmp': { fs: 'InMemory', options: {} },
-            // '/proc': { fs: 'InMemory', options: {} },
-            // '/var': { fs: 'InMemory', options: {} },
-            // '/sys': { fs: 'InMemory', options: {} },
-            // '/bin': { fs: 'IndexedDB', options: {} },
-            // '/usr': { fs: 'IndexedDB', options: {} },
-            // '/tmp': { fs: 'InMemory', options: {} } 
-        } 
-    }, async err => {
-        if (err) {
-          alert(err);
-        } else {
+    // LocalStorage has a ~5-10MB quota, far too small for this app's filesystem
+    // (and for mounted local folders). Use IndexedDB (often GB-scale) for everything
+    // instead. IndexedDB is async-only, so mirror it behind an InMemory filesystem
+    // to keep the synchronous `fs` API working.
+    const createBackend = <T>(Ctor: { Create(opts: T, cb: (err: any, fs?: any) => void): void }, opts: T): Promise<any> =>
+        new Promise((resolve, reject) => Ctor.Create(opts, (err, fs) => err ? reject(err) : resolve(fs)))
+
+    // Creates an IndexedDB-backed filesystem mirrored behind an InMemory filesystem,
+    // so it can be used synchronously while being persisted to IndexedDB (storeName).
+    const createIndexedDBMirror = async (Backend: any, storeName: string) => {
+        const idbFS = await createBackend(Backend.IndexedDB, { storeName })
+        await new Promise<void>((resolve, reject) => idbFS.makeRootDirectory((err: any) => err ? reject(err) : resolve()))
+        const memFS = await createBackend(Backend.InMemory, {})
+        return createBackend(Backend.AsyncMirror, { sync: memFS, async: idbFS })
+    }
+
+    const fsReady = (async () => {
+        try {
+            // @ts-ignore
+            const Backend = window.BrowserFS.FileSystem
+            const rootFS = await createIndexedDBMirror(Backend, 'fs')
+            const tmpFS = await createIndexedDBMirror(Backend, 'tmp')
+            const mntFS = await createIndexedDBMirror(Backend, 'mnt')
+            const mfs = await createBackend(Backend.MountableFileSystem, { '/': rootFS, '/tmp': tmpFS, '/mnt': mntFS })
+
+            // @ts-ignore
+            window.BrowserFS.initialize(mfs)
+
             const fs = window.require('fs') as typeof _fs
             // @ts-ignore
-            window.fs = fs 
+            window.fs = fs
 
-            // fs.mkdirSync('/c')
-            // fs.mkdirSync('/d')
-            // console.log(fs.readdirSync('/'))
             defaultDirs.forEach(dir => {
                 if(!fs.existsSync(dir)) {
                     fs.mkdirSync(dir)
@@ -124,7 +129,7 @@ const initWindow = () => {
 
             const ignoreMetaReload = defaultFiles.find(item => item.path === metaFilePath && item.force_reload===false);
             if(!ignoreMetaReload) defaultFiles = await (await fetch(metaFileServerPath)).json();
-            
+
             defaultFiles.forEach(async item => {
                 if(fs.existsSync(item.path) && !item.force_reload) return;
                 const path = item.file.startsWith('http') ? item.file : `/public/mount${item.file.startsWith('/')?'':'/'}${item.file}`;
@@ -137,8 +142,10 @@ const initWindow = () => {
                 // navigator.serviceWorker.controller?.postMessage({type: 'fs/file-added', payload: {file: item.path}});
 
             })
+        } catch (err) {
+            alert(err)
         }
-    });
+    })();
 
 
 
@@ -168,7 +175,7 @@ const initWindow = () => {
          })
     }
 
-
+    return fsReady
 }
 
 const channelRef = {current: null as null | BroadcastChannel}
@@ -238,7 +245,7 @@ const initWorker = () => {
 }
 
 window.addEventListener('load', async () => {
-  initWindow();
+  await initWindow();
   // initWorker()
 //   initChannel()
   loadBootstrapScript(localStorage);

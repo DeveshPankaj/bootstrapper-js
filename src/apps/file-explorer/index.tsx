@@ -9,7 +9,29 @@ import { createRoot } from "react-dom/client";
 
 // import { placeholder } from "@codemirror/view";
 import { FileType } from '@shared/types';
-import { getFileExtension } from "@shared/utils";
+import { DESKTOP_PATH, getFileExtension, mountLocalDirectory } from "@shared/utils";
+
+const MOUNT_PATH = '/mnt';
+
+const NAV_SHORTCUTS = [
+    { label: 'Home', path: DESKTOP_PATH, icon: 'home' },
+    { label: 'Mounted', path: MOUNT_PATH, icon: 'drive_folder_upload' },
+    { label: 'Root', path: '/', icon: 'dns' },
+];
+
+// Resolves `.`/`..`/`//` segments without delegating to fs.realpathSync, since
+// MountableFileSystem's realpathSync returns paths relative to the mounted
+// filesystem's own root (e.g. realpathSync('/tmp') => '/') instead of the
+// global path.
+const normalizePath = (path: string) => {
+    const parts = path.split('/').filter(p => p && p !== '.')
+    const result: string[] = []
+    for (const part of parts) {
+        if (part === '..') result.pop()
+        else result.push(part)
+    }
+    return '/' + result.join('/')
+}
 import { ListDirComponent } from "./desktop";
 
 const platform = Platform.getInstance()
@@ -108,6 +130,36 @@ platform.host.registerCommand('ui.file-explorer', (body: HTMLBodyElement, props:
 
         }
 
+        .file-explorer-body {
+            display: flex;
+            flex-grow: 1;
+            min-height: 0;
+        }
+
+        .file-explorer-nav {
+            flex: 0 0 10rem;
+            border-right: 1px solid #ccc;
+            overflow: auto;
+            padding: .5rem 0;
+        }
+
+        .file-explorer-nav > div {
+            display: flex;
+            align-items: center;
+            gap: .5rem;
+            padding: .4rem .75rem;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .file-explorer-nav > div:hover {
+            background: aqua;
+        }
+
+        .file-explorer-nav > div.active {
+            background: #ddd;
+        }
+
         .dir-list {
             flex-grow: 1;
             overflow: auto;
@@ -160,7 +212,7 @@ const App = (props: UICallbackProps & { file: FileType }) => {
     const [dirList, setDirList] = React.useState<Array<string>>(fs.readdirSync(dirRef.current || '/'))
 
     const open = (file: string) => {
-        const selectedFilePath = fs.realpathSync(dirRef.current.endsWith('/') ? `${dirRef.current}${file}` : `${dirRef.current}/${file}`);
+        const selectedFilePath = normalizePath(dirRef.current.endsWith('/') ? `${dirRef.current}${file}` : `${dirRef.current}/${file}`);
         const stat = fs.statSync(selectedFilePath);
 
         if (stat.isDirectory()) {
@@ -176,6 +228,12 @@ const App = (props: UICallbackProps & { file: FileType }) => {
         }
     }
 
+    const navigateTo = (path: string) => {
+        if (!fs.existsSync(path)) fs.mkdirSync(path, { recursive: true })
+        dirRef.current = normalizePath(path)
+        setDirList(fs.readdirSync(dirRef.current))
+    }
+
     const makeDirClick = () => {
         const dirName = prompt('Dir name?')
         if (!dirName) return;
@@ -189,6 +247,22 @@ const App = (props: UICallbackProps & { file: FileType }) => {
         const filePath = dirRef.current.endsWith('/') ? `${dirRef.current}${fileName}` : `${dirRef.current}/${fileName}`
         fs.writeFileSync(filePath, '')
         setDirList(fs.readdirSync(dirRef.current))
+    }
+
+    const mountLocalFolderClick = async () => {
+        if (!window.showDirectoryPicker) {
+            alert('Mounting a local folder is not supported in this browser.')
+            return
+        }
+
+        try {
+            const dirHandle = await window.showDirectoryPicker()
+            const targetPath = `${MOUNT_PATH}/${dirHandle.name}`
+            await mountLocalDirectory(fs, dirHandle, targetPath)
+            navigateTo(targetPath)
+        } catch (error) {
+            if ((error as Error)?.name !== 'AbortError') console.error(error)
+        }
     }
 
     const openFile = (file: FileType) => {
@@ -229,6 +303,7 @@ const App = (props: UICallbackProps & { file: FileType }) => {
                 <div style={{ display: 'flex', alignItems: "center" }} >
                     <span className="material-symbols-outlined" style={{ cursor: 'pointer' }} onClick={makeDirClick} aria-label="create_new_folder" title="create folder">create_new_folder</span>
                     <span className="material-symbols-outlined" style={{ cursor: 'pointer' }} onClick={makeFileClick} aria-label="create_file" title="create file">post_add</span>
+                    <span className="material-symbols-outlined" style={{ cursor: 'pointer' }} onClick={mountLocalFolderClick} aria-label="mount_local_folder" title="mount local folder">drive_folder_upload</span>
                 </div>
                 {/* <div>
                     <span className="material-symbols-outlined" style={{cursor: 'pointer'}} onClick={props.close} aria-label="create_file" title="create file">close</span>
@@ -237,14 +312,28 @@ const App = (props: UICallbackProps & { file: FileType }) => {
                 {/* <button onClick={makeDirClick}>New Diractory</button>
                 <button onClick={makeFileClick}>New File</button> */}
             </header>
-            <section className="dir-list">
-                {/* {dirRef.current != '/' ? <div onClick={() => open('..')}>..</div> : null} */}
-                {/* {
-                    dirList.map(file => <div key={`${dirRef.current}/${file}`} onClick={() => open(file)}>{file}</div>)
-                } */}
+            <div className="file-explorer-body">
+                <nav className="file-explorer-nav">
+                    {NAV_SHORTCUTS.map(item => (
+                        <div
+                            key={item.path}
+                            className={dirRef.current === item.path ? 'active' : ''}
+                            onClick={() => navigateTo(item.path)}
+                        >
+                            <span className="material-symbols-outlined">{item.icon}</span>
+                            <span>{item.label}</span>
+                        </div>
+                    ))}
+                </nav>
+                <section className="dir-list">
+                    {/* {dirRef.current != '/' ? <div onClick={() => open('..')}>..</div> : null} */}
+                    {/* {
+                        dirList.map(file => <div key={`${dirRef.current}/${file}`} onClick={() => open(file)}>{file}</div>)
+                    } */}
 
-                <ListDirComponent dir={dirRef.current} openFile={openFile} showFileActions={showFileActionsHandler} />
-            </section>
+                    <ListDirComponent dir={dirRef.current} openFile={openFile} showFileActions={showFileActionsHandler} />
+                </section>
+            </div>
         </div>
     )
 }

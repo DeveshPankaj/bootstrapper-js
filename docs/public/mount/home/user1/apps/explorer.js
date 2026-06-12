@@ -3,8 +3,30 @@ const fs = platform.host.getFS();
 
 const React = platform.getService("React");
 const { createRoot } = platform.getService("ReactDOM");
-const { DESKTOP_PATH, appendStyleSheet, getFileExtension } = platform.getService("utils");
+const { DESKTOP_PATH, appendStyleSheet, getFileExtension, mountLocalDirectory } = platform.getService("utils");
 const { DESKTOP_CONTAINER_CLASS, WINDOWS_CONTAINER_CLASS } = platform.getService("window-manager");
+
+const MOUNT_PATH = '/mnt';
+
+const NAV_SHORTCUTS = [
+  { label: 'Home', path: DESKTOP_PATH, icon: 'home' },
+  { label: 'Mounted', path: MOUNT_PATH, icon: 'drive_folder_upload' },
+  { label: 'Root', path: '/', icon: 'dns' },
+];
+
+// Resolves `.`/`..`/`//` segments without delegating to fs.realpathSync, since
+// MountableFileSystem's realpathSync returns paths relative to the mounted
+// filesystem's own root (e.g. realpathSync('/tmp') => '/') instead of the
+// global path.
+const normalizePath = (path) => {
+  const parts = path.split('/').filter((p) => p && p !== '.');
+  const result = [];
+  for (const part of parts) {
+    if (part === '..') result.pop();
+    else result.push(part);
+  }
+  return '/' + result.join('/');
+};
 
 const run = (...args) => {
   const [body, props, dir = DESKTOP_PATH] = args;
@@ -69,6 +91,36 @@ const run = (...args) => {
 
         }
 
+        .file-explorer-body {
+            display: flex;
+            flex-grow: 1;
+            min-height: 0;
+        }
+
+        .file-explorer-nav {
+            flex: 0 0 10rem;
+            border-right: 1px solid #ccc;
+            overflow: auto;
+            padding: .5rem 0;
+        }
+
+        .file-explorer-nav > div {
+            display: flex;
+            align-items: center;
+            gap: .5rem;
+            padding: .4rem .75rem;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .file-explorer-nav > div:hover {
+            background: aqua;
+        }
+
+        .file-explorer-nav > div.active {
+            background: #ddd;
+        }
+
         .dir-list {
             flex-grow: 1;
             overflow: auto;
@@ -116,7 +168,7 @@ const App = (props) => {
   );
 
   const open = (file) => {
-    const selectedFilePath = fs.realpathSync(
+    const selectedFilePath = normalizePath(
       dirRef.current.endsWith("/")
         ? `${dirRef.current}${file}`
         : `${dirRef.current}/${file}`
@@ -131,6 +183,28 @@ const App = (props) => {
       // props.setTitle(`File Explorer (${dirRef.current})`)
     } else {
       platform.host.exec(platform, selectedFilePath);
+    }
+  };
+
+  const navigateTo = (path) => {
+    if (!fs.existsSync(path)) fs.mkdirSync(path, { recursive: true });
+    dirRef.current = normalizePath(path);
+    setDirList(fs.readdirSync(dirRef.current));
+  };
+
+  const mountLocalFolderClick = async () => {
+    if (!platform.window.showDirectoryPicker) {
+      alert("Mounting a local folder is not supported in this browser.");
+      return;
+    }
+
+    try {
+      const dirHandle = await platform.window.showDirectoryPicker();
+      const targetPath = `${MOUNT_PATH}/${dirHandle.name}`;
+      await mountLocalDirectory(fs, dirHandle, targetPath);
+      navigateTo(targetPath);
+    } catch (error) {
+      if (error?.name !== "AbortError") console.error(error);
     }
   };
 
@@ -238,6 +312,15 @@ const App = (props) => {
           >
             post_add
           </span>
+          <span
+            className="material-symbols-outlined"
+            style={{ cursor: "pointer" }}
+            onClick={mountLocalFolderClick}
+            aria-label="mount_local_folder"
+            title="mount local folder"
+          >
+            drive_folder_upload
+          </span>
         </div>
         {/* <div>
                   <span className="material-symbols-outlined" style={{cursor: 'pointer'}} onClick={props.close} aria-label="create_file" title="create file">close</span>
@@ -246,18 +329,32 @@ const App = (props) => {
         {/* <button onClick={makeDirClick}>New Diractory</button>
               <button onClick={makeFileClick}>New File</button> */}
       </header>
-      <section className="dir-list">
-        {/* {dirRef.current != '/' ? <div onClick={() => open('..')}>..</div> : null} */}
-        {/* {
-                  dirList.map(file => <div key={`${dirRef.current}/${file}`} onClick={() => open(file)}>{file}</div>)
-              } */}
+      <div className="file-explorer-body">
+        <nav className="file-explorer-nav">
+          {NAV_SHORTCUTS.map((item) => (
+            <div
+              key={item.path}
+              className={dirRef.current === item.path ? "active" : ""}
+              onClick={() => navigateTo(item.path)}
+            >
+              <span className="material-symbols-outlined">{item.icon}</span>
+              <span>{item.label}</span>
+            </div>
+          ))}
+        </nav>
+        <section className="dir-list">
+          {/* {dirRef.current != '/' ? <div onClick={() => open('..')}>..</div> : null} */}
+          {/* {
+                    dirList.map(file => <div key={`${dirRef.current}/${file}`} onClick={() => open(file)}>{file}</div>)
+                } */}
 
-        <ListDirConponent
-          dir={dirRef.current}
-          openFile={openFile}
-          showFileActions={showFileActionsHandler}
-        />
-      </section>
+          <ListDirConponent
+            dir={dirRef.current}
+            openFile={openFile}
+            showFileActions={showFileActionsHandler}
+          />
+        </section>
+      </div>
     </div>
   );
 };
@@ -271,6 +368,14 @@ const ListDirConponent = ({ dir, openFile, showFileActions }) => {
     ".proj": "/public/game-icon.png",
     ".html": "/public/html-icon.png",
     ".png": "/public/png-icon.png",
+    ".jpg": "/public/png-icon.png",
+    ".jpeg": "/public/png-icon.png",
+    ".gif": "/public/png-icon.png",
+    ".webp": "/public/png-icon.png",
+    ".svg": "/public/png-icon.png",
+    ".bmp": "/public/png-icon.png",
+    ".ico": "/public/png-icon.png",
+    ".avif": "/public/png-icon.png",
     ".run": "/public/bash.png",
     '.md': '/public/note-icon.webp',
     ".json": "/public/json.png",

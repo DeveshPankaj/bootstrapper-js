@@ -13,3 +13,21 @@ export const appendStyleSheet = (document: Document, styleSheet: CSSStyleSheet) 
 
     document.adoptedStyleSheets.push(styleSheet)
 }
+
+// Recursively copies a local directory (picked via the File System Access API)
+// into the BrowserFS-backed virtual filesystem at `targetPath`.
+export const mountLocalDirectory = async (fs: typeof import('fs'), dirHandle: FileSystemDirectoryHandle, targetPath: string): Promise<void> => {
+    if(!fs.existsSync(targetPath)) fs.mkdirSync(targetPath, { recursive: true })
+
+    for await (const [name, handle] of (dirHandle as any).entries() as AsyncIterable<[string, any]>) {
+        const entryPath = `${targetPath}/${name}`
+
+        if(handle.kind === 'directory') {
+            await mountLocalDirectory(fs, handle as FileSystemDirectoryHandle, entryPath)
+        } else {
+            const file: File = await handle.getFile()
+            const buffer = await file.arrayBuffer()
+            fs.writeFileSync(entryPath, Buffer.from(buffer))
+        }
+    }
+}

@@ -1036,8 +1036,25 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   DESKTOP_PATH: () => (/* binding */ DESKTOP_PATH),
 /* harmony export */   appendStyleSheet: () => (/* binding */ appendStyleSheet),
-/* harmony export */   getFileExtension: () => (/* binding */ getFileExtension)
+/* harmony export */   getFileExtension: () => (/* binding */ getFileExtension),
+/* harmony export */   mountLocalDirectory: () => (/* binding */ mountLocalDirectory)
 /* harmony export */ });
+var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+var __asyncValues = (undefined && undefined.__asyncValues) || function (o) {
+    if (!Symbol.asyncIterator) throw new TypeError("Symbol.asyncIterator is not defined.");
+    var m = o[Symbol.asyncIterator], i;
+    return m ? m.call(o) : (o = typeof __values === "function" ? __values(o) : o[Symbol.iterator](), i = {}, verb("next"), verb("throw"), verb("return"), i[Symbol.asyncIterator] = function () { return this; }, i);
+    function verb(n) { i[n] = o[n] && function (v) { return new Promise(function (resolve, reject) { v = o[n](v), settle(resolve, reject, v.done, v.value); }); }; }
+    function settle(resolve, reject, d, v) { Promise.resolve(v).then(function(v) { resolve({ value: v, done: d }); }, reject); }
+};
 const DESKTOP_PATH = '/home/user1';
 const getFileExtension = (fileName) => {
     const ext = fileName.split('.').at(-1);
@@ -1050,6 +1067,36 @@ const appendStyleSheet = (document, styleSheet) => {
         return;
     document.adoptedStyleSheets.push(styleSheet);
 };
+// Recursively copies a local directory (picked via the File System Access API)
+// into the BrowserFS-backed virtual filesystem at `targetPath`.
+const mountLocalDirectory = (fs, dirHandle, targetPath) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a, e_1, _b, _c;
+    if (!fs.existsSync(targetPath))
+        fs.mkdirSync(targetPath, { recursive: true });
+    try {
+        for (var _d = true, _e = __asyncValues(dirHandle.entries()), _f; _f = yield _e.next(), _a = _f.done, !_a; _d = true) {
+            _c = _f.value;
+            _d = false;
+            const [name, handle] = _c;
+            const entryPath = `${targetPath}/${name}`;
+            if (handle.kind === 'directory') {
+                yield mountLocalDirectory(fs, handle, entryPath);
+            }
+            else {
+                const file = yield handle.getFile();
+                const buffer = yield file.arrayBuffer();
+                fs.writeFileSync(entryPath, Buffer.from(buffer));
+            }
+        }
+    }
+    catch (e_1_1) { e_1 = { error: e_1_1 }; }
+    finally {
+        try {
+            if (!_d && !_a && (_b = _e.return)) yield _b.call(_e);
+        }
+        finally { if (e_1) throw e_1.error; }
+    }
+});
 
 
 /***/ }),
@@ -32088,6 +32135,7 @@ const platform = window.platform;
 // const {createRoot} = platform.getService('ReactDOM') as {createRoot: typeof _createRoot}
 let React;
 let createRoot;
+const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.ico', '.avif'];
 const cacheName = 'MyFancyCacheName_v1';
 const cacheRef = { current: null };
 // caches.open(cacheName).then((cache) => {cacheRef.current = cache})
@@ -32319,7 +32367,7 @@ const App = (props) => {
         React.createElement("div", { style: { width: '3rem', height: '100%', background: 'black', color: 'white', flexShrink: '0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '.5rem' } },
             React.createElement("span", { className: "material-symbols-outlined", style: { cursor: 'pointer' }, onClick: save, "aria-label": "save", title: "save" }, "save"),
             props.file.name.endsWith('.html') ? React.createElement("span", { className: "material-symbols-outlined", style: { cursor: 'pointer' }, onClick: openIframe, "aria-label": "open_in_browser", title: "open in iframe" }, "open_in_browser") : null,
-            props.file.name.endsWith('.png') ? React.createElement("span", { className: "material-symbols-outlined", style: { cursor: 'pointer' }, onClick: openIframe, "aria-label": "open_in_browser", title: "open in iframe" }, "open_in_browser") : null,
+            IMAGE_EXTENSIONS.some(ext => props.file.name.endsWith(ext)) ? React.createElement("span", { className: "material-symbols-outlined", style: { cursor: 'pointer' }, onClick: openIframe, "aria-label": "open_in_browser", title: "open in iframe" }, "open_in_browser") : null,
             props.file.name.endsWith('.run') ? React.createElement("span", { className: "material-symbols-outlined", style: { cursor: 'pointer' }, onClick: runSource, "aria-label": "terminal", title: "open in terminal" }, "terminal") : null,
             props.file.name.endsWith('.js') ? React.createElement("span", { className: "material-symbols-outlined", style: { cursor: 'pointer' }, onClick: runJS, "aria-label": "run", title: "Run" }, "terminal") : null),
         React.createElement("div", { ref: ref, style: { width: 'calc(100% - 3rem)', height: '100%' } })));

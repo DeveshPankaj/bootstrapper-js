@@ -25,8 +25,20 @@ const clientRequests = new Map();
 const getMIMEtype = (fileName) => {
     if (fileName.endsWith('.png'))
         return 'image/png';
-    if (fileName.endsWith('.jpeg'))
+    if (fileName.endsWith('.jpg') || fileName.endsWith('.jpeg'))
         return 'image/jpeg';
+    if (fileName.endsWith('.gif'))
+        return 'image/gif';
+    if (fileName.endsWith('.webp'))
+        return 'image/webp';
+    if (fileName.endsWith('.svg'))
+        return 'image/svg+xml';
+    if (fileName.endsWith('.bmp'))
+        return 'image/bmp';
+    if (fileName.endsWith('.ico'))
+        return 'image/x-icon';
+    if (fileName.endsWith('.avif'))
+        return 'image/avif';
     if (fileName.endsWith('.html'))
         return 'text/html';
     if (fileName.endsWith('.js'))

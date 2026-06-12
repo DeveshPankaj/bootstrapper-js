@@ -19,6 +19,8 @@ const platform: Platform = window.platform
 let React: typeof _React
 let createRoot: typeof _createRoot
 
+const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.ico', '.avif']
+
 const cacheName = 'MyFancyCacheName_v1';
 const cacheRef = { current: null as Cache | null }
 
@@ -296,7 +298,7 @@ const App = (props: UICallbackProps & { file: FileType }) => {
                 <span className="material-symbols-outlined" style={{ cursor: 'pointer' }} onClick={save} aria-label="save" title="save">save</span>
 
                 {props.file.name.endsWith('.html') ? <span className="material-symbols-outlined" style={{ cursor: 'pointer' }} onClick={openIframe} aria-label="open_in_browser" title="open in iframe">open_in_browser</span> : null}
-                {props.file.name.endsWith('.png') ? <span className="material-symbols-outlined" style={{ cursor: 'pointer' }} onClick={openIframe} aria-label="open_in_browser" title="open in iframe">open_in_browser</span> : null}
+                {IMAGE_EXTENSIONS.some(ext => props.file.name.endsWith(ext)) ? <span className="material-symbols-outlined" style={{ cursor: 'pointer' }} onClick={openIframe} aria-label="open_in_browser" title="open in iframe">open_in_browser</span> : null}
                 {props.file.name.endsWith('.run') ? <span className="material-symbols-outlined" style={{ cursor: 'pointer' }} onClick={runSource} aria-label="terminal" title="open in terminal">terminal</span> : null}
                 {props.file.name.endsWith('.js') ? <span className="material-symbols-outlined" style={{ cursor: 'pointer' }} onClick={runJS} aria-label="run" title="Run">terminal</span> : null}
                 {/* {props.file.name.endsWith('.ts') ? <span className="material-symbols-outlined" style={{cursor: 'pointer'}} onClick={compileTs} aria-label="compile" title="compile">token</span> : null} */}

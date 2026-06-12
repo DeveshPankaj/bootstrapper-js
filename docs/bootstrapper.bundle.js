@@ -73,6 +73,7 @@ const initWindow = () => {
         '/home/user1/tools',
         '/home/user1/projects',
         '/home/user1/quotes',
+        '/mnt',
         // '/home/user1/projects/Snake.html', // Specific project file (not a directory, but included for completeness)
         // '/home/user1/projects/WebGL.html', // Specific project file (not a directory, but included for completeness)
         // '/home/user1/projects/WebGL-Earth.html', // Specific project file (not a directory, but included for completeness)
@@ -96,34 +97,32 @@ const initWindow = () => {
         '/var/log',
         '/var/spool'
     ];
-    // @ts-ignore
-    window.BrowserFS.configure({
-        fs: 'MountableFileSystem',
-        options: {
-            '/': { fs: 'LocalStorage', options: {} },
-            // '/home': { fs: 'LocalStorage', options: {} },
-            // '/bin': { fs: 'LocalStorage', options: {} },
-            // '/usr': { fs: 'LocalStorage', options: {} },
-            // '/srv': { fs: 'LocalStorage', options: {} },
-            // '/tmp': { fs: 'InMemory', options: {} },
-            // '/proc': { fs: 'InMemory', options: {} },
-            // '/var': { fs: 'InMemory', options: {} },
-            // '/sys': { fs: 'InMemory', options: {} },
-            // '/bin': { fs: 'IndexedDB', options: {} },
-            // '/usr': { fs: 'IndexedDB', options: {} },
-            // '/tmp': { fs: 'InMemory', options: {} } 
-        }
-    }, (err) => __awaiter(void 0, void 0, void 0, function* () {
-        if (err) {
-            alert(err);
-        }
-        else {
+    // LocalStorage has a ~5-10MB quota, far too small for this app's filesystem
+    // (and for mounted local folders). Use IndexedDB (often GB-scale) for everything
+    // instead. IndexedDB is async-only, so mirror it behind an InMemory filesystem
+    // to keep the synchronous `fs` API working.
+    const createBackend = (Ctor, opts) => new Promise((resolve, reject) => Ctor.Create(opts, (err, fs) => err ? reject(err) : resolve(fs)));
+    // Creates an IndexedDB-backed filesystem mirrored behind an InMemory filesystem,
+    // so it can be used synchronously while being persisted to IndexedDB (storeName).
+    const createIndexedDBMirror = (Backend, storeName) => __awaiter(void 0, void 0, void 0, function* () {
+        const idbFS = yield createBackend(Backend.IndexedDB, { storeName });
+        yield new Promise((resolve, reject) => idbFS.makeRootDirectory((err) => err ? reject(err) : resolve()));
+        const memFS = yield createBackend(Backend.InMemory, {});
+        return createBackend(Backend.AsyncMirror, { sync: memFS, async: idbFS });
+    });
+    const fsReady = (() => __awaiter(void 0, void 0, void 0, function* () {
+        try {
+            // @ts-ignore
+            const Backend = window.BrowserFS.FileSystem;
+            const rootFS = yield createIndexedDBMirror(Backend, 'fs');
+            const tmpFS = yield createIndexedDBMirror(Backend, 'tmp');
+            const mntFS = yield createIndexedDBMirror(Backend, 'mnt');
+            const mfs = yield createBackend(Backend.MountableFileSystem, { '/': rootFS, '/tmp': tmpFS, '/mnt': mntFS });
+            // @ts-ignore
+            window.BrowserFS.initialize(mfs);
             const fs = window.require('fs');
             // @ts-ignore
             window.fs = fs;
-            // fs.mkdirSync('/c')
-            // fs.mkdirSync('/d')
-            // console.log(fs.readdirSync('/'))
             defaultDirs.forEach(dir => {
                 if (!fs.existsSync(dir)) {
                     fs.mkdirSync(dir);
@@ -152,7 +151,10 @@ const initWindow = () => {
                 // navigator.serviceWorker.controller?.postMessage({type: 'fs/file-added', payload: {file: item.path}});
             }));
         }
-    }));
+        catch (err) {
+            alert(err);
+        }
+    }))();
     if (navigator.serviceWorker) {
         navigator.serviceWorker.register('/sw.bundle.js', { scope: '/' }).then(function (reg) {
             if (reg.active)
@@ -177,6 +179,7 @@ const initWindow = () => {
             console.log('registration failed: ' + err);
         });
     }
+    return fsReady;
 };
 const channelRef = { current: null };
 const initChannel = () => {
@@ -232,7 +235,7 @@ const initWorker = () => {
     const worker = startWorker();
 };
 window.addEventListener('load', () => __awaiter(void 0, void 0, void 0, function* () {
-    initWindow();
+    yield initWindow();
     // initWorker()
     //   initChannel()
     loadBootstrapScript(localStorage);
