@@ -231,9 +231,20 @@ platform.register('fs', (cmd: string, ...args: string[]) => {
       }
       break;
     case "rmdir":
+      // BrowserFS's rmdirSync doesn't support the `recursive` option (it throws
+      // ENOTEMPTY for non-empty directories), so remove contents ourselves first.
+      const removeRecursive = (path: string) => {
+        for(const entry of _fs.readdirSync(path)) {
+          const entryPath = `${path.endsWith('/') ? path : `${path}/`}${entry}`
+          if(_fs.statSync(entryPath).isDirectory()) removeRecursive(entryPath)
+          else _fs.unlinkSync(entryPath)
+        }
+        _fs.rmdirSync(path)
+      }
+
       for(let filePath of args) {
         if(_fs.existsSync(filePath)){
-          _fs.rmdirSync(filePath, { recursive: true });
+          removeRecursive(filePath)
         }
       }
   }
