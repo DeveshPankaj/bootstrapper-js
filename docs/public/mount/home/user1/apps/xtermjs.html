@@ -9,17 +9,114 @@
     * {
       margin: 0;
       padding: 0;
+      box-sizing: border-box;
     }
     html, body {
       height: 100%;
       width: 100%;
       display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: #000;
     }
-    #terminal {
-      flex: 1;
-      height: 100vh;
-      width: 100vw;
+
+    #tab-bar {
+      flex: 0 0 auto;
+      display: flex;
+      align-items: stretch;
+      background: #1e1e1e;
+      border-bottom: 1px solid #000;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 12px;
+      overflow-x: auto;
+      -ms-overflow-style: none;
+      scrollbar-width: none;
     }
+    #tab-bar::-webkit-scrollbar { display: none; }
+
+    #tabs {
+      display: flex;
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+
+    .tab {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.35rem 0.6rem;
+      color: #9aa0a6;
+      background: #1e1e1e;
+      border-right: 1px solid #000;
+      cursor: pointer;
+      white-space: nowrap;
+      max-width: 12rem;
+      min-width: 6rem;
+    }
+
+    .tab .tab-label {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .tab.active {
+      background: #000;
+      color: #00ff00;
+    }
+
+    .tab:hover {
+      background: #2a2a2a;
+    }
+
+    .tab-close {
+      margin-left: auto;
+      width: 1.1rem;
+      height: 1.1rem;
+      line-height: 1.1rem;
+      text-align: center;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+
+    .tab-close:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    #new-tab {
+      flex: 0 0 auto;
+      width: 2rem;
+      border: none;
+      border-right: 1px solid #000;
+      background: #1e1e1e;
+      color: #9aa0a6;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    #new-tab:hover {
+      background: #2a2a2a;
+      color: #00ff00;
+    }
+
+    #terminals {
+      flex: 1 1 auto;
+      position: relative;
+      min-height: 0;
+      min-width: 0;
+    }
+
+    .terminal-pane {
+      position: absolute;
+      inset: 0;
+      padding: 4px;
+    }
+
+    .terminal-pane .terminal-inner {
+      height: 100%;
+      width: 100%;
+    }
+
     .xterm {
       width: 100%;
       height: 100%;
@@ -31,13 +128,23 @@
   </style>
 </head>
 <body>
-  <div id="terminal"></div>
+  <div id="tab-bar">
+    <div id="tabs"></div>
+    <button id="new-tab" title="New Terminal Tab">+</button>
+  </div>
+  <div id="terminals"></div>
 
   <script type="module">
     import 'https://unpkg.com/xterm/lib/xterm.js';
 
-    class TerminalManager {
-      constructor() {
+    const CHAR_WIDTH = 9;
+    const CHAR_HEIGHT = 18;
+    const HISTORY_FILE = '/home/user1/.bash_history';
+
+    class TerminalSession {
+      constructor(app, paneEl) {
+        this.app = app;
+        this.paneEl = paneEl;
         this.terminal = new Terminal({
           cursorBlink: true,
           convertEol: true,
@@ -54,23 +161,39 @@
           USER: 'root'
         };
         this.commandHistory = [];
-        this.historyIndex = -1;
+        this.historyIndex = 0;
         this.inputBuffer = '';
+        this.busy = false;
         this.neofetchMessages = this.initializeMessages();
         this.fs = platform.host.getFS();
-        this.files = this.fs.readdirSync(this.context.pwd);
+        this.loadHistory();
       }
 
-      initializeTerminal() {
-        this.terminal.open(document.getElementById('terminal'));
+      async initializeTerminal() {
+        const container = document.createElement('div');
+        container.className = 'terminal-inner';
+        this.paneEl.appendChild(container);
+
+        this.terminal.open(container);
         this.resizeTerminal();
         this.handleTerminalInput();
-        this.processCommand('info');
-        window.addEventListener('resize', () => this.resizeTerminal());
+
+        this.busy = true;
+        await this.processCommand('info');
+        this.busy = false;
+        this.displayPrompt();
+      }
+
+      dispose() {
+        this.terminal.dispose();
       }
 
       resizeTerminal() {
-        this.terminal.resize(Math.floor(window.innerWidth / 9), Math.floor(window.innerHeight / 18));
+        const rect = this.paneEl.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return;
+        const cols = Math.max(20, Math.floor(rect.width / CHAR_WIDTH));
+        const rows = Math.max(5, Math.floor(rect.height / CHAR_HEIGHT));
+        this.terminal.resize(cols, rows);
       }
 
       handleTerminalInput() {
@@ -78,6 +201,8 @@
       }
 
       processInput(data) {
+        if (this.busy) return;
+
         if (data === '\r') {
           this.processEnterKey();
         } else if (data === '\u007F') {
@@ -94,30 +219,54 @@
         }
       }
 
-      processEnterKey() {
+      async processEnterKey() {
         this.terminal.write('\r\n');
-        if (this.inputBuffer.trim() !== '') {
-          this.processCommand(this.inputBuffer.trim());
-          this.commandHistory.push(this.inputBuffer.trim());
-          this.appendHistory(this.inputBuffer.trim());
-          this.historyIndex = this.commandHistory.length;
-        }
+        const command = this.inputBuffer.trim();
         this.inputBuffer = '';
-        this.terminal.write('\r\n'); // Ensure the cursor moves to the next empty line
+
+        if (command !== '') {
+          this.commandHistory.push(command);
+          this.historyIndex = this.commandHistory.length;
+          this.appendHistory(command);
+
+          this.busy = true;
+          try {
+            await this.processCommand(command);
+          } catch (err) {
+            this.terminal.write(`\r\n${err && err.message ? err.message : err}\r\n`);
+          }
+          this.busy = false;
+        }
+
+        this.terminal.write('\r\n');
         this.displayPrompt();
       }
-      
-      appendHistory(command) {
-        const historyFile = `${this.context.pwd}/.bash_history`;
-        const fs = this.fs
-        // Append the command to the history file
-        if (fs.existsSync(historyFile)) {
-          fs.appendFileSync(historyFile, `${command}\n`);
-        } else {
-          fs.writeFileSync(historyFile, `${command}\n`);
+
+      loadHistory() {
+        try {
+          if (this.fs.existsSync(HISTORY_FILE)) {
+            this.commandHistory = this.fs.readFileSync(HISTORY_FILE, 'utf8')
+              .split('\n')
+              .filter(line => line.trim() !== '');
+            this.historyIndex = this.commandHistory.length;
+          }
+        } catch (err) {
+          console.error('Failed to load history', err);
         }
       }
 
+      appendHistory(command) {
+        const fs = this.fs;
+        try {
+          if (fs.existsSync(HISTORY_FILE)) {
+            fs.appendFileSync(HISTORY_FILE, `${command}\n`);
+          } else {
+            fs.writeFileSync(HISTORY_FILE, `${command}\n`);
+          }
+        } catch (err) {
+          console.error('Failed to write history', err);
+        }
+      }
 
       processBackspace() {
         if (this.inputBuffer.length > 0) {
@@ -127,10 +276,11 @@
       }
 
       processUpArrow() {
+        if (this.commandHistory.length === 0) return;
         if (this.historyIndex > 0) {
           this.historyIndex--;
           this.inputBuffer = this.commandHistory[this.historyIndex];
-          this.updateCommandLine();
+          this.redrawInputLine();
         }
       }
 
@@ -138,16 +288,19 @@
         if (this.historyIndex < this.commandHistory.length - 1) {
           this.historyIndex++;
           this.inputBuffer = this.commandHistory[this.historyIndex];
-          this.updateCommandLine();
-        } else {
+          this.redrawInputLine();
+        } else if (this.historyIndex < this.commandHistory.length) {
           this.historyIndex = this.commandHistory.length;
           this.inputBuffer = '';
-          this.updateCommandLine();
+          this.redrawInputLine();
         }
       }
 
-      updateCommandLine() {
-        this.terminal.write(`\r\x1b[32mroot\x1b[0m\x1b[36m@pankajdevesh.com\x1b[0m: \x1b[33m~${this.context.pwd}$\x1b[0m ${' '.repeat(this.inputBuffer.length)}\r`);
+      // Clears the current line and redraws the prompt + input buffer. Used
+      // after history navigation so leftover characters from a longer previous
+      // line don't remain on screen.
+      redrawInputLine() {
+        this.terminal.write('\r\x1b[2K');
         this.displayPrompt();
       }
 
@@ -160,16 +313,31 @@
         this.terminal.write(`\x1b[32mroot\x1b[0m\x1b[36m@pankajdevesh.com\x1b[0m: \x1b[33m~${this.context.pwd}$\x1b[0m ${this.inputBuffer}`);
       }
 
-      processCommand(command) {
-        const cmdArgs = command.split(' ');
+      // Splits a command line into arguments, honoring single/double-quoted
+      // substrings (e.g. `edit "my file.txt"` -> ['edit', 'my file.txt']).
+      parseArgs(command) {
+        const matches = command.match(/"([^"]*)"|'([^']*)'|\S+/g) || [];
+        return matches.map(arg => {
+          if ((arg.startsWith('"') && arg.endsWith('"')) || (arg.startsWith("'") && arg.endsWith("'"))) {
+            return arg.slice(1, -1);
+          }
+          return arg;
+        });
+      }
+
+      async processCommand(command) {
+        const cmdArgs = this.parseArgs(command);
         const commandFile = this.findCommandFile(cmdArgs[0]);
 
         if (commandFile) {
           platform.register('terminal', this.terminal);
           platform.register('context', this.context);
-          platform.host.exec(platform, commandFile, this.context.pwd, ...cmdArgs.slice(1));
+          // `host.exec` returns a promise for `.run`/`.js` commands, allowing
+          // async commands (e.g. ones that `await` inside) to finish before the
+          // next prompt is shown.
+          await platform.host.exec(platform, commandFile, this.context.pwd, ...cmdArgs.slice(1));
         } else {
-          this.handleInternalCommands(cmdArgs);
+          await this.handleInternalCommands(cmdArgs);
         }
       }
 
@@ -185,13 +353,10 @@
         return commandFile;
       }
 
-      handleInternalCommands(cmdArgs) {
+      async handleInternalCommands(cmdArgs) {
         switch (cmdArgs[0]) {
           case 'cd':
             this.changeDirectory(cmdArgs);
-            break;
-          case 'edit':
-            this.editFile(cmdArgs);
             break;
           default:
             this.terminal.write(`Command not found: ${cmdArgs[0]}\r\n`);
@@ -208,7 +373,7 @@
           try {
             if (this.fs.statSync(newDir).isDirectory()) {
               this.context.pwd = newDir;
-              this.files = this.fs.readdirSync(this.context.pwd);
+              this.app.updateTabTitle(this, newDir);
             } else {
               this.terminal.write(`cd: ${newDir}: Not a directory\r\n`);
             }
@@ -226,14 +391,6 @@
           return `${this.context.pwd}/${dir}`;
         }
         return dir;
-      }
-
-      editFile(cmdArgs) {
-        if (cmdArgs.length < 2) {
-          this.terminal.write('edit: missing operand\r\n');
-        } else {
-          // Handle edit logic here
-        }
       }
 
       initializeMessages() {
@@ -270,8 +427,99 @@
       }
     }
 
-    const terminalManager = new TerminalManager();
-    terminalManager.initializeTerminal();
+    // Manages the tab bar and the set of open terminal sessions/panes.
+    class TerminalApp {
+      constructor() {
+        this.sessions = [];
+        this.tabsEl = document.getElementById('tabs');
+        this.terminalsEl = document.getElementById('terminals');
+
+        document.getElementById('new-tab').addEventListener('click', () => this.addTab());
+        window.addEventListener('resize', () => this.resizeActive());
+
+        this.addTab();
+      }
+
+      addTab() {
+        const pane = document.createElement('div');
+        pane.className = 'terminal-pane';
+        this.terminalsEl.appendChild(pane);
+
+        const session = new TerminalSession(this, pane);
+
+        const tab = document.createElement('div');
+        tab.className = 'tab';
+
+        const label = document.createElement('span');
+        label.className = 'tab-label';
+        label.textContent = `Terminal ${this.sessions.length + 1}`;
+
+        const close = document.createElement('span');
+        close.className = 'tab-close';
+        close.textContent = '×';
+        close.title = 'Close tab';
+        close.addEventListener('click', (event) => {
+          event.stopPropagation();
+          this.closeTab(session);
+        });
+
+        tab.appendChild(label);
+        tab.appendChild(close);
+        tab.addEventListener('click', () => this.activate(session));
+        this.tabsEl.appendChild(tab);
+
+        session.tabEl = tab;
+        session.labelEl = label;
+
+        this.sessions.push(session);
+        this.activate(session);
+        session.initializeTerminal().then(() => session.terminal.focus());
+      }
+
+      closeTab(session) {
+        if (this.sessions.length === 1) return;
+
+        const index = this.sessions.indexOf(session);
+        const wasActive = session.tabEl.classList.contains('active');
+
+        session.dispose();
+        session.tabEl.remove();
+        session.paneEl.remove();
+        this.sessions.splice(index, 1);
+
+        if (wasActive) {
+          const next = this.sessions[Math.max(0, index - 1)];
+          this.activate(next);
+        }
+      }
+
+      activate(session) {
+        this.sessions.forEach(s => {
+          const isActive = s === session;
+          s.paneEl.style.display = isActive ? 'block' : 'none';
+          s.tabEl.classList.toggle('active', isActive);
+        });
+        // Resizing before terminal.open() corrupts the buffer once it scrolls,
+        // so only resize/focus terminals that have already been opened.
+        if (session.terminal.element) {
+          session.resizeTerminal();
+          session.terminal.focus();
+        }
+      }
+
+      resizeActive() {
+        const active = this.sessions.find(s => s.tabEl.classList.contains('active'));
+        if (active) active.resizeTerminal();
+      }
+
+      updateTabTitle(session, pwd) {
+        const base = pwd.split('/').filter(Boolean).pop();
+        session.labelEl.textContent = base ? `~/${base}` : '/';
+        session.labelEl.title = pwd;
+      }
+    }
+
+    window.__terminalApp = new TerminalApp();
   </script>
 </body>
 </html>

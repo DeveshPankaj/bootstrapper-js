@@ -2,6 +2,23 @@
 import type _fs from 'fs'
 const __BOOTSTRAP_SCRIPT_PATH_KEY__ = '__BOOTSTRAP_SCRIPT_PATH__';
 
+// Which storage backend the virtual filesystem persists to: 'indexeddb' (default,
+// GB-scale) or 'localstorage' (~5-10MB, used by older versions of this app). The
+// choice is read from this localStorage key, and can be overridden (and persisted)
+// via the `?fsBackend=indexeddb|localstorage` query param. Settings.html's "Storage"
+// page reads/writes the same key/param names.
+const FS_BACKEND_STORAGE_KEY = '__app_fs_backend__';
+const FS_BACKEND_QUERY_PARAM = 'fsBackend';
+
+const resolveFsBackend = (): 'indexeddb' | 'localstorage' => {
+    const fromQuery = new URLSearchParams(window.location.search).get(FS_BACKEND_QUERY_PARAM)
+    if (fromQuery === 'indexeddb' || fromQuery === 'localstorage') {
+        localStorage.setItem(FS_BACKEND_STORAGE_KEY, fromQuery)
+        return fromQuery
+    }
+    return localStorage.getItem(FS_BACKEND_STORAGE_KEY) === 'localstorage' ? 'localstorage' : 'indexeddb'
+}
+
 
 (function() {
     const originalOpen = XMLHttpRequest.prototype.open;
@@ -101,10 +118,23 @@ const initWindow = () => {
         try {
             // @ts-ignore
             const Backend = window.BrowserFS.FileSystem
-            const rootFS = await createIndexedDBMirror(Backend, 'fs')
-            const tmpFS = await createIndexedDBMirror(Backend, 'tmp')
-            const mntFS = await createIndexedDBMirror(Backend, 'mnt')
-            const mfs = await createBackend(Backend.MountableFileSystem, { '/': rootFS, '/tmp': tmpFS, '/mnt': mntFS })
+            const fsBackend = resolveFsBackend()
+
+            let mfs
+            if (fsBackend === 'localstorage') {
+                // LocalStorage is a single global synchronous key-value store (no
+                // namespacing), so only '/' is backed by it; '/tmp' and '/mnt' are
+                // in-memory (ephemeral) to avoid key collisions.
+                const rootFS = await createBackend(Backend.LocalStorage, {})
+                const tmpFS = await createBackend(Backend.InMemory, {})
+                const mntFS = await createBackend(Backend.InMemory, {})
+                mfs = await createBackend(Backend.MountableFileSystem, { '/': rootFS, '/tmp': tmpFS, '/mnt': mntFS })
+            } else {
+                const rootFS = await createIndexedDBMirror(Backend, 'fs')
+                const tmpFS = await createIndexedDBMirror(Backend, 'tmp')
+                const mntFS = await createIndexedDBMirror(Backend, 'mnt')
+                mfs = await createBackend(Backend.MountableFileSystem, { '/': rootFS, '/tmp': tmpFS, '/mnt': mntFS })
+            }
 
             // @ts-ignore
             window.BrowserFS.initialize(mfs)

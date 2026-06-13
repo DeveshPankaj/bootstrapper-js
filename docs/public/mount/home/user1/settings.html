@@ -153,6 +153,7 @@
       {id: '4', name: 'wallpapers', label: 'Wallpaper', icon: 'wallpaper', color: '#ff9f0a', component: Wallpapers, marginTop: 'auto'},
       {id: '5', name: 'layout', label: 'Layout', icon: 'dashboard', color: '#0a84ff', component: Layout},
       {id: '6', name: 'window-manager', label: 'Window Manager', icon: 'palette', color: '#ff453a', component: WindowManagerSettings},
+      {id: '7', name: 'storage', label: 'Storage', icon: 'storage', color: '#5856d6', component: StorageSettings},
     ]
 
     const [currentPage, setCurrentPage] = React.useState(pages[0])
@@ -718,6 +719,61 @@
           them available here. For deeper customization (e.g. new window behaviors), edit{' '}
           <code>/opt/window-manager.js</code> in the file explorer &mdash; it is re-loaded every time a
           window is opened.
+        </p>
+      </div>
+    )
+  }
+
+  // Keep in sync with FS_BACKEND_STORAGE_KEY / FS_BACKEND_QUERY_PARAM in src/index.ts.
+  const FS_BACKEND_STORAGE_KEY = '__app_fs_backend__'
+  const FS_BACKEND_QUERY_PARAM = 'fsBackend'
+
+  const FS_BACKEND_OPTIONS = [
+    { id: 'indexeddb', label: 'IndexedDB', desc: 'Default. Large storage quota (GB-scale) — used for the full filesystem and mounted local folders.' },
+    { id: 'localstorage', label: 'LocalStorage', desc: 'Small quota (~5-10MB). Switch to this to access files saved by older versions of this app that stored data in localStorage.' },
+  ]
+
+  const StorageSettings = () => {
+    const active = localStorage.getItem(FS_BACKEND_STORAGE_KEY) || 'indexeddb'
+    const [selected, setSelected] = React.useState(active)
+
+    const apply = () => {
+      localStorage.setItem(FS_BACKEND_STORAGE_KEY, selected)
+      const top = platform.window.top
+      const url = new URL(top.location.href)
+      url.searchParams.set(FS_BACKEND_QUERY_PARAM, selected)
+      top.location.href = url.toString()
+    }
+
+    return (
+      <div className="settings-page">
+        <h1 className="settings-page-title">Storage</h1>
+        <p className="settings-page-subtitle">Choose where the virtual filesystem is persisted. Switching reloads the desktop.</p>
+
+        <div className="settings-group">
+          <div className="settings-group-body" style={{padding: '0.6rem 0.8rem', display: 'block'}}>
+            {FS_BACKEND_OPTIONS.map(opt => (
+              <label key={opt.id} style={{display: 'flex', alignItems: 'flex-start', gap: '0.6rem', padding: '0.5rem 0', cursor: 'pointer'}}>
+                <input type="radio" name="fs-backend" checked={selected === opt.id} onChange={() => setSelected(opt.id)} style={{marginTop: '0.2rem'}} />
+                <span>
+                  <strong>{opt.label}</strong>
+                  {opt.id === active ? <span style={{marginLeft: '0.5rem', color: '#0a84ff'}}>(active)</span> : null}
+                  <div style={{fontSize: '0.8rem', color: '#666'}}>{opt.desc}</div>
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div style={{marginTop: '1rem'}}>
+          <button className="settings-btn" onClick={apply} disabled={selected === active}>Switch &amp; Reload</button>
+        </div>
+
+        <p className="settings-hint">
+          The active backend is stored under the <code>{FS_BACKEND_STORAGE_KEY}</code> key in this browser's
+          localStorage, and can be overridden by adding <code>?{FS_BACKEND_QUERY_PARAM}=indexeddb</code> or{' '}
+          <code>?{FS_BACKEND_QUERY_PARAM}=localstorage</code> to the page URL. Each backend keeps its own
+          separate copy of the filesystem &mdash; switching does not move or merge files between them.
         </p>
       </div>
     )

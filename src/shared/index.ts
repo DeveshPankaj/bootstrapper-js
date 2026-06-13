@@ -204,8 +204,13 @@ export class Host {
       $args: args
     };
     //   const factory = new Function(...Object.keys(context), 'return '+command);
-    const factory = new Function(...Object.keys(context), command);
-    factory.call({}, ...Object.values(context));
+    // Wrap in an async IIFE so command strings/`.run` scripts can use `await` and
+    // callers (e.g. the terminal) can await completion of async commands. For
+    // existing synchronous commands this has no observable effect: the body still
+    // runs synchronously up to its first `await` (i.e. fully synchronously if it
+    // has none), and the returned promise can simply be ignored.
+    const factory = new Function(...Object.keys(context), `return (async () => {\n${command}\n})();`);
+    return factory.call({}, ...Object.values(context));
   }
 
   public execString(source: string, filenameAlias: string = '/tmp/dynamic.js', _platform?: Platform) {
@@ -331,15 +336,13 @@ export class Host {
       if (fileExt === 'js') {
         const fs = this.getFS()
         const source = fs.readFileSync(filepath)
-        this.execString(source.toString(), '/(sw)' + filepath)
-        return;
+        return this.execString(source.toString(), '/(sw)' + filepath)
       }
 
       else if (fileExt === 'run') {
         const fs = this.getFS()
         const source = fs.readFileSync(filepath)
-        this.execCommand(source.toString(), plarform, ...args)
-        return;
+        return this.execCommand(source.toString(), plarform, ...args)
       }
 
       else {
@@ -352,7 +355,7 @@ export class Host {
     }
 
     // console.log(`%c> ${script}`, 'color: green;background:black;font-size:12px')
-    this.execCommand(script, plarform, ...args);
+    return this.execCommand(script, plarform, ...args);
   }
 
   public getService(moduleName: string, serviceName: string): unknown {

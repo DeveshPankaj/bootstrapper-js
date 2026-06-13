@@ -244,6 +244,20 @@ platform.host.registerCommand('core.add-module', (namespace: string, mod: Module
     platformEventEmitter.next({type: 'core.module-loaded', payload: nextModules})
 });
 
+// Fallback 'explorer' command, delegating to the compiled ui.file-explorer module.
+// /home/user1/apps/explorer.js (force_reload: false, so user edits persist) registers
+// the real 'explorer' command on boot via initd.run, and its registration is prepended
+// after this one so it takes precedence when present. But if the virtual fs has a
+// stale/incompatible explorer.js left over from an older app version (e.g. switching
+// to a localStorage backend that still has old data), explorer.js may not register
+// 'explorer' at all, leaving `command('explorer')` calls (opening a folder, the
+// desktop "Explorer" context menu item) to throw an uncaught "Command: [explorer] not
+// found". This fallback ensures 'explorer' always resolves to a working file explorer.
+platform.host.registerCommand('explorer', (...args: unknown[]) => {
+    const fileExplorer = platform.host.getCommand('ui.file-explorer')!
+    return fileExplorer.exec(...args)
+}, { icon: 'folder', title: 'Files' })
+
 
 platform.register('fs', (cmd: string, ...args: string[]) => {
   console.log(cmd, args);

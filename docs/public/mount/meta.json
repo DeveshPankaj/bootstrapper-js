@@ -40,6 +40,11 @@
     "force_reload": false
   },
   {
+    "path": "/bin/sleep.run",
+    "file": "/bin/sleep.run",
+    "force_reload": false
+  },
+  {
     "path": "/bin/edit.run",
     "file": "/bin/edit.run",
     "force_reload": false

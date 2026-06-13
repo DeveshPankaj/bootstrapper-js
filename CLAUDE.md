@@ -35,6 +35,29 @@ icons) and a set of bundled mini-apps that run inside iframe "windows".
   relative to the mounted filesystem's own root under `MountableFileSystem` (e.g.
   `realpathSync('/tmp')` → `/`, not the global path).
 
+### Storage backend switch (IndexedDB vs LocalStorage)
+
+- `src/index.ts` resolves which backend to mount via `resolveFsBackend()`: reads the
+  `__app_fs_backend__` localStorage key (default `'indexeddb'`), overridable/persisted
+  via the `?fsBackend=indexeddb|localstorage` query param.
+  - `'indexeddb'` (default, GB-scale): `/`, `/tmp`, `/mnt` each `AsyncMirror` over
+    IndexedDB (`createIndexedDBMirror`).
+  - `'localstorage'` (~5-10MB, for accessing data saved by older app versions): `/` is
+    a raw `LocalStorage` backend; `/tmp` and `/mnt` are `InMemory` (ephemeral, to avoid
+    key collisions since LocalStorage has no namespacing).
+  - Each backend is a completely separate filesystem — switching doesn't move/merge
+    files.
+- Settings → "Storage" page (`docs/public/mount/home/user1/settings.html`,
+  `StorageSettings` component) lets the user pick a backend and reloads
+  (`top.location.href` with the query param set) to apply it. Keep its
+  `FS_BACKEND_STORAGE_KEY`/`FS_BACKEND_QUERY_PARAM` constants in sync with `src/index.ts`.
+- **Gotcha**: a LocalStorage-backend fs may contain a *stale* copy of
+  `/home/user1/apps/explorer.js` from an older app version (it has `force_reload`
+  absent, so it's never overwritten). If that stale copy doesn't call
+  `registerCommand("explorer", ...)`, every `command('explorer')` call (opening a
+  folder, desktop "Explorer" context menu) throws an uncaught `Command: [explorer] not
+  found`. Mitigated by a fallback `'explorer'` command — see Platform/Host section.
+
 ## Platform / Host architecture (`src/shared/index.ts`)
 
 - `Platform.getInstance()` — per-module/per-script platform instance.
@@ -54,10 +77,18 @@ icons) and a set of bundled mini-apps that run inside iframe "windows".
     `service(moduleName, serviceName)`, `command(commandName)`, `$args` in scope (used
     for context-menu actions like
     `service('001-core.layout', 'open-window') (command('ui.notepad'), '/path')`).
-  - `registerCommand(name, callback, meta)` / `getCommand` / `callCommand`.
+  - `registerCommand(name, callback, meta)` / `getCommand` / `callCommand`. New
+    registrations are *prepended*, and `command(name)`/`getCommand` use `.find()`, so
+    the most-recently-registered command with a given name wins.
 - `platform.register(name, value)` / `platform.getService(moduleName, serviceName)` —
   cross-module service registry.
 - `UserPreference` — reads/writes `/user-preferences.json` (wallpaper, etc.).
+- `src/remote.ts` registers a fallback `'explorer'` command (delegates to the always-
+  available compiled `ui.file-explorer` command) at boot, before `initd.run` runs.
+  The real `/home/user1/apps/explorer.js` registers its own `'explorer'` command later
+  via `initd.run` and (being prepended) takes precedence when present — the fallback
+  only matters if that file is missing/stale/fails to register one (see Storage backend
+  switch gotcha above).
 
 ## Layout & window manager (`src/core/layout/index.tsx`, `src/core/window-manager.ts`)
 
@@ -164,6 +195,24 @@ Both explorer copies share the same macOS Finder look:
 
 When changing one explorer file's structure/behavior, mirror the change in the other.
 
+## Terminal (`docs/public/mount/home/user1/apps/xtermjs.html`)
+
+- xterm.js 5.3.0 from `https://unpkg.com/xterm/lib/xterm.js`, DOM renderer (no canvas
+  addon — was tried and reverted, see below), `convertEol: true`.
+- `TerminalApp` manages multiple tabbed `TerminalSession`s. Each session's
+  `initializeTerminal()` is `async`: calls `terminal.open()`, then `resizeTerminal()`,
+  then `await`s the initial `processCommand('info')` banner (guarded by a `busy` flag)
+  before `displayPrompt()`.
+- **`terminal.resize()` must never be called before `terminal.open()`** — doing so
+  permanently corrupts the buffer once it scrolls (overlapping/leftover text from
+  earlier rows). `TerminalApp.activate(session)` guards `resizeTerminal()`/`focus()`
+  behind `if (session.terminal.element)`, and `addTab()` calls `initializeTerminal()`
+  (which resizes after `open()`) before focusing.
+- `window.__terminalApp` exposes the `TerminalApp` instance for test introspection.
+- **Known remaining cosmetic bug**: after an async command (e.g. `sleep 1`) causes the
+  terminal to scroll, one row can briefly show leftover/overlapping text from a row
+  that scrolled past. Left unfixed per explicit instruction — revisit only if asked.
+
 ## Testing conventions
 
 - **Never run ad-hoc test scripts from `/tmp`** — create them in the repo (now under
@@ -182,6 +231,10 @@ When changing one explorer file's structure/behavior, mirror the change in the o
   change can stop matching afterward).
 - In headless mode, the draggable `<iframe class="draggable">` overlay intercepts
   pointer events — use `{ force: true }` on `click`/`dblclick`.
+- For xterm.js content, don't read `.xterm-rows` innerText (breaks if a canvas/webgl
+  renderer is ever used) — use the buffer API via `window.__terminalApp` instead:
+  `session.terminal.buffer.active.getLine(i).translateToString(true)` for each `i` in
+  `0..buf.length`.
 - After verifying, stop the dev server: `pkill -f "pnpm start"` /
   `pkill -f "webpack serve"`.
 

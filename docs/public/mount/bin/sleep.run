@@ -1,0 +1,12 @@
+/** /bin/sleep.run */
+const terminal = platform.getService('terminal')
+const write = terminal ? terminal.write.bind(terminal) : console.log
+const [pwd, secs] = $args
+
+const duration = parseFloat(secs)
+if (!secs || isNaN(duration)) {
+  write('sleep: missing or invalid operand\r\n')
+  return
+}
+
+await new Promise(resolve => setTimeout(resolve, duration * 1000))
