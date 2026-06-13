@@ -596,7 +596,7 @@ const ListDirConponent = ({ dir, openFile, showFileActions }) => {
   // the SW's fetch handler (unlike `<iframe src="/(sw)/...">` navigations,
   // which the SW intercepts regardless of the embedding document's controller).
   const [thumbnails, setThumbnails] = React.useState({});
-  const filesKey = files.map((f) => f.path).join(" ");
+  const filesKey = files.map((f) => f.path).join(" ");
   React.useEffect(() => {
     const urls = [];
     const next = {};
