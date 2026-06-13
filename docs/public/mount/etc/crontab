@@ -1,0 +1,5 @@
+# System crontab. Standard 5-field syntax: minute hour dom month dow command
+# Fields support *, N, N,M, N-M and */N.
+#
+# Check the public IP every 15 minutes and write it to /var/log/public-ip.txt
+*/15 * * * * /opt/cron/check-public-ip.js

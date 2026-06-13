@@ -1,0 +1,20 @@
+/** /bin/kill.run */
+const terminal = platform.getService('terminal')
+const write = terminal ? terminal.write.bind(terminal) : console.log
+const [pwd, pidArg] = $args
+
+if (!pidArg) {
+    write('usage: kill <pid>\r\n')
+    return
+}
+
+const pid = parseInt(pidArg, 10)
+const fs = platform.host.getFS()
+
+if (!fs.existsSync(`/proc/${pid}`)) {
+    write(`kill: (${pid}): No such process\r\n`)
+    return
+}
+
+platform.host.getCommand('process.kill')?.exec(pid)
+write(`Terminated process ${pid}\r\n`)

@@ -1,0 +1,18 @@
+{
+  "name": "Default",
+  "appearance": {
+    "headerBackground": "#000000",
+    "headerColor": "#ffffff",
+    "windowBackground": "rgba(255, 255, 255, 0.15)",
+    "taskbarBackground": "rgba(0, 0, 0, 0.5)",
+    "taskbarSize": 56,
+    "accentColor": "#0a84ff",
+    "borderRadius": 6,
+    "blur": 10,
+    "shadow": true
+  },
+  "behavior": {
+    "dblClickHeaderFullscreen": true,
+    "bringToFrontOnClick": true
+  }
+}

@@ -1,4 +1,4 @@
-import { Command, Host, Platform, PlatformEvent } from "@shared/index";
+import { Command, Host, Platform, PlatformEvent, WidgetDef } from "@shared/index";
 import { BehaviorSubject, Subject } from "rxjs";
 import { Module, modules } from "./modules/modules";
 import type fs from 'fs'
@@ -6,6 +6,7 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import * as utils from '@shared/utils'
 import { DESKTOP_CONTAINER_CLASS, WINDOWS_CONTAINER_CLASS } from './core/window-manager'
+import { startCronScheduler } from './core/cron'
 
 //@ts-ignore
 const public_path = __webpack_public_path__ as string;
@@ -26,7 +27,7 @@ class WindowService {
         //   console.log(`${uniqueName} require ${moduleName}`)
         // };
 
-        const host = new Host(this.window, newPlatform, commands, modulesMap);
+        const host = new Host(this.window, newPlatform, commands, widgets, modulesMap);
         newPlatform.setHost(host);
 
         resolve([iframe.contentWindow!, platformEventEmitter]);
@@ -167,7 +168,32 @@ const runInitCommands = () => {
   ];
   initd.forEach(command => host.exec(hostPlatform, command[0], ...command.slice(1)))
 
+  loadWidgets();
+  startCronScheduler();
 }
+
+// Loads every `.js` file in `/etc/widgets/` and runs it via execString, so it
+// can call `platform.host.registerWidget(...)`. The widgets directory is
+// plain virtual-fs files editable through the file explorer.
+const WIDGETS_DIR = '/etc/widgets';
+const loadWidgets = () => {
+  try {
+    const fs = host.getFS();
+    if (!fs.existsSync(WIDGETS_DIR)) return;
+    for (const file of fs.readdirSync(WIDGETS_DIR) as string[]) {
+      if (!file.endsWith('.js')) continue;
+      const filepath = `${WIDGETS_DIR}/${file}`;
+      try {
+        const source = fs.readFileSync(filepath, 'utf-8') as string;
+        host.execString(source, filepath);
+      } catch (err) {
+        console.error(`Failed to load widget [${filepath}]`, err);
+      }
+    }
+  } catch (err) {
+    console.error('Failed to load widgets', err);
+  }
+};
 
 const runCommand = (cmd: string) => {
   const context = {
@@ -198,7 +224,8 @@ const hostPlatform = new Platform(platformEventEmitter, "root");
 const platform = window.platform = hostPlatform;
 
 const commands = new BehaviorSubject<Array<Command>>([]);
-const host = new Host(window, hostPlatform, commands, modulesMap);
+const widgets = new BehaviorSubject<Array<WidgetDef>>([]);
+const host = new Host(window, hostPlatform, commands, widgets, modulesMap);
 hostPlatform.setHost(host);
 
 modulesMap.set('root', {platform} as any)

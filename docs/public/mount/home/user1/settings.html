@@ -123,6 +123,8 @@
       {id: '2', name: 'projects', label: 'Projects', component: Projects},
       {id: '3', name: 'contact', label: 'Contact', component: Contact},
       {id: '4', name: 'wallpapers', label: 'Wallpapers', component: Wallpapers, marginTop: 'auto'},
+      {id: '5', name: 'layout', label: 'Layout', component: Layout},
+      {id: '6', name: 'window-manager', label: 'Window Manager', component: WindowManagerSettings},
     ]
 
     const [currentPage, setCurrentPage] = React.useState(pages[0])
@@ -241,6 +243,285 @@
 
   const Contact = () => {
     return (<>Contact</>)
+  }
+
+  const Layout = () => {
+    const readLayouts = () => {
+      try {
+        return JSON.parse(fs.readFileSync('/etc/wm/layouts.json', 'utf-8')).layouts ?? []
+      } catch (err) {
+        return []
+      }
+    }
+
+    const readCurrentLayout = () => {
+      try {
+        return JSON.parse(fs.readFileSync('/etc/wm/config.json', 'utf-8')).layout ?? 'default'
+      } catch (err) {
+        return 'default'
+      }
+    }
+
+    const [layouts] = React.useState(readLayouts);
+    const [currentLayout, setCurrentLayout] = React.useState(readCurrentLayout);
+
+    const onSelectLayout = (layoutId) => {
+      setCurrentLayout(layoutId);
+      platform.host.callCommand('set-layout', layoutId);
+    };
+
+    const cardStyle = (active) => ({
+      padding: '1rem',
+      margin: '0.5rem 0',
+      border: active ? '2px solid #007bff' : '1px solid #ccc',
+      borderRadius: '8px',
+      cursor: 'pointer',
+      background: active ? '#e9f3ff' : 'white',
+    });
+
+    return (
+      <div style={{padding: '1rem'}}>
+        <h2>Layout</h2>
+        <p>Choose how the desktop, taskbar and windows are arranged.</p>
+        {layouts.map(layout => (
+          <div key={layout.id} style={cardStyle(layout.id === currentLayout)} onClick={() => onSelectLayout(layout.id)}>
+            <strong>{layout.name}</strong>
+            {layout.id === currentLayout ? <span style={{marginLeft: '0.5rem', color: '#007bff'}}>(active)</span> : null}
+          </div>
+        ))}
+        <p style={{color: '#555', fontSize: '0.9rem'}}>
+          Layouts are stored in <code>/etc/wm/layouts.json</code> and the active layout in <code>/etc/wm/config.json</code> — edit these files directly to customize or add new layouts.
+        </p>
+      </div>
+    )
+  }
+
+  const WM_SETTINGS_PATH = '/etc/wm/current.json'
+  const WM_THEMES_DIR = '/etc/wm/themes'
+
+  const DEFAULT_WM_SETTINGS = {
+    appearance: {
+      headerBackground: '#000000',
+      headerColor: '#ffffff',
+      windowBackground: 'rgba(255, 255, 255, 0.15)',
+      taskbarBackground: 'rgba(0, 0, 0, 0.5)',
+      taskbarSize: 56,
+      accentColor: '#0a84ff',
+      borderRadius: 6,
+      blur: 10,
+      shadow: true,
+    },
+    behavior: {
+      dblClickHeaderFullscreen: true,
+      bringToFrontOnClick: true,
+    },
+  }
+
+  // Parses '#rrggbb[aa]' or 'rgb(a)(...)' CSS colors into {r, g, b, a}.
+  const parseCssColor = (str) => {
+    str = (str || '').trim()
+    if (str.startsWith('#')) {
+      let hex = str.slice(1)
+      if (hex.length === 3) hex = hex.split('').map(c => c + c).join('')
+      const r = parseInt(hex.slice(0, 2), 16) || 0
+      const g = parseInt(hex.slice(2, 4), 16) || 0
+      const b = parseInt(hex.slice(4, 6), 16) || 0
+      const a = hex.length >= 8 ? parseInt(hex.slice(6, 8), 16) / 255 : 1
+      return { r, g, b, a }
+    }
+    const m = str.match(/rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*([\d.]+)\s*)?\)/)
+    if (m) return { r: +m[1], g: +m[2], b: +m[3], a: m[4] !== undefined ? +m[4] : 1 }
+    return { r: 0, g: 0, b: 0, a: 1 }
+  }
+
+  const rgbToHex = (r, g, b) => '#' + [r, g, b].map(x => Math.round(x).toString(16).padStart(2, '0')).join('')
+
+  // Color + opacity picker that reads/writes an 'rgba(r, g, b, a)' CSS color string.
+  const ColorAlphaInput = ({ value, onChange }) => {
+    const { r, g, b, a } = parseCssColor(value)
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <input type="color" value={rgbToHex(r, g, b)} onChange={e => {
+          const next = parseCssColor(e.target.value)
+          onChange(`rgba(${next.r}, ${next.g}, ${next.b}, ${a})`)
+        }} />
+        <input type="range" min="0" max="1" step="0.01" value={a} title="Opacity"
+          onChange={e => onChange(`rgba(${r}, ${g}, ${b}, ${e.target.value})`)}
+          style={{ width: '5rem' }} />
+        <span style={{ fontSize: '0.75rem', color: '#666', width: '2.5rem', textAlign: 'right' }}>{Math.round(a * 100)}%</span>
+      </div>
+    )
+  }
+
+  const WindowManagerSettings = () => {
+    const readWmSettings = () => {
+      try {
+        const raw = JSON.parse(fs.readFileSync(WM_SETTINGS_PATH, 'utf-8'))
+        return {
+          appearance: { ...DEFAULT_WM_SETTINGS.appearance, ...raw.appearance },
+          behavior: { ...DEFAULT_WM_SETTINGS.behavior, ...raw.behavior },
+        }
+      } catch (err) {
+        return DEFAULT_WM_SETTINGS
+      }
+    }
+
+    const readThemes = () => {
+      try {
+        if (!fs.existsSync(WM_THEMES_DIR)) return []
+        return fs.readdirSync(WM_THEMES_DIR)
+          .filter(f => f.endsWith('.json'))
+          .map(file => {
+            const id = file.replace(/\.json$/, '')
+            let raw = {}
+            try { raw = JSON.parse(fs.readFileSync(`${WM_THEMES_DIR}/${file}`, 'utf-8')) } catch (err) {}
+            return {
+              id,
+              name: raw.name || id,
+              appearance: { ...DEFAULT_WM_SETTINGS.appearance, ...raw.appearance },
+            }
+          })
+      } catch (err) {
+        return []
+      }
+    }
+
+    const [settings, setSettings] = React.useState(readWmSettings)
+    const [themes] = React.useState(readThemes)
+    const [currentThemeId, setCurrentThemeId] = React.useState(() => {
+      try {
+        return JSON.parse(fs.readFileSync(WM_SETTINGS_PATH, 'utf-8')).name?.toLowerCase()
+      } catch (err) {
+        return undefined
+      }
+    })
+
+    const persist = (next) => {
+      setSettings(next)
+      setCurrentThemeId(undefined)
+      if (!fs.existsSync('/etc/wm')) fs.mkdirSync('/etc/wm', { recursive: true })
+      fs.writeFileSync(WM_SETTINGS_PATH, JSON.stringify(next, null, 2))
+      platform.host.callCommand('set-window-manager-settings', next)
+    }
+
+    const selectTheme = (theme) => {
+      platform.host.callCommand('set-window-manager-theme', theme.id)
+      setCurrentThemeId(theme.id)
+      setSettings(readWmSettings())
+    }
+
+    const setAppearance = (key, value) => {
+      persist({ ...settings, appearance: { ...settings.appearance, [key]: value } })
+    }
+
+    const setBehavior = (key, value) => {
+      persist({ ...settings, behavior: { ...settings.behavior, [key]: value } })
+    }
+
+    const resetToDefaults = () => persist(DEFAULT_WM_SETTINGS)
+
+    const rowStyle = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', padding: '0.6rem 0', borderBottom: '1px solid #eee' }
+    const labelStyle = { flex: 1 }
+    const sectionTitleStyle = { marginTop: '1.5rem', marginBottom: '0.25rem' }
+
+    const themeCardStyle = (active) => ({
+      display: 'flex',
+      alignItems: 'center',
+      gap: '0.75rem',
+      padding: '0.6rem 0.8rem',
+      margin: '0.4rem 0',
+      border: active ? '2px solid #007bff' : '1px solid #ccc',
+      borderRadius: '8px',
+      cursor: 'pointer',
+      background: active ? '#e9f3ff' : 'white',
+    })
+
+    const swatchStyle = (appearance) => ({
+      width: '2.5rem',
+      height: '1.6rem',
+      borderRadius: `${Math.min(appearance.borderRadius, 8)}px`,
+      background: appearance.windowBackground,
+      border: `2px solid ${appearance.headerBackground}`,
+      outline: `2px solid ${appearance.accentColor}`,
+      flexShrink: 0,
+    })
+
+    return (
+      <div style={{ padding: '1rem', maxWidth: '32rem' }}>
+        <h2>Window Manager</h2>
+        <p>Customize the appearance and behavior of application windows.</p>
+
+        <h3 style={sectionTitleStyle}>Themes</h3>
+        {themes.map(theme => (
+          <div key={theme.id} style={themeCardStyle(theme.id === currentThemeId)} onClick={() => selectTheme(theme)}>
+            <div style={swatchStyle(theme.appearance)} />
+            <strong>{theme.name}</strong>
+            {theme.id === currentThemeId ? <span style={{marginLeft: 'auto', color: '#007bff'}}>(active)</span> : null}
+          </div>
+        ))}
+
+        <h3 style={sectionTitleStyle}>Appearance</h3>
+        <div style={rowStyle}>
+          <label style={labelStyle}>Title bar background</label>
+          <input type="color" value={settings.appearance.headerBackground} onChange={e => setAppearance('headerBackground', e.target.value)} />
+        </div>
+        <div style={rowStyle}>
+          <label style={labelStyle}>Title bar text color</label>
+          <input type="color" value={settings.appearance.headerColor} onChange={e => setAppearance('headerColor', e.target.value)} />
+        </div>
+        <div style={rowStyle}>
+          <label style={labelStyle}>Window background</label>
+          <ColorAlphaInput value={settings.appearance.windowBackground} onChange={v => setAppearance('windowBackground', v)} />
+        </div>
+        <div style={rowStyle}>
+          <label style={labelStyle}>Taskbar background</label>
+          <ColorAlphaInput value={settings.appearance.taskbarBackground} onChange={v => setAppearance('taskbarBackground', v)} />
+        </div>
+        <div style={rowStyle}>
+          <label style={labelStyle}>Taskbar size ({settings.appearance.taskbarSize}px)</label>
+          <input type="range" min="40" max="96" value={settings.appearance.taskbarSize} onChange={e => setAppearance('taskbarSize', Number(e.target.value))} />
+        </div>
+        <div style={rowStyle}>
+          <label style={labelStyle}>Accent color</label>
+          <input type="color" value={settings.appearance.accentColor} onChange={e => setAppearance('accentColor', e.target.value)} />
+        </div>
+        <div style={rowStyle}>
+          <label style={labelStyle}>Corner radius ({settings.appearance.borderRadius}px)</label>
+          <input type="range" min="0" max="24" value={settings.appearance.borderRadius} onChange={e => setAppearance('borderRadius', Number(e.target.value))} />
+        </div>
+        <div style={rowStyle}>
+          <label style={labelStyle}>Background blur ({settings.appearance.blur}px)</label>
+          <input type="range" min="0" max="40" value={settings.appearance.blur} onChange={e => setAppearance('blur', Number(e.target.value))} />
+        </div>
+        <div style={rowStyle}>
+          <label style={labelStyle}>Drop shadow</label>
+          <input type="checkbox" checked={settings.appearance.shadow} onChange={e => setAppearance('shadow', e.target.checked)} />
+        </div>
+
+        <h3 style={sectionTitleStyle}>Behavior</h3>
+        <div style={rowStyle}>
+          <label style={labelStyle}>Double-click title bar to toggle fullscreen</label>
+          <input type="checkbox" checked={settings.behavior.dblClickHeaderFullscreen} onChange={e => setBehavior('dblClickHeaderFullscreen', e.target.checked)} />
+        </div>
+        <div style={rowStyle}>
+          <label style={labelStyle}>Bring window to front on click</label>
+          <input type="checkbox" checked={settings.behavior.bringToFrontOnClick} onChange={e => setBehavior('bringToFrontOnClick', e.target.checked)} />
+        </div>
+
+        <div style={{ marginTop: '1rem' }}>
+          <button onClick={resetToDefaults} style={{ padding: '0.4rem 0.8rem', cursor: 'pointer' }}>Reset to defaults</button>
+        </div>
+
+        <p style={{ color: '#555', fontSize: '0.9rem', marginTop: '1.5rem' }}>
+          Selecting a theme or changing a toggle writes the active settings to{' '}
+          <code>/etc/wm/current.json</code>, which applies to windows immediately. Themes are stored as
+          individual files in <code>/etc/wm/themes/</code> &mdash; add your own JSON files there to make
+          them available here. For deeper customization (e.g. new window behaviors), edit{' '}
+          <code>/opt/window-manager.js</code> in the file explorer &mdash; it is re-loaded every time a
+          window is opened.
+        </p>
+      </div>
+    )
   }
 
   const Wallpapers = () => {

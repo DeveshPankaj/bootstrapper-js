@@ -143,7 +143,7 @@ const openPlayer = () => {
 
 const { remove } = platform.host.registerCommand(
   "webamp",
-  () => {
+  (...args) => {
     if (win.Webamp) {
       openPlayer();
     } else {
@@ -154,6 +154,11 @@ const { remove } = platform.host.registerCommand(
         }, 0)
       });
     }
+    // Webamp renders its own window chrome (with its own close/minimize)
+    // directly onto the top-level document, not into this window's iframe -
+    // close this wrapper window immediately so it doesn't linger as a
+    // never-closed taskbar entry.
+    args[1]?.close()
   },
   {
     callable: true,

@@ -2,8 +2,9 @@
 #!/bin/bash
  
 # Load NVM
-#export NVM_DIR="$HOME/.nvm"
-#[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+
 echo "Starting server at $(date)" >> /var/log/run_script.log
 echo "Running nvm use 17" >> /var/log/run_script.log
 # Use Node.js version 17

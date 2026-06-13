@@ -170,6 +170,26 @@
     "force_reload": true
   },
   {
+    "path": "/home/user1/apps/task-manager.js",
+    "file": "/home/user1/apps/task-manager.js",
+    "force_reload": true
+  },
+  {
+    "path": "/bin/ps.run",
+    "file": "/bin/ps.run",
+    "force_reload": false
+  },
+  {
+    "path": "/bin/kill.run",
+    "file": "/bin/kill.run",
+    "force_reload": false
+  },
+  {
+    "path": "/bin/msg.run",
+    "file": "/bin/msg.run",
+    "force_reload": false
+  },
+  {
     "path": "/home/user1/tools/speed-test.html",
     "file": "/home/user1/tools/speed-test.html",
     "force_reload":false
@@ -232,6 +252,41 @@
     "force_reload": false
   },
   {
+    "path": "/etc/wm/layouts.json",
+    "file": "/etc/wm/layouts.json",
+    "force_reload": false
+  },
+  {
+    "path": "/etc/wm/config.json",
+    "file": "/etc/wm/config.json",
+    "force_reload": false
+  },
+  {
+    "path": "/etc/wm/themes/default.json",
+    "file": "/etc/wm/themes/default.json",
+    "force_reload": false
+  },
+  {
+    "path": "/etc/wm/themes/dark.json",
+    "file": "/etc/wm/themes/dark.json",
+    "force_reload": false
+  },
+  {
+    "path": "/etc/wm/themes/light.json",
+    "file": "/etc/wm/themes/light.json",
+    "force_reload": false
+  },
+  {
+    "path": "/etc/wm/themes/ocean.json",
+    "file": "/etc/wm/themes/ocean.json",
+    "force_reload": false
+  },
+  {
+    "path": "/etc/wm/themes/sunset.json",
+    "file": "/etc/wm/themes/sunset.json",
+    "force_reload": false
+  },
+  {
     "path": "/meta.json",
     "file": "/meta.json",
     "force_reload": true
@@ -239,6 +294,26 @@
   {
     "path": "/.initd.run",
     "file": "/initd.run",
+    "force_reload": false
+  },
+  {
+    "path": "/etc/widgets/clock.js",
+    "file": "/etc/widgets/clock.js",
+    "force_reload": false
+  },
+  {
+    "path": "/etc/widgets/public-ip.js",
+    "file": "/etc/widgets/public-ip.js",
+    "force_reload": false
+  },
+  {
+    "path": "/etc/crontab",
+    "file": "/etc/crontab",
+    "force_reload": false
+  },
+  {
+    "path": "/opt/cron/check-public-ip.js",
+    "file": "/opt/cron/check-public-ip.js",
     "force_reload": false
   }
 ]

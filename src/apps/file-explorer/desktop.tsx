@@ -32,6 +32,10 @@ export const ListDirComponent = ({ dir, openFile, showFileActions, customClass }
         '': '/public/invalid-file-icon.png'
     }
 
+    const imageExtensions = new Set([
+        '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.ico', '.avif',
+    ])
+
     const fs = platform.host.getFS()
     const ls: Array<FileType> = fs.readdirSync(dir, {}).map(x => ({
         name: x as string,
@@ -72,7 +76,7 @@ export const ListDirComponent = ({ dir, openFile, showFileActions, customClass }
         .desktop-icons{
             flex-direction: column;
             width: min-content;
-            height: 100vh;
+            height: 100%;
         }
     
         .${DESKTOP_CONTAINER_CLASS}-files .file[data-ext] {
@@ -106,8 +110,8 @@ export const ListDirComponent = ({ dir, openFile, showFileActions, customClass }
         <main className={`${DESKTOP_CONTAINER_CLASS}-files ${customClass??''}` } ref={containerRef}>
             {
                 files.map(file => (
-                    <div key={file.path} onClick={() => openFile(file)} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'center' }}>
-                        <div className={`file`} data-ext={file.meta.ext} style={{ backgroundImage: `url(${extIconMap[file.meta.ext as string] ?? extIconMap['']})`, backgroundRepeat: 'no-repeat', backgroundSize: 'cover', backgroundPosition: 'center center' }} onContextMenu={ev => rightClickHandler(file, ev)}></div>
+                    <div key={file.path} onDoubleClick={() => openFile(file)} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'center' }}>
+                        <div className={`file`} data-ext={file.meta.ext} style={{ backgroundImage: `url('${file.type === 'file' && imageExtensions.has(file.meta.ext as string) ? `/(sw)${file.path}` : extIconMap[file.meta.ext as string] ?? extIconMap['']}')`, backgroundRepeat: 'no-repeat', backgroundSize: 'cover', backgroundPosition: 'center center' }} onContextMenu={ev => rightClickHandler(file, ev)}></div>
                         <span style={{ color: 'black', mixBlendMode: 'difference', overflow: 'hidden', maxWidth: '8rem', textOverflow: 'ellipsis', filter: 'contrast(0)' }}>{file.name}</span>
                     </div>
                 ))

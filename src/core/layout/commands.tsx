@@ -1,6 +1,7 @@
 import { Command, Platform } from '@shared/index'
 import React from 'react'
 import { map } from 'rxjs'
+import { windowsSubject, TaskbarWindowInfo } from '../window-manager'
 
 
 const platform = Platform.getInstance()
@@ -20,6 +21,7 @@ export const Commands = ({ onCommandClick, vertical, align = 'start' }: { onComm
         // 'ui.game-of-life',
         // 'ui.xml-parser',
         'webamp',
+        'ui.task-manager',
     ]
 
 
@@ -75,6 +77,49 @@ export const Commands = ({ onCommandClick, vertical, align = 'start' }: { onComm
                     </div>
                 ))
             }
+        </div>
+    )
+}
+
+const openSettings = () => {
+    platform.host.execCommand(`service('root', 'exec') ('/home/user1/settings.html');`, platform)
+}
+
+const TaskbarWindowIcon = ({ win }: { win: TaskbarWindowInfo }) => (
+    <div
+        className={`taskbar-icon-button taskbar-window-icon${win.active ? ' active' : ''}`}
+        aria-label={`window-${win.pid}`}
+        title={win.title}
+        onClick={win.toggle}
+    >
+        <span className="material-symbols-outlined">{win.icon || 'window'}</span>
+        <div className="taskbar-preview">
+            <span>{win.title}</span>
+        </div>
+    </div>
+)
+
+// Windows-11-style taskbar: pinned app launchers (Commands), one icon per
+// currently running window (from windowsSubject, with a hover preview of its
+// title), and a settings icon that's the same across all taskbar placements
+// (header/footer/left-nav/right-nav/floating toolbar).
+export const Taskbar = ({ onCommandClick, vertical, align = 'start' }: { onCommandClick: (cmd: Command) => void, vertical?: boolean, align?: 'start' | 'center' | 'end' }) => {
+    const [windows, setWindows] = React.useState<Array<TaskbarWindowInfo>>(windowsSubject.getValue())
+
+    React.useEffect(() => {
+        const subscription = windowsSubject.subscribe(setWindows)
+        return () => subscription.unsubscribe()
+    }, [])
+
+    return (
+        <div className="taskbar">
+            <Commands onCommandClick={onCommandClick} vertical={vertical} align={align} />
+            {windows.length ? <div className="taskbar-divider" /> : null}
+            {windows.map(win => <TaskbarWindowIcon key={win.pid} win={win} />)}
+            <div className="taskbar-spacer" />
+            <div className="taskbar-icon-button taskbar-settings" aria-label="open-settings" title="Settings" onClick={openSettings}>
+                <span className="material-symbols-outlined">settings</span>
+            </div>
         </div>
     )
 }

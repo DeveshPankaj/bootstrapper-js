@@ -1,0 +1,29 @@
+/** /bin/ps.run */
+const terminal = platform.getService('terminal')
+const write = terminal ? terminal.write.bind(terminal) : console.log
+
+const fmtUptime = (startedAt) => {
+    const secs = Math.floor((Date.now() - startedAt) / 1000)
+    const h = Math.floor(secs / 3600)
+    const m = Math.floor((secs % 3600) / 60)
+    const s = secs % 60
+    return `${h}h ${m}m ${s}s`
+}
+
+const processes = platform.host.getCommand('process.list')?.exec() ?? []
+
+const rows = processes.map(p => [
+    `${p.pid}`,
+    p.name,
+    p.title,
+    fmtUptime(p.startedAt),
+    p.services.join(', '),
+])
+
+const header = ['PID', 'NAME', 'TITLE', 'UPTIME', 'SERVICES']
+const widths = header.map((h, i) => Math.max(h.length, ...rows.map(r => r[i].length)))
+
+const formatRow = (cols) => cols.map((c, i) => c.padEnd(widths[i])).join('  ')
+
+write(formatRow(header) + '\r\n')
+rows.forEach(row => write(formatRow(row) + '\r\n'))

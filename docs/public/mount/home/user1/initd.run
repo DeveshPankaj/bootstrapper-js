@@ -14,6 +14,9 @@ service('root', 'exec')('/home/user1/apps/wamp.js');
 // Load Markdown reader
 service('root', 'exec')('/home/user1/apps/markdown.js');
 
+// Load Task Manager
+service('root', 'exec')('/home/user1/apps/task-manager.js');
+
 // service('root', 'exec')('/home/user1/settings.html');
 // service('root', 'exec')('/home/user1/apps/xtermjs.html');
 

@@ -84,7 +84,8 @@ const initWindow = () => {
         '/bin',
         // '/root',
         // '/media',
-        // '/etc',
+        '/etc',
+        '/etc/wm',
         '/proc',
         // '/lib',                        // Existing system directories
         // '/mnt',

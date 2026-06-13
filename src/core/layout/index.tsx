@@ -1,8 +1,8 @@
-import { filter } from 'rxjs'
+import { BehaviorSubject, filter } from 'rxjs'
 import { Command, Platform } from '@shared/index'
 import { createRoot } from 'react-dom/client'
 import React from 'react'
-import { Commands } from './commands'
+import { Taskbar } from './commands'
 import { ContextMenu, ContextMenuItem } from './contextmenu'
 import { DESKTOP_CONTAINER_CLASS, WINDOWS_CONTAINER_CLASS, WindowManager } from '../window-manager'
 import { FileType } from '../../shared/types'
@@ -14,7 +14,228 @@ const platform = Platform.getInstance()
 const styles = platform.host.createCSSStyleSheet()
 // document.body.requestFullscreen()
 
-const applyCss = ({wallpaper}: {wallpaper: string}) => {
+// Layout presets are stored in the virtual filesystem (standard Linux config
+// location: /etc/wm) so they can be edited either through Settings or by
+// directly editing the JSON files.
+const LAYOUTS_PATH = '/etc/wm/layouts.json'
+const LAYOUT_CONFIG_PATH = '/etc/wm/config.json'
+const WM_CURRENT_PATH = '/etc/wm/current.json'
+const WM_THEMES_DIR = '/etc/wm/themes'
+const WM_DEFAULT_THEME_PATH = `${WM_THEMES_DIR}/light.json`
+
+type LayoutDef = {
+    id: string
+    name: string
+    grid: {
+        areas: string
+        columns: string
+        rows: string
+    }
+    commands: {
+        slot: 'header' | 'left-nav' | 'right-nav' | 'footer' | 'toolbar'
+        vertical?: boolean
+        align?: 'start' | 'center' | 'end'
+    }
+}
+
+const DEFAULT_LAYOUTS: Array<LayoutDef> = [
+    {
+        id: 'default',
+        name: 'Floating Dock',
+        grid: {
+            areas: `"header header header" "left-nav content-area right-nav" "footer footer footer"`,
+            columns: 'auto 1fr auto',
+            rows: 'auto 1fr auto'
+        },
+        commands: { slot: 'toolbar', vertical: false, align: 'center' }
+    },
+    {
+        id: 'linux-top-header',
+        name: 'Linux Top Header',
+        grid: {
+            areas: `"header header header" "content-area content-area content-area"`,
+            columns: '1fr',
+            rows: 'auto 1fr'
+        },
+        commands: { slot: 'header', vertical: false, align: 'start' }
+    },
+    {
+        id: 'ubuntu-left-bar',
+        name: 'Ubuntu Left Bar',
+        grid: {
+            areas: `"left-nav content-area"`,
+            columns: 'auto 1fr',
+            rows: '1fr'
+        },
+        commands: { slot: 'left-nav', vertical: true, align: 'start' }
+    },
+    {
+        id: 'windows-bottom-bar',
+        name: 'Windows Bottom Taskbar',
+        grid: {
+            areas: `"content-area" "footer"`,
+            columns: '1fr',
+            rows: '1fr auto'
+        },
+        commands: { slot: 'footer', vertical: false, align: 'start' }
+    }
+]
+
+type WmSettings = {
+    appearance: {
+        headerBackground: string
+        headerColor: string
+        windowBackground: string
+        taskbarBackground: string
+        taskbarSize: number
+        accentColor: string
+        borderRadius: number
+        blur: number
+        shadow: boolean
+    }
+    behavior: {
+        dblClickHeaderFullscreen: boolean
+        bringToFrontOnClick: boolean
+    }
+}
+
+const DEFAULT_WM_SETTINGS: WmSettings = {
+    appearance: {
+        headerBackground: '#000000',
+        headerColor: '#ffffff',
+        windowBackground: 'rgba(255, 255, 255, 0.15)',
+        taskbarBackground: 'rgba(0, 0, 0, 0.5)',
+        taskbarSize: 56,
+        accentColor: '#0a84ff',
+        borderRadius: 6,
+        blur: 10,
+        shadow: true,
+    },
+    behavior: {
+        dblClickHeaderFullscreen: true,
+        bringToFrontOnClick: true,
+    },
+}
+
+const readJsonFile = (path: string): any | null => {
+    const fs = platform.host.getFS()
+    try {
+        if (fs.existsSync(path)) return JSON.parse(fs.readFileSync(path, 'utf-8') as string)
+    } catch (err) { console.error(err) }
+    return null
+}
+
+const mergeWmSettings = (raw: any): WmSettings => ({
+    appearance: { ...DEFAULT_WM_SETTINGS.appearance, ...raw?.appearance },
+    behavior: { ...DEFAULT_WM_SETTINGS.behavior, ...raw?.behavior },
+})
+
+const writeWmCurrent = (raw: any) => {
+    const fs = platform.host.getFS()
+    if (!fs.existsSync('/etc/wm')) fs.mkdirSync('/etc/wm', { recursive: true })
+    fs.writeFileSync(WM_CURRENT_PATH, JSON.stringify(raw, null, 2))
+}
+
+// Ensures /etc/wm/current.json exists, seeding it from themes/default.json,
+// or failing that, from any other theme file found in /etc/wm/themes.
+const ensureWmCurrent = (): any => {
+    const fs = platform.host.getFS()
+    const current = readJsonFile(WM_CURRENT_PATH)
+    if (current) return current
+
+    let seed = readJsonFile(WM_DEFAULT_THEME_PATH)
+    if (!seed) {
+        try {
+            if (fs.existsSync(WM_THEMES_DIR)) {
+                const files = (fs.readdirSync(WM_THEMES_DIR) as string[]).filter(f => f.endsWith('.json'))
+                for (const file of files) {
+                    seed = readJsonFile(`${WM_THEMES_DIR}/${file}`)
+                    if (seed) break
+                }
+            }
+        } catch (err) { console.error(err) }
+    }
+    if (!seed) seed = DEFAULT_WM_SETTINGS
+
+    writeWmCurrent(seed)
+    return seed
+}
+
+const readWmSettings = (): WmSettings => mergeWmSettings(ensureWmCurrent())
+
+const readThemes = (): Array<{ id: string, name: string, appearance: WmSettings['appearance'] }> => {
+    const fs = platform.host.getFS()
+    try {
+        if (!fs.existsSync(WM_THEMES_DIR)) return []
+        const files = (fs.readdirSync(WM_THEMES_DIR) as string[]).filter(f => f.endsWith('.json'))
+        return files.map(file => {
+            const id = file.replace(/\.json$/, '')
+            const raw = readJsonFile(`${WM_THEMES_DIR}/${file}`)
+            const merged = mergeWmSettings(raw)
+            return { id, name: raw?.name || id, appearance: merged.appearance }
+        })
+    } catch (err) { console.error(err); return [] }
+}
+
+const applyTheme = (themeId: string): WmSettings => {
+    const raw = readJsonFile(`${WM_THEMES_DIR}/${themeId}.json`) || DEFAULT_WM_SETTINGS
+    writeWmCurrent(raw)
+    const settings = mergeWmSettings(raw)
+    applyWmSettings(settings)
+    return settings
+}
+
+// Window appearance is applied as CSS custom properties on the document root,
+// so both already-open and newly-opened windows pick up changes immediately.
+const applyWmSettings = (settings: WmSettings) => {
+    const root = platform.window.document.documentElement
+    const { appearance } = settings
+    root.style.setProperty('--wm-header-bg', appearance.headerBackground)
+    root.style.setProperty('--wm-header-color', appearance.headerColor)
+    root.style.setProperty('--wm-window-bg', appearance.windowBackground)
+    root.style.setProperty('--wm-taskbar-bg', appearance.taskbarBackground)
+    root.style.setProperty('--wm-taskbar-size', `${appearance.taskbarSize}px`)
+    root.style.setProperty('--wm-accent', appearance.accentColor)
+    root.style.setProperty('--wm-radius', `${appearance.borderRadius}px`)
+    root.style.setProperty('--wm-blur', `${appearance.blur}px`)
+    root.style.setProperty('--wm-shadow', appearance.shadow ? '0 8px 32px rgba(31, 38, 135, 0.37)' : 'none')
+}
+
+const readLayouts = (): Array<LayoutDef> => {
+    const fs = platform.host.getFS()
+    try {
+        if (fs.existsSync(LAYOUTS_PATH)) {
+            const parsed = JSON.parse(fs.readFileSync(LAYOUTS_PATH, 'utf-8') as string)
+            if (Array.isArray(parsed.layouts) && parsed.layouts.length) return parsed.layouts
+        }
+    } catch (err) { console.error(err) }
+    return DEFAULT_LAYOUTS
+}
+
+const readCurrentLayoutId = (): string => {
+    const fs = platform.host.getFS()
+    try {
+        if (fs.existsSync(LAYOUT_CONFIG_PATH)) {
+            return JSON.parse(fs.readFileSync(LAYOUT_CONFIG_PATH, 'utf-8') as string).layout || 'default'
+        }
+    } catch (err) { console.error(err) }
+    return 'default'
+}
+
+const writeCurrentLayoutId = (layoutId: string) => {
+    const fs = platform.host.getFS()
+    if (!fs.existsSync('/etc/wm')) fs.mkdirSync('/etc/wm', { recursive: true })
+    fs.writeFileSync(LAYOUT_CONFIG_PATH, JSON.stringify({ layout: layoutId }, null, 2))
+}
+
+const layoutSubject = new BehaviorSubject<string>(readCurrentLayoutId())
+
+const getCurrentLayout = (): LayoutDef => {
+    const layouts = readLayouts()
+    return layouts.find(l => l.id === layoutSubject.getValue()) || layouts[0] || DEFAULT_LAYOUTS[0]
+}
+
+const applyCss = ({wallpaper, grid}: {wallpaper: string, grid: LayoutDef['grid']}) => {
     styles.replace(`
         html, body {
             margin: 0;
@@ -56,17 +277,14 @@ const applyCss = ({wallpaper}: {wallpaper: string}) => {
             // color: #919191;
             // height: -webkit-fill-available;
             height: 100%;
-    
+
             display: grid;
-            grid-template-columns: auto 1fr auto;
-            grid-template-rows: auto 1fr auto;
+            grid-template-columns: ${grid.columns};
+            grid-template-rows: ${grid.rows};
             // gap: 5px;
             grid-auto-flow: row;
-            grid-template-areas:
-                "header header header"
-                "left-nav content-area right-nav"
-                "footer footer footer";
-    
+            grid-template-areas: ${grid.areas};
+
             // background-image: url(/wp-8.jpeg);
             background-image: url(${wallpaper});
             background-repeat: no-repeat;
@@ -81,8 +299,58 @@ const applyCss = ({wallpaper}: {wallpaper: string}) => {
         }
         .content-area {
             grid-area: content-area;
+            min-height: 0;
+            min-width: 0;
+            overflow: hidden;
         }
-    
+
+        .widgets-panel {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 0.75rem;
+            z-index: 5;
+            pointer-events: none;
+        }
+
+        .widgets-panel .widget {
+            pointer-events: auto;
+            padding: 0.75rem 1rem;
+            background: var(--wm-window-bg, rgba(255, 255, 255, 0.15));
+            backdrop-filter: blur(var(--wm-blur, 10px));
+            border-radius: var(--wm-radius, 8px);
+            box-shadow: var(--wm-shadow, 0 8px 32px rgba(31, 38, 135, 0.37));
+            color: var(--wm-header-color, #1d1d1f);
+        }
+
+        .widget-clock-time {
+            font-size: 1.75rem;
+            font-weight: 600;
+            text-align: right;
+        }
+
+        .widget-clock-date {
+            font-size: 0.8rem;
+            opacity: 0.8;
+            text-align: right;
+        }
+
+        .widget-public-ip-label {
+            font-size: 0.7rem;
+            opacity: 0.8;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .widget-public-ip-value {
+            font-size: 1rem;
+            font-weight: 600;
+            text-align: right;
+        }
+
         .window > iframe {
             border: 0;
             flex-grow: 1;
@@ -116,21 +384,22 @@ const applyCss = ({wallpaper}: {wallpaper: string}) => {
     
             resize: both;
             overflow: hidden;
-            border-radius: 6px;
-    
-    
+            border-radius: var(--wm-radius, 6px);
+
+
             // padding: 4px;
-            background: rgba(255, 255, 255, 0.15);
-            backdrop-filter: blur(10px);
-            box-shadow: rgba(31, 38, 135, 0.37) 0px 8px 32px;
+            background: var(--wm-window-bg, rgba(255, 255, 255, 0.15));
+            backdrop-filter: blur(var(--wm-blur, 10px));
+            box-shadow: var(--wm-shadow, rgba(31, 38, 135, 0.37) 0px 8px 32px);
             // border: 1px solid rgba(255, 255, 255, 0.18);
         }
-        .window.hidden {
+        .window.hidden, .window.minimized {
             display: none;
         }
-    
+
         .window.top {
             z-index: 10;
+            outline: 1px solid var(--wm-accent, transparent);
         }
     
         .window::-webkit-resizer {
@@ -151,8 +420,8 @@ const applyCss = ({wallpaper}: {wallpaper: string}) => {
             padding: 7px;
             cursor: move;
             z-index: 9;
-            background-color: rgb(0 0 0);
-            color: #fff;
+            background-color: var(--wm-header-bg, rgb(0 0 0));
+            color: var(--wm-header-color, #fff);
             
             // position: absolute;
             // bottom: 100%;
@@ -189,16 +458,112 @@ const applyCss = ({wallpaper}: {wallpaper: string}) => {
     
     
         .toolbar {
-            background: #f0f8ff55;
             position: absolute;
             bottom: 1rem;
             left: 50%;
             transform: translateX(-50%);
-    
-            padding: 0 2rem;
-            border-radius: 2rem;
         }
-    
+
+        /* Windows 11 style taskbar: translucent pill of blurred glass that hosts
+           pinned app launchers, running-window indicators and the settings icon. */
+        .taskbar {
+            display: flex;
+            align-items: center;
+            gap: 0.15rem;
+            box-sizing: border-box;
+            height: var(--wm-taskbar-size, 56px);
+            padding: 0.3rem 0.6rem;
+            background: var(--wm-taskbar-bg, rgba(255, 255, 255, 0.5));
+            backdrop-filter: blur(var(--wm-blur, 10px));
+            box-shadow: var(--wm-shadow, 0 8px 32px rgba(31, 38, 135, 0.37));
+            border-radius: var(--wm-radius, 12px);
+            color: var(--wm-header-color, #1d1d1f);
+        }
+
+        .header .taskbar, .footer .taskbar {
+            width: 100%;
+            border-radius: 0;
+        }
+
+        .left-nav .taskbar, .right-nav .taskbar {
+            flex-direction: column;
+            height: 100%;
+            width: var(--wm-taskbar-size, 56px);
+            border-radius: 0;
+        }
+
+        .taskbar-divider {
+            width: 1px;
+            height: 60%;
+            background: currentColor;
+            opacity: 0.2;
+            margin: 0 0.3rem;
+        }
+
+        .left-nav .taskbar-divider, .right-nav .taskbar-divider {
+            width: 60%;
+            height: 1px;
+            margin: 0.3rem 0;
+        }
+
+        .taskbar-spacer {
+            flex: 1;
+        }
+
+        .taskbar-icon-button {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.4rem;
+            border-radius: 8px;
+            cursor: pointer;
+            color: var(--wm-header-color, #1d1d1f);
+        }
+
+        .taskbar-icon-button:hover, .taskbar-window-icon.active {
+            background: rgba(127, 127, 127, 0.2);
+        }
+
+        .taskbar-window-icon.active::after {
+            content: '';
+            position: absolute;
+            bottom: 2px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 18px;
+            height: 3px;
+            border-radius: 2px;
+            background: var(--wm-accent, #0a84ff);
+        }
+
+        .taskbar-preview {
+            position: absolute;
+            bottom: calc(100% + 0.5rem);
+            left: 50%;
+            transform: translateX(-50%);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            background: var(--wm-window-bg, rgba(255, 255, 255, 0.85));
+            backdrop-filter: blur(var(--wm-blur, 10px));
+            border-radius: var(--wm-radius, 8px);
+            box-shadow: var(--wm-shadow, 0 8px 32px rgba(31, 38, 135, 0.37));
+            padding: 0.4rem;
+            z-index: 50;
+            pointer-events: none;
+        }
+
+        .taskbar-window-icon:hover .taskbar-preview {
+            display: flex;
+        }
+
+        .taskbar-preview span {
+            margin-top: 0.25rem;
+            font-size: 0.75rem;
+            white-space: nowrap;
+        }
+
         .overlay {
             // display: none;
             background: rgba(255, 255, 255, 0.30);
@@ -232,11 +597,26 @@ const applyCss = ({wallpaper}: {wallpaper: string}) => {
 }
 
 const userPrefWallpaper = platform.userPref.getWallpaper()
-applyCss({wallpaper: userPrefWallpaper || '/public/wp-11.jpg'})
+applyCss({wallpaper: userPrefWallpaper || '/public/wp-11.jpg', grid: getCurrentLayout().grid})
+applyWmSettings(readWmSettings())
+
+const applyWindowManagerSettings = (settings: WmSettings) => {
+    writeWmCurrent(settings)
+    applyWmSettings(settings)
+}
+
+platform.register('set-window-manager-settings', applyWindowManagerSettings)
+platform.host.registerCommand('set-window-manager-settings', applyWindowManagerSettings)
+
+platform.register('set-window-manager-theme', applyTheme)
+platform.host.registerCommand('set-window-manager-theme', applyTheme)
+
+platform.register('get-window-manager-themes', readThemes)
+platform.host.registerCommand('get-window-manager-themes', readThemes)
 
 platform.register('set-wallpaper', (wallpaperUrl: string) => {
     // console.log(wallpaperUrl)
-    applyCss({wallpaper: wallpaperUrl});
+    applyCss({wallpaper: wallpaperUrl, grid: getCurrentLayout().grid});
     platform.userPref.setWallpaper(wallpaperUrl);
 })
 
@@ -245,7 +625,7 @@ platform.register('add-wallpaper', (wallpaperUrl: string) => {
 })
 
 platform.host.registerCommand('set-wallpaper', (wallpaperUrl: string) => {
-    applyCss({wallpaper: wallpaperUrl});
+    applyCss({wallpaper: wallpaperUrl, grid: getCurrentLayout().grid});
     platform.userPref.setWallpaper(wallpaperUrl);
 })
 
@@ -253,6 +633,129 @@ platform.host.registerCommand('add-wallpaper', (wallpaperUrl: string) => {
     platform.userPref.addWallpaper(wallpaperUrl);
 })
 
+const applyLayout = (layoutId: string) => {
+    writeCurrentLayoutId(layoutId)
+    layoutSubject.next(layoutId)
+    applyCss({wallpaper: platform.userPref.getWallpaper() || '/public/wp-11.jpg', grid: getCurrentLayout().grid})
+}
+
+platform.register('set-layout', applyLayout)
+platform.host.registerCommand('set-layout', applyLayout)
+
+
+// Renders one container <div> per widget registered via
+// `platform.host.registerWidget(...)` (e.g. files in `/etc/widgets/`).
+// Each widget owns its container and is responsible for its own contents;
+// if `render` returns a cleanup function, it's called when the widget is
+// removed or this panel unmounts.
+const WidgetItem = ({ widget }: { widget: import('@shared/index').WidgetDef }) => {
+    const ref = React.useRef<HTMLDivElement>(null)
+
+    React.useEffect(() => {
+        if (!ref.current) return;
+        const cleanup = widget.render(ref.current, {
+            platform,
+            onDestroy: (cb: Function) => {
+                const existing = (ref.current as any)?._onDestroy ?? []
+                existing.push(cb)
+                if (ref.current) (ref.current as any)._onDestroy = existing
+            },
+        })
+        return () => {
+            const callbacks: Function[] = (ref.current as any)?._onDestroy ?? []
+            callbacks.forEach(cb => cb())
+            if (typeof cleanup === 'function') cleanup()
+        }
+    }, [widget])
+
+    return <div className="widget" data-widget={widget.name} ref={ref}></div>
+}
+
+const WidgetsPanel = () => {
+    const [widgetList, setWidgetList] = React.useState<Array<import('@shared/index').WidgetDef>>([])
+
+    React.useEffect(() => {
+        const subscription = platform.host.widgets$.subscribe(setWidgetList)
+        return () => subscription.unsubscribe()
+    }, [])
+
+    if (!widgetList.length) return null;
+
+    return (
+        <div className="widgets-panel">
+            {widgetList.map(widget => <WidgetItem key={widget.name} widget={widget} />)}
+        </div>
+    )
+}
+
+const LayoutShell = (props: {
+    contentRef: React.RefObject<HTMLDivElement | null>
+    contextMenuRef: React.RefObject<HTMLDivElement | null>
+    onCommandClick: (command: Command, ...args: unknown[]) => void
+    onContextMenu: React.MouseEventHandler<HTMLDivElement>
+    openFile: (file: FileType) => void
+    showFileActionsHandler: (file: FileType, event: React.MouseEvent<HTMLDivElement, MouseEvent>) => void
+    contextMenuComponentRef: { current: any }
+}) => {
+    const [layoutId, setLayoutId] = React.useState(layoutSubject.getValue())
+
+    React.useEffect(() => {
+        const subscription = layoutSubject.subscribe(setLayoutId)
+        return () => subscription.unsubscribe()
+    }, [])
+
+    const layouts = readLayouts()
+    const currentLayout = layouts.find(l => l.id === layoutId) || layouts[0] || DEFAULT_LAYOUTS[0]
+    const { slot, vertical, align } = currentLayout.commands
+
+    // Only render slot containers that the active layout actually places in its
+    // grid-template-areas. Rendering an unused .header/.left-nav/.right-nav/.footer
+    // div would make it an unassigned grid item, which the browser auto-places into
+    // extra implicit rows/columns and pushes the real content off-screen.
+    const usedAreas = new Set(currentLayout.grid.areas.match(/[\w-]+/g) ?? [])
+
+    const commands = <Taskbar onCommandClick={props.onCommandClick} vertical={vertical} align={align} />
+
+    return (
+        <>
+            {usedAreas.has('header') ? (
+                <div className="header">
+                    {slot === 'header' ? commands : null}
+                </div>
+            ) : null}
+            {usedAreas.has('left-nav') ? (
+                <div className="left-nav">
+                    {slot === 'left-nav' ? commands : null}
+                </div>
+            ) : null}
+            <div className="content-area" ref={props.contentRef} onContextMenu={props.onContextMenu}>
+                <div className={DESKTOP_CONTAINER_CLASS}>
+                    <ListDirComponent openFile={props.openFile} showFileActions={props.showFileActionsHandler} customClass='desktop-icons' />
+                </div>
+                <WidgetsPanel />
+                <div className={WINDOWS_CONTAINER_CLASS}></div>
+            </div>
+            {usedAreas.has('right-nav') ? (
+                <div className="right-nav">
+                    {slot === 'right-nav' ? commands : null}
+                </div>
+            ) : null}
+            {usedAreas.has('footer') ? (
+                <div className="footer">
+                    {slot === 'footer' ? commands : null}
+                </div>
+            ) : null}
+            {slot === 'toolbar' ? (
+                <div className='toolbar'>
+                    {commands}
+                </div>
+            ) : null}
+            <div className='contextmenu' ref={props.contextMenuRef}>
+                <ContextMenu componentRef={obj => props.contextMenuComponentRef.current = obj} />
+            </div>
+        </>
+    )
+}
 
 export const render = (container: HTMLElement) => {
     platform.host.addCSSStyleSheet(styles)
@@ -378,36 +881,15 @@ export const render = (container: HTMLElement) => {
         ])
     }
     root.render(
-        <>
-            <div className="header">
-                {/* <Header /> */}
-                {/* <Commands onCommandClick={onCommandClick} align='end'/> */}
-            </div>
-            <div className="left-nav">
-                {/* <Commands onCommandClick={onCommandClick} vertical /> */}
-            </div>
-            <div className="content-area" ref={contentRef} onContextMenu={onContextMenu}>
-                <div className={DESKTOP_CONTAINER_CLASS}>
-                    <ListDirComponent openFile={openFile} showFileActions={showFileActionsHandler}  customClass='desktop-icons'/>
-                </div>
-                <div className={WINDOWS_CONTAINER_CLASS}></div>
-            </div>
-            <div className="right-nav">
-                {/* <Commands onCommandClick={onCommandClick} vertical align='start' /> */}
-            </div>
-            <div className="footer">
-                {/* <Commands onCommandClick={onCommandClickHandler} align='center' /> */}
-            </div>
-            <div className='toolbar'>
-                <Commands onCommandClick={onCommandClick}/>
-            </div>
-            <div className='contextmenu' ref={contextMenuRef}>
-                <ContextMenu componentRef={obj => contextMenuComponentRef.current = obj} />
-            </div>
-            {/* <div className='overlay'>
-                <div style={{position: 'absolute', top: '10rem', left: '9rem'}}></div>
-            </div> */}
-        </>
+        <LayoutShell
+            contentRef={contentRef}
+            contextMenuRef={contextMenuRef}
+            onCommandClick={onCommandClick}
+            onContextMenu={onContextMenu}
+            openFile={openFile}
+            showFileActionsHandler={showFileActionsHandler}
+            contextMenuComponentRef={contextMenuComponentRef}
+        />
     )
 
 }

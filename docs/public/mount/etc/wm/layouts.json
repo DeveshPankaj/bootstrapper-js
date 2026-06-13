@@ -1,0 +1,44 @@
+{
+  "layouts": [
+    {
+      "id": "default",
+      "name": "Floating Dock",
+      "grid": {
+        "areas": "\"header header header\" \"left-nav content-area right-nav\" \"footer footer footer\"",
+        "columns": "auto 1fr auto",
+        "rows": "auto 1fr auto"
+      },
+      "commands": { "slot": "toolbar", "vertical": false, "align": "center" }
+    },
+    {
+      "id": "linux-top-header",
+      "name": "Linux Top Header",
+      "grid": {
+        "areas": "\"header header header\" \"content-area content-area content-area\"",
+        "columns": "1fr",
+        "rows": "auto 1fr"
+      },
+      "commands": { "slot": "header", "vertical": false, "align": "start" }
+    },
+    {
+      "id": "ubuntu-left-bar",
+      "name": "Ubuntu Left Bar",
+      "grid": {
+        "areas": "\"left-nav content-area\"",
+        "columns": "auto 1fr",
+        "rows": "1fr"
+      },
+      "commands": { "slot": "left-nav", "vertical": true, "align": "start" }
+    },
+    {
+      "id": "windows-bottom-bar",
+      "name": "Windows Bottom Taskbar",
+      "grid": {
+        "areas": "\"content-area\" \"footer\"",
+        "columns": "1fr",
+        "rows": "1fr auto"
+      },
+      "commands": { "slot": "footer", "vertical": false, "align": "start" }
+    }
+  ]
+}

@@ -29,12 +29,30 @@ export type Command = {
   meta: Record<string, unknown>;
 };
 
+// A widget is a small piece of UI rendered onto the desktop (e.g. a clock or
+// a status display), registered via `platform.host.registerWidget(...)` from
+// any script - typically one of the auto-loaded files in `/etc/widgets/`, but
+// the registration call itself isn't special to that location.
+export type WidgetApi = {
+  platform: Platform;
+  onDestroy: (cb: Function) => void;
+};
+
+export type WidgetDef = {
+  name: string;
+  render: (container: HTMLElement, api: WidgetApi) => void | (() => void);
+  servicePlatformName: string;
+  meta: Record<string, unknown>;
+};
+
 
 export type UICallbackProps = {
+    pid: number
     setWindowView: (show: boolean) => void
     setTitle: (title: string) => void
     appendActionButton: (props: {icon: string, title: string, onClick: () => void}) => {remove: ()=>void}
     close: () => void
+    onMessage: (cb: (message: unknown) => void) => () => void
     onDestroy: (cb: Function) => void
     toggleFullScreen: () => void
     getBoundingClientRect: () => Record<string, number>
@@ -44,10 +62,12 @@ export type UICallbackProps = {
 
 export class Host {
   public readonly commands$: Observable<Array<Command>>;
+  public readonly widgets$: Observable<Array<WidgetDef>>;
   constructor(
     private window: Window,
     private readonly platform: Platform,
     private commands: BehaviorSubject<Array<Command>>,
+    private widgets: BehaviorSubject<Array<WidgetDef>> = new BehaviorSubject<Array<WidgetDef>>([]),
     protected modulesMap: Map<
       string,
       {
@@ -59,6 +79,15 @@ export class Host {
     > = new Map()
   ) {
     this.commands$ = this.commands.asObservable();
+    this.widgets$ = this.widgets.asObservable();
+  }
+
+  // Looks up a module's `Platform` instance by its (unique) module name -
+  // e.g. `command.servicePlatformName` - via the shared `modulesMap`, which
+  // is the same `Map` instance passed to every `Host` across bundles. Used
+  // by the task manager to inspect which services a process has requested.
+  public getModulePlatform(name: string): Platform | undefined {
+    return this.modulesMap.get(name)?.platform;
   }
 
   public appendDomElement(el: HTMLElement) {
@@ -102,6 +131,28 @@ export class Host {
       remove: () => {
         this.commands.next(
           this.commands.getValue().filter((x) => x !== newCommandObject)
+        );
+      },
+    };
+  }
+
+  public registerWidget(
+    widget_name: string,
+    render: WidgetDef["render"],
+    meta: Record<string, unknown> = {}
+  ): { remove: () => void } {
+    const newWidget = Object.freeze({
+      name: widget_name,
+      render,
+      servicePlatformName: this.platform.name,
+      meta,
+    });
+    this.widgets.next([...this.widgets.getValue(), newWidget]);
+
+    return {
+      remove: () => {
+        this.widgets.next(
+          this.widgets.getValue().filter((x) => x !== newWidget)
         );
       },
     };
@@ -323,6 +374,8 @@ export class Host {
   }
 
   public getFS() {
+    this.platform.requestedServices.add('fs')
+
     // @ts-ignore
     return this.window.fs as typeof fs;
 
@@ -346,6 +399,11 @@ export class Host {
 
 export class Platform {
     private _services = new Map<string, unknown>()
+
+    // Services this platform instance has requested via `getService`, used
+    // by the task manager to show "which services are requested by the
+    // process" (looked up cross-bundle via `Host.getModulePlatform`).
+    public readonly requestedServices = new Set<string>()
 
     public readonly events$: Observable<PlatformEvent>
     public host!: Host
@@ -377,6 +435,7 @@ export class Platform {
     }
     public getService<T>(serviceName: string) {
         console.log(`Resolving service [${serviceName}]`)
+        this.requestedServices.add(serviceName)
         // this.host.getService(serviceName)
         if(this._services.has(serviceName)) return this._services.get(serviceName) as T;
 

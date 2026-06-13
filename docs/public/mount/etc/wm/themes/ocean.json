@@ -1,0 +1,18 @@
+{
+  "name": "Ocean",
+  "appearance": {
+    "headerBackground": "#073b4c",
+    "headerColor": "#e0fbfc",
+    "windowBackground": "rgba(17, 92, 122, 0.55)",
+    "taskbarBackground": "rgba(7, 59, 76, 0.6)",
+    "taskbarSize": 56,
+    "accentColor": "#06d6a0",
+    "borderRadius": 14,
+    "blur": 18,
+    "shadow": true
+  },
+  "behavior": {
+    "dblClickHeaderFullscreen": true,
+    "bringToFrontOnClick": true
+  }
+}

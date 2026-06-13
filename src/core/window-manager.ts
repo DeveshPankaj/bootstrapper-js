@@ -1,16 +1,161 @@
 import { draggable } from "@shared/draggable";
 import { Command, Platform } from "@shared/index";
+import { BehaviorSubject, Subject } from "rxjs";
 const platform = Platform.getInstance();
 
 export const WINDOWS_CONTAINER_CLASS = "windows";
 export const DESKTOP_CONTAINER_CLASS = "desktop";
 
+// Tracks every currently-open window so the taskbar can render an icon per
+// running window and show minimize state on hover.
+export type TaskbarWindowInfo = {
+  pid: number;
+  name: string;
+  title: string;
+  icon: string;
+  minimized: boolean;
+  active: boolean;
+  toggle: () => void;
+};
+
+export const windowsSubject = new BehaviorSubject<TaskbarWindowInfo[]>([]);
+
+const PROC_DIR = "/proc";
+let nextPid = 1;
+
+// One entry per running window/process, keyed by pid. Backs the
+// `process.*` commands (kill, send-message, list) so any script - a `/bin`
+// command, a widget, the task manager, etc. - can interact with a running
+// window by pid alone.
+type ProcessEntry = {
+  close: () => void;
+  messages$: Subject<unknown>;
+  servicePlatformName: string;
+  startedAt: number;
+};
+const processRegistry = new Map<number, ProcessEntry>();
+
+const removeRecursive = (path: string) => {
+  const fs = platform.host.getFS();
+  if (!fs.existsSync(path)) return;
+  for (const entry of fs.readdirSync(path) as string[]) {
+    const entryPath = `${path.endsWith("/") ? path : `${path}/`}${entry}`;
+    if (fs.statSync(entryPath).isDirectory()) removeRecursive(entryPath);
+    else fs.unlinkSync(entryPath);
+  }
+  fs.rmdirSync(path);
+};
+
+const writeProcMeta = (pid: number, meta: Record<string, unknown>) => {
+  try {
+    const fs = platform.host.getFS();
+    const dir = `${PROC_DIR}/${pid}`;
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(`${dir}/meta.json`, JSON.stringify(meta, null, 2));
+  } catch (err) {
+    console.error("Failed to write /proc metadata", err);
+  }
+};
+
+// Appends an inbox message to `/proc/<pid>/inbox.json` so a process can read
+// messages sent to it (e.g. on next tick / poll) even if it wasn't around to
+// receive the live `messages$` event.
+const appendProcInbox = (pid: number, message: unknown) => {
+  try {
+    const fs = platform.host.getFS();
+    const dir = `${PROC_DIR}/${pid}`;
+    if (!fs.existsSync(dir)) return;
+    const inboxPath = `${dir}/inbox.json`;
+    const inbox: Array<unknown> = fs.existsSync(inboxPath)
+      ? JSON.parse(fs.readFileSync(inboxPath, "utf-8") as string)
+      : [];
+    inbox.push({ message, receivedAt: Date.now() });
+    while (inbox.length > 50) inbox.shift();
+    fs.writeFileSync(inboxPath, JSON.stringify(inbox, null, 2));
+  } catch (err) {
+    console.error("Failed to write /proc inbox", err);
+  }
+};
+
+// `window-manager.ts` is bundled both into `remote.bundle.js` (where
+// `Platform.getInstance()` resolves to `undefined` at module-eval time,
+// since `window.platform` isn't assigned yet) and into `layout.bundle.js`
+// (loaded into an iframe whose `window.platform` is already set). Only
+// register the `process.*` commands once `platform.host` is actually
+// available - lazily, from the `WindowManager` constructor.
+let processCommandsRegistered = false;
+const registerProcessCommands = () => {
+  if (processCommandsRegistered || !platform?.host) return;
+  processCommandsRegistered = true;
+
+  // `process.kill(pid)` - closes the window with the given pid, same as
+  // clicking its close button.
+  platform.host.registerCommand("process.kill", (pid: number | string) => {
+    processRegistry.get(Number(pid))?.close();
+  });
+
+  // `process.send-message(pid, message)` - delivers `message` to the process
+  // with the given pid: appended to `/proc/<pid>/inbox.json` for polling, and
+  // emitted live to any `onMessage` listener the process registered.
+  platform.host.registerCommand("process.send-message", (pid: number | string, message: unknown) => {
+    const numericPid = Number(pid);
+    appendProcInbox(numericPid, message);
+    processRegistry.get(numericPid)?.messages$.next(message);
+  });
+
+  // `process.list()` - returns a snapshot of every running window/process,
+  // including uptime and the services its platform has requested so far.
+  // Used by `/bin/ps.run` and the task manager app.
+  platform.host.registerCommand("process.list", () => {
+    return windowsSubject.getValue().map(win => {
+      const entry = processRegistry.get(win.pid);
+      const proc = entry ? platform.host.getModulePlatform(entry.servicePlatformName) : undefined;
+      return {
+        pid: win.pid,
+        name: win.name,
+        title: win.title,
+        icon: win.icon,
+        minimized: win.minimized,
+        active: win.active,
+        startedAt: entry?.startedAt ?? Date.now(),
+        services: proc ? Array.from(proc.requestedServices) : [],
+      };
+    });
+  });
+};
+
+// Behavior (event wiring, etc.) for new windows lives in the virtual
+// filesystem so it can be edited (via the file explorer) and takes effect
+// for the next window opened, without rebuilding the app.
+const WINDOW_MANAGER_MODULE_PATH = "/opt/window-manager.js";
+
+const FALLBACK_WM_SETTINGS = {
+  behavior: {
+    dblClickHeaderFullscreen: true,
+    bringToFrontOnClick: true,
+  },
+};
+
+const loadWindowManagerModule = (): any => {
+  try {
+    const fs = platform.host.getFS();
+    if (!fs.existsSync(WINDOW_MANAGER_MODULE_PATH)) return {};
+    const source = fs.readFileSync(WINDOW_MANAGER_MODULE_PATH, "utf-8") as string;
+    return platform.host.execString(source, WINDOW_MANAGER_MODULE_PATH);
+  } catch (err) {
+    console.error("Failed to load window manager module", err);
+    return {};
+  }
+};
+
 export class WindowManager {
   private readonly windows: Record<
     string,
-    Array<{ container: HTMLDivElement }>
+    Array<{ container: HTMLDivElement; pid: number }>
   > = {};
-  constructor(private contentRef: { current: HTMLDivElement | null }) {}
+  constructor(private contentRef: { current: HTMLDivElement | null }) {
+    registerProcessCommands();
+  }
 
   public createWindow(command_name: string, ...args: unknown[]) {
     const command: Command = platform.host.getCommand(command_name)!;
@@ -18,20 +163,46 @@ export class WindowManager {
       throw `Command not found [${command_name}]`;
     }
 
+    const pid = nextPid++;
     const container = platform.window.document.createElement("div");
-    const [head, closeButton, fullScreenButton, setTitle, appendActionButton, setHeaderStyles] =
+    const [head, closeButton, fullScreenButton, minimizeButton, setTitleRaw, appendActionButton, setHeaderStyles] =
       createWindoeHeader(command);
 
+    const setTitle = (newTitle: string) => {
+      setTitleRaw(newTitle);
+      writeProcMeta(pid, { pid, name: command.name, title: newTitle, icon: (command.meta?.icon as string) || "", startedAt: Date.now() });
+      windowsSubject.next(
+        windowsSubject.getValue().map(w => w.pid === pid ? { ...w, title: newTitle } : w)
+      );
+    };
+
     // this.closeWindow(command)
-    const windowRef = { container, command };
+    const windowRef = { container, command, pid };
     this.windows[command.name] ??= [];
     this.windows[command.name].push(windowRef);
     Object.freeze(windowRef);
 
     // container.style.top = '3rem'
     container.setAttribute("data-name", command.name);
+    container.setAttribute("data-pid", `${pid}`);
     container.classList.add("window");
     container.classList.add("hidden");
+
+    const title = (command.meta.title as string) || command.name;
+    const icon = (command.meta?.icon as string) || "";
+    writeProcMeta(pid, { pid, name: command.name, title, icon, startedAt: Date.now() });
+    windowsSubject.next([
+      ...windowsSubject.getValue(),
+      {
+        pid,
+        name: command.name,
+        title,
+        icon,
+        minimized: false,
+        active: true,
+        toggle: () => this.toggleMinimize(windowRef),
+      },
+    ]);
 
     container.appendChild(head);
     if (command.meta.fullScreen) {
@@ -54,6 +225,15 @@ export class WindowManager {
       onCloseCallbacks = [];
       this.closeWindow(windowRef);
     }
+
+    const messages$ = new Subject<unknown>();
+    processRegistry.set(pid, {
+      close: closeFunction,
+      messages$,
+      servicePlatformName: command.servicePlatformName,
+      startedAt: Date.now(),
+    });
+
     iframe.onload = () => {
       const iframeBody = iframe.contentWindow?.document?.body;
       if (!iframeBody) return;
@@ -71,7 +251,15 @@ export class WindowManager {
       command.exec(
         iframeBody,
         {
+          // A process can read its own pid to namespace temp files under
+          // `/proc/<pid>/...`, and use it as the target for `process.kill`
+          // and `process.send-message` from other scripts.
+          pid,
           close: closeFunction,
+          onMessage: (cb: (message: unknown) => void) => {
+            const subscription = messages$.subscribe(cb);
+            return () => subscription.unsubscribe();
+          },
           onDestroy: (cb: Function) => {
             onCloseCallbacks.push(cb);
             return () => {
@@ -104,6 +292,18 @@ export class WindowManager {
       draggable(container, head);
       this.moveOnTop(windowRef);
       head.addEventListener("mousedown", () => this.moveOnTop(windowRef));
+
+      const wmModule = loadWindowManagerModule();
+      const settings = wmModule.readSettings?.() ?? FALLBACK_WM_SETTINGS;
+      wmModule.setupWindow?.({
+        container,
+        head,
+        iframe,
+        command,
+        settings,
+        toggleFullScreen: () => toggleFullScreen(this.contentRef.current!, container),
+        moveOnTop: () => this.moveOnTop(windowRef),
+      });
     };
 
     if (this.contentRef.current) {
@@ -113,12 +313,14 @@ export class WindowManager {
       closeButton.onclick = closeFunction;
       fullScreenButton.onclick = () =>
         toggleFullScreen(this.contentRef.current!, container);
+      minimizeButton.onclick = () => this.toggleMinimize(windowRef);
     }
   }
 
   private closeWindow(windowRef: {
     command: Command;
     container: HTMLDivElement;
+    pid: number;
   }) {
     if (!this.windows[windowRef.command.name]) return;
 
@@ -128,16 +330,61 @@ export class WindowManager {
     this.windows[windowRef.command.name] = this.windows[
       windowRef.command.name
     ].filter((x) => x != windowRef);
+
+    removeRecursive(`${PROC_DIR}/${windowRef.pid}`);
+    processRegistry.get(windowRef.pid)?.messages$.complete();
+    processRegistry.delete(windowRef.pid);
+    windowsSubject.next(windowsSubject.getValue().filter(w => w.pid !== windowRef.pid));
   }
 
   private moveOnTop(windowRef: {
     command: Command;
     container: HTMLDivElement;
+    pid: number;
   }) {
     Object.values(this.windows).forEach((wins) =>
       wins.forEach((win) => win.container.classList.remove("top"))
     );
     windowRef.container.classList.add("top");
+    windowsSubject.next(
+      windowsSubject.getValue().map(w => ({ ...w, active: w.pid === windowRef.pid }))
+    );
+  }
+
+  public toggleMinimize(windowRef: {
+    command: Command;
+    container: HTMLDivElement;
+    pid: number;
+  }) {
+    const isMinimized = windowRef.container.classList.contains("minimized");
+    if (isMinimized) {
+      this.restoreWindow(windowRef);
+    } else {
+      this.minimizeWindow(windowRef);
+    }
+  }
+
+  private minimizeWindow(windowRef: {
+    command: Command;
+    container: HTMLDivElement;
+    pid: number;
+  }) {
+    windowRef.container.classList.add("minimized");
+    windowsSubject.next(
+      windowsSubject.getValue().map(w => w.pid === windowRef.pid ? { ...w, minimized: true, active: false } : w)
+    );
+  }
+
+  private restoreWindow(windowRef: {
+    command: Command;
+    container: HTMLDivElement;
+    pid: number;
+  }) {
+    windowRef.container.classList.remove("minimized");
+    windowsSubject.next(
+      windowsSubject.getValue().map(w => w.pid === windowRef.pid ? { ...w, minimized: false } : w)
+    );
+    this.moveOnTop(windowRef);
   }
 }
 
@@ -159,8 +406,14 @@ const createWindoeHeader = (command: Command) => {
 
   const gap = platform.window.document.createElement("span");
   gap.style.marginLeft = "auto";
+  const minimize = platform.window.document.createElement("span");
+  minimize.classList.add("material-symbols-outlined", "window-action");
+  minimize.style.cursor = "pointer";
+  minimize.innerHTML = "remove";
+  minimize.title = "minimize window";
+
   const fullScreen = platform.window.document.createElement("span");
-  fullScreen.classList.add("material-symbols-outlined");
+  fullScreen.classList.add("material-symbols-outlined", "window-action");
   fullScreen.style.cursor = "pointer";
   fullScreen.innerHTML = "fullscreen";
   fullScreen.title = "toggle fullscreen";
@@ -169,7 +422,7 @@ const createWindoeHeader = (command: Command) => {
   };
 
   const close = platform.window.document.createElement("span");
-  close.classList.add("material-symbols-outlined");
+  close.classList.add("material-symbols-outlined", "window-action");
   close.style.cursor = "pointer";
   close.innerHTML = "close";
   close.title = "close window";
@@ -179,6 +432,7 @@ const createWindoeHeader = (command: Command) => {
 
   head.appendChild(title);
   head.appendChild(gap);
+  head.appendChild(minimize);
   head.appendChild(fullScreen);
   head.appendChild(close);
 
@@ -201,7 +455,7 @@ const createWindoeHeader = (command: Command) => {
     onClick: () => void;
   }) => {
     const newButton = platform.window.document.createElement("span");
-    newButton.classList.add("material-symbols-outlined");
+    newButton.classList.add("material-symbols-outlined", "window-action");
     newButton.style.cursor = "pointer";
     newButton.innerHTML = props.icon;
     newButton.title = props.title;
@@ -213,7 +467,7 @@ const createWindoeHeader = (command: Command) => {
     };
   };
 
-  return [head, close, fullScreen, setTitle, appendActionButton, setHeaderStyles] as const;
+  return [head, close, fullScreen, minimize, setTitle, appendActionButton, setHeaderStyles] as const;
 };
 
 const appendWindow = (
