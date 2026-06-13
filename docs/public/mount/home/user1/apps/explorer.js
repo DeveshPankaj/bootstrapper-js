@@ -430,6 +430,113 @@ const App = (props) => {
     openContextMenu(event.clientX + rect.x, event.clientY + rect.y, actions);
   };
 
+  // --- Drag & drop: move files between explorer windows, and import files from the OS ---
+
+  const isDescendantOrSame = (parentPath, childPath) => {
+    const normalizedParent = normalizePath(parentPath);
+    const normalizedChild = normalizePath(childPath);
+    if (normalizedChild === normalizedParent) return true;
+    const prefix = normalizedParent.endsWith("/") ? normalizedParent : `${normalizedParent}/`;
+    return normalizedChild.startsWith(prefix);
+  };
+
+  const moveEntry = (sourcePath, targetDir) => {
+    const normalizedSource = normalizePath(sourcePath);
+    const name = normalizedSource.split("/").filter(Boolean).pop();
+    const destPath = normalizePath(`${targetDir}/${name}`);
+    if (destPath === normalizedSource) return;
+    if (isDescendantOrSame(normalizedSource, destPath)) {
+      alert("Cannot move a folder into itself.");
+      return;
+    }
+    if (fs.existsSync(destPath)) {
+      if (!confirm(`"${name}" already exists in the destination. Overwrite?`)) return;
+      const stat = fs.statSync(destPath);
+      if (stat.isDirectory()) fs.rmdirSync(destPath);
+      else fs.unlinkSync(destPath);
+    }
+    try {
+      fs.renameSync(normalizedSource, destPath);
+    } catch (err) {
+      console.error("Failed to move", normalizedSource, "->", destPath, err);
+      alert(`Failed to move "${name}".`);
+    }
+  };
+
+  // Recursively imports a dropped OS file/directory entry (File System Entry API).
+  const importDroppedEntry = async (entry, targetDir) => {
+    const destPath = normalizePath(`${targetDir}/${entry.name}`);
+    if (entry.isDirectory) {
+      if (!fs.existsSync(destPath)) fs.mkdirSync(destPath, { recursive: true });
+      const reader = entry.createReader();
+      const readAllEntries = () =>
+        new Promise((resolve, reject) => {
+          const all = [];
+          const readBatch = () => {
+            reader.readEntries((batch) => {
+              if (batch.length === 0) {
+                resolve(all);
+                return;
+              }
+              all.push(...batch);
+              readBatch();
+            }, reject);
+          };
+          readBatch();
+        });
+      const children = await readAllEntries();
+      for (const child of children) await importDroppedEntry(child, destPath);
+    } else {
+      const file = await new Promise((resolve, reject) => entry.file(resolve, reject));
+      const buffer = await file.arrayBuffer();
+      fs.writeFileSync(destPath, Buffer.from(buffer));
+    }
+  };
+
+  const importDroppedFile = async (file, targetDir) => {
+    const buffer = await file.arrayBuffer();
+    fs.writeFileSync(normalizePath(`${targetDir}/${file.name}`), Buffer.from(buffer));
+  };
+
+  // Imports files/folders dragged in from the user's computer.
+  const importExternalDrop = async (dataTransfer, targetDir) => {
+    const items = dataTransfer.items ? Array.from(dataTransfer.items) : [];
+    const entries = items
+      .map((item) => (typeof item.webkitGetAsEntry === "function" ? item.webkitGetAsEntry() : null))
+      .filter(Boolean);
+
+    if (entries.length > 0) {
+      for (const entry of entries) await importDroppedEntry(entry, targetDir);
+    } else {
+      const droppedFiles = Array.from(dataTransfer.files || []);
+      for (const file of droppedFiles) await importDroppedFile(file, targetDir);
+    }
+  };
+
+  const handleDragOver = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = event.dataTransfer.types.includes("application/x-vfs-path") ? "move" : "copy";
+  };
+
+  // Handles a drop onto `targetDir` - either moving an item dragged from an explorer
+  // window (`application/x-vfs-path`), or importing files/folders dragged from the OS.
+  const handleDrop = (event, targetDir) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const vfsPath = event.dataTransfer.getData("application/x-vfs-path");
+    if (vfsPath) {
+      moveEntry(vfsPath, targetDir);
+      refresh();
+      return;
+    }
+
+    importExternalDrop(event.dataTransfer, targetDir)
+      .then(refresh)
+      .catch((err) => console.error("Failed to import dropped files", err));
+  };
+
   const breadcrumbs = getBreadcrumbs(dirRef.current);
 
   return (
@@ -515,6 +622,8 @@ const App = (props) => {
               key={item.path}
               className={dirRef.current === item.path ? "active" : ""}
               onClick={() => navigateTo(item.path)}
+              onDragOver={handleDragOver}
+              onDrop={(ev) => handleDrop(ev, item.path)}
             >
               <span className="material-symbols-outlined">{item.icon}</span>
               <span>{item.label}</span>
@@ -527,6 +636,8 @@ const App = (props) => {
             dir={dirRef.current}
             openFile={openFile}
             showFileActions={showFileActionsHandler}
+            handleDragOver={handleDragOver}
+            handleDrop={handleDrop}
           />
           <div className="file-explorer-status">
             {dirList.length} item{dirList.length === 1 ? "" : "s"}
@@ -537,28 +648,28 @@ const App = (props) => {
   );
 };
 
-const ListDirConponent = ({ dir, openFile, showFileActions }) => {
+const ListDirConponent = ({ dir, openFile, showFileActions, handleDragOver, handleDrop }) => {
   dir ??= DESKTOP_PATH;
 
   const extIconMap = {
-    ".js": "/public/js-icon.png",
-    ".ts": "/public/ts-icon.png",
-    ".proj": "/public/game-icon.png",
-    ".html": "/public/html-icon.png",
-    ".png": "/public/png-icon.png",
-    ".jpg": "/public/png-icon.png",
-    ".jpeg": "/public/png-icon.png",
-    ".gif": "/public/png-icon.png",
-    ".webp": "/public/png-icon.png",
-    ".svg": "/public/png-icon.png",
-    ".bmp": "/public/png-icon.png",
-    ".ico": "/public/png-icon.png",
-    ".avif": "/public/png-icon.png",
-    ".run": "/public/bash.png",
-    '.md': '/public/note-icon.webp',
-    ".json": "/public/json.png",
-    ".": "/public/folder-icon.png",
-    "": "/public/invalid-file-icon.png",
+    ".js": "/usr/share/icons/js-icon.png",
+    ".ts": "/usr/share/icons/ts-icon.png",
+    ".proj": "/usr/share/icons/game-icon.png",
+    ".html": "/usr/share/icons/html-icon.png",
+    ".png": "/usr/share/icons/png-icon.png",
+    ".jpg": "/usr/share/icons/png-icon.png",
+    ".jpeg": "/usr/share/icons/png-icon.png",
+    ".gif": "/usr/share/icons/png-icon.png",
+    ".webp": "/usr/share/icons/png-icon.png",
+    ".svg": "/usr/share/icons/png-icon.png",
+    ".bmp": "/usr/share/icons/png-icon.png",
+    ".ico": "/usr/share/icons/png-icon.png",
+    ".avif": "/usr/share/icons/png-icon.png",
+    ".run": "/usr/share/icons/bash.png",
+    '.md': '/usr/share/icons/note-icon.webp',
+    ".json": "/usr/share/icons/json.png",
+    ".": "/usr/share/icons/folder-icon.png",
+    "": "/usr/share/icons/invalid-file-icon.png",
   };
 
   const imageExtensions = new Set([
@@ -616,6 +727,28 @@ const ListDirConponent = ({ dir, openFile, showFileActions }) => {
     return () => urls.forEach((url) => URL.revokeObjectURL(url));
   }, [filesKey]);
 
+  // File-type icons live in the virtual fs under /usr/share/icons (see
+  // extIconMap above) and, for the same reason as the thumbnails above, are
+  // loaded as blob URLs rather than referenced via `/(sw)/...` paths.
+  const [iconUrls, setIconUrls] = React.useState({});
+  React.useEffect(() => {
+    const urls = [];
+    const next = {};
+    Object.entries(extIconMap).forEach(([ext, path]) => {
+      try {
+        const data = fs.readFileSync(path);
+        const blob = new Blob([data], { type: path.endsWith(".webp") ? "image/webp" : "image/png" });
+        const url = URL.createObjectURL(blob);
+        next[ext] = url;
+        urls.push(url);
+      } catch (err) {
+        console.error("Failed to load icon for", ext, err);
+      }
+    });
+    setIconUrls(next);
+    return () => urls.forEach((url) => URL.revokeObjectURL(url));
+  }, []);
+
   const containerRef = React.useRef(null);
   React.useLayoutEffect(() => {
     if (!containerRef.current) return;
@@ -658,6 +791,18 @@ const ListDirConponent = ({ dir, openFile, showFileActions }) => {
           color: #fff;
       }
 
+      .${DESKTOP_CONTAINER_CLASS}-files .file-item.drag-over {
+          background: rgba(10, 132, 255, 0.18);
+          outline: 2px dashed #0a84ff;
+          outline-offset: -2px;
+      }
+
+      .${DESKTOP_CONTAINER_CLASS}-files.drag-over {
+          outline: 2px dashed #0a84ff;
+          outline-offset: -4px;
+          background: rgba(10, 132, 255, 0.04);
+      }
+
       .${DESKTOP_CONTAINER_CLASS}-files .file[data-ext] {
       }
 
@@ -696,12 +841,51 @@ const ListDirConponent = ({ dir, openFile, showFileActions }) => {
     showFileActions(file, event);
   };
 
+  const [dragOverPath, setDragOverPath] = React.useState(null);
+  const [mainDragOver, setMainDragOver] = React.useState(false);
+
+  const dragStartHandler = (file, event) => {
+    event.dataTransfer.setData("application/x-vfs-path", file.path);
+    event.dataTransfer.effectAllowed = "move";
+  };
+
   return (
-    <main className={`${DESKTOP_CONTAINER_CLASS}-files`} ref={containerRef}>
+    <main
+      className={`${DESKTOP_CONTAINER_CLASS}-files ${mainDragOver ? "drag-over" : ""}`}
+      ref={containerRef}
+      onDragOver={(ev) => {
+        handleDragOver(ev);
+        setMainDragOver(true);
+      }}
+      onDragLeave={() => setMainDragOver(false)}
+      onDrop={(ev) => {
+        setMainDragOver(false);
+        handleDrop(ev, dir);
+      }}
+    >
       {files.map((file) => (
         <div
           key={file.path}
-          className={`file-item ${selected === file.path ? "selected" : ""}`}
+          className={`file-item ${selected === file.path ? "selected" : ""} ${dragOverPath === file.path ? "drag-over" : ""}`}
+          draggable
+          onDragStart={(ev) => dragStartHandler(file, ev)}
+          onDragOver={
+            file.type === "dir"
+              ? (ev) => {
+                  handleDragOver(ev);
+                  setDragOverPath(file.path);
+                }
+              : undefined
+          }
+          onDragLeave={file.type === "dir" ? () => setDragOverPath(null) : undefined}
+          onDrop={
+            file.type === "dir"
+              ? (ev) => {
+                  setDragOverPath(null);
+                  handleDrop(ev, file.path);
+                }
+              : undefined
+          }
           onClick={() => setSelected(file.path)}
           onDoubleClick={() => openFile(file)}
           onContextMenu={(ev) => rightClickHandler(file, ev)}
@@ -713,7 +897,7 @@ const ListDirConponent = ({ dir, openFile, showFileActions }) => {
               backgroundImage: `url('${
                 file.type === "file" && imageExtensions.has(file.meta.ext) && thumbnails[file.path]
                   ? thumbnails[file.path]
-                  : extIconMap[file.meta.ext] ?? extIconMap[""]
+                  : iconUrls[file.meta.ext] ?? iconUrls[""] ?? ""
               }')`,
               backgroundRepeat: "no-repeat",
               backgroundSize: "cover",

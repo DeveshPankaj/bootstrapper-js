@@ -12,24 +12,24 @@ export const ListDirComponent = ({ dir, openFile, showFileActions, customClass }
     dir ??= DESKTOP_PATH;
 
     const extIconMap: Record<string, string> = {
-        '.js': '/public/js-icon.png',
-        '.ts': '/public/ts-icon.png',
-        '.proj': '/public/game-icon.png',
-        '.html': '/public/html-icon.png',
-        '.png': '/public/png-icon.png',
-        '.jpg': '/public/png-icon.png',
-        '.jpeg': '/public/png-icon.png',
-        '.gif': '/public/png-icon.png',
-        '.webp': '/public/png-icon.png',
-        '.svg': '/public/png-icon.png',
-        '.bmp': '/public/png-icon.png',
-        '.ico': '/public/png-icon.png',
-        '.avif': '/public/png-icon.png',
-        '.run': '/public/bash.png',
-        '.md': '/public/note-icon.webp',
-        '.json': '/public/json.png',
-        '.': '/public/folder-icon.png',
-        '': '/public/invalid-file-icon.png'
+        '.js': '/(sw)/usr/share/icons/js-icon.png',
+        '.ts': '/(sw)/usr/share/icons/ts-icon.png',
+        '.proj': '/(sw)/usr/share/icons/game-icon.png',
+        '.html': '/(sw)/usr/share/icons/html-icon.png',
+        '.png': '/(sw)/usr/share/icons/png-icon.png',
+        '.jpg': '/(sw)/usr/share/icons/png-icon.png',
+        '.jpeg': '/(sw)/usr/share/icons/png-icon.png',
+        '.gif': '/(sw)/usr/share/icons/png-icon.png',
+        '.webp': '/(sw)/usr/share/icons/png-icon.png',
+        '.svg': '/(sw)/usr/share/icons/png-icon.png',
+        '.bmp': '/(sw)/usr/share/icons/png-icon.png',
+        '.ico': '/(sw)/usr/share/icons/png-icon.png',
+        '.avif': '/(sw)/usr/share/icons/png-icon.png',
+        '.run': '/(sw)/usr/share/icons/bash.png',
+        '.md': '/(sw)/usr/share/icons/note-icon.webp',
+        '.json': '/(sw)/usr/share/icons/json.png',
+        '.': '/(sw)/usr/share/icons/folder-icon.png',
+        '': '/(sw)/usr/share/icons/invalid-file-icon.png'
     }
 
     const imageExtensions = new Set([

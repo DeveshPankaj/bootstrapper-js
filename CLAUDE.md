@@ -72,7 +72,12 @@ icons) and a set of bundled mini-apps that run inside iframe "windows".
     "scripts" (settings.html `<script type="text/React-Jsx">`) get executed. Inside the
     executed code, `window` is a *shim* (`{ platform: newPlatform, document, top }`),
     not the real `window` — `window.platform` gives you a working `Platform` whose
-    `.host` is the same shared `Host`.
+    `.host` is the same shared `Host`. `Buffer` (Node polyfill) IS available as a bare
+    global identifier here (e.g. `Buffer.from(arrayBuffer)`) even though it's not part
+    of `window` shim — it resolves via the real global object, where webpack's
+    polyfill installs it. Use `Buffer.from(...)`, not `new Uint8Array(...)`, when
+    writing binary data with `fs.writeFileSync` — BrowserFS's `writeSync` calls
+    `.copy()` on the data, which `Uint8Array` lacks but `Buffer` has.
   - `execCommand(commandStr, platform, ...args)` — runs a small DSL string with
     `service(moduleName, serviceName)`, `command(commandName)`, `$args` in scope (used
     for context-menu actions like
@@ -193,6 +198,32 @@ Both explorer copies share the same macOS Finder look:
 - Status bar `.file-explorer-status` at the bottom (`margin-top: auto` so it sticks to
   the bottom of a flex column even with few items).
 
+### Drag and drop
+
+Both explorer copies support dragging files in two directions, implemented in `App`
+(handlers: `moveEntry`, `importDroppedEntry`/`importDroppedFile`, `importExternalDrop`,
+`handleDragOver`, `handleDrop`) and wired up in `ListDirConponent`/`ListDirComponent`:
+
+- **Within/between explorer windows** — every `.file-item` is `draggable`; `onDragStart`
+  puts the item's vfs path in `dataTransfer` under the custom MIME type
+  `application/x-vfs-path`. Dropping onto a folder `.file-item`, the file-list
+  background (`<main>`, drops into the current dir), or a sidebar `NAV_SHORTCUTS` item
+  calls `handleDrop`, which detects this MIME type and does `fs.renameSync` (with an
+  `isDescendantOrSame` guard against moving a folder into itself/its own descendant,
+  and an overwrite-confirm if the destination name already exists). Native HTML5 DnD
+  works across iframes/windows in the same page, so this works between two explorer
+  windows.
+- **From the user's computer** — same drop handlers; if `dataTransfer` has no
+  `application/x-vfs-path`, `importExternalDrop` reads `dataTransfer.items`, calling
+  `webkitGetAsEntry()` for `FileSystemFileEntry`/`FileSystemDirectoryEntry` (recursing
+  into directories via `entry.createReader().readEntries()`), falling back to
+  `dataTransfer.files` if `webkitGetAsEntry` isn't available.
+- `.file-item.drag-over` / `.${DESKTOP_CONTAINER_CLASS}-files.drag-over` CSS classes
+  (dashed blue outline) highlight the current drop target.
+- Drop targets call `event.preventDefault()`/`stopPropagation()` in `handleDragOver`/
+  `handleDrop` so a drop on a folder item doesn't *also* fire the background drop on
+  `<main>`.
+
 When changing one explorer file's structure/behavior, mirror the change in the other.
 
 ## Terminal (`docs/public/mount/home/user1/apps/xtermjs.html`)
@@ -240,6 +271,16 @@ When changing one explorer file's structure/behavior, mirror the change in the o
 
 ## Misc gotchas
 
+- **`src/sw.ts` `/(sw)/<path>` and `/cache/<path>` handlers must `decodeURIComponent()`
+  the path slice** before sending it to the page (`postMessage` `fs/file-request`) for
+  `fs.readFileSync`. `URL.pathname` keeps percent-encoding (e.g. spaces as `%20`), but
+  vfs paths from `fs.readdirSync`/`fs.statSync` have literal characters — without
+  decoding, any file whose name has a space or other encoded character fails
+  `fs.existsSync` in `src/index.ts`'s `fs/file-request` handler, the SW's error
+  fallback does `fetch(_url.pathname.slice('/(sw)'.length))` (i.e. the bare un-prefixed
+  path, which 404s since it isn't a real static file) instead of the original
+  `/(sw)/...` URL. This bit drag-and-dropped files with spaces in their names (e.g.
+  `5C27-EN - Detailed version.jpg`).
 - Material Symbols Outlined icon font is loaded from Google Fonts CDN and re-declared
   via `@font-face`/`.material-symbols-outlined` in several stylesheets (layout, both
   explorer copies) — keep consistent if editing.

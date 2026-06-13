@@ -237,6 +237,56 @@
     "file": "/usr/lib/ui/menuItem.js"
   },
   {
+    "path": "/usr/share/icons/js-icon.png",
+    "file": "/usr/share/icons/js-icon.png",
+    "force_reload": true
+  },
+  {
+    "path": "/usr/share/icons/ts-icon.png",
+    "file": "/usr/share/icons/ts-icon.png",
+    "force_reload": true
+  },
+  {
+    "path": "/usr/share/icons/game-icon.png",
+    "file": "/usr/share/icons/game-icon.png",
+    "force_reload": true
+  },
+  {
+    "path": "/usr/share/icons/html-icon.png",
+    "file": "/usr/share/icons/html-icon.png",
+    "force_reload": true
+  },
+  {
+    "path": "/usr/share/icons/png-icon.png",
+    "file": "/usr/share/icons/png-icon.png",
+    "force_reload": true
+  },
+  {
+    "path": "/usr/share/icons/bash.png",
+    "file": "/usr/share/icons/bash.png",
+    "force_reload": true
+  },
+  {
+    "path": "/usr/share/icons/note-icon.webp",
+    "file": "/usr/share/icons/note-icon.webp",
+    "force_reload": true
+  },
+  {
+    "path": "/usr/share/icons/json.png",
+    "file": "/usr/share/icons/json.png",
+    "force_reload": true
+  },
+  {
+    "path": "/usr/share/icons/folder-icon.png",
+    "file": "/usr/share/icons/folder-icon.png",
+    "force_reload": true
+  },
+  {
+    "path": "/usr/share/icons/invalid-file-icon.png",
+    "file": "/usr/share/icons/invalid-file-icon.png",
+    "force_reload": true
+  },
+  {
     "path": "/home/user1/apps/xtermjs.html",
     "file": "/home/user1/apps/xtermjs.html",
     "force_reload":true

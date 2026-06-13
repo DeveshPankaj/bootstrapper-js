@@ -95,6 +95,7 @@ self.addEventListener('fetch', function (event) {
                 if (!cachedResponse) {
                     return new Promise((resolve, reject) => {
                         const request_id = getUUID();
+                        const vfsPath = decodeURIComponent(_url.pathname.slice('/(sw)'.length));
                         clientRequests.set(request_id, (fileData, error) => {
                             if (error) {
                                 // resolve(new Response(`<h1>Error: ${error}</h1>`, {headers: {'Content-Type': getMIMEtype(url)!}}))
@@ -106,7 +107,7 @@ self.addEventListener('fetch', function (event) {
                         });
                         clients.matchAll().then(clients => {
                             clients.forEach(client => {
-                                client.postMessage({ type: 'fs/file-request', payload: { path: _url.pathname.slice('/(sw)'.length), request_id } });
+                                client.postMessage({ type: 'fs/file-request', payload: { path: vfsPath, request_id } });
                             });
                             if (clients.length === 0) {
                                 resolve(new Response("<h1>ERROR: no client available to serve the request. (if it's first time you are seeing this error, then try reloding app after saving your changes)</h1>", { headers: { 'Content-Type': 'text/html' } }));
@@ -136,7 +137,7 @@ self.addEventListener('fetch', function (event) {
                         });
                         clients.matchAll().then(clients => {
                             clients.forEach(client => {
-                                client.postMessage({ type: 'fs/file-request', payload: { path: _url.pathname.slice('/cache'.length), request_id } });
+                                client.postMessage({ type: 'fs/file-request', payload: { path: decodeURIComponent(_url.pathname.slice('/cache'.length)), request_id } });
                             });
                             if (clients.length === 0) {
                                 resolve(new Response("<h1>ERROR: no client available to serve the request. (if it's first time you are seeing this error, then try reloding app after saving your changes)</h1>", { headers: { 'Content-Type': 'text/html' } }));

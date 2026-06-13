@@ -784,12 +784,24 @@
     const [wallpapers, setWallpapers] = React.useState(configWallpapers);
     const [showPicker, setShowPicker] = React.useState(false);
     const [activeWallpaper, setActiveWallpaper] = React.useState(() => platform.userPref.getWallpaper());
+    const [contextMenu, setContextMenu] = React.useState(null);
 
     React.useEffect(() => {
       const metaFileRawContent = fs.readFileSync('/user-preferences.json')
       const configWallpapers = JSON.parse(metaFileRawContent).wallpapers ?? []
       setWallpapers(configWallpapers)
     }, [])
+
+    React.useEffect(() => {
+      if (!contextMenu) return;
+      const close = () => setContextMenu(null);
+      document.addEventListener('click', close);
+      document.addEventListener('contextmenu', close);
+      return () => {
+        document.removeEventListener('click', close);
+        document.removeEventListener('contextmenu', close);
+      };
+    }, [contextMenu]);
 
     const toFullUrl = (wallpaper) => wallpaper.startsWith('/') ? `${origin}${wallpaper}` : wallpaper;
 
@@ -805,6 +817,32 @@
 
     const onClickHandler = (wallpaper) => {
       addAndSet(wallpaper);
+    };
+
+    const onContextMenuHandler = (event, wallpaper) => {
+      event.preventDefault();
+      setContextMenu({ x: event.clientX, y: event.clientY, wallpaper });
+    };
+
+    const onDeleteWallpaper = (wallpaper) => {
+      setContextMenu(null);
+      setWallpapers(state => state.filter(w => w !== wallpaper));
+      platform.host.callCommand('remove-wallpaper', wallpaper);
+      setActiveWallpaper(platform.userPref.getWallpaper());
+
+      // If the wallpaper points at a file in the virtual fs (uploaded via "Choose
+      // from Files"), delete the underlying file too. Wallpapers referencing
+      // bundled `/public/...` assets or remote URLs are only removed from the list.
+      const swMarker = '/(sw)/';
+      const swIdx = wallpaper.indexOf(swMarker);
+      if (swIdx !== -1) {
+        const path = wallpaper.slice(swIdx + swMarker.length - 1);
+        try {
+          if (fs.existsSync(path)) fs.unlinkSync(path);
+        } catch (err) {
+          console.error('Failed to delete wallpaper file', path, err);
+        }
+      }
     };
 
     const onFetchClick = () => {
@@ -841,7 +879,12 @@
             const fullUrl = toFullUrl(url);
             const active = fullUrl === activeWallpaper;
             return (
-              <div key={index} className={`wallpaper-card ${active ? 'active' : ''}`} onClick={() => onClickHandler(url)}>
+              <div
+                key={index}
+                className={`wallpaper-card ${active ? 'active' : ''}`}
+                onClick={() => onClickHandler(url)}
+                onContextMenu={(ev) => onContextMenuHandler(ev, url)}
+              >
                 <img src={fullUrl} alt={`Wallpaper ${index + 1}`} className="wallpaper-thumb" />
                 <div className="wallpaper-overlay">
                   {active ? (
@@ -862,6 +905,11 @@
             onSelect={onPickFromFiles}
             onClose={() => setShowPicker(false)}
           />
+        )}
+        {contextMenu && (
+          <div className="wallpaper-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }}>
+            <button onClick={() => onDeleteWallpaper(contextMenu.wallpaper)}>Delete</button>
+          </div>
         )}
       </div>
     );
@@ -1283,6 +1331,34 @@ html, body {
   font-size: 2rem;
   color: #fff;
   filter: drop-shadow(0 1px 3px rgba(0,0,0,0.5));
+}
+
+.wallpaper-context-menu {
+  position: fixed;
+  z-index: 1000;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: rgba(0, 0, 0, 0.2) 0px 2px 10px;
+  overflow: hidden;
+  min-width: 9rem;
+  padding: 4px;
+}
+
+.wallpaper-context-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: #d70015;
+}
+
+.wallpaper-context-menu button:hover {
+  background: rgba(215, 0, 21, 0.08);
 }
 
 /* File picker modal */

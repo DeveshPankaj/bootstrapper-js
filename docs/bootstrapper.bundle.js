@@ -96,6 +96,8 @@ const initWindow = () => {
         '/usr/bin',
         '/usr/lib',
         '/usr/local',
+        '/usr/share/',
+        '/usr/share/icons/',
         '/bin',
         // '/root',
         // '/media',

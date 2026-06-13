@@ -235,7 +235,43 @@ const getCurrentLayout = (): LayoutDef => {
     return layouts.find(l => l.id === layoutSubject.getValue()) || layouts[0] || DEFAULT_LAYOUTS[0]
 }
 
+const wallpaperImageMimeTypes: Record<string, string> = {
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.gif': 'image/gif',
+    '.webp': 'image/webp',
+    '.svg': 'image/svg+xml',
+    '.bmp': 'image/bmp',
+    '.ico': 'image/x-icon',
+    '.avif': 'image/avif',
+}
+
+// `styles` is a Constructable Stylesheet adopted via `document.adoptedStyleSheets` -
+// `url()` resource fetches from such stylesheets aren't intercepted by the service
+// worker (unlike `<iframe src="/(sw)/...">` navigations), so `/(sw)/<path>` virtual-fs
+// wallpaper URLs 404. Read the file directly from the virtual fs and use a blob URL
+// instead, mirroring the thumbnail workaround in file-explorer/settings.html.
+const resolveWallpaperUrl = (wallpaper: string): string => {
+    const swMarker = '/(sw)/'
+    const idx = wallpaper.indexOf(swMarker)
+    if (idx === -1) return wallpaper
+
+    const path = wallpaper.slice(idx + swMarker.length - 1) // keep leading '/'
+    try {
+        const fs = platform.host.getFS()
+        const ext = path.slice(path.lastIndexOf('.'))
+        const data = fs.readFileSync(path)
+        const blob = new Blob([data], { type: wallpaperImageMimeTypes[ext] || 'application/octet-stream' })
+        return URL.createObjectURL(blob)
+    } catch (err) {
+        console.error('Failed to load wallpaper', path, err)
+        return wallpaper
+    }
+}
+
 const applyCss = ({wallpaper, grid}: {wallpaper: string, grid: LayoutDef['grid']}) => {
+    const wallpaperUrl = resolveWallpaperUrl(wallpaper)
     styles.replace(`
         html, body {
             margin: 0;
@@ -286,7 +322,7 @@ const applyCss = ({wallpaper, grid}: {wallpaper: string, grid: LayoutDef['grid']
             grid-template-areas: ${grid.areas};
 
             // background-image: url(/wp-8.jpeg);
-            background-image: url(${wallpaper});
+            background-image: url(${wallpaperUrl});
             background-repeat: no-repeat;
             background-size: cover;
     
@@ -631,6 +667,16 @@ platform.host.registerCommand('set-wallpaper', (wallpaperUrl: string) => {
 
 platform.host.registerCommand('add-wallpaper', (wallpaperUrl: string) => {
     platform.userPref.addWallpaper(wallpaperUrl);
+})
+
+platform.register('remove-wallpaper', (wallpaperUrl: string) => {
+    const activeWallpaper = platform.userPref.removeWallpaper(wallpaperUrl);
+    if (activeWallpaper) applyCss({wallpaper: activeWallpaper, grid: getCurrentLayout().grid});
+})
+
+platform.host.registerCommand('remove-wallpaper', (wallpaperUrl: string) => {
+    const activeWallpaper = platform.userPref.removeWallpaper(wallpaperUrl);
+    if (activeWallpaper) applyCss({wallpaper: activeWallpaper, grid: getCurrentLayout().grid});
 })
 
 const applyLayout = (layoutId: string) => {

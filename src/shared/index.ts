@@ -577,6 +577,20 @@ class UserPreference {
     this.savePreferences();
   }
 
+  // Removes a wallpaper from the saved list. If it was the active wallpaper, falls
+  // back to default_wallpaper (or the first remaining wallpaper).
+  public removeWallpaper(wallpaper: string): string | undefined {
+    this.loadPreferences();
+    this.preferences.wallpapers = this.preferences.wallpapers?.filter(w => w !== wallpaper);
+
+    if (this.preferences.wallpaper === wallpaper) {
+      this.preferences.wallpaper = this.preferences.default_wallpaper ?? this.preferences.wallpapers?.[0];
+    }
+
+    this.savePreferences();
+    return this.preferences.wallpaper;
+  }
+
   // Require method for specific preference key
   public require(key: string): any {
     if (!this.preferences[key]) {
