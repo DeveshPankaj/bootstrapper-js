@@ -20,14 +20,14 @@
     // console.log(props, React, ReactDOM);
 
     props.toggleHeader(false);
-    
+
     const dom = document.getElementById('react-root');
     const root = ReactDOM.createRoot(dom);
     const appModuleSource = document.querySelector('script[type="text/React-Jsx"]').innerText;
 
     const {App} = platform.host.execString(appModuleSource);
     root.render(React.createElement(App, props, []));
-    
+
 
 
     // document.getElementById('render-btn').addEventListener('click', () => {
@@ -36,7 +36,7 @@
 
     // const dragger = document.getElementById('dragger');
     const dragger = dom
-    
+
     let isDragging = false;
     let startX, startY, startRect;
 
@@ -112,23 +112,51 @@
 </script>
 <script type="text/React-Jsx">
   const React = require('React');
-  exports.App = (props) => {
-    const origin = platform.window.location.origin || platform.window.location.ancestorOrigins[0] || '';
 
+  const fs = platform.host.getFS()
+  const origin = platform.window.location.origin || platform.window.location.ancestorOrigins[0] || '';
+
+  const metaFileRawContent = fs.readFileSync('/user-preferences.json')
+  const userPreferences = JSON.parse(metaFileRawContent)
+  const configWallpapers = userPreferences.wallpapers ?? []
+  const contactInfo = userPreferences.contact ?? {}
+
+  const imageExtensions = new Set([
+    '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.ico', '.avif',
+  ])
+
+  const imageMimeTypes = {
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.gif': 'image/gif',
+    '.webp': 'image/webp',
+    '.svg': 'image/svg+xml',
+    '.bmp': 'image/bmp',
+    '.ico': 'image/x-icon',
+    '.avif': 'image/avif',
+  }
+
+  const getExt = (name) => {
+    const parts = name.split('.')
+    return parts.length > 1 ? `.${parts.at(-1).toLowerCase()}` : ''
+  }
+
+  exports.App = (props) => {
     const onCloseHandler = () => {
       props.close();
     };
     const pages = [
-      {id: '1', name: 'about', label: 'About', component: About},
-      {id: '2', name: 'projects', label: 'Projects', component: Projects},
-      {id: '3', name: 'contact', label: 'Contact', component: Contact},
-      {id: '4', name: 'wallpapers', label: 'Wallpapers', component: Wallpapers, marginTop: 'auto'},
-      {id: '5', name: 'layout', label: 'Layout', component: Layout},
-      {id: '6', name: 'window-manager', label: 'Window Manager', component: WindowManagerSettings},
+      {id: '1', name: 'about', label: 'About', icon: 'account_circle', color: '#8e8e93', component: About},
+      {id: '2', name: 'projects', label: 'Projects', icon: 'apps', color: '#5e5ce6', component: Projects},
+      {id: '3', name: 'contact', label: 'Contact', icon: 'mail', color: '#34c759', component: Contact},
+      {id: '4', name: 'wallpapers', label: 'Wallpaper', icon: 'wallpaper', color: '#ff9f0a', component: Wallpapers, marginTop: 'auto'},
+      {id: '5', name: 'layout', label: 'Layout', icon: 'dashboard', color: '#0a84ff', component: Layout},
+      {id: '6', name: 'window-manager', label: 'Window Manager', icon: 'palette', color: '#ff453a', component: WindowManagerSettings},
     ]
 
     const [currentPage, setCurrentPage] = React.useState(pages[0])
-  
+
     return (
       <>
         <span
@@ -136,46 +164,25 @@
           title="Close window"
           onClick={onCloseHandler}
         ></span>
-        <div style={{
-          display: 'flex',
-          height: '100%',
-          width: '100%',
-          overflow: 'auto',
-          // background: '#212121'
-        }}>
-          <nav style={{
-            // background: '#2c2c2c',
-            display: 'flex',
-            flexDirection: 'column',
-            // justifyContent: 'space-evenly',
-            fontFamily: 'monospace',
-            cursor: 'pointer',
-            width: '13rem',
-            display: 'flex',
-            // height: 'fit-content',
-            // margin: '1rem',
-            // borderRadius: '1rem',
-            overflow: 'hidden',
-            boxShadow: 'rgba(0, 0, 0, 0.09) 0px 3px 12px',
-            flexShrink: 0
-          }}>
-            {pages.map(page => {
-              return <a key={page.id} style={{
-                // flexGrow: '1', 
-                padding: '1rem', 
-                background: page.id===currentPage.id ? 'black' : '#ffffff52',
-                color: page.id===currentPage.id ? 'white' : 'black',
-                cursor: 'pointer',
-                marginTop: page.marginTop
-              }}
-              onClick={_ => setCurrentPage(page)}
-              >{page.label}</a>
-            })}
+        <div className="settings-root">
+          <nav className="settings-sidebar">
+            <div className="settings-sidebar-title">Settings</div>
+            <div className="settings-nav-list">
+              {pages.map(page => (
+                <div
+                  key={page.id}
+                  className={`settings-nav-item ${page.id === currentPage.id ? 'active' : ''}`}
+                  style={{marginTop: page.marginTop}}
+                  onClick={() => setCurrentPage(page)}
+                >
+                  <span className="settings-nav-icon material-symbols-outlined" style={{background: page.color}}>{page.icon}</span>
+                  <span>{page.label}</span>
+                </div>
+              ))}
+            </div>
           </nav>
-          <section style={{flexGrow: '1', padding: '0rem', fontFamily: 'monospace', overflow: 'auto'}}>
-            {
-              <currentPage.component/>
-            }
+          <section className="settings-content">
+            <currentPage.component/>
           </section>
         </div>
       </>
@@ -190,59 +197,245 @@
       const interval = setInterval(() => {
         setMinionImgId(prevId => (prevId + 1) % 3);
       }, 30000);
-    
+
       return () => clearInterval(interval);
     }, []);
-    
+
     return (
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        // justifyContent: 'center',
-        // alignItems: 'center',
-        height: '-webkit-fill-available',
-        fontFamily: 'Arial, sans-serif',
-        // textAlign: 'center',
-        color: '#333',
-        padding: '1rem',
-        backgroundImage: `url(${origin}/public/minion-${minionImgId}.png)`,
-        backgroundSize: `auto`,
-        // filter: 'grayscale(100%)',
-        backgroundPosition: 'bottom right',
-        backgroundRepeat: 'no-repeat',
-      }}>
-        <h1 style={{ fontSize: '2rem', marginBottom: '1rem' }}>Hi! I'm Pankaj devesh</h1>
-        <p style={{ fontSize: '1.1rem', maxWidth: '30rem', lineHeight: '1.6' }}>
-          We are a passionate team dedicated to providing innovative solutions. 
-          Our focus is on delivering quality products and services that make a difference. 
-          Our mission is to enhance the lives of our users through technology.
-        </p>
-        <p style={{ fontSize: '1.1rem', maxWidth: '20rem', lineHeight: '1.6' }}>
-          With years of experience in the industry, we prioritize customer satisfaction 
-          and continuous improvement, ensuring that our offerings meet and exceed expectations.
-        </p>
+      <div className="settings-page">
+        <h1 className="settings-page-title">About</h1>
+        <div className="about-card">
+          <img className="about-avatar" src={`${origin}/public/minion-${minionImgId}.png`} alt="avatar" />
+          <div className="about-info">
+            <h2 className="about-name">Pankaj Devesh</h2>
+            <p className="about-role">Full-stack Developer &middot; Creator of this web OS</p>
+          </div>
+        </div>
+        <div className="settings-group">
+          <div className="settings-group-body" style={{padding: '1rem 1.25rem', display: 'block'}}>
+            <p style={{margin: '0 0 0.75rem', lineHeight: 1.6, color: '#3a3a3c'}}>
+              We are a passionate team dedicated to providing innovative solutions.
+              Our focus is on delivering quality products and services that make a difference.
+              Our mission is to enhance the lives of our users through technology.
+            </p>
+            <p style={{margin: 0, lineHeight: 1.6, color: '#3a3a3c'}}>
+              With years of experience in the industry, we prioritize customer satisfaction
+              and continuous improvement, ensuring that our offerings meet and exceed expectations.
+            </p>
+          </div>
+        </div>
       </div>
     );
   };
-  
-  
-  const fs = platform.host.getFS()
-  const metaFileRawContent = fs.readFileSync('/user-preferences.json')
-  const configWallpapers = JSON.parse(metaFileRawContent).wallpapers ?? []
+
+
+  // Generic image-thumbnail hook: reads each image-extension file in `entries`
+  // from the virtual fs and exposes path -> blob URL. Mirrors the approach in
+  // the file explorer (`/(sw)/...` subresource fetches aren't intercepted from
+  // uncontrolled `about:blank` iframes, so thumbnails are built from blob URLs
+  // read directly via `platform.host.getFS()`).
+  const useThumbnails = (entries, getPath, getExtOf) => {
+    const [thumbnails, setThumbnails] = React.useState({})
+    const key = entries.map(getPath).join(' ')
+    React.useEffect(() => {
+      const urls = []
+      const next = {}
+      entries.forEach(entry => {
+        const ext = getExtOf(entry)
+        if (!imageExtensions.has(ext)) return
+        try {
+          const data = fs.readFileSync(getPath(entry))
+          const blob = new Blob([data], {type: imageMimeTypes[ext] || 'application/octet-stream'})
+          const url = URL.createObjectURL(blob)
+          next[getPath(entry)] = url
+          urls.push(url)
+        } catch (err) {}
+      })
+      setThumbnails(next)
+      return () => urls.forEach(url => URL.revokeObjectURL(url))
+    }, [key])
+    return thumbnails
+  }
+
+  // Generic file picker modal: browses the virtual fs starting at `initialDir`,
+  // optionally restricting selectable files to `accept` (a Set of lowercase
+  // extensions, e.g. imageExtensions). Calls `onSelect(path)` then `onClose()`.
+  const FilePicker = ({ initialDir, accept, title, onSelect, onClose }) => {
+    const [dir, setDir] = React.useState(initialDir || '/home/user1')
+    const [selected, setSelected] = React.useState(null)
+
+    const readDir = (d) => {
+      try {
+        return fs.readdirSync(d)
+          .map(name => {
+            const path = d === '/' ? `/${name}` : `${d}/${name}`
+            let isDir = false
+            try { isDir = fs.statSync(path).isDirectory() } catch (err) {}
+            return { name, path, isDir, ext: getExt(name) }
+          })
+          .sort((a, b) => (a.isDir === b.isDir) ? a.name.localeCompare(b.name) : (a.isDir ? -1 : 1))
+      } catch (err) {
+        return []
+      }
+    }
+
+    const [entries, setEntries] = React.useState(() => readDir(dir))
+
+    React.useEffect(() => {
+      setEntries(readDir(dir))
+      setSelected(null)
+    }, [dir])
+
+    const thumbnails = useThumbnails(entries.filter(e => !e.isDir), e => e.path, e => e.ext)
+
+    const breadcrumbs = React.useMemo(() => {
+      const parts = dir.split('/').filter(Boolean)
+      const crumbs = [{ name: 'Root', path: '/' }]
+      let acc = ''
+      parts.forEach(p => { acc += `/${p}`; crumbs.push({ name: p, path: acc }) })
+      return crumbs
+    }, [dir])
+
+    const visibleEntries = entries.filter(e => e.isDir || !accept || accept.has(e.ext))
+
+    const choose = (path) => {
+      onSelect(path)
+      onClose()
+    }
+
+    return (
+      <div className="filepicker-overlay" onClick={onClose}>
+        <div className="filepicker-dialog" onClick={e => e.stopPropagation()}>
+          <div className="filepicker-header">
+            <span>{title || 'Choose a file'}</span>
+            <span className="filepicker-close material-symbols-outlined" onClick={onClose}>close</span>
+          </div>
+          <div className="filepicker-breadcrumbs">
+            {breadcrumbs.map((c, i) => (
+              <React.Fragment key={c.path}>
+                {i > 0 && <span className="material-symbols-outlined sep">chevron_right</span>}
+                <span className="crumb" onClick={() => setDir(c.path)}>{c.name}</span>
+              </React.Fragment>
+            ))}
+          </div>
+          <div className="filepicker-grid">
+            {visibleEntries.length === 0 && (
+              <div className="filepicker-empty">This folder is empty.</div>
+            )}
+            {visibleEntries.map(entry => (
+              <div
+                key={entry.path}
+                className={`filepicker-item ${selected === entry.path ? 'selected' : ''}`}
+                onClick={() => !entry.isDir && setSelected(entry.path)}
+                onDoubleClick={() => entry.isDir ? setDir(entry.path) : choose(entry.path)}
+                title={entry.name}
+              >
+                <div
+                  className="filepicker-icon"
+                  style={thumbnails[entry.path] ? { backgroundImage: `url('${thumbnails[entry.path]}')` } : undefined}
+                >
+                  {!thumbnails[entry.path] && (
+                    <span className="material-symbols-outlined">{entry.isDir ? 'folder' : 'draft'}</span>
+                  )}
+                </div>
+                <span className="filepicker-name">{entry.name}</span>
+              </div>
+            ))}
+          </div>
+          <div className="filepicker-footer">
+            <button className="settings-btn" onClick={onClose}>Cancel</button>
+            <button className="settings-btn primary" disabled={!selected} onClick={() => choose(selected)}>Choose</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
 
   const Projects = () => {
     const projectsDir = '/home/user1/projects'
-    const [ls, setLs] = React.useState(fs.readdirSync(projectsDir))
+    const [ls] = React.useState(() => fs.readdirSync(projectsDir).map(name => {
+      const path = `${projectsDir}/${name}`
+      let isDir = false
+      try { isDir = fs.statSync(path).isDirectory() } catch (err) {}
+      return { name, path, isDir, ext: getExt(name) }
+    }))
 
-    const openProject = file => {
+    const projectIconMap = {
+      '.html': '/public/html-icon.png',
+      '.js': '/public/js-icon.png',
+      '.ts': '/public/ts-icon.png',
+      '': '/public/folder-icon.png',
+    }
+
+    const openProject = (file) => {
       const cmd = `service('root', 'exec') ('${projectsDir}/${file}');`
       platform.host.execCommand(cmd, platform);
     }
-    return (<>{ls.map(file => <div onClick={_=>openProject(file)} key={`${projectsDir}/${file}`} style={{padding: '1rem', cursor: 'pointer'}}>{file}</div>)}</>)
+
+    return (
+      <div className="settings-page">
+        <h1 className="settings-page-title">Projects</h1>
+        <div className="projects-grid">
+          {ls.map(file => (
+            <div key={file.path} className="project-card" onClick={() => openProject(file.name)}>
+              <img className="project-icon" src={`${origin}${projectIconMap[file.isDir ? '' : file.ext] ?? '/public/invalid-file-icon.png'}`} alt="" />
+              <span className="project-name">{file.name}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
   }
 
   const Contact = () => {
-    return (<>Contact</>)
+    const [copied, setCopied] = React.useState(false)
+
+    const copyEmail = () => {
+      platform.window.navigator.clipboard?.writeText(contactInfo.email || '')
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    }
+
+    const links = [
+      { key: 'email', label: 'Email', value: contactInfo.email, href: contactInfo.email ? `mailto:${contactInfo.email}` : null, icon: 'mail', color: '#34c759', action: contactInfo.email ? { label: copied ? 'Copied!' : 'Copy', onClick: copyEmail } : null },
+      { key: 'github', label: 'GitHub', value: contactInfo.github, href: contactInfo.github, icon: 'code', color: '#1f2328' },
+      { key: 'website', label: 'Website', value: contactInfo.website, href: contactInfo.website, icon: 'language', color: '#0a84ff' },
+    ].filter(link => link.value)
+
+    return (
+      <div className="settings-page">
+        <h1 className="settings-page-title">Contact</h1>
+        <div className="settings-group">
+          <div className="settings-group-body">
+            {links.length === 0 && (
+              <div className="settings-row">
+                <span className="settings-row-label">No contact info set yet.</span>
+              </div>
+            )}
+            {links.map(link => (
+              <div key={link.key} className="settings-row">
+                <span className="settings-row-icon material-symbols-outlined" style={{background: link.color}}>{link.icon}</span>
+                <div className="settings-row-text">
+                  <div className="settings-row-title">{link.label}</div>
+                  {link.href ? (
+                    <a className="settings-row-subtitle" href={link.href} target="_blank" rel="noreferrer">{link.value}</a>
+                  ) : (
+                    <div className="settings-row-subtitle">{link.value}</div>
+                  )}
+                </div>
+                {link.action && (
+                  <button className="settings-btn" onClick={link.action.onClick}>{link.action.label}</button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+        <p className="settings-hint">
+          Edit the <code>contact</code> object in <code>/user-preferences.json</code> to add or change email, GitHub and website links.
+        </p>
+      </div>
+    )
   }
 
   const Layout = () => {
@@ -270,26 +463,23 @@
       platform.host.callCommand('set-layout', layoutId);
     };
 
-    const cardStyle = (active) => ({
-      padding: '1rem',
-      margin: '0.5rem 0',
-      border: active ? '2px solid #007bff' : '1px solid #ccc',
-      borderRadius: '8px',
-      cursor: 'pointer',
-      background: active ? '#e9f3ff' : 'white',
-    });
-
     return (
-      <div style={{padding: '1rem'}}>
-        <h2>Layout</h2>
-        <p>Choose how the desktop, taskbar and windows are arranged.</p>
-        {layouts.map(layout => (
-          <div key={layout.id} style={cardStyle(layout.id === currentLayout)} onClick={() => onSelectLayout(layout.id)}>
-            <strong>{layout.name}</strong>
-            {layout.id === currentLayout ? <span style={{marginLeft: '0.5rem', color: '#007bff'}}>(active)</span> : null}
+      <div className="settings-page">
+        <h1 className="settings-page-title">Layout</h1>
+        <p className="settings-page-subtitle">Choose how the desktop, taskbar and windows are arranged.</p>
+        <div className="settings-group">
+          <div className="settings-group-body">
+            {layouts.map(layout => (
+              <div key={layout.id} className="settings-row" style={{cursor: 'pointer'}} onClick={() => onSelectLayout(layout.id)}>
+                <div className="settings-row-text">
+                  <div className="settings-row-title">{layout.name}</div>
+                </div>
+                {layout.id === currentLayout && <span className="material-symbols-outlined" style={{color: '#0a84ff'}}>check</span>}
+              </div>
+            ))}
           </div>
-        ))}
-        <p style={{color: '#555', fontSize: '0.9rem'}}>
+        </div>
+        <p className="settings-hint">
           Layouts are stored in <code>/etc/wm/layouts.json</code> and the active layout in <code>/etc/wm/config.json</code> — edit these files directly to customize or add new layouts.
         </p>
       </div>
@@ -420,20 +610,16 @@
 
     const resetToDefaults = () => persist(DEFAULT_WM_SETTINGS)
 
-    const rowStyle = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', padding: '0.6rem 0', borderBottom: '1px solid #eee' }
-    const labelStyle = { flex: 1 }
-    const sectionTitleStyle = { marginTop: '1.5rem', marginBottom: '0.25rem' }
-
     const themeCardStyle = (active) => ({
       display: 'flex',
       alignItems: 'center',
       gap: '0.75rem',
       padding: '0.6rem 0.8rem',
       margin: '0.4rem 0',
-      border: active ? '2px solid #007bff' : '1px solid #ccc',
-      borderRadius: '8px',
+      border: active ? '2px solid #0a84ff' : '1px solid #e5e5ea',
+      borderRadius: '10px',
       cursor: 'pointer',
-      background: active ? '#e9f3ff' : 'white',
+      background: active ? '#eaf2ff' : 'white',
     })
 
     const swatchStyle = (appearance) => ({
@@ -447,72 +633,84 @@
     })
 
     return (
-      <div style={{ padding: '1rem', maxWidth: '32rem' }}>
-        <h2>Window Manager</h2>
-        <p>Customize the appearance and behavior of application windows.</p>
+      <div className="settings-page">
+        <h1 className="settings-page-title">Window Manager</h1>
+        <p className="settings-page-subtitle">Customize the appearance and behavior of application windows.</p>
 
-        <h3 style={sectionTitleStyle}>Themes</h3>
-        {themes.map(theme => (
-          <div key={theme.id} style={themeCardStyle(theme.id === currentThemeId)} onClick={() => selectTheme(theme)}>
-            <div style={swatchStyle(theme.appearance)} />
-            <strong>{theme.name}</strong>
-            {theme.id === currentThemeId ? <span style={{marginLeft: 'auto', color: '#007bff'}}>(active)</span> : null}
+        <h3 className="settings-section-title">Themes</h3>
+        <div className="settings-group">
+          <div className="settings-group-body" style={{padding: '0.6rem 0.8rem', display: 'block'}}>
+            {themes.map(theme => (
+              <div key={theme.id} style={themeCardStyle(theme.id === currentThemeId)} onClick={() => selectTheme(theme)}>
+                <div style={swatchStyle(theme.appearance)} />
+                <strong>{theme.name}</strong>
+                {theme.id === currentThemeId ? <span style={{marginLeft: 'auto', color: '#0a84ff'}}>(active)</span> : null}
+              </div>
+            ))}
           </div>
-        ))}
-
-        <h3 style={sectionTitleStyle}>Appearance</h3>
-        <div style={rowStyle}>
-          <label style={labelStyle}>Title bar background</label>
-          <input type="color" value={settings.appearance.headerBackground} onChange={e => setAppearance('headerBackground', e.target.value)} />
-        </div>
-        <div style={rowStyle}>
-          <label style={labelStyle}>Title bar text color</label>
-          <input type="color" value={settings.appearance.headerColor} onChange={e => setAppearance('headerColor', e.target.value)} />
-        </div>
-        <div style={rowStyle}>
-          <label style={labelStyle}>Window background</label>
-          <ColorAlphaInput value={settings.appearance.windowBackground} onChange={v => setAppearance('windowBackground', v)} />
-        </div>
-        <div style={rowStyle}>
-          <label style={labelStyle}>Taskbar background</label>
-          <ColorAlphaInput value={settings.appearance.taskbarBackground} onChange={v => setAppearance('taskbarBackground', v)} />
-        </div>
-        <div style={rowStyle}>
-          <label style={labelStyle}>Taskbar size ({settings.appearance.taskbarSize}px)</label>
-          <input type="range" min="40" max="96" value={settings.appearance.taskbarSize} onChange={e => setAppearance('taskbarSize', Number(e.target.value))} />
-        </div>
-        <div style={rowStyle}>
-          <label style={labelStyle}>Accent color</label>
-          <input type="color" value={settings.appearance.accentColor} onChange={e => setAppearance('accentColor', e.target.value)} />
-        </div>
-        <div style={rowStyle}>
-          <label style={labelStyle}>Corner radius ({settings.appearance.borderRadius}px)</label>
-          <input type="range" min="0" max="24" value={settings.appearance.borderRadius} onChange={e => setAppearance('borderRadius', Number(e.target.value))} />
-        </div>
-        <div style={rowStyle}>
-          <label style={labelStyle}>Background blur ({settings.appearance.blur}px)</label>
-          <input type="range" min="0" max="40" value={settings.appearance.blur} onChange={e => setAppearance('blur', Number(e.target.value))} />
-        </div>
-        <div style={rowStyle}>
-          <label style={labelStyle}>Drop shadow</label>
-          <input type="checkbox" checked={settings.appearance.shadow} onChange={e => setAppearance('shadow', e.target.checked)} />
         </div>
 
-        <h3 style={sectionTitleStyle}>Behavior</h3>
-        <div style={rowStyle}>
-          <label style={labelStyle}>Double-click title bar to toggle fullscreen</label>
-          <input type="checkbox" checked={settings.behavior.dblClickHeaderFullscreen} onChange={e => setBehavior('dblClickHeaderFullscreen', e.target.checked)} />
+        <h3 className="settings-section-title">Appearance</h3>
+        <div className="settings-group">
+          <div className="settings-group-body">
+            <div className="settings-row">
+              <span className="settings-row-label">Title bar background</span>
+              <input type="color" value={settings.appearance.headerBackground} onChange={e => setAppearance('headerBackground', e.target.value)} />
+            </div>
+            <div className="settings-row">
+              <span className="settings-row-label">Title bar text color</span>
+              <input type="color" value={settings.appearance.headerColor} onChange={e => setAppearance('headerColor', e.target.value)} />
+            </div>
+            <div className="settings-row">
+              <span className="settings-row-label">Window background</span>
+              <ColorAlphaInput value={settings.appearance.windowBackground} onChange={v => setAppearance('windowBackground', v)} />
+            </div>
+            <div className="settings-row">
+              <span className="settings-row-label">Taskbar background</span>
+              <ColorAlphaInput value={settings.appearance.taskbarBackground} onChange={v => setAppearance('taskbarBackground', v)} />
+            </div>
+            <div className="settings-row">
+              <span className="settings-row-label">Taskbar size ({settings.appearance.taskbarSize}px)</span>
+              <input type="range" min="40" max="96" value={settings.appearance.taskbarSize} onChange={e => setAppearance('taskbarSize', Number(e.target.value))} />
+            </div>
+            <div className="settings-row">
+              <span className="settings-row-label">Accent color</span>
+              <input type="color" value={settings.appearance.accentColor} onChange={e => setAppearance('accentColor', e.target.value)} />
+            </div>
+            <div className="settings-row">
+              <span className="settings-row-label">Corner radius ({settings.appearance.borderRadius}px)</span>
+              <input type="range" min="0" max="24" value={settings.appearance.borderRadius} onChange={e => setAppearance('borderRadius', Number(e.target.value))} />
+            </div>
+            <div className="settings-row">
+              <span className="settings-row-label">Background blur ({settings.appearance.blur}px)</span>
+              <input type="range" min="0" max="40" value={settings.appearance.blur} onChange={e => setAppearance('blur', Number(e.target.value))} />
+            </div>
+            <div className="settings-row">
+              <span className="settings-row-label">Drop shadow</span>
+              <input type="checkbox" checked={settings.appearance.shadow} onChange={e => setAppearance('shadow', e.target.checked)} />
+            </div>
+          </div>
         </div>
-        <div style={rowStyle}>
-          <label style={labelStyle}>Bring window to front on click</label>
-          <input type="checkbox" checked={settings.behavior.bringToFrontOnClick} onChange={e => setBehavior('bringToFrontOnClick', e.target.checked)} />
+
+        <h3 className="settings-section-title">Behavior</h3>
+        <div className="settings-group">
+          <div className="settings-group-body">
+            <div className="settings-row">
+              <span className="settings-row-label">Double-click title bar to toggle fullscreen</span>
+              <input type="checkbox" checked={settings.behavior.dblClickHeaderFullscreen} onChange={e => setBehavior('dblClickHeaderFullscreen', e.target.checked)} />
+            </div>
+            <div className="settings-row">
+              <span className="settings-row-label">Bring window to front on click</span>
+              <input type="checkbox" checked={settings.behavior.bringToFrontOnClick} onChange={e => setBehavior('bringToFrontOnClick', e.target.checked)} />
+            </div>
+          </div>
         </div>
 
         <div style={{ marginTop: '1rem' }}>
-          <button onClick={resetToDefaults} style={{ padding: '0.4rem 0.8rem', cursor: 'pointer' }}>Reset to defaults</button>
+          <button className="settings-btn" onClick={resetToDefaults}>Reset to defaults</button>
         </div>
 
-        <p style={{ color: '#555', fontSize: '0.9rem', marginTop: '1.5rem' }}>
+        <p className="settings-hint">
           Selecting a theme or changing a toggle writes the active settings to{' '}
           <code>/etc/wm/current.json</code>, which applies to windows immediately. Themes are stored as
           individual files in <code>/etc/wm/themes/</code> &mdash; add your own JSON files there to make
@@ -525,118 +723,122 @@
   }
 
   const Wallpapers = () => {
-  
-    const origin = platform.window.location.origin || platform.window.location.ancestorOrigins[0] || '';
     const [inputValue, setInputValue] = React.useState('');
     const [wallpapers, setWallpapers] = React.useState(configWallpapers);
+    const [showPicker, setShowPicker] = React.useState(false);
+    const [activeWallpaper, setActiveWallpaper] = React.useState(() => platform.userPref.getWallpaper());
 
     React.useEffect(() => {
       const metaFileRawContent = fs.readFileSync('/user-preferences.json')
       const configWallpapers = JSON.parse(metaFileRawContent).wallpapers ?? []
       setWallpapers(configWallpapers)
-
     }, [])
 
-  
-    const gridStyle = {
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-      gap: '20px',
-      padding: '20px',
-    };
-  
-    const imageStyle = {
-      width: '100%',
-      height: '150px',
-      objectFit: 'cover',
-      borderRadius: '8px',
-      cursor: 'pointer',
-    };
-  
-    const inputContainerStyle = {
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      position: 'fixed',
-      bottom: '10px',
-      width: '50%',
-    };
-  
-    const inputStyle = {
-      flexGrow: 1,
-      marginLeft: '10px',
-      maxWidth: '600px',
-      padding: '0.5rem',
-      border: '1px solid #ccc',
-      borderRadius: '4px',
-    };
-  
-    const buttonStyle = {
-      marginLeft: '10px',
-      padding: '0.5rem 1rem',
-      backgroundColor: '#007bff',
-      color: 'white',
-      border: 'none',
-      borderRadius: '4px',
-      cursor: 'pointer',
-    };
-  
-    const onClickHandler = (wallpaper) => {
-      const newWallpaper = wallpaper.startsWith('/') ? `${origin}${wallpaper}` : wallpaper;
-      if(!wallpapers.includes(wallpaper)) {
-        const addWallpaper = platform.getService('add-wallpaper');
-        setWallpapers(state => [...state, newWallpaper]);
+    const toFullUrl = (wallpaper) => wallpaper.startsWith('/') ? `${origin}${wallpaper}` : wallpaper;
+
+    const addAndSet = (wallpaper) => {
+      const fullUrl = toFullUrl(wallpaper);
+      if (!wallpapers.includes(wallpaper)) {
+        setWallpapers(state => [...state, wallpaper]);
         platform.host.callCommand('add-wallpaper', wallpaper);
       }
-
-      platform.host.callCommand('set-wallpaper', newWallpaper);
+      platform.host.callCommand('set-wallpaper', fullUrl);
+      setActiveWallpaper(fullUrl);
     };
-  
-    const onFetchClick = () => {
-      // if (inputValue) {
-      //   onClickHandler(inputValue);
-      // }
 
-      if(!wallpapers.includes(inputValue)) {
+    const onClickHandler = (wallpaper) => {
+      addAndSet(wallpaper);
+    };
+
+    const onFetchClick = () => {
+      if (inputValue && !wallpapers.includes(inputValue)) {
         setWallpapers(state => [...state, inputValue]);
         platform.host.callCommand('add-wallpaper', inputValue);
         setInputValue('')
       }
     };
-  
+
+    const onPickFromFiles = (path) => {
+      addAndSet(`/(sw)${path}`);
+    };
+
     return (
-      <>
-        <div style={gridStyle}>
-          {wallpapers.map((url, index) => (
-            <div key={index} onClick={() => onClickHandler(url)}>
-              {url.startsWith('/') ? (
-                <img src={`${origin}${url}`} alt={`Wallpaper ${index + 1}`} style={imageStyle} />
-              ) : (
-                <img src={url} alt={`Wallpaper ${index + 1}`} style={imageStyle} />
-              )}
-            </div>
-          ))}
-        </div>
-        {/* Input section at the bottom center */}
-        <div style={inputContainerStyle}>
+      <div className="settings-page">
+        <h1 className="settings-page-title">Wallpaper</h1>
+        <div className="wallpaper-toolbar">
           <input
             type="text"
-            placeholder="Enter URL"
-            style={inputStyle}
+            className="settings-input"
+            placeholder="Wallpaper image URL"
             value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)} // Update state with input value
+            onChange={(e) => setInputValue(e.target.value)}
           />
-          <button onClick={onFetchClick} style={buttonStyle}>
-            Add Wallpaper
+          <button className="settings-btn" onClick={onFetchClick}>Add</button>
+          <button className="settings-btn primary" onClick={() => setShowPicker(true)}>
+            <span className="material-symbols-outlined" style={{fontSize: '1.1rem', verticalAlign: '-2px', marginRight: '0.25rem'}}>folder_open</span>
+            Choose from Files
           </button>
         </div>
-      </>
+        <div className="wallpaper-grid">
+          {wallpapers.map((url, index) => {
+            const fullUrl = toFullUrl(url);
+            const active = fullUrl === activeWallpaper;
+            return (
+              <div key={index} className={`wallpaper-card ${active ? 'active' : ''}`} onClick={() => onClickHandler(url)}>
+                <img src={fullUrl} alt={`Wallpaper ${index + 1}`} className="wallpaper-thumb" />
+                <div className="wallpaper-overlay">
+                  {active ? (
+                    <span className="material-symbols-outlined wallpaper-check">check_circle</span>
+                  ) : (
+                    <span className="wallpaper-overlay-label">Set as Wallpaper</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {showPicker && (
+          <FilePicker
+            title="Choose a wallpaper image"
+            initialDir="/home/user1"
+            accept={imageExtensions}
+            onSelect={onPickFromFiles}
+            onClose={() => setShowPicker(false)}
+          />
+        )}
+      </div>
     );
   };
 
 </script>
 
 <style>
+@font-face {
+  font-family: 'Material Symbols Outlined';
+  font-style: normal;
+  font-weight: 100 700;
+  src: url(https://fonts.gstatic.com/s/materialsymbolsoutlined/v138/kJEhBvYX7BgnkSrUwT8OhrdQw4oELdPIeeII9v6oFsLjBuVY.woff2) format('woff2');
+}
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 20px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+}
+
+html, body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+
 .close-button {
   position: absolute;
   top: 10px;  /* Distance from the top of the container */
@@ -680,9 +882,485 @@
 .close-button:hover::after {
   background-color: #000;
 }
+
+/* macOS System Settings style shell */
+.settings-root {
+  display: flex;
+  height: 100%;
+  width: 100%;
+  background: #f5f5f7;
+  color: #1d1d1f;
+}
+
+.settings-sidebar {
+  flex: 0 0 13.5rem;
+  background: rgba(246, 246, 248, 0.9);
+  border-right: 1px solid #e0e0e2;
+  overflow: auto;
+  padding: 0.75rem 0.5rem;
+  box-sizing: border-box;
+}
+
+.settings-sidebar-title {
+  font-size: 1.3rem;
+  font-weight: 700;
+  padding: 0.5rem 0.6rem 1rem;
+}
+
+.settings-nav-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.settings-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 0.92rem;
+  color: #1d1d1f;
+}
+
+.settings-nav-item:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.settings-nav-item.active {
+  background: #0a84ff;
+  color: #fff;
+}
+
+.settings-nav-icon {
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.settings-content {
+  flex-grow: 1;
+  overflow: auto;
+  padding: 1.5rem 2rem;
+  box-sizing: border-box;
+}
+
+.settings-page {
+  max-width: 40rem;
+  margin: 0 auto;
+}
+
+.settings-page-title {
+  font-size: 1.7rem;
+  font-weight: 700;
+  margin: 0 0 0.25rem;
+}
+
+.settings-page-subtitle {
+  color: #6e6e73;
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+}
+
+.settings-section-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6e6e73;
+  margin: 1.5rem 0 0.4rem;
+}
+
+.settings-group {
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+}
+
+.settings-group-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.7rem 1rem;
+  border-bottom: 1px solid #f0f0f2;
+}
+
+.settings-row:last-child {
+  border-bottom: none;
+}
+
+.settings-row-label {
+  flex: 1;
+  font-size: 0.92rem;
+}
+
+.settings-row-icon {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.settings-row-text {
+  flex-grow: 1;
+  min-width: 0;
+}
+
+.settings-row-title {
+  font-size: 0.92rem;
+  font-weight: 500;
+}
+
+.settings-row-subtitle {
+  font-size: 0.8rem;
+  color: #6e6e73;
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.settings-row-subtitle:hover {
+  text-decoration: underline;
+}
+
+.settings-hint {
+  color: #6e6e73;
+  font-size: 0.82rem;
+  margin-top: 1.25rem;
+  line-height: 1.5;
+}
+
+.settings-hint code {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+  padding: 0.05rem 0.3rem;
+}
+
+.settings-btn {
+  padding: 0.4rem 0.9rem;
+  border-radius: 7px;
+  border: 1px solid #d2d2d7;
+  background: #fff;
+  color: #1d1d1f;
+  cursor: pointer;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.settings-btn:hover {
+  background: #f5f5f7;
+}
+
+.settings-btn.primary {
+  background: #0a84ff;
+  border-color: #0a84ff;
+  color: #fff;
+}
+
+.settings-btn.primary:hover {
+  background: #0070e0;
+}
+
+.settings-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.settings-input {
+  flex-grow: 1;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid #d2d2d7;
+  border-radius: 7px;
+  font-size: 0.85rem;
+}
+
+/* About */
+.about-card {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.about-avatar {
+  width: 5rem;
+  height: 5rem;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #f0f0f2;
+}
+
+.about-name {
+  margin: 0;
+  font-size: 1.3rem;
+}
+
+.about-role {
+  margin: 0.2rem 0 0;
+  color: #6e6e73;
+  font-size: 0.9rem;
+}
+
+/* Projects */
+.projects-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
+  gap: 0.75rem;
+}
+
+.project-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 1rem 0.5rem;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  text-align: center;
+}
+
+.project-card:hover {
+  background: #eef4ff;
+}
+
+.project-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  object-fit: contain;
+}
+
+.project-name {
+  font-size: 0.78rem;
+  word-break: break-word;
+  color: #1d1d1f;
+}
+
+/* Wallpapers */
+.wallpaper-toolbar {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.wallpaper-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 1rem;
+}
+
+.wallpaper-card {
+  position: relative;
+  border-radius: 10px;
+  overflow: hidden;
+  cursor: pointer;
+  aspect-ratio: 16 / 10;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.wallpaper-card.active {
+  box-shadow: 0 0 0 3px #0a84ff;
+}
+
+.wallpaper-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.wallpaper-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0);
+  transition: background 0.15s;
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.wallpaper-card:not(.active):hover .wallpaper-overlay {
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.wallpaper-card:not(.active) .wallpaper-overlay-label {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.wallpaper-card:not(.active):hover .wallpaper-overlay-label {
+  opacity: 1;
+}
+
+.wallpaper-card.active .wallpaper-overlay {
+  background: rgba(10, 132, 255, 0.18);
+}
+
+.wallpaper-check {
+  font-size: 2rem;
+  color: #fff;
+  filter: drop-shadow(0 1px 3px rgba(0,0,0,0.5));
+}
+
+/* File picker modal */
+.filepicker-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.filepicker-dialog {
+  background: #fff;
+  border-radius: 12px;
+  width: min(34rem, 90vw);
+  height: min(28rem, 80vh);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+}
+
+.filepicker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #f0f0f2;
+  font-weight: 600;
+}
+
+.filepicker-close {
+  cursor: pointer;
+  color: #6e6e73;
+}
+
+.filepicker-breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.4rem 1rem;
+  font-size: 0.8rem;
+  color: #6e6e73;
+  border-bottom: 1px solid #f0f0f2;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.filepicker-breadcrumbs .crumb {
+  cursor: pointer;
+  padding: 0.1rem 0.3rem;
+  border-radius: 4px;
+}
+
+.filepicker-breadcrumbs .crumb:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.filepicker-breadcrumbs .sep {
+  font-size: 0.9rem;
+}
+
+.filepicker-grid {
+  flex-grow: 1;
+  overflow: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr));
+  gap: 0.5rem;
+  padding: 0.75rem;
+  align-content: flex-start;
+}
+
+.filepicker-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  color: #aaa;
+  padding: 2rem 0;
+  font-size: 0.85rem;
+}
+
+.filepicker-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.4rem;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.filepicker-item:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.filepicker-item.selected {
+  background: rgba(10, 132, 255, 0.15);
+}
+
+.filepicker-icon {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 6px;
+  background-color: #f0f0f2;
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #8e8e93;
+}
+
+.filepicker-name {
+  font-size: 0.72rem;
+  text-align: center;
+  word-break: break-word;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.filepicker-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-top: 1px solid #f0f0f2;
+}
 </style>
 
-<div draggable id="react-root" style="background: #ffffff66;height: 100%;width: 100%;"></div>
+<div draggable id="react-root" style="height: 100%; width: 100%;"></div>
 <div draggable id="dragger"></div>
 <!-- <button id="render-btn">Render</button> -->
 
