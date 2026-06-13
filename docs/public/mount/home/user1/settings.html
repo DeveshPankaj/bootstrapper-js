@@ -400,6 +400,7 @@
     const links = [
       { key: 'email', label: 'Email', value: contactInfo.email, href: contactInfo.email ? `mailto:${contactInfo.email}` : null, icon: 'mail', color: '#34c759', action: contactInfo.email ? { label: copied ? 'Copied!' : 'Copy', onClick: copyEmail } : null },
       { key: 'github', label: 'GitHub', value: contactInfo.github, href: contactInfo.github, icon: 'code', color: '#1f2328' },
+      { key: 'linkedin', label: 'LinkedIn', value: contactInfo.linkedin, href: contactInfo.linkedin, icon: 'work', color: '#0a66c2' },
       { key: 'website', label: 'Website', value: contactInfo.website, href: contactInfo.website, icon: 'language', color: '#0a84ff' },
     ].filter(link => link.value)
 

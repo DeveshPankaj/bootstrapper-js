@@ -21,7 +21,7 @@ const LAYOUTS_PATH = '/etc/wm/layouts.json'
 const LAYOUT_CONFIG_PATH = '/etc/wm/config.json'
 const WM_CURRENT_PATH = '/etc/wm/current.json'
 const WM_THEMES_DIR = '/etc/wm/themes'
-const WM_DEFAULT_THEME_PATH = `${WM_THEMES_DIR}/light.json`
+const WM_DEFAULT_THEME_PATH = `${WM_THEMES_DIR}/ocean.json`
 
 type LayoutDef = {
     id: string

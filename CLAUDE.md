@@ -98,8 +98,9 @@ Split into two halves on purpose:
      `dark.json`, `light.json`, `ocean.json`, `sunset.json`), each the same
      `{name, appearance, behavior}` shape.
    - `ensureWmCurrent()` seeds `current.json` on startup if missing: tries
-     `/etc/wm/themes/default.json`, then any other `.json` file in `/etc/wm/themes/`,
-     then falls back to in-code `DEFAULT_WM_SETTINGS`.
+     `WM_DEFAULT_THEME_PATH` (`/etc/wm/themes/ocean.json` — the default theme), then
+     any other `.json` file in `/etc/wm/themes/`, then falls back to in-code
+     `DEFAULT_WM_SETTINGS`.
    - `applyWmSettings(settings)` sets `--wm-header-bg`, `--wm-header-color`,
      `--wm-window-bg`, `--wm-accent`, `--wm-radius`, `--wm-blur`, `--wm-shadow` on
      `:root`. `.window`, `.window-header`, `.window.top` CSS rules consume these via
