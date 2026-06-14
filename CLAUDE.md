@@ -35,6 +35,34 @@ icons) and a set of bundled mini-apps that run inside iframe "windows".
   relative to the mounted filesystem's own root under `MountableFileSystem` (e.g.
   `realpathSync('/tmp')` → `/`, not the global path).
 
+### "FHS-lite" vfs layout
+
+The vfs loosely mirrors Linux's filesystem hierarchy. When adding a new system file,
+follow these existing conventions (all bootstrapped via `meta.json`, all currently
+`force_reload: true` except where noted):
+- `/bin/*.run` — built-in shell commands (`ls.run`, `cp.run`, `cat.run`, ...), run via
+  `execCommand`/the terminal.
+- `/usr/bin/*.js` — small standalone scripts (e.g. `fullscreen.js`).
+- `/usr/lib/ui/*.js` — shared UI snippets consumed by other vfs scripts (currently
+  `menuItem.js`, a context-menu item template).
+- `/usr/share/icons/*` — file-type icon images for the explorer's `extIconMap` (see
+  "File-type icons" below).
+- `/etc/wm/` — window manager config (`layouts.json`, `config.json`, `current.json`,
+  `themes/*.json`).
+- `/etc/crontab`, `/etc/widgets/*.js` — cron schedule and desktop widget scripts
+  (`force_reload: false`, user-editable).
+- `/opt/window-manager.js` — per-window behavior, re-read on every `createWindow`
+  (see "Window manager appearance & behavior").
+- `/opt/cron/*.js` — cron job scripts (`force_reload: false`).
+- `/home/user1/` — user home: `apps/` (explorer, terminal, etc.), `settings.html`,
+  `initd.run` (boot script run by `initd`), user content dirs (`projects/`, `quotes/`,
+  `tools/`, `welcome/`).
+- `/tmp`, `/mnt` — ephemeral / mounted-folder space, not part of `meta.json`.
+
+Rule of thumb: files under `/usr`, `/etc`, `/opt`, `/bin` are "system" — not meant for
+direct user editing (`force_reload: true`); files under `/home/user1` and `/etc/crontab`
+/`/etc/widgets`/`/opt/cron` are user-editable (`force_reload: false`/absent).
+
 ### Storage backend switch (IndexedDB vs LocalStorage)
 
 - `src/index.ts` resolves which backend to mount via `resolveFsBackend()`: reads the

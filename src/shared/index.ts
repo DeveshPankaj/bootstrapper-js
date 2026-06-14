@@ -115,9 +115,13 @@ export class Host {
     callback: (...args: any[]) => void,
     meta: Record<string, unknown> = {}
   ): { remove: () => void } {
-    // if(this.commands.getValue().find(x => x.name === command_name)) {
-    //     throw `Duplicate command name [${command_name}]`
-    // }
+    // New registrations are prepended and `getCommand`/`callCommand` use `.find()`,
+    // so the most-recently-registered command with a given name wins and any earlier
+    // one is shadowed (used intentionally for the 'explorer' fallback in remote.ts).
+    // Warn so accidental shadowing elsewhere doesn't go unnoticed.
+    if (this.commands.getValue().find((x) => x.name === command_name)) {
+      console.warn(`registerCommand: '${command_name}' is already registered — the new registration will take precedence.`);
+    }
 
     const newCommandObject = Object.freeze({
       name: command_name,

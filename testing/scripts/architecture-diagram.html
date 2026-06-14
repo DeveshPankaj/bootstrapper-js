@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; font-family: -apple-system, Helvetica, Arial, sans-serif; }
+  body { margin: 0; padding: 24px; background: #fff; }
+  .outer {
+    border: 3px solid #8aa83a;
+    border-radius: 10px;
+    background: #f4f9e9;
+    padding: 14px;
+    width: 920px;
+  }
+  .outer-title {
+    text-align: center;
+    font-weight: 700;
+    font-size: 20px;
+    color: #4f6b1f;
+    margin-bottom: 12px;
+  }
+  .row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .row.equal > .box { flex: 1; }
+  .box {
+    border: 2px solid #8aa83a;
+    border-radius: 8px;
+    background: #cfe6a8;
+    padding: 10px 12px;
+  }
+  .box h3 {
+    margin: 0 0 6px 0;
+    font-size: 14px;
+    text-align: center;
+    color: #2f4413;
+  }
+  .box ul {
+    margin: 0;
+    padding-left: 18px;
+    font-size: 11.5px;
+    color: #2f4413;
+    line-height: 1.5;
+  }
+  .box.wide { background: #e3f0c8; }
+  .box.kernel { background: #d6ecb0; }
+  .box.kmod { background: #cfe6a8; }
+  .arrow {
+    text-align: center;
+    font-size: 22px;
+    color: #4f6b1f;
+    margin: 6px 0;
+  }
+  .hw {
+    border: 3px solid #6f6f6f;
+    border-radius: 10px;
+    background: #efefef;
+    padding: 14px;
+    width: 920px;
+    margin-top: 10px;
+  }
+  .hw-title {
+    text-align: center;
+    font-weight: 700;
+    font-size: 18px;
+    color: #444;
+    margin-bottom: 12px;
+  }
+  .hw .box {
+    background: #fafafa;
+    border-color: #999;
+  }
+  .hw .box h3 { color: #333; }
+  .hw .box ul { color: #333; }
+</style>
+</head>
+<body>
+  <div class="outer">
+    <div class="outer-title">bootstrapper-js &mdash; "Web OS" (Browser)</div>
+
+    <div class="row equal">
+      <div class="box">
+        <h3>System Software</h3>
+        <ul>
+          <li>file-explorer</li>
+          <li>notepad</li>
+          <li>vs-code</li>
+          <li>game-of-life</li>
+          <li>xml-parser</li>
+          <li><i>(src/apps/*)</i></li>
+        </ul>
+      </div>
+      <div class="box">
+        <h3>User Process</h3>
+        <ul>
+          <li>/bin/*.run</li>
+          <li>/home/user1/apps/*.js, *.html</li>
+          <li>/opt/*.js (cron jobs)</li>
+          <li>initd.run</li>
+        </ul>
+      </div>
+      <div class="box">
+        <h3>User Utility</h3>
+        <ul>
+          <li>Desktop shell, taskbar</li>
+          <li>Window manager UI</li>
+          <li>settings.html pages</li>
+          <li>Terminal (xtermjs.html)</li>
+        </ul>
+      </div>
+      <div class="box">
+        <h3>Compiler</h3>
+        <ul>
+          <li>execString</li>
+          <li>Babel (env+react+ts)</li>
+          <li>CommonJS via new Function</li>
+          <li>runs .js / .tsx in vfs</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="box wide" style="flex:1">
+        <h3>System Libraries</h3>
+        <ul>
+          <li><b>src/shared/*</b> &mdash; Platform, Host registry, UserPreference, utils, draggable, types</li>
+          <li><b>/usr/lib/ui/*</b>, <b>/usr/share/icons/*</b> &mdash; shared vfs assets</li>
+          <li><b>modules.json</b> &mdash; preload/lazy module catalogue</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="box kernel" style="flex:1">
+        <h3>Kernel</h3>
+        <ul>
+          <li><b>src/index.ts</b> &mdash; boot: resolve fs backend, mount BrowserFS, bootstrap defaultDirs + meta.json</li>
+          <li><b>src/remote.ts</b> &mdash; Host / WindowService / command+service registry, Platform.exec / execString / execCommand</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="box kmod" style="flex:1">
+        <h3>Kernel Modules</h3>
+        <ul>
+          <li><b>src/core/layout</b> &mdash; desktop shell, window-manager appearance, layouts (/etc/wm/*)</li>
+          <li><b>src/core/window-manager.ts</b> &mdash; per-window behavior (/opt/window-manager.js, re-executed per createWindow)</li>
+          <li><b>src/core/cron.ts</b> &mdash; /etc/crontab scheduler</li>
+          <li><b>src/core/iframe</b> &mdash; generic iframe window host</li>
+          <li><b>src/sw.ts</b> &mdash; service worker (/(sw)/, /cache/ fs bridge)</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow">&#8595;</div>
+
+  <div class="hw">
+    <div class="hw-title">Browser Runtime ("Hardware")</div>
+    <div class="row equal" style="margin-bottom:0">
+      <div class="box">
+        <h3>JS Engine / Workers (CPU)</h3>
+        <ul><li>V8 / Web Workers</li></ul>
+      </div>
+      <div class="box">
+        <h3>IndexedDB / LocalStorage (RAM/Disk)</h3>
+        <ul><li>BrowserFS persistence</li></ul>
+      </div>
+      <div class="box">
+        <h3>DOM, Fetch/XHR, Service Worker (I/O)</h3>
+        <ul><li>UI rendering, network, SW fs bridge</li></ul>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

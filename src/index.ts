@@ -20,33 +20,6 @@ const resolveFsBackend = (): 'indexeddb' | 'localstorage' => {
 }
 
 
-(function() {
-    const originalOpen = XMLHttpRequest.prototype.open;
-    const originalSend = XMLHttpRequest.prototype.send;
-
-    XMLHttpRequest.prototype.open = function(method, url, async, user, password) {
-        this._method = method;
-        this._url = url;
-        console.log('XMLHttpRequest opened:', { method, url, async, user, password });
-        return originalOpen.apply(this, arguments);
-    };
-
-    XMLHttpRequest.prototype.send = function(body) {
-        console.log('XMLHttpRequest sent:', { body });
-        this.addEventListener('readystatechange', function() {
-            if (this.readyState === 4) { // Request is complete
-                console.log('XMLHttpRequest response received:', {
-                    method: this._method,
-                    url: this._url,
-                    status: this.status,
-                    response: this.responseText,
-                });
-            }
-        });
-        return originalSend.apply(this, arguments);
-    };
-})();
-
 const loadBootstrapScript = (storage: Storage) => {
     const bootstrap_script_path = storage.getItem(__BOOTSTRAP_SCRIPT_PATH_KEY__) || "/remote.bundle.js"
     if(!bootstrap_script_path) return
