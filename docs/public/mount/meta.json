@@ -65,6 +65,11 @@
     "force_reload": false
   },
   {
+    "path": "/bin/tree.run",
+    "file": "/bin/tree.run",
+    "force_reload": false
+  },
+  {
     "path": "/bin/date.run",
     "file": "/bin/date.run",
     "force_reload": false
@@ -182,6 +187,11 @@
   {
     "path": "/bin/ps.run",
     "file": "/bin/ps.run",
+    "force_reload": false
+  },
+  {
+    "path": "/bin/htop.run",
+    "file": "/bin/htop.run",
     "force_reload": false
   },
   {
@@ -359,6 +369,61 @@
   {
     "path": "/etc/widgets/public-ip.js",
     "file": "/etc/widgets/public-ip.js",
+    "force_reload": false
+  },
+  {
+    "path": "/etc/widgets/memory.js",
+    "file": "/etc/widgets/memory.js",
+    "force_reload": false
+  },
+  {
+    "path": "/etc/widgets/toolbar.js",
+    "file": "/etc/widgets/toolbar.js",
+    "force_reload": false
+  },
+  {
+    "path": "/etc/settings/01-about.js",
+    "file": "/etc/settings/01-about.js",
+    "force_reload": false
+  },
+  {
+    "path": "/etc/settings/02-projects.js",
+    "file": "/etc/settings/02-projects.js",
+    "force_reload": false
+  },
+  {
+    "path": "/etc/settings/03-contact.js",
+    "file": "/etc/settings/03-contact.js",
+    "force_reload": false
+  },
+  {
+    "path": "/etc/settings/04-wallpapers.js",
+    "file": "/etc/settings/04-wallpapers.js",
+    "force_reload": false
+  },
+  {
+    "path": "/etc/settings/05-layout.js",
+    "file": "/etc/settings/05-layout.js",
+    "force_reload": false
+  },
+  {
+    "path": "/etc/settings/06-window-manager.js",
+    "file": "/etc/settings/06-window-manager.js",
+    "force_reload": false
+  },
+  {
+    "path": "/etc/settings/07-widgets.js",
+    "file": "/etc/settings/07-widgets.js",
+    "force_reload": false
+  },
+  {
+    "path": "/etc/settings/08-storage.js",
+    "file": "/etc/settings/08-storage.js",
+    "force_reload": false
+  },
+  {
+    "path": "/etc/settings/99-example.js",
+    "file": "/etc/settings/99-example.js",
     "force_reload": false
   },
   {

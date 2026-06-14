@@ -15,10 +15,78 @@ export type TaskbarWindowInfo = {
   icon: string;
   minimized: boolean;
   active: boolean;
+  desktopId: string;
   toggle: () => void;
 };
 
 export const windowsSubject = new BehaviorSubject<TaskbarWindowInfo[]>([]);
+
+// Multiple virtual desktops ("Spaces"): every window belongs to exactly one
+// desktop (tagged via `desktopId`); only the active desktop's windows are
+// shown. Persisted so the desktop layout survives a reload.
+export type DesktopInfo = { id: string; name: string };
+
+const DESKTOPS_CONFIG_PATH = "/etc/wm/desktops.json";
+
+const DEFAULT_DESKTOPS_CONFIG = { desktops: [{ id: "1", name: "Desktop 1" }], active: "1" };
+
+const readDesktopsConfig = (): { desktops: DesktopInfo[]; active: string } => {
+  try {
+    const fs = platform.host.getFS();
+    const raw = JSON.parse(fs.readFileSync(DESKTOPS_CONFIG_PATH, "utf-8"));
+    if (Array.isArray(raw.desktops) && raw.desktops.length && raw.active) return raw;
+  } catch (err) { /* default */ }
+  return DEFAULT_DESKTOPS_CONFIG;
+};
+
+const writeDesktopsConfig = (desktops: DesktopInfo[], active: string) => {
+  try {
+    const fs = platform.host.getFS();
+    if (!fs.existsSync("/etc/wm")) fs.mkdirSync("/etc/wm", { recursive: true });
+    fs.writeFileSync(DESKTOPS_CONFIG_PATH, JSON.stringify({ desktops, active }, null, 2));
+  } catch (err) { /* best effort */ }
+};
+
+const initialDesktopsConfig = readDesktopsConfig();
+export const desktopsSubject = new BehaviorSubject<DesktopInfo[]>(initialDesktopsConfig.desktops);
+export const activeDesktopSubject = new BehaviorSubject<string>(initialDesktopsConfig.active);
+
+export const switchDesktop = (id: string) => {
+  if (id === activeDesktopSubject.getValue()) return;
+  if (!desktopsSubject.getValue().some(d => d.id === id)) return;
+  activeDesktopSubject.next(id);
+  writeDesktopsConfig(desktopsSubject.getValue(), id);
+};
+
+export const addDesktop = () => {
+  const desktops = desktopsSubject.getValue();
+  const id = `${Date.now()}`;
+  const updated = [...desktops, { id, name: `Desktop ${desktops.length + 1}` }];
+  desktopsSubject.next(updated);
+  activeDesktopSubject.next(id);
+  writeDesktopsConfig(updated, id);
+};
+
+
+export const removeDesktop = (id: string) => {
+  const desktops = desktopsSubject.getValue();
+  if (desktops.length <= 1) return;
+  const idx = desktops.findIndex(d => d.id === id);
+  if (idx === -1) return;
+
+  const updated = desktops.filter(d => d.id !== id);
+  const wasActive = activeDesktopSubject.getValue() === id;
+  const newActive = wasActive ? updated[Math.max(0, idx - 1)].id : activeDesktopSubject.getValue();
+
+  // Move any windows on the removed desktop to the desktop that becomes active.
+  windowsSubject.next(
+    windowsSubject.getValue().map(w => w.desktopId === id ? { ...w, desktopId: newActive } : w)
+  );
+
+  desktopsSubject.next(updated);
+  activeDesktopSubject.next(newActive);
+  writeDesktopsConfig(updated, newActive);
+};
 
 const PROC_DIR = "/proc";
 let nextPid = 1;
@@ -88,6 +156,9 @@ const registerProcessCommands = () => {
   if (processCommandsRegistered || !platform?.host) return;
   processCommandsRegistered = true;
 
+  platform.register('add-desktop', addDesktop);
+  platform.host.registerCommand('add-desktop', addDesktop, { callable: true });
+
   // `process.kill(pid)` - closes the window with the given pid, same as
   // clicking its close button.
   platform.host.registerCommand("process.kill", (pid: number | string) => {
@@ -155,6 +226,19 @@ export class WindowManager {
   > = {};
   constructor(private contentRef: { current: HTMLDivElement | null }) {
     registerProcessCommands();
+    activeDesktopSubject.subscribe(() => this.updateVisibility());
+    windowsSubject.subscribe(() => this.updateVisibility());
+  }
+
+  // Hides windows that don't belong to the active desktop.
+  private updateVisibility() {
+    const active = activeDesktopSubject.getValue();
+    const infos = windowsSubject.getValue();
+    Object.values(this.windows).forEach(wins => wins.forEach(w => {
+      const info = infos.find(i => i.pid === w.pid);
+      const desktopId = info?.desktopId ?? active;
+      w.container.classList.toggle("desktop-hidden", desktopId !== active);
+    }));
   }
 
   public createWindow(command_name: string, ...args: unknown[]) {
@@ -200,6 +284,7 @@ export class WindowManager {
         icon,
         minimized: false,
         active: true,
+        desktopId: activeDesktopSubject.getValue(),
         toggle: () => this.toggleMinimize(windowRef),
       },
     ]);

@@ -1,4 +1,4 @@
-import { Command, Host, Platform, PlatformEvent, WidgetDef } from "@shared/index";
+import { Command, Host, Platform, PlatformEvent, SettingsSectionDef, WidgetDef } from "@shared/index";
 import { BehaviorSubject, Subject } from "rxjs";
 import { Module, modules } from "./modules/modules";
 import type fs from 'fs'
@@ -27,7 +27,7 @@ class WindowService {
         //   console.log(`${uniqueName} require ${moduleName}`)
         // };
 
-        const host = new Host(this.window, newPlatform, commands, widgets, modulesMap);
+        const host = new Host(this.window, newPlatform, commands, widgets, modulesMap, settingsSections);
         newPlatform.setHost(host);
 
         resolve([iframe.contentWindow!, platformEventEmitter]);
@@ -225,7 +225,8 @@ const platform = window.platform = hostPlatform;
 
 const commands = new BehaviorSubject<Array<Command>>([]);
 const widgets = new BehaviorSubject<Array<WidgetDef>>([]);
-const host = new Host(window, hostPlatform, commands, widgets, modulesMap);
+const settingsSections = new BehaviorSubject<Array<SettingsSectionDef>>([]);
+const host = new Host(window, hostPlatform, commands, widgets, modulesMap, settingsSections);
 hostPlatform.setHost(host);
 
 modulesMap.set('root', {platform} as any)

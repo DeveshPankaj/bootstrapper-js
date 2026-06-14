@@ -344,15 +344,15 @@ const applyCss = ({wallpaper, grid}: {wallpaper: string, grid: LayoutDef['grid']
             position: absolute;
             top: 1rem;
             right: 1rem;
-            display: flex;
-            flex-direction: column;
-            align-items: flex-end;
-            gap: 0.75rem;
+            bottom: 1rem;
+            left: 1rem;
             z-index: 5;
             pointer-events: none;
         }
 
         .widgets-panel .widget {
+            position: absolute;
+            min-width: 9rem;
             pointer-events: auto;
             padding: 0.75rem 1rem;
             background: var(--wm-window-bg, rgba(255, 255, 255, 0.15));
@@ -360,6 +360,14 @@ const applyCss = ({wallpaper, grid}: {wallpaper: string, grid: LayoutDef['grid']
             border-radius: var(--wm-radius, 8px);
             box-shadow: var(--wm-shadow, 0 8px 32px rgba(31, 38, 135, 0.37));
             color: var(--wm-header-color, #1d1d1f);
+            cursor: grab;
+            user-select: none;
+        }
+
+        .widgets-panel .widget.dragging {
+            cursor: grabbing;
+            opacity: 0.85;
+            z-index: 10;
         }
 
         .widget-clock-time {
@@ -384,6 +392,43 @@ const applyCss = ({wallpaper, grid}: {wallpaper: string, grid: LayoutDef['grid']
         .widget-public-ip-value {
             font-size: 1rem;
             font-weight: 600;
+            text-align: right;
+        }
+
+        .widget-memory-label {
+            font-size: 0.7rem;
+            opacity: 0.8;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .widget-memory-value {
+            font-size: 1rem;
+            font-weight: 600;
+            text-align: right;
+        }
+
+        .widget-memory-bar {
+            margin-top: 0.4rem;
+            width: 100%;
+            height: 0.35rem;
+            border-radius: 0.2rem;
+            background: rgba(127, 127, 127, 0.3);
+            overflow: hidden;
+        }
+
+        .widget-memory-bar-fill {
+            height: 100%;
+            width: 0%;
+            background: var(--wm-accent, #0a84ff);
+            border-radius: 0.2rem;
+            transition: width 0.3s ease;
+        }
+
+        .widget-memory-sub {
+            margin-top: 0.2rem;
+            font-size: 0.7rem;
+            opacity: 0.7;
             text-align: right;
         }
 
@@ -600,6 +645,74 @@ const applyCss = ({wallpaper, grid}: {wallpaper: string, grid: LayoutDef['grid']
             white-space: nowrap;
         }
 
+        .desktop-switcher {
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
+
+        .left-nav .desktop-switcher, .right-nav .desktop-switcher {
+            flex-direction: column;
+        }
+
+        .desktop-pill {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 1.6rem;
+            height: 1.6rem;
+            padding: 0 0.3rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            color: var(--wm-header-color, #1d1d1f);
+        }
+
+        .desktop-pill:hover {
+            background: rgba(127, 127, 127, 0.2);
+        }
+
+        .desktop-pill.active {
+            background: var(--wm-accent, #0a84ff);
+            color: #fff;
+        }
+
+        .desktop-context-menu {
+            position: fixed;
+            z-index: 100;
+            background: var(--wm-window-bg, #fff);
+            backdrop-filter: blur(var(--wm-blur, 10px));
+            border-radius: var(--wm-radius, 8px);
+            box-shadow: var(--wm-shadow, 0 8px 32px rgba(31, 38, 135, 0.37));
+            color: var(--wm-header-color, #1d1d1f);
+            overflow: hidden;
+        }
+
+        .desktop-context-menu button {
+            display: block;
+            width: 100%;
+            padding: 0.5rem 1rem;
+            border: none;
+            background: transparent;
+            color: inherit;
+            font-size: 0.85rem;
+            text-align: left;
+            cursor: pointer;
+        }
+
+        .desktop-context-menu button:hover {
+            background: rgba(127, 127, 127, 0.2);
+        }
+
+        .desktop-context-menu button:disabled {
+            opacity: 0.4;
+            cursor: default;
+        }
+
+        .window.desktop-hidden {
+            display: none !important;
+        }
+
         .overlay {
             // display: none;
             background: rgba(255, 255, 255, 0.30);
@@ -697,26 +810,156 @@ platform.register('set-layout', applyLayout)
 platform.host.registerCommand('set-layout', applyLayout)
 
 
+// Per-widget pixel positions (keyed by widget name), persisted so dragged
+// widgets stay where the user left them.
+const WIDGET_POSITIONS_PATH = '/etc/widgets/positions.json'
+// Which registered widgets are shown (`null` = show all - default before the
+// user has touched Settings > Widgets).
+const WIDGETS_CONFIG_PATH = '/etc/widgets/config.json'
+
+const readWidgetPositions = (): Record<string, { top: number, left: number }> => {
+    try {
+        const fs = platform.host.getFS()
+        return JSON.parse(fs.readFileSync(WIDGET_POSITIONS_PATH, 'utf-8'))
+    } catch (err) {
+        return {}
+    }
+}
+
+const writeWidgetPosition = (name: string, top: number, left: number) => {
+    const fs = platform.host.getFS()
+    const positions = readWidgetPositions()
+    positions[name] = { top, left }
+    try {
+        if (!fs.existsSync('/etc/widgets')) fs.mkdirSync('/etc/widgets', { recursive: true })
+        fs.writeFileSync(WIDGET_POSITIONS_PATH, JSON.stringify(positions, null, 2))
+    } catch (err) { /* best effort */ }
+}
+
+// Widgets hidden by default until the user enables them from Settings ->
+// Widgets, even though their script is loaded/registered at boot.
+const DEFAULT_HIDDEN_WIDGETS = ['toolbar']
+
+const readEnabledWidgets = (): string[] | null => {
+    try {
+        const fs = platform.host.getFS()
+        const cfg = JSON.parse(fs.readFileSync(WIDGETS_CONFIG_PATH, 'utf-8'))
+        if (Array.isArray(cfg.enabled)) return cfg.enabled
+    } catch (err) { /* fall through to default */ }
+    return null
+}
+
+const enabledWidgetsSubject = new BehaviorSubject<string[] | null>(readEnabledWidgets())
+
+const setEnabledWidgets = (enabled: string[]) => {
+    const fs = platform.host.getFS()
+    try {
+        if (!fs.existsSync('/etc/widgets')) fs.mkdirSync('/etc/widgets', { recursive: true })
+        fs.writeFileSync(WIDGETS_CONFIG_PATH, JSON.stringify({ enabled }, null, 2))
+    } catch (err) { /* best effort */ }
+    enabledWidgetsSubject.next(enabled)
+}
+
+platform.register('set-enabled-widgets', setEnabledWidgets)
+platform.host.registerCommand('set-enabled-widgets', setEnabledWidgets)
+
 // Renders one container <div> per widget registered via
 // `platform.host.registerWidget(...)` (e.g. files in `/etc/widgets/`).
 // Each widget owns its container and is responsible for its own contents;
 // if `render` returns a cleanup function, it's called when the widget is
-// removed or this panel unmounts.
-const WidgetItem = ({ widget }: { widget: import('@shared/index').WidgetDef }) => {
+// removed or this panel unmounts. The whole widget is draggable - its
+// position is persisted to WIDGET_POSITIONS_PATH on drop.
+const WidgetItem = ({ widget, savedPosition, defaultTop, panelRef }: {
+    widget: import('@shared/index').WidgetDef
+    savedPosition?: { top: number, left: number }
+    defaultTop: number
+    panelRef: React.RefObject<HTMLDivElement | null>
+}) => {
     const ref = React.useRef<HTMLDivElement>(null)
 
     React.useEffect(() => {
         if (!ref.current) return;
-        const cleanup = widget.render(ref.current, {
+        const el = ref.current
+
+        if (savedPosition) {
+            el.style.left = `${savedPosition.left}px`
+            el.style.top = `${savedPosition.top}px`
+            el.style.right = 'auto'
+        } else {
+            el.style.right = '0'
+            el.style.top = `${defaultTop}px`
+        }
+
+        const cleanup = widget.render(el, {
             platform,
             onDestroy: (cb: Function) => {
-                const existing = (ref.current as any)?._onDestroy ?? []
+                const existing = (el as any)._onDestroy ?? []
                 existing.push(cb)
-                if (ref.current) (ref.current as any)._onDestroy = existing
+                ;(el as any)._onDestroy = existing
             },
         })
+
+        // Distinguish a drag from a click on an interactive child (e.g. a
+        // toolbar widget's buttons): pointer capture is set immediately on
+        // pointerdown (so move/up keep reaching `el` even once the pointer
+        // leaves its bounds), but dragging - and the resulting style/position
+        // change - only kicks in once the pointer moves past a small
+        // threshold. If it never does, releasing capture on pointerup re-fires
+        // a click on the original target so the child's click handler runs.
+        const DRAG_THRESHOLD = 4
+        let pointerDown = false
+        let dragging = false
+        let downTarget: HTMLElement | null = null
+        let startX = 0, startY = 0, origLeft = 0, origTop = 0
+
+        const beginDrag = () => {
+            dragging = true
+            el.classList.add('dragging')
+            const elRect = el.getBoundingClientRect()
+            const panelRect = panelRef.current?.getBoundingClientRect()
+            origLeft = elRect.left - (panelRect?.left ?? 0)
+            origTop = elRect.top - (panelRect?.top ?? 0)
+            el.style.left = `${origLeft}px`
+            el.style.top = `${origTop}px`
+            el.style.right = 'auto'
+        }
+        const onPointerDown = (e: PointerEvent) => {
+            pointerDown = true
+            downTarget = e.target as HTMLElement
+            startX = e.clientX
+            startY = e.clientY
+            el.setPointerCapture(e.pointerId)
+        }
+        const onPointerMove = (e: PointerEvent) => {
+            if (!pointerDown) return
+            if (!dragging) {
+                if (Math.abs(e.clientX - startX) < DRAG_THRESHOLD && Math.abs(e.clientY - startY) < DRAG_THRESHOLD) return
+                beginDrag()
+            }
+            el.style.left = `${origLeft + (e.clientX - startX)}px`
+            el.style.top = `${origTop + (e.clientY - startY)}px`
+        }
+        const onPointerUp = (e: PointerEvent) => {
+            pointerDown = false
+            el.releasePointerCapture(e.pointerId)
+            if (!dragging) {
+                downTarget?.click()
+                return
+            }
+            dragging = false
+            el.classList.remove('dragging')
+            writeWidgetPosition(widget.name, parseFloat(el.style.top), parseFloat(el.style.left))
+        }
+
+        el.addEventListener('pointerdown', onPointerDown)
+        el.addEventListener('pointermove', onPointerMove)
+        el.addEventListener('pointerup', onPointerUp)
+
         return () => {
-            const callbacks: Function[] = (ref.current as any)?._onDestroy ?? []
+            el.removeEventListener('pointerdown', onPointerDown)
+            el.removeEventListener('pointermove', onPointerMove)
+            el.removeEventListener('pointerup', onPointerUp)
+            const callbacks: Function[] = (el as any)._onDestroy ?? []
             callbacks.forEach(cb => cb())
             if (typeof cleanup === 'function') cleanup()
         }
@@ -727,17 +970,36 @@ const WidgetItem = ({ widget }: { widget: import('@shared/index').WidgetDef }) =
 
 const WidgetsPanel = () => {
     const [widgetList, setWidgetList] = React.useState<Array<import('@shared/index').WidgetDef>>([])
+    const [enabled, setEnabled] = React.useState<string[] | null>(enabledWidgetsSubject.getValue())
+    const panelRef = React.useRef<HTMLDivElement>(null)
+    const positions = React.useMemo(readWidgetPositions, [])
 
     React.useEffect(() => {
-        const subscription = platform.host.widgets$.subscribe(setWidgetList)
-        return () => subscription.unsubscribe()
+        const widgetsSub = platform.host.widgets$.subscribe(setWidgetList)
+        const enabledSub = enabledWidgetsSubject.subscribe(setEnabled)
+        return () => {
+            widgetsSub.unsubscribe()
+            enabledSub.unsubscribe()
+        }
     }, [])
 
-    if (!widgetList.length) return null;
+    const visibleWidgets = enabled
+        ? widgetList.filter(w => enabled.includes(w.name))
+        : widgetList.filter(w => !DEFAULT_HIDDEN_WIDGETS.includes(w.name))
+
+    if (!visibleWidgets.length) return null;
 
     return (
-        <div className="widgets-panel">
-            {widgetList.map(widget => <WidgetItem key={widget.name} widget={widget} />)}
+        <div className="widgets-panel" ref={panelRef}>
+            {visibleWidgets.map((widget, i) => (
+                <WidgetItem
+                    key={widget.name}
+                    widget={widget}
+                    savedPosition={positions[widget.name]}
+                    defaultTop={i * 100}
+                    panelRef={panelRef}
+                />
+            ))}
         </div>
     )
 }
@@ -931,6 +1193,12 @@ export const render = (container: HTMLElement) => {
                 id: '5',
                 title: 'VsCode (password:demo)',
                 cmd: `service('root', 'exec') ('/home/user1/projects/VSCode.html');`
+            },
+            {
+                type: 'action',
+                id: '6',
+                title: 'Add Desktop',
+                cmd: `platform.host.callCommand('add-desktop')`
             },
         ])
     }

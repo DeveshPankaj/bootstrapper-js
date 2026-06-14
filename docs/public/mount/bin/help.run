@@ -12,9 +12,12 @@ const colors = {
 
 const commands = [
     { name: 'ls', message: 'List files' },
+    { name: 'tree [<dir>]', message: 'List files in a tree' },
     { name: 'files [?<folder-path>]', message: 'Open file explorer' },
     { name: 'edit <file_name>', message: 'Edit a file' },
     { name: 'cat <file>', message: 'Print file content' },
+    { name: 'head [<file>] [<lines>]', message: 'Print first lines of a file' },
+    { name: 'tail [<file>] [<lines>]', message: 'Print last lines of a file' },
     { name: 'cd <dir>', message: 'Change directory' },
     { name: 'clear', message: 'Clear the terminal' },
     { name: 'contact', message: 'Show contact info' },
@@ -24,7 +27,15 @@ const commands = [
     { name: 'cp <source> <destination>', message: 'Copy a file' },
     { name: 'mv <source> <destination>', message: 'Move or rename a file' },
     { name: 'rm <file>', message: 'Remove a file' },
-    { name: 'history', message: 'Show command history' }
+    { name: 'history', message: 'Show command history' },
+    { name: 'date', message: 'Show the current date and time' },
+    { name: 'ifconfig', message: 'Show network interface info' },
+    { name: 'info', message: 'Show system/user info banner' },
+    { name: 'ps', message: 'List running processes' },
+    { name: 'htop', message: 'Live process monitor (press q to quit)' },
+    { name: 'kill <pid>', message: 'Kill a running process' },
+    { name: 'msg <pid> <message>', message: 'Send a message to a process' },
+    { name: 'sleep <seconds>', message: 'Pause for a number of seconds' }
 ];
 
 // Calculate the maximum width of the command names and messages separately

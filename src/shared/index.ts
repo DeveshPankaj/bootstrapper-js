@@ -45,6 +45,24 @@ export type WidgetDef = {
   meta: Record<string, unknown>;
 };
 
+// A settings section is a dynamically-registered page in the Settings app
+// (see /home/user1/settings.html) - registered via
+// `platform.host.registerSettingsSection(...)` (or the 'settings' service's
+// `registerSection`/`unregisterSection`). Settings renders one nav item per
+// section (using `name` + `icon` from `meta`) and, when selected, calls
+// `render` with a container element to fill, mirroring `WidgetDef.render`.
+export type SettingsSectionApi = {
+  platform: Platform;
+  onDestroy: (cb: Function) => void;
+};
+
+export type SettingsSectionDef = {
+  name: string;
+  render: (container: HTMLElement, api: SettingsSectionApi) => void | (() => void);
+  servicePlatformName: string;
+  meta: Record<string, unknown>;
+};
+
 
 export type UICallbackProps = {
     pid: number
@@ -63,6 +81,7 @@ export type UICallbackProps = {
 export class Host {
   public readonly commands$: Observable<Array<Command>>;
   public readonly widgets$: Observable<Array<WidgetDef>>;
+  public readonly settingsSections$: Observable<Array<SettingsSectionDef>>;
   constructor(
     private window: Window,
     private readonly platform: Platform,
@@ -76,10 +95,12 @@ export class Host {
         eventEmitter: Subject<PlatformEvent>;
         platform: Platform;
       }
-    > = new Map()
+    > = new Map(),
+    private settingsSections: BehaviorSubject<Array<SettingsSectionDef>> = new BehaviorSubject<Array<SettingsSectionDef>>([])
   ) {
     this.commands$ = this.commands.asObservable();
     this.widgets$ = this.widgets.asObservable();
+    this.settingsSections$ = this.settingsSections.asObservable();
   }
 
   // Looks up a module's `Platform` instance by its (unique) module name -
@@ -157,6 +178,28 @@ export class Host {
       remove: () => {
         this.widgets.next(
           this.widgets.getValue().filter((x) => x !== newWidget)
+        );
+      },
+    };
+  }
+
+  public registerSettingsSection(
+    section_name: string,
+    render: SettingsSectionDef["render"],
+    meta: Record<string, unknown> = {}
+  ): { remove: () => void } {
+    const newSection = Object.freeze({
+      name: section_name,
+      render,
+      servicePlatformName: this.platform.name,
+      meta,
+    });
+    this.settingsSections.next([...this.settingsSections.getValue(), newSection]);
+
+    return {
+      remove: () => {
+        this.settingsSections.next(
+          this.settingsSections.getValue().filter((x) => x !== newSection)
         );
       },
     };

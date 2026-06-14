@@ -1,0 +1,62 @@
+/** /bin/tree.run */
+const terminal = platform.getService('terminal')
+const fs = platform.host.getFS()
+const [pwd, dir, ...rest] = $args
+const write = terminal ? terminal.write.bind(terminal) : console.log
+
+// ANSI color codes
+const colors = {
+    blue: '\x1b[34m',  // Blue for directories
+    reset: '\x1b[0m'   // Reset to default
+};
+
+const rootDir = dir ?? pwd;
+if (!fs.existsSync(rootDir)) {
+    write(`tree: ${rootDir}: No such file or directory\n`);
+    return;
+}
+
+let dirCount = 0;
+let fileCount = 0;
+const lines = [];
+
+const walk = (path, prefix) => {
+    let entries;
+    try {
+        entries = fs.readdirSync(path).sort();
+    } catch (err) {
+        return;
+    }
+
+    entries.forEach((entry, idx) => {
+        const entryPath = `${path}/${entry}`.replace(/\/+/g, '/');
+        let stats;
+        try {
+            stats = fs.statSync(entryPath);
+        } catch (err) {
+            return;
+        }
+
+        const isLast = idx === entries.length - 1;
+        const connector = isLast ? '└── ' : '├── ';
+        const isDir = stats.isDirectory();
+        const name = isDir ? `${colors.blue}${entry}${colors.reset}` : entry;
+
+        lines.push(`${prefix}${connector}${name}`);
+
+        if (isDir) {
+            dirCount++;
+            const childPrefix = prefix + (isLast ? '    ' : '│   ');
+            walk(entryPath, childPrefix);
+        } else {
+            fileCount++;
+        }
+    });
+};
+
+lines.push(rootDir);
+walk(rootDir, '');
+lines.push('');
+lines.push(`${dirCount} directories, ${fileCount} files`);
+
+write(lines.join('\n') + '\n');

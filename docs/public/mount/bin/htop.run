@@ -1,0 +1,57 @@
+/** /bin/htop.run */
+const terminal = platform.getService('terminal')
+const write = terminal ? terminal.write.bind(terminal) : console.log
+
+const fmtUptime = (startedAt) => {
+    const secs = Math.floor((Date.now() - startedAt) / 1000)
+    const h = Math.floor(secs / 3600)
+    const m = Math.floor((secs % 3600) / 60)
+    const s = secs % 60
+    return `${h}h ${m}m ${s}s`
+}
+
+const REFRESH_MS = 1000
+
+const render = () => {
+    const processes = platform.host.getCommand('process.list')?.exec() ?? []
+
+    const rows = processes.map(p => [
+        `${p.pid}`,
+        p.name,
+        p.title,
+        fmtUptime(p.startedAt),
+        p.services.join(', '),
+    ])
+
+    const header = ['PID', 'NAME', 'TITLE', 'UPTIME', 'SERVICES']
+    const widths = header.map((h, i) => Math.max(h.length, ...rows.map(r => r[i].length)))
+    const formatRow = (cols) => cols.map((c, i) => c.padEnd(widths[i])).join('  ')
+
+    // Clear screen and move cursor home before redrawing.
+    write('\x1b[2J\x1b[H')
+    write('htop - press q to quit\r\n\r\n')
+    write(formatRow(header) + '\r\n')
+    rows.forEach(row => write(formatRow(row) + '\r\n'))
+}
+
+// terminal.onData has multiple subscribers - the terminal app's own handler
+// ignores input while a command is running (`busy`), but this listener still
+// receives raw keystrokes so 'q'/Ctrl+C can interrupt the refresh loop.
+let stopped = false
+const subscription = terminal.onData(data => {
+    if (data === 'q' || data === 'Q' || data === '\u0003') stopped = true
+})
+
+try {
+    while (!stopped) {
+        render()
+
+        const waitUntil = Date.now() + REFRESH_MS
+        while (!stopped && Date.now() < waitUntil) {
+            await new Promise(resolve => setTimeout(resolve, 50))
+        }
+    }
+} finally {
+    subscription.dispose()
+    write('\x1b[2J\x1b[H')
+}
