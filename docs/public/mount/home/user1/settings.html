@@ -261,7 +261,10 @@
   // Generic file picker modal: browses the virtual fs starting at `initialDir`,
   // optionally restricting selectable files to `accept` (a Set of lowercase
   // extensions, e.g. imageExtensions). Calls `onSelect(path)` then `onClose()`.
-  const FilePicker = ({ initialDir, accept, title, onSelect, onClose }) => {
+  // When `mode === 'folder'`, only directories are listed and the footer's
+  // "Choose" button selects the currently open directory (`dir`) rather than
+  // requiring a clicked file.
+  const FilePicker = ({ initialDir, accept, title, mode, onSelect, onClose }) => {
     const [dir, setDir] = React.useState(initialDir || '/home/user1')
     const [selected, setSelected] = React.useState(null)
 
@@ -297,7 +300,9 @@
       return crumbs
     }, [dir])
 
-    const visibleEntries = entries.filter(e => e.isDir || !accept || accept.has(e.ext))
+    const visibleEntries = mode === 'folder'
+      ? entries.filter(e => e.isDir)
+      : entries.filter(e => e.isDir || !accept || accept.has(e.ext))
 
     const choose = (path) => {
       onSelect(path)
@@ -345,7 +350,11 @@
           </div>
           <div className="filepicker-footer">
             <button className="settings-btn" onClick={onClose}>Cancel</button>
-            <button className="settings-btn primary" disabled={!selected} onClick={() => choose(selected)}>Choose</button>
+            {mode === 'folder' ? (
+              <button className="settings-btn primary" onClick={() => choose(dir)}>Choose This Folder</button>
+            ) : (
+              <button className="settings-btn primary" disabled={!selected} onClick={() => choose(selected)}>Choose</button>
+            )}
           </div>
         </div>
       </div>
@@ -783,14 +792,31 @@
     const [inputValue, setInputValue] = React.useState('');
     const [wallpapers, setWallpapers] = React.useState(configWallpapers);
     const [showPicker, setShowPicker] = React.useState(false);
+    const [showFolderPicker, setShowFolderPicker] = React.useState(false);
+    const [wallpapersDir, setWallpapersDir] = React.useState(() => platform.userPref.getWallpapersDir() ?? '');
     const [activeWallpaper, setActiveWallpaper] = React.useState(() => platform.userPref.getWallpaper());
     const [contextMenu, setContextMenu] = React.useState(null);
 
     React.useEffect(() => {
       const metaFileRawContent = fs.readFileSync('/user-preferences.json')
-      const configWallpapers = JSON.parse(metaFileRawContent).wallpapers ?? []
-      setWallpapers(configWallpapers)
+      const prefs = JSON.parse(metaFileRawContent)
+      setWallpapers(prefs.wallpapers ?? [])
+      setWallpapersDir(prefs.wallpapers_dir ?? '')
     }, [])
+
+    // Images found in the configured wallpapers folder, shown alongside the
+    // wallpapers listed in /user-preferences.json.
+    const folderWallpapers = React.useMemo(() => {
+      if (!wallpapersDir) return [];
+      try {
+        return fs.readdirSync(wallpapersDir)
+          .filter(name => imageExtensions.has(getExt(name)))
+          .map(name => `/(sw)${wallpapersDir}/${name}`)
+          .filter(url => !wallpapers.includes(url));
+      } catch (err) {
+        return [];
+      }
+    }, [wallpapersDir, wallpapers]);
 
     React.useEffect(() => {
       if (!contextMenu) return;
@@ -829,20 +855,6 @@
       setWallpapers(state => state.filter(w => w !== wallpaper));
       platform.host.callCommand('remove-wallpaper', wallpaper);
       setActiveWallpaper(platform.userPref.getWallpaper());
-
-      // If the wallpaper points at a file in the virtual fs (uploaded via "Choose
-      // from Files"), delete the underlying file too. Wallpapers referencing
-      // bundled `/public/...` assets or remote URLs are only removed from the list.
-      const swMarker = '/(sw)/';
-      const swIdx = wallpaper.indexOf(swMarker);
-      if (swIdx !== -1) {
-        const path = wallpaper.slice(swIdx + swMarker.length - 1);
-        try {
-          if (fs.existsSync(path)) fs.unlinkSync(path);
-        } catch (err) {
-          console.error('Failed to delete wallpaper file', path, err);
-        }
-      }
     };
 
     const onFetchClick = () => {
@@ -855,6 +867,11 @@
 
     const onPickFromFiles = (path) => {
       addAndSet(`/(sw)${path}`);
+    };
+
+    const onPickWallpapersDir = (path) => {
+      setWallpapersDir(path);
+      platform.host.callCommand('set-wallpapers-dir', path);
     };
 
     return (
@@ -874,16 +891,27 @@
             Choose from Files
           </button>
         </div>
+        <div className="wallpaper-toolbar">
+          <span className="settings-hint" style={{flex: 1}}>
+            Wallpapers folder:{' '}
+            {wallpapersDir ? <code>{wallpapersDir}</code> : <em>not set</em>}
+          </span>
+          <button className="settings-btn" onClick={() => setShowFolderPicker(true)}>
+            <span className="material-symbols-outlined" style={{fontSize: '1.1rem', verticalAlign: '-2px', marginRight: '0.25rem'}}>folder_open</span>
+            {wallpapersDir ? 'Change Folder' : 'Set Wallpapers Folder'}
+          </button>
+        </div>
         <div className="wallpaper-grid">
-          {wallpapers.map((url, index) => {
+          {[...wallpapers, ...folderWallpapers].map((url, index) => {
             const fullUrl = toFullUrl(url);
             const active = fullUrl === activeWallpaper;
+            const fromList = index < wallpapers.length;
             return (
               <div
-                key={index}
+                key={url}
                 className={`wallpaper-card ${active ? 'active' : ''}`}
                 onClick={() => onClickHandler(url)}
-                onContextMenu={(ev) => onContextMenuHandler(ev, url)}
+                onContextMenu={fromList ? (ev) => onContextMenuHandler(ev, url) : undefined}
               >
                 <img src={fullUrl} alt={`Wallpaper ${index + 1}`} className="wallpaper-thumb" />
                 <div className="wallpaper-overlay">
@@ -904,6 +932,15 @@
             accept={imageExtensions}
             onSelect={onPickFromFiles}
             onClose={() => setShowPicker(false)}
+          />
+        )}
+        {showFolderPicker && (
+          <FilePicker
+            title="Choose a wallpapers folder"
+            initialDir={wallpapersDir || '/home/user1'}
+            mode="folder"
+            onSelect={onPickWallpapersDir}
+            onClose={() => setShowFolderPicker(false)}
           />
         )}
         {contextMenu && (

@@ -188,6 +188,23 @@ compiled TS are kept separate):
   usage. Its `.desktop-icons` class must stay `height: 100%` (not `100vh`) to avoid
   overflowing the grid's `content-area` track.
 
+### File-type icons
+
+The icon images used for `extIconMap` (per-extension file icons, e.g. `.js`, `.json`,
+`.run`, folders, the generic/invalid-file icon) live in the virtual fs under
+`/usr/share/icons/` (bootstrapped via `meta.json` entries with `force_reload: true`,
+sourced from `docs/public/mount/usr/share/icons/*`, mirroring the existing
+`/usr/lib/ui/menuItem.js` "system dir" convention) rather than as `/public/*.png`
+webpack static assets.
+- In `explorer.js` and `index.tsx` (which render inside an `about:blank` iframe, so
+  `/(sw)/...` sub-resource URLs don't reach the SW — same reason thumbnails use blob
+  URLs), `extIconMap` maps extensions to `/usr/share/icons/...` vfs paths, and a
+  mount-only `useEffect` (`[]` deps) reads each via `fs.readFileSync` and converts to a
+  blob URL (`iconUrls` state), revoked on unmount.
+- In `desktop.tsx` (renders in the main document, which the SW does control),
+  `extIconMap` instead references `/(sw)/usr/share/icons/...` directly — no blob-URL
+  conversion needed there.
+
 Both explorer copies share the same macOS Finder look:
 - Toolbar: light gradient header with back/forward/up (history-stack based) nav arrows
   and a clickable breadcrumb path bar (`getBreadcrumbs()`).
@@ -286,3 +303,13 @@ When changing one explorer file's structure/behavior, mirror the change in the o
   explorer copies) — keep consistent if editing.
 - `settings.html` pages array (`pages` in the `App` component) drives the left nav of
   the Settings window; each entry is `{id, name, label, component}`.
+- Settings → "Wallpaper" page: in addition to the `wallpapers` list in
+  `/user-preferences.json`, an optional `wallpapers_dir` vfs path (set via "Set
+  Wallpapers Folder" / `UserPreference.getWallpapersDir`/`setWallpapersDir`, command
+  `set-wallpapers-dir`) is scanned for image files and shown in the same grid
+  (de-duped against `wallpapers`, referenced as `/(sw)<dir>/<name>`). Picking a folder
+  uses `FilePicker`'s `mode="folder"` (lists only directories; footer button selects
+  the currently open `dir` instead of a clicked file). Right-click "Delete" only
+  removes wallpapers from the `wallpapers` list/preferences (never deletes the
+  underlying file — folder-sourced images have no delete action since they aren't in
+  the list).

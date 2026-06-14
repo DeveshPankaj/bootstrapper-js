@@ -577,6 +577,17 @@ class UserPreference {
     this.savePreferences();
   }
 
+  // Get the directory the Wallpaper settings page additionally lists images from
+  public getWallpapersDir(): string | undefined {
+    return this.preferences.wallpapers_dir;
+  }
+
+  public setWallpapersDir(dir: string): void {
+    this.loadPreferences();
+    this.preferences.wallpapers_dir = dir;
+    this.savePreferences();
+  }
+
   // Removes a wallpaper from the saved list. If it was the active wallpaper, falls
   // back to default_wallpaper (or the first remaining wallpaper).
   public removeWallpaper(wallpaper: string): string | undefined {

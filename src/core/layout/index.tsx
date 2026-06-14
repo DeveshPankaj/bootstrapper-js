@@ -679,6 +679,14 @@ platform.host.registerCommand('remove-wallpaper', (wallpaperUrl: string) => {
     if (activeWallpaper) applyCss({wallpaper: activeWallpaper, grid: getCurrentLayout().grid});
 })
 
+platform.register('set-wallpapers-dir', (dir: string) => {
+    platform.userPref.setWallpapersDir(dir);
+})
+
+platform.host.registerCommand('set-wallpapers-dir', (dir: string) => {
+    platform.userPref.setWallpapersDir(dir);
+})
+
 const applyLayout = (layoutId: string) => {
     writeCurrentLayoutId(layoutId)
     layoutSubject.next(layoutId)
