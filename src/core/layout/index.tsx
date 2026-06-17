@@ -486,6 +486,19 @@ const applyCss = ({wallpaper, grid}: {wallpaper: string, grid: LayoutDef['grid']
         .window::-webkit-resizer {
             background-color: transparent;
         }
+
+        .window-resize-handle {
+            position: absolute;
+            z-index: 50;
+        }
+        .window-resize-handle.n  { top: 0; left: 6px; right: 6px; height: 5px; cursor: n-resize; }
+        .window-resize-handle.s  { bottom: 0; left: 6px; right: 6px; height: 5px; cursor: s-resize; }
+        .window-resize-handle.e  { right: 0; top: 6px; bottom: 6px; width: 5px; cursor: e-resize; }
+        .window-resize-handle.w  { left: 0; top: 6px; bottom: 6px; width: 5px; cursor: w-resize; }
+        .window-resize-handle.nw { top: 0; left: 0; width: 12px; height: 12px; cursor: nw-resize; }
+        .window-resize-handle.ne { top: 0; right: 0; width: 12px; height: 12px; cursor: ne-resize; }
+        .window-resize-handle.sw { bottom: 0; left: 0; width: 12px; height: 12px; cursor: sw-resize; }
+        .window-resize-handle.se { bottom: 0; right: 0; width: 12px; height: 12px; cursor: se-resize; }
     
         .window.dragging {
             outline: 1px solid #d3d3d3;
@@ -616,6 +629,18 @@ const applyCss = ({wallpaper, grid}: {wallpaper: string, grid: LayoutDef['grid']
             height: 3px;
             border-radius: 2px;
             background: var(--wm-accent, #0a84ff);
+        }
+
+        .taskbar-window-icon.minimized::after {
+            content: '';
+            position: absolute;
+            bottom: 2px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 6px;
+            height: 3px;
+            border-radius: 2px;
+            background: rgba(127, 127, 127, 0.6);
         }
 
         .taskbar-preview {

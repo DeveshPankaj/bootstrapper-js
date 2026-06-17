@@ -245,16 +245,152 @@ platform.host.registerCommand('core.add-module', (namespace: string, mod: Module
     platformEventEmitter.next({type: 'core.module-loaded', payload: nextModules})
 });
 
+// Keybinding wiring — reads /etc/keybindings.json and wires up document-level keydown listeners.
+// Called on boot (after vfs is ready) and after keybindings are changed in Settings.
+// Bindings use `code` (e.g. 'KeyF', 'Space') so Alt+letter works on Mac (where e.key becomes
+// a Unicode char like 'ƒ' instead of 'f'). Falls back to matching `key` for old-format entries.
+const KEYBINDINGS_FILE = '/etc/keybindings.json';
+const DEFAULT_KEYBINDINGS = [
+  { code: 'Space', modifiers: ['Alt'], command: 'spotlight' },
+  { code: 'KeyF',  modifiers: ['Alt'], command: 'explorer' },
+  { code: 'KeyT',  modifiers: ['Alt'], command: 'ui.terminal' },
+  { code: 'KeyS',  modifiers: ['Alt'], command: 'ui.settings' },
+];
+let keybindingAbort: AbortController | null = null;
+const wireKeybindings = () => {
+  keybindingAbort?.abort();
+  keybindingAbort = new AbortController();
+  const { signal } = keybindingAbort;
+  try {
+    const fs = host.getFS();
+    let bindings: Array<{ code?: string; key?: string; modifiers: string[]; command: string }> = DEFAULT_KEYBINDINGS;
+    if (fs.existsSync(KEYBINDINGS_FILE)) {
+      try { bindings = JSON.parse(fs.readFileSync(KEYBINDINGS_FILE, 'utf-8') as string); } catch (_) {}
+    }
+    window.document.addEventListener('keydown', (e: KeyboardEvent) => {
+      for (const b of bindings) {
+        // Prefer code matching (layout-independent); fall back to key for legacy entries.
+        const keyMatch = b.code ? e.code === b.code : e.key === (b as any).key;
+        if (!keyMatch) continue;
+        const mods = b.modifiers || [];
+        if (mods.includes('Meta')  !== e.metaKey)  continue;
+        if (mods.includes('Ctrl')  !== e.ctrlKey)  continue;
+        if (mods.includes('Alt')   !== e.altKey)   continue;
+        if (mods.includes('Shift') !== e.shiftKey) continue;
+        e.preventDefault();
+        try { platform.host.callCommand(b.command); } catch (err) { console.error('[keybinding]', b.command, err) }
+      }
+    }, { signal });
+  } catch (_) {}
+};
+platform.host.registerCommand('reload-keybindings', wireKeybindings);
+// Wire up keybindings shortly after boot so vfs is ready
+setTimeout(wireKeybindings, 3000);
+
+// Query-param app launcher — opens apps on page load via URL params.
+// Single app:   ?app=<commandName>&args=<base64(JSON.stringify([...]))>
+// Multiple apps: ?apps=<base64(JSON.stringify([{app, args?}]))>
+// base64 encoding lets args carry arbitrary strings (paths, JSON, etc.) safely.
+const launchFromQueryParams = () => {
+  const params = new URLSearchParams(window.location.search)
+  try {
+    const appsParam = params.get('apps')
+    if (appsParam) {
+      const entries: Array<{ app: string; args?: unknown[] }> = JSON.parse(atob(appsParam))
+      for (const entry of entries) {
+        try { platform.host.callCommand(entry.app, ...(entry.args ?? [])) }
+        catch (e) { console.error('[query-launch]', entry.app, e) }
+      }
+      return
+    }
+    const appParam = params.get('app')
+    if (appParam) {
+      const argsParam = params.get('args')
+      const args: unknown[] = argsParam ? JSON.parse(atob(argsParam)) : []
+      platform.host.callCommand(appParam, ...args)
+    }
+  } catch (e) { console.error('[query-launch] failed:', e) }
+}
+// Run after initd.run and widget/settings scripts have had time to register commands.
+setTimeout(launchFromQueryParams, 4000);
+
+// Toast notification system — platform.host.callCommand('notify', {title, body, duration})
+const TOAST_CONTAINER_ID = '__toast_container__';
+const ensureToastContainer = () => {
+  let container = window.document.getElementById(TOAST_CONTAINER_ID);
+  if (!container) {
+    container = window.document.createElement('div');
+    container.id = TOAST_CONTAINER_ID;
+    Object.assign(container.style, {
+      position: 'fixed', bottom: '1.5rem', right: '1.5rem',
+      display: 'flex', flexDirection: 'column', gap: '0.5rem',
+      zIndex: '999999', pointerEvents: 'none',
+    });
+    window.document.body.appendChild(container);
+  }
+  return container;
+};
+platform.host.registerCommand('notify', ({ title = '', body = '', duration = 4000 }: { title?: string; body?: string; duration?: number }) => {
+  const container = ensureToastContainer();
+  const toast = window.document.createElement('div');
+  Object.assign(toast.style, {
+    background: 'rgba(30,30,30,0.92)', color: '#fff',
+    borderRadius: '12px', padding: '0.7rem 1rem',
+    boxShadow: '0 4px 24px rgba(0,0,0,0.35)',
+    minWidth: '220px', maxWidth: '320px',
+    backdropFilter: 'blur(12px)',
+    pointerEvents: 'auto', cursor: 'pointer',
+    transition: 'opacity 0.3s, transform 0.3s',
+    opacity: '0', transform: 'translateY(8px)',
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+    fontSize: '13px',
+  });
+  if (title) {
+    const h = window.document.createElement('div');
+    h.textContent = title;
+    Object.assign(h.style, { fontWeight: '600', marginBottom: body ? '0.2rem' : '0' });
+    toast.appendChild(h);
+  }
+  if (body) {
+    const p = window.document.createElement('div');
+    p.textContent = body;
+    Object.assign(p.style, { opacity: '0.8', lineHeight: '1.4' });
+    toast.appendChild(p);
+  }
+  container.appendChild(toast);
+  const dismiss = () => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateY(8px)';
+    setTimeout(() => toast.remove(), 320);
+  };
+  toast.addEventListener('click', dismiss);
+  requestAnimationFrame(() => { toast.style.opacity = '1'; toast.style.transform = 'translateY(0)'; });
+  setTimeout(dismiss, duration);
+});
+
+// Convenience commands for opening the terminal and settings via the keybinding
+// system (and Spotlight). The actual open logic mirrors the taskbar's execCommand calls.
+platform.host.registerCommand('ui.terminal', () => {
+    platform.host.execCommand("service('root', 'exec') ('/home/user1/apps/xtermjs.html')", platform)
+}, { icon: 'terminal', title: 'Terminal' })
+
+platform.host.registerCommand('ui.settings', () => {
+    platform.host.execCommand("service('root', 'exec') ('/home/user1/settings.html')", platform)
+}, { icon: 'settings', title: 'Settings' })
+
 // Fallback 'explorer' command, delegating to the compiled ui.file-explorer module.
-// /home/user1/apps/explorer.js (force_reload: false, so user edits persist) registers
-// the real 'explorer' command on boot via initd.run, and its registration is prepended
-// after this one so it takes precedence when present. But if the virtual fs has a
-// stale/incompatible explorer.js left over from an older app version (e.g. switching
-// to a localStorage backend that still has old data), explorer.js may not register
-// 'explorer' at all, leaving `command('explorer')` calls (opening a folder, the
-// desktop "Explorer" context menu item) to throw an uncaught "Command: [explorer] not
-// found". This fallback ensures 'explorer' always resolves to a working file explorer.
+// /home/user1/apps/explorer.js registers the real 'explorer' command on boot via
+// initd.run (prepended, so it takes precedence). This fallback handles two cases:
+// 1. Stale/missing explorer.js (localStorage backend gotcha) — ensures 'explorer'
+//    always resolves.
+// 2. Called with no args (e.g. from a keybinding or Spotlight) — routes through
+//    open-window so the window manager sets up body/props correctly.
 platform.host.registerCommand('explorer', (...args: unknown[]) => {
+    if (!args.length || args[0] == null) {
+        // Standalone call: use open-window so the window gets proper body/props.
+        platform.host.execCommand("service('001-core.layout', 'open-window') (command('explorer'))", platform)
+        return
+    }
     const fileExplorer = platform.host.getCommand('ui.file-explorer')!
     return fileExplorer.exec(...args)
 }, { icon: 'folder', title: 'Files' })

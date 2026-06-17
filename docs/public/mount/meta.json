@@ -17,42 +17,37 @@
   {
     "path": "/bin/rm.run",
     "file": "/bin/rm.run",
-    "force_reload": false
+    "force_reload": true
   },
   {
     "path": "/bin/pwd.run",
     "file": "/bin/pwd.run",
-    "force_reload": false
+    "force_reload": true
   },
   {
     "path": "/bin/cp.run",
     "file": "/bin/cp.run",
-    "force_reload": false
-  },
-  {
-    "path": "/bin/cp.run",
-    "file": "/bin/cp.run",
-    "force_reload": false
+    "force_reload": true
   },
   {
     "path": "/bin/clear.run",
     "file": "/bin/clear.run",
-    "force_reload": false
+    "force_reload": true
   },
   {
     "path": "/bin/sleep.run",
     "file": "/bin/sleep.run",
-    "force_reload": false
+    "force_reload": true
   },
   {
     "path": "/bin/edit.run",
     "file": "/bin/edit.run",
-    "force_reload": false
+    "force_reload": true
   },
   {
     "path": "/bin/history.run",
     "file": "/bin/history.run",
-    "force_reload": false
+    "force_reload": true
   },
   {
     "path": "/bin/echo.run",
@@ -62,57 +57,57 @@
   {
     "path": "/bin/ls.run",
     "file": "/bin/ls.run",
-    "force_reload": false
+    "force_reload": true
   },
   {
     "path": "/bin/tree.run",
     "file": "/bin/tree.run",
-    "force_reload": false
+    "force_reload": true
   },
   {
     "path": "/bin/date.run",
     "file": "/bin/date.run",
-    "force_reload": false
+    "force_reload": true
   },
   {
     "path": "/bin/editor.run",
     "file": "/bin/editor.run",
-    "force_reload": false
+    "force_reload": true
   },
   {
     "path": "/bin/head.run",
     "file": "/bin/head.run",
-    "force_reload": false
+    "force_reload": true
   },
   {
     "path": "/bin/ifconfig.run",
     "file": "/bin/ifconfig.run",
-    "force_reload": false
+    "force_reload": true
   },
   {
     "path": "/bin/tail.run",
     "file": "/bin/tail.run",
-    "force_reload": false
+    "force_reload": true
   },
   {
     "path": "/lib/platform.js",
     "file": "/lib/platform.js",
-    "force_reload": false
+    "force_reload": true
   },
   {
     "path": "/lib/draggable.js",
     "file": "/lib/draggable.js",
-    "force_reload": false
+    "force_reload": true
   },
   {
     "path": "/opt/window-manager.js",
     "file": "/opt/window-manager.js",
-    "force_reload": false
+    "force_reload": true
   },
   {
     "path": "/bin/cat.run",
     "file": "/bin/cat.run",
-    "force_reload": false
+    "force_reload": true
   },
   {
     "path": "/usr/bin/files.run",
@@ -139,11 +134,13 @@
   },
   {
     "path": "/home/user1/apps/explorer.js",
-    "file": "/home/user1/apps/explorer.js"
+    "file": "/home/user1/apps/explorer.js",
+    "force_reload": true
   },
   {
     "path": "/home/user1/apps/markdown.js",
-    "file": "/home/user1/apps/markdown.js"
+    "file": "/home/user1/apps/markdown.js",
+    "force_reload": true
   },
   {
     "path": "/home/user1/apps/md-renderer.html",
@@ -187,32 +184,32 @@
   {
     "path": "/bin/ps.run",
     "file": "/bin/ps.run",
-    "force_reload": false
+    "force_reload": true
   },
   {
     "path": "/bin/htop.run",
     "file": "/bin/htop.run",
-    "force_reload": false
+    "force_reload": true
   },
   {
     "path": "/bin/kill.run",
     "file": "/bin/kill.run",
-    "force_reload": false
+    "force_reload": true
   },
   {
     "path": "/bin/msg.run",
     "file": "/bin/msg.run",
-    "force_reload": false
+    "force_reload": true
   },
   {
     "path": "/home/user1/tools/speed-test.html",
     "file": "/home/user1/tools/speed-test.html",
-    "force_reload":false
+    "force_reload": false
   },
   {
     "path": "/lib/utils.js",
     "file": "/lib/utils.js",
-    "force_reload": false
+    "force_reload": true
   },
   {
     "path": "/home/user1/projects/Snake.html",
@@ -240,11 +237,13 @@
   },
   {
     "path": "/usr/bin/fullscreen.js",
-    "file": "/home/user1/fullscreen.js"
+    "file": "/home/user1/fullscreen.js",
+    "force_reload": true
   },
   {
     "path": "/usr/lib/ui/menuItem.js",
-    "file": "/usr/lib/ui/menuItem.js"
+    "file": "/usr/lib/ui/menuItem.js",
+    "force_reload": true
   },
   {
     "path": "/usr/share/icons/js-icon.png",
@@ -299,16 +298,11 @@
   {
     "path": "/home/user1/apps/xtermjs.html",
     "file": "/home/user1/apps/xtermjs.html",
-    "force_reload":true
+    "force_reload": true
   },
   {
     "path": "/home/user1/apps/WebRTC.html",
     "file": "/home/user1/apps/WebRTC.html",
-    "force_reload": false
-  },
-  {
-    "path": "/home/user1/apps/FS.html",
-    "file": "/home/user1/apps/FS.html",
     "force_reload": false
   },
   {
@@ -359,72 +353,117 @@
   {
     "path": "/.initd.run",
     "file": "/initd.run",
-    "force_reload": false
+    "force_reload": true
   },
   {
     "path": "/etc/widgets/clock.js",
     "file": "/etc/widgets/clock.js",
-    "force_reload": false
+    "force_reload": true
   },
   {
     "path": "/etc/widgets/public-ip.js",
     "file": "/etc/widgets/public-ip.js",
-    "force_reload": false
+    "force_reload": true
   },
   {
     "path": "/etc/widgets/memory.js",
     "file": "/etc/widgets/memory.js",
-    "force_reload": false
+    "force_reload": true
   },
   {
     "path": "/etc/widgets/toolbar.js",
     "file": "/etc/widgets/toolbar.js",
-    "force_reload": false
+    "force_reload": true
   },
   {
     "path": "/etc/settings/01-about.js",
     "file": "/etc/settings/01-about.js",
-    "force_reload": false
+    "force_reload": true
   },
   {
     "path": "/etc/settings/02-projects.js",
     "file": "/etc/settings/02-projects.js",
-    "force_reload": false
+    "force_reload": true
   },
   {
     "path": "/etc/settings/03-contact.js",
     "file": "/etc/settings/03-contact.js",
-    "force_reload": false
+    "force_reload": true
   },
   {
     "path": "/etc/settings/04-wallpapers.js",
     "file": "/etc/settings/04-wallpapers.js",
-    "force_reload": false
+    "force_reload": true
   },
   {
     "path": "/etc/settings/05-layout.js",
     "file": "/etc/settings/05-layout.js",
-    "force_reload": false
+    "force_reload": true
   },
   {
     "path": "/etc/settings/06-window-manager.js",
     "file": "/etc/settings/06-window-manager.js",
-    "force_reload": false
+    "force_reload": true
   },
   {
     "path": "/etc/settings/07-widgets.js",
     "file": "/etc/settings/07-widgets.js",
-    "force_reload": false
+    "force_reload": true
   },
   {
     "path": "/etc/settings/08-storage.js",
     "file": "/etc/settings/08-storage.js",
-    "force_reload": false
+    "force_reload": true
+  },
+  {
+    "path": "/etc/settings/09-keybindings.js",
+    "file": "/etc/settings/09-keybindings.js",
+    "force_reload": true
+  },
+  {
+    "path": "/etc/settings/10-bootlog.js",
+    "file": "/etc/settings/10-bootlog.js",
+    "force_reload": true
+  },
+  {
+    "path": "/etc/settings/11-vfs-snapshot.js",
+    "file": "/etc/settings/11-vfs-snapshot.js",
+    "force_reload": true
+  },
+  {
+    "path": "/etc/settings/12-workspaces.js",
+    "file": "/etc/settings/12-workspaces.js",
+    "force_reload": true
+  },
+  {
+    "path": "/etc/settings/13-notifications.js",
+    "file": "/etc/settings/13-notifications.js",
+    "force_reload": true
   },
   {
     "path": "/etc/settings/99-example.js",
     "file": "/etc/settings/99-example.js",
-    "force_reload": false
+    "force_reload": true
+  },
+  {
+    "path": "/etc/widgets/sticky-notes.js",
+    "file": "/etc/widgets/sticky-notes.js",
+    "force_reload": true
+  },
+  {
+    "path": "/etc/widgets/shortcuts.js",
+    "file": "/etc/widgets/shortcuts.js",
+    "force_reload": true
+  },
+  {
+    "path": "/home/user1/apps/imageviewer.js",
+    "file": "/home/user1/apps/imageviewer.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/spotlight.js",
+    "file": "/opt/spotlight.js",
+    "force_reload": true
   },
   {
     "path": "/etc/crontab",
@@ -434,6 +473,76 @@
   {
     "path": "/opt/cron/check-public-ip.js",
     "file": "/opt/cron/check-public-ip.js",
+    "force_reload": false
+  },
+  {
+    "path": "/etc/settings/14-theme-builder.js",
+    "file": "/etc/settings/14-theme-builder.js",
+    "force_reload": true
+  },
+  {
+    "path": "/etc/settings/15-fonts.js",
+    "file": "/etc/settings/15-fonts.js",
+    "force_reload": true
+  },
+  {
+    "path": "/etc/settings/16-app-manager.js",
+    "file": "/etc/settings/16-app-manager.js",
+    "force_reload": true
+  },
+  {
+    "path": "/etc/settings/17-startup.js",
+    "file": "/etc/settings/17-startup.js",
+    "force_reload": true
+  },
+  {
+    "path": "/etc/settings/18-cron.js",
+    "file": "/etc/settings/18-cron.js",
+    "force_reload": true
+  },
+  {
+    "path": "/home/user1/apps/diff.js",
+    "file": "/home/user1/apps/diff.js",
+    "force_reload": true
+  },
+  {
+    "path": "/home/user1/apps/csv-viewer.js",
+    "file": "/home/user1/apps/csv-viewer.js",
+    "force_reload": true
+  },
+  {
+    "path": "/home/user1/apps/bookmarks.js",
+    "file": "/home/user1/apps/bookmarks.js",
+    "force_reload": true
+  },
+  {
+    "path": "/home/user1/apps/app-launcher.js",
+    "file": "/home/user1/apps/app-launcher.js",
+    "force_reload": true
+  },
+  {
+    "path": "/etc/widgets/rss.js",
+    "file": "/etc/widgets/rss.js",
+    "force_reload": true
+  },
+  {
+    "path": "/usr/lib/fflate.min.js",
+    "file": "/usr/lib/fflate.min.js",
+    "force_reload": true
+  },
+  {
+    "path": "/home/user1/apps/python.js",
+    "file": "/home/user1/apps/python.js",
+    "force_reload": true
+  },
+  {
+    "path": "/home/user1/apps/python.html",
+    "file": "/home/user1/apps/python.html",
+    "force_reload": true
+  },
+  {
+    "path": "/home/user1/projects/hello.py",
+    "file": "/home/user1/projects/hello.py",
     "force_reload": false
   }
 ]

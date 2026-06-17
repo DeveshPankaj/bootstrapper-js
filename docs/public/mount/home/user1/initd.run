@@ -17,6 +17,13 @@ service('root', 'exec')('/home/user1/apps/markdown.js');
 // Load Task Manager
 service('root', 'exec')('/home/user1/apps/task-manager.js');
 
+// Load new apps (registers their commands at boot)
+service('root', 'exec')('/home/user1/apps/diff.js');
+service('root', 'exec')('/home/user1/apps/csv-viewer.js');
+service('root', 'exec')('/home/user1/apps/bookmarks.js');
+service('root', 'exec')('/home/user1/apps/app-launcher.js');
+service('root', 'exec')('/home/user1/apps/python.js');
+
 // service('root', 'exec')('/home/user1/settings.html');
 // service('root', 'exec')('/home/user1/apps/xtermjs.html');
 

@@ -160,6 +160,8 @@
           PATH: '/bin:/usr/bin',
           USER: 'root'
         };
+        this.env = {};
+        this.aliases = {};
         this.commandHistory = [];
         this.historyIndex = 0;
         this.inputBuffer = '';
@@ -167,6 +169,7 @@
         this.neofetchMessages = this.initializeMessages();
         this.fs = platform.host.getFS();
         this.loadHistory();
+        this.loadAliases();
       }
 
       async initializeTerminal() {
@@ -213,9 +216,61 @@
           this.processDownArrow();
         } else if (data === '\u000C') {
           this.clearTerminal();
+        } else if (data === '\t') {
+          this.processTabCompletion();
         } else {
           this.inputBuffer += data;
           this.terminal.write(data);
+        }
+      }
+
+      processTabCompletion() {
+        const input = this.inputBuffer;
+        const lastSpace = input.lastIndexOf(' ');
+        const prefix = lastSpace >= 0 ? input.slice(lastSpace + 1) : input;
+        const isFirstToken = lastSpace < 0;
+
+        let candidates = [];
+        if (isFirstToken) {
+          for (const dir of this.context.PATH.split(':')) {
+            try {
+              for (const f of this.fs.readdirSync(dir)) {
+                if (f.endsWith('.run')) candidates.push(f.replace(/\.run$/, ''));
+              }
+            } catch (_) {}
+          }
+          candidates.push('cd', 'export', 'env', 'alias', 'unalias', 'exit', 'python', 'python3');
+          // Add alias names as completable commands
+          for (const a of Object.keys(this.aliases)) candidates.push(a);
+        } else {
+          const slashIdx = prefix.lastIndexOf('/');
+          let searchDir = this.context.pwd;
+          let filePrefix = prefix;
+          if (slashIdx >= 0) {
+            const dirPart = prefix.slice(0, slashIdx) || '/';
+            searchDir = dirPart.startsWith('/') ? dirPart : `${this.context.pwd}/${dirPart}`;
+            filePrefix = prefix.slice(slashIdx + 1);
+          }
+          try {
+            const dirPrefix = slashIdx >= 0 ? prefix.slice(0, slashIdx + 1) : '';
+            candidates = this.fs.readdirSync(searchDir)
+              .filter(e => e.startsWith(filePrefix))
+              .map(e => {
+                try { return this.fs.statSync(`${searchDir}/${e}`).isDirectory() ? dirPrefix + e + '/' : dirPrefix + e; }
+                catch (_) { return dirPrefix + e; }
+              });
+          } catch (_) {}
+        }
+
+        const matches = candidates.filter(c => c.startsWith(prefix));
+        if (matches.length === 0) return;
+        if (matches.length === 1) {
+          const completion = matches[0].slice(prefix.length);
+          this.inputBuffer += completion;
+          this.terminal.write(completion);
+        } else {
+          this.terminal.write('\r\n' + matches.join('  ') + '\r\n');
+          this.displayPrompt();
         }
       }
 
@@ -265,6 +320,42 @@
           }
         } catch (err) {
           console.error('Failed to write history', err);
+        }
+      }
+
+      loadAliases() {
+        const ALIASES_FILE = '/home/user1/.aliases';
+        try {
+          if (!this.fs.existsSync(ALIASES_FILE)) return;
+          const content = this.fs.readFileSync(ALIASES_FILE, 'utf8');
+          for (const line of content.split('\n')) {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed.startsWith('#')) continue;
+            const m = trimmed.match(/^alias\s+([\w-]+)=(.+)/);
+            if (m) this.aliases[m[1]] = m[2].replace(/^['"]|['"]$/g, '');
+          }
+        } catch (err) {
+          console.error('Failed to load aliases', err);
+        }
+      }
+
+      async displayInlineImage(filepath) {
+        try {
+          const data = this.fs.readFileSync(filepath);
+          const ext = filepath.split('.').pop().toLowerCase();
+          const mimes = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml', bmp: 'image/bmp' };
+          const mime = mimes[ext] || 'application/octet-stream';
+          const blob = new Blob([data.buffer ?? data], { type: mime });
+          const url = URL.createObjectURL(blob);
+          this.terminal.write(`\x1b[36m${filepath.split('/').pop()}\x1b[0m\r\n`);
+          const img = document.createElement('img');
+          img.src = url;
+          img.style.cssText = 'max-width:300px;max-height:200px;display:block;margin:4px 8px;border-radius:4px;border:1px solid #333;';
+          img.onload = () => URL.revokeObjectURL(url);
+          img.onerror = () => { URL.revokeObjectURL(url); img.remove(); this.terminal.write('(failed to decode image)\r\n'); };
+          this.paneEl.appendChild(img);
+        } catch (err) {
+          this.terminal.write(`cat: ${err && err.message ? err.message : err}\r\n`);
         }
       }
 
@@ -327,6 +418,24 @@
 
       async processCommand(command) {
         const cmdArgs = this.parseArgs(command);
+
+        // Alias expansion: if first token matches an alias, expand it
+        const aliasValue = this.aliases[cmdArgs[0]];
+        if (aliasValue) {
+          const expandedArgs = this.parseArgs(aliasValue);
+          cmdArgs.splice(0, 1, ...expandedArgs);
+        }
+
+        // Intercept cat for image files to render inline preview
+        if (cmdArgs[0] === 'cat' && cmdArgs.length >= 2) {
+          const fp = cmdArgs[1].startsWith('/') ? cmdArgs[1] : `${this.context.pwd}/${cmdArgs[1]}`;
+          const IMAGE_EXTS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp'];
+          if (IMAGE_EXTS.some(ext => fp.toLowerCase().endsWith('.' + ext))) {
+            await this.displayInlineImage(fp);
+            return;
+          }
+        }
+
         const commandFile = this.findCommandFile(cmdArgs[0]);
 
         if (commandFile) {
@@ -358,6 +467,84 @@
           case 'cd':
             this.changeDirectory(cmdArgs);
             break;
+          case 'exit':
+            if (this.app.sessions.length > 1) {
+              // Close this tab; another session remains active.
+              this.app.closeTab(this);
+            } else {
+              // Last tab — close the terminal window via its header close button.
+              const closeBtn = window.frameElement?.closest?.('.window')?.querySelector?.('[title="close window"]');
+              if (closeBtn) closeBtn.click();
+            }
+            break;
+          case 'export': {
+            if (cmdArgs.length < 2) {
+              this.terminal.write('export: usage: export VAR=value\r\n');
+              break;
+            }
+            const eqIdx = cmdArgs[1].indexOf('=');
+            if (eqIdx < 0) {
+              this.terminal.write(`export: ${cmdArgs[1]}: no value specified (use VAR=value)\r\n`);
+            } else {
+              const varName = cmdArgs[1].slice(0, eqIdx);
+              const varVal = cmdArgs[1].slice(eqIdx + 1);
+              this.env[varName] = varVal;
+            }
+            break;
+          }
+          case 'env': {
+            const lines = Object.entries(this.env).map(([k, v]) => `${k}=${v}`).join('\r\n');
+            this.terminal.write(lines ? lines + '\r\n' : '(no env vars set)\r\n');
+            break;
+          }
+          case 'alias': {
+            if (cmdArgs.length < 2) {
+              // List all aliases
+              const alines = Object.entries(this.aliases).map(([k, v]) => `alias ${k}='${v}'`).join('\r\n');
+              this.terminal.write(alines ? alines + '\r\n' : '(no aliases defined)\r\n');
+              break;
+            }
+            const eqIdx = cmdArgs[1].indexOf('=');
+            if (eqIdx < 0) {
+              // Show single alias
+              const n = cmdArgs[1];
+              if (this.aliases[n]) {
+                this.terminal.write(`alias ${n}='${this.aliases[n]}'\r\n`);
+              } else {
+                this.terminal.write(`alias: ${n}: not found\r\n`);
+              }
+            } else {
+              const n = cmdArgs[1].slice(0, eqIdx);
+              const v = cmdArgs[1].slice(eqIdx + 1).replace(/^['"]|['"]$/g, '');
+              this.aliases[n] = v;
+            }
+            break;
+          }
+          case 'unalias': {
+            if (cmdArgs.length < 2) {
+              this.terminal.write('unalias: usage: unalias name\r\n');
+              break;
+            }
+            delete this.aliases[cmdArgs[1]];
+            break;
+          }
+          case 'python':
+          case 'python3': {
+            if (!platform.host.getCommand('ui.python')) {
+              this.terminal.write('python: runtime not loaded\r\n');
+              break;
+            }
+            let pyArg = '';
+            if (cmdArgs[1]) {
+              pyArg = cmdArgs[1].startsWith('/') ? cmdArgs[1] : `${this.context.pwd}/${cmdArgs[1]}`;
+            }
+            const pyDsl = pyArg
+              ? `service('001-core.layout', 'open-window')(command('ui.python'), '${pyArg}')`
+              : `service('001-core.layout', 'open-window')(command('ui.python'))`;
+            platform.host.execCommand(pyDsl, platform);
+            this.terminal.write((pyArg ? `Running ${pyArg}` : 'Opening Python REPL') + '…\r\n');
+            break;
+          }
           default:
             this.terminal.write(`Command not found: ${cmdArgs[0]}\r\n`);
             break;

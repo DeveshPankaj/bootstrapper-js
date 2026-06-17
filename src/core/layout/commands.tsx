@@ -133,7 +133,7 @@ const DesktopSwitcher = () => {
 
 const TaskbarWindowIcon = ({ win }: { win: TaskbarWindowInfo }) => (
     <div
-        className={`taskbar-icon-button taskbar-window-icon${win.active ? ' active' : ''}`}
+        className={`taskbar-icon-button taskbar-window-icon${win.active ? ' active' : ''}${win.minimized ? ' minimized' : ''}`}
         aria-label={`window-${win.pid}`}
         title={win.title}
         onClick={win.toggle}

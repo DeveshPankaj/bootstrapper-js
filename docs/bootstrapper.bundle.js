@@ -55,6 +55,13 @@ const loadBootstrapScript = (storage) => {
     window.document.head.appendChild(script);
 };
 const initWindow = () => {
+    // Boot log — phases are pushed here; readable from Settings > Boot Log via window.__bootLog.
+    // @ts-ignore
+    window.__bootLog = [];
+    const bootLog = (label, startMs, error) => {
+        // @ts-ignore
+        window.__bootLog.push({ label, durationMs: Date.now() - startMs, error });
+    };
     // @ts-ignore
     window.BrowserFS.install(window);
     const defaultDirs = [
@@ -105,6 +112,7 @@ const initWindow = () => {
         return createBackend(Backend.AsyncMirror, { sync: memFS, async: idbFS });
     });
     const fsReady = (() => __awaiter(void 0, void 0, void 0, function* () {
+        const t0 = Date.now();
         try {
             // @ts-ignore
             const Backend = window.BrowserFS.FileSystem;
@@ -127,6 +135,7 @@ const initWindow = () => {
             }
             // @ts-ignore
             window.BrowserFS.initialize(mfs);
+            bootLog(`VFS init (${fsBackend})`, t0);
             const fs = window.require('fs');
             // @ts-ignore
             window.fs = fs;
@@ -146,6 +155,8 @@ const initWindow = () => {
             const ignoreMetaReload = defaultFiles.find(item => item.path === metaFilePath && item.force_reload === false);
             if (!ignoreMetaReload)
                 defaultFiles = yield (yield fetch(metaFileServerPath)).json();
+            const t1 = Date.now();
+            let fileCount = 0;
             defaultFiles.forEach((item) => __awaiter(void 0, void 0, void 0, function* () {
                 if (fs.existsSync(item.path) && !item.force_reload)
                     return;
@@ -155,10 +166,13 @@ const initWindow = () => {
                 if (!fs.existsSync(dir))
                     fs.mkdirSync(dir, { recursive: true });
                 fs.writeFileSync(item.path, Buffer.from(fileData));
+                fileCount++;
                 // navigator.serviceWorker.controller?.postMessage({type: 'fs/file-added', payload: {file: item.path}});
             }));
+            bootLog(`meta.json bootstrap (${fileCount} files written)`, t1);
         }
         catch (err) {
+            bootLog('VFS error', t0, String(err));
             alert(err);
         }
     }))();

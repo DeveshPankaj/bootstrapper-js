@@ -375,6 +375,7 @@ export class WindowManager {
       );
 
       draggable(container, head);
+      addResizeHandles(container);
       this.moveOnTop(windowRef);
       head.addEventListener("mousedown", () => this.moveOnTop(windowRef));
 
@@ -553,6 +554,49 @@ const createWindoeHeader = (command: Command) => {
   };
 
   return [head, close, fullScreen, minimize, setTitle, appendActionButton, setHeaderStyles] as const;
+};
+
+const addResizeHandles = (container: HTMLElement) => {
+  const DIRS = ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'] as const;
+  const MIN_W = 200, MIN_H = 120;
+
+  for (const dir of DIRS) {
+    const handle = platform.window.document.createElement('div');
+    handle.className = `window-resize-handle ${dir}`;
+    container.appendChild(handle);
+
+    let startX = 0, startY = 0;
+    let startRect = { left: 0, top: 0, width: 0, height: 0 };
+
+    handle.addEventListener('pointerdown', (e: PointerEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+      handle.setPointerCapture(e.pointerId);
+      const r = container.getBoundingClientRect();
+      const parentRect = (container.offsetParent as HTMLElement)?.getBoundingClientRect() ?? { left: 0, top: 0 };
+      startX = e.clientX;
+      startY = e.clientY;
+      startRect = { left: r.left - parentRect.left, top: r.top - parentRect.top, width: r.width, height: r.height };
+    });
+
+    handle.addEventListener('pointermove', (e: PointerEvent) => {
+      if (!handle.hasPointerCapture(e.pointerId)) return;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      let { left, top, width, height } = startRect;
+
+      if (dir.includes('e')) width = Math.max(MIN_W, width + dx);
+      if (dir.includes('s')) height = Math.max(MIN_H, height + dy);
+      if (dir.includes('w')) { const nw = Math.max(MIN_W, width - dx); left += width - nw; width = nw; }
+      if (dir.includes('n')) { const nh = Math.max(MIN_H, height - dy); top += height - nh; height = nh; }
+
+      Object.assign(container.style, { left: `${left}px`, top: `${top}px`, width: `${width}px`, height: `${height}px` });
+    });
+
+    handle.addEventListener('pointerup', (e: PointerEvent) => {
+      handle.releasePointerCapture(e.pointerId);
+    });
+  }
 };
 
 const appendWindow = (

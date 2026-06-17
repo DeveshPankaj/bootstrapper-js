@@ -211,13 +211,9 @@ export class Host {
   }
 
   public callCommand(command_name: string, ...args: any) {
-    const allCommands = this.commands.getValue();
-    const commands = allCommands.filter((x) => x.name === command_name);
-
-    if (commands.length === 0)
-      console.log(`Command [${command_name}] not registered!`);
-
-    commands.forEach((command) => command.exec(...args));
+    const command = this.getCommand(command_name);
+    if (!command) { console.log(`Command [${command_name}] not registered!`); return; }
+    command.exec(...args);
   }
 
   public execCommand(command: string, platform: Platform, ...args: string[]) {

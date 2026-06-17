@@ -41,8 +41,74 @@ const getBreadcrumbs = (path) => {
   return crumbs;
 };
 
+// ── ZIP support via fflate v0.8.2 ─────────────────────────────────────────
+// fflate source: https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js
+let _fflate = null;
+const loadFflate = () => {
+  if (_fflate) return _fflate;
+  try {
+    const code = fs.readFileSync('/usr/lib/fflate.min.js', 'utf8');
+    const mod = { exports: {} };
+    new Function('module', 'exports', code)(mod, mod.exports);
+    _fflate = mod.exports;
+  } catch (e) {
+    throw new Error('fflate not available: ' + e.message);
+  }
+  return _fflate;
+};
+
+const extractZip = (zipPath, destDir) => {
+  const fflate = loadFflate();
+  const data = fs.readFileSync(zipPath);
+  const uint8 = new Uint8Array(data.buffer ?? data);
+  const entries = fflate.unzipSync(uint8);
+  let count = 0;
+  for (const [name, content] of Object.entries(entries)) {
+    if (name.endsWith('/')) continue;
+    const fullPath = normalizePath(`${destDir}/${name}`);
+    const parentDir = fullPath.split('/').slice(0, -1).join('/');
+    try { fs.mkdirSync(parentDir, { recursive: true }); } catch (_) {}
+    fs.writeFileSync(fullPath, Buffer.from(content));
+    count++;
+  }
+  return count;
+};
+
+const addToZip = (zipFiles, vfsPath, zipEntryName) => {
+  try {
+    const stat = fs.statSync(vfsPath);
+    if (stat.isDirectory()) {
+      const entries = fs.readdirSync(vfsPath);
+      if (entries.length === 0) {
+        zipFiles[zipEntryName + '/'] = [new Uint8Array(0), { level: 0 }];
+      }
+      for (const e of entries) addToZip(zipFiles, `${vfsPath}/${e}`, `${zipEntryName}/${e}`);
+    } else {
+      const data = fs.readFileSync(vfsPath);
+      zipFiles[zipEntryName] = [new Uint8Array(data.buffer ?? data), { level: 6 }];
+    }
+  } catch (_) {}
+};
+
+const compressToZip = (vfsPath, outputPath) => {
+  const fflate = loadFflate();
+  const zipFiles = {};
+  const baseName = vfsPath.split('/').pop();
+  addToZip(zipFiles, vfsPath, baseName);
+  const zipped = fflate.zipSync(zipFiles);
+  fs.writeFileSync(outputPath, Buffer.from(zipped));
+};
+// ──────────────────────────────────────────────────────────────────────────
+
 const run = (...args) => {
   const [body, props, dir = DESKTOP_PATH] = args;
+
+  // Called with no args (e.g. from a keybinding or Spotlight) — route through
+  // open-window so the window manager provides body/props correctly.
+  if (!body) {
+    platform.host.execCommand("service('001-core.layout', 'open-window') (command('explorer'))", platform)
+    return
+  }
 
   const container = platform.window.document.createElement("div");
   const root = createRoot(container);
@@ -279,6 +345,21 @@ const run = (...args) => {
   props.setWindowView(true);
 };
 
+// Recursively searches for files/dirs whose name contains `query` (case-insensitive).
+const searchVfs = (fs, dir, query, results = [], depth = 0) => {
+  if (depth > 6) return results;
+  try {
+    for (const name of fs.readdirSync(dir)) {
+      const path = normalizePath(`${dir}/${name}`);
+      if (name.toLowerCase().includes(query)) {
+        try { results.push({ name, path, isDir: fs.statSync(path).isDirectory() }); } catch (_) {}
+      }
+      try { if (fs.statSync(path).isDirectory()) searchVfs(fs, path, query, results, depth + 1); } catch (_) {}
+    }
+  } catch (_) {}
+  return results;
+};
+
 const App = (props) => {
   const fs = platform.host.getFS();
   const dirRef = React.useRef(props.dir || "/");
@@ -291,10 +372,57 @@ const App = (props) => {
     fs.readdirSync(dirRef.current || "/")
   );
   const [, forceUpdate] = React.useState(0);
+  const [searchActive, setSearchActive] = React.useState(false);
+  const [searchQuery, setSearchQuery] = React.useState('');
+  const [searchResults, setSearchResults] = React.useState([]);
 
   const refresh = () => {
     setDirList(fs.readdirSync(dirRef.current));
     forceUpdate((n) => n + 1);
+  };
+  const refreshRef = React.useRef(refresh);
+  refreshRef.current = refresh;
+
+  // Register zip service functions so context menu DSL can invoke them
+  React.useEffect(() => {
+    const MODULE = '/home/user1/apps/explorer.js';
+    platform.register('zip-extract', (zipPath) => {
+      try {
+        const destDir = zipPath.split('/').slice(0, -1).join('/');
+        const n = extractZip(zipPath, destDir);
+        platform.host.callCommand('notify', { title: 'Extracted', body: `${n} file${n !== 1 ? 's' : ''} extracted`, duration: 3000 });
+        refreshRef.current();
+      } catch (e) {
+        platform.host.callCommand('notify', { title: 'Extract failed', body: e.message || String(e), duration: 4000 });
+      }
+    });
+    platform.register('zip-compress', (vfsPath) => {
+      try {
+        const dir = vfsPath.split('/').slice(0, -1).join('/');
+        const name = vfsPath.split('/').pop();
+        const outPath = `${dir}/${name}.zip`;
+        compressToZip(vfsPath, outPath);
+        platform.host.callCommand('notify', { title: 'Compressed', body: `Created ${name}.zip`, duration: 3000 });
+        refreshRef.current();
+      } catch (e) {
+        platform.host.callCommand('notify', { title: 'Compress failed', body: e.message || String(e), duration: 4000 });
+      }
+    });
+  }, []);
+
+  const onSearchChange = (q) => {
+    setSearchQuery(q);
+    if (q.trim()) setSearchResults(searchVfs(fs, dirRef.current, q.trim().toLowerCase()));
+    else setSearchResults([]);
+  };
+
+  const activateSearch = () => { setSearchActive(true); setSearchQuery(''); setSearchResults([]); };
+  const deactivateSearch = () => { setSearchActive(false); setSearchQuery(''); setSearchResults([]); };
+
+  const openSearchResult = (result) => {
+    deactivateSearch();
+    if (result.isDir) goTo(result.path);
+    else platform.host.exec(platform, result.path);
   };
 
   const goTo = (path, { pushHistory = true } = {}) => {
@@ -312,6 +440,8 @@ const App = (props) => {
     refresh();
   };
 
+  const IMAGE_EXTS = new Set(['.png','.jpg','.jpeg','.gif','.webp','.svg','.bmp','.ico','.avif']);
+
   const open = (file) => {
     const selectedFilePath = normalizePath(
       dirRef.current.endsWith("/")
@@ -323,6 +453,31 @@ const App = (props) => {
     if (stat.isDirectory()) {
       goTo(selectedFilePath);
     } else {
+      const ext = getFileExtension(selectedFilePath);
+      if (IMAGE_EXTS.has(ext)) {
+        const cmd = platform.host.getCommand('ui.imageviewer');
+        if (cmd) { cmd.exec(null, null, selectedFilePath); return; }
+      }
+      if (ext === 'csv') {
+        const cmd = platform.host.getCommand('ui.csv-viewer');
+        if (cmd) { cmd.exec(null, null, selectedFilePath); return; }
+      }
+      if (ext === 'py') {
+        const cmd = platform.host.getCommand('ui.python');
+        if (cmd) { cmd.exec(null, null, selectedFilePath); return; }
+      }
+      if (ext === 'zip') {
+        if (confirm(`Extract "${selectedFilePath.split('/').pop()}" into current folder?`)) {
+          try {
+            const n = extractZip(selectedFilePath, dirRef.current);
+            platform.host.callCommand('notify', { title: 'Extracted', body: `${n} file${n !== 1 ? 's' : ''} extracted`, duration: 3000 });
+            refresh();
+          } catch (e) {
+            platform.host.callCommand('notify', { title: 'Extract failed', body: e.message || String(e), duration: 4000 });
+          }
+        }
+        return;
+      }
       platform.host.exec(platform, selectedFilePath);
     }
   };
@@ -405,6 +560,15 @@ const App = (props) => {
         title: "Edit",
         cmd: `service('001-core.layout', 'open-window') (command('ui.notepad'), '${file.path}')`,
       });
+      const ctxExt = file.name.split('.').pop().toLowerCase();
+      if (ctxExt === 'py') {
+        actions.push({
+          id: "run_python",
+          type: "action",
+          title: "Run in Python",
+          cmd: `service('001-core.layout', 'open-window') (command('ui.python'), '${file.path}')`,
+        });
+      }
       actions.push({
         id: "open_file",
         type: "action",
@@ -417,6 +581,27 @@ const App = (props) => {
         title: "Delete",
         cmd: `service('root', 'fs')('rm', '${file.path}')`,
       });
+      actions.push({
+        id: "diff_file",
+        type: "action",
+        title: "Compare with…",
+        cmd: `service('001-core.layout', 'open-window') (command('ui.diff'), '${file.path}', '')`,
+      });
+      const fileExt = file.name.split('.').pop().toLowerCase();
+      if (fileExt === 'zip') {
+        actions.push({
+          id: "zip_extract",
+          type: "action",
+          title: "Extract here",
+          cmd: `service('/home/user1/apps/explorer.js', 'zip-extract')('${file.path}')`,
+        });
+      }
+      actions.push({
+        id: "zip_compress_file",
+        type: "action",
+        title: "Compress to ZIP",
+        cmd: `service('/home/user1/apps/explorer.js', 'zip-compress')('${file.path}')`,
+      });
     } else {
       actions.push({
         id: "open_file",
@@ -424,7 +609,13 @@ const App = (props) => {
         title: "Open in explorer",
         cmd: `service('001-core.layout', 'open-window') (command('explorer'), '${file.path}')`,
       });
-      actions.push({ id: 'delete_file', type: 'action', title: 'Delete', cmd: `service('root', 'fs')('rmdir', '${file.path}')` })
+      actions.push({ id: 'delete_file', type: 'action', title: 'Delete', cmd: `service('root', 'fs')('rmdir', '${file.path}')` });
+      actions.push({
+        id: "zip_compress_dir",
+        type: "action",
+        title: "Compress to ZIP",
+        cmd: `service('/home/user1/apps/explorer.js', 'zip-compress')('${file.path}')`,
+      });
     }
 
     openContextMenu(event.clientX + rect.x, event.clientY + rect.y, actions);
@@ -572,22 +763,45 @@ const App = (props) => {
           </span>
         </div>
 
-        <div className="breadcrumbs">
-          {breadcrumbs.map((crumb, idx) => (
-            <React.Fragment key={crumb.path}>
-              {idx > 0 ? <span className="sep material-symbols-outlined">chevron_right</span> : null}
-              <span
-                className={`crumb ${crumb.path === dirRef.current ? "current" : ""}`}
-                onClick={() => navigateTo(crumb.path)}
-                title={crumb.path}
-              >
-                {idx === 0 ? <span className="material-symbols-outlined" style={{ fontSize: '16px', verticalAlign: 'middle' }}>dns</span> : crumb.name}
-              </span>
-            </React.Fragment>
-          ))}
-        </div>
+        {searchActive ? (
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '.4rem' }}>
+            <input
+              autoFocus
+              type="text"
+              value={searchQuery}
+              onChange={e => onSearchChange(e.target.value)}
+              onKeyDown={e => e.key === 'Escape' && deactivateSearch()}
+              placeholder={`Search in ${dirRef.current}…`}
+              style={{ flex: 1, border: '1px solid #ccc', borderRadius: 6, padding: '3px 8px', fontSize: 13, outline: 'none' }}
+            />
+            <span className="material-symbols-outlined" onClick={deactivateSearch} style={{ cursor: 'pointer', color: '#888', fontSize: 18 }}>close</span>
+          </div>
+        ) : (
+          <div className="breadcrumbs">
+            {breadcrumbs.map((crumb, idx) => (
+              <React.Fragment key={crumb.path}>
+                {idx > 0 ? <span className="sep material-symbols-outlined">chevron_right</span> : null}
+                <span
+                  className={`crumb ${crumb.path === dirRef.current ? "current" : ""}`}
+                  onClick={() => navigateTo(crumb.path)}
+                  title={crumb.path}
+                >
+                  {idx === 0 ? <span className="material-symbols-outlined" style={{ fontSize: '16px', verticalAlign: 'middle' }}>dns</span> : crumb.name}
+                </span>
+              </React.Fragment>
+            ))}
+          </div>
+        )}
 
         <div className="toolbar-actions">
+          <span
+            className="material-symbols-outlined"
+            onClick={activateSearch}
+            aria-label="search"
+            title="search"
+          >
+            search
+          </span>
           <span
             className="material-symbols-outlined"
             onClick={makeDirClick}
@@ -614,7 +828,23 @@ const App = (props) => {
           </span>
         </div>
       </header>
-      <div className="file-explorer-body">
+      {searchActive && searchQuery.trim() && (
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: '#fff', zIndex: 10, display: 'flex', flexDirection: 'column', overflowY: 'auto', padding: '0.5rem' }}>
+          {searchResults.length === 0 ? (
+            <div style={{ padding: '1rem', color: '#999', fontSize: 13 }}>No results for "{searchQuery}"</div>
+          ) : searchResults.map((r, i) => (
+            <div key={i} onDoubleClick={() => openSearchResult(r)} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.35rem 0.5rem', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}
+              onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,122,255,0.08)'}
+              onMouseLeave={e => e.currentTarget.style.background = ''}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 16, color: '#6aa9f4' }}>{r.isDir ? 'folder' : 'insert_drive_file'}</span>
+              <span style={{ fontWeight: 500 }}>{r.name}</span>
+              <span style={{ fontSize: 11, color: '#999', marginLeft: 'auto', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '60%' }}>{r.path}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="file-explorer-body" style={{ position: 'relative' }}>
         <nav className="file-explorer-nav">
           <div className="nav-section-title">Favorites</div>
           {NAV_SHORTCUTS.map((item) => (
@@ -920,5 +1150,9 @@ const { remove } = platform.host.registerCommand("explorer", run, {
   fullScreen: false,
   header: {style: {backgroundColor: ''}}
 });
+
+// Load image viewer and spotlight on boot
+platform.host.exec(platform, '/home/user1/apps/imageviewer.js');
+platform.host.exec(platform, '/opt/spotlight.js');
 
 // setTimeout(remove, 6000)
