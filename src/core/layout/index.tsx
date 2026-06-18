@@ -505,6 +505,16 @@ const applyCss = ({wallpaper, grid}: {wallpaper: string, grid: LayoutDef['grid']
             z-index: 200;
             box-shadow: rgb(255 255 255) 0px 0px 4px;
         }
+
+        .snap-preview {
+            position: fixed;
+            z-index: 99;
+            background: rgba(10, 132, 255, 0.12);
+            border: 2px solid rgba(10, 132, 255, 0.45);
+            border-radius: var(--wm-radius, 6px);
+            pointer-events: none;
+            transition: left 0.08s ease, top 0.08s ease, width 0.08s ease, height 0.08s ease;
+        }
     
         .window.on-top {
             z-index: 100;
@@ -863,7 +873,8 @@ const writeWidgetPosition = (name: string, top: number, left: number) => {
 
 // Widgets hidden by default until the user enables them from Settings ->
 // Widgets, even though their script is loaded/registered at boot.
-const DEFAULT_HIDDEN_WIDGETS = ['toolbar']
+// Only clock, memory, shortcuts are shown by default.
+const DEFAULT_HIDDEN_WIDGETS = ['toolbar', 'public-ip', 'sticky-notes', 'rss']
 
 const readEnabledWidgets = (): string[] | null => {
     try {
@@ -1009,7 +1020,7 @@ const WidgetsPanel = () => {
     }, [])
 
     const visibleWidgets = enabled
-        ? widgetList.filter(w => enabled.includes(w.name))
+        ? widgetList.filter(w => enabled.includes(w.name) || w.meta?.['alwaysVisible'])
         : widgetList.filter(w => !DEFAULT_HIDDEN_WIDGETS.includes(w.name))
 
     if (!visibleWidgets.length) return null;
@@ -1218,6 +1229,12 @@ export const render = (container: HTMLElement) => {
                 id: '5',
                 title: 'VsCode (password:demo)',
                 cmd: `service('root', 'exec') ('/home/user1/projects/VSCode.html');`
+            },
+            {
+                type: 'action',
+                id: '7',
+                title: 'Dashboard',
+                cmd: `service('001-core.layout', 'open-window') (command('ui.dashboard'))`
             },
             {
                 type: 'action',

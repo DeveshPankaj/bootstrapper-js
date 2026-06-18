@@ -1,5 +1,6 @@
 import { Command, Platform } from '@shared/index'
 import React from 'react'
+import ReactDOM from 'react-dom'
 import { map } from 'rxjs'
 import { windowsSubject, TaskbarWindowInfo, desktopsSubject, activeDesktopSubject, removeDesktop, switchDesktop } from '../window-manager'
 
@@ -122,10 +123,11 @@ const DesktopSwitcher = () => {
                     {idx + 1}
                 </div>
             ))}
-            {menu ? (
+            {menu ? ReactDOM.createPortal(
                 <div className="desktop-context-menu" style={{ top: menu.y, left: menu.x }}>
                     <button disabled={desktops.length <= 1} onClick={() => { removeDesktop(menu.id); setMenu(null) }}>Delete desktop</button>
-                </div>
+                </div>,
+                document.body
             ) : null}
         </div>
     )

@@ -8,9 +8,9 @@ const write = terminal ? terminal.write.bind(terminal) : console.log;
 // Function to resolve environment variables from context
 const resolveVariable = (arg) => {
   // Replace both ${VAR_NAME} and $VAR_NAME with their corresponding values
-  return arg.replace(/\$\{(\w+)\}|\$\((\w+)\)/g, (_, varName1, varName2) => {
-    const varName = varName1 || varName2; // Use either matched variable name
-    return context[varName] ?? ''; // Return variable value or empty string if not found
+  return arg.replace(/\$\{(\w+)\}|\$\((\w+)\)|\$(\w+)/g, (_, v1, v2, v3) => {
+    const varName = v1 || v2 || v3;
+    return context[varName] ?? '';
   });
 };
 

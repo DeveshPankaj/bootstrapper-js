@@ -1,0 +1,12 @@
+const terminal = platform.getService('terminal');
+const write = (msg) => terminal ? terminal.write(msg) : console.log(msg);
+const [pwd, file] = $args;
+
+if (!platform.host.getCommand('ui.python')) {
+  write('python: runtime not loaded\r\n');
+  return;
+}
+
+const filePath = file ? (file.startsWith('/') ? file : `${pwd}/${file}`) : '';
+service('001-core.layout', 'open-window')(command('ui.python'), filePath);
+write((filePath ? `Running ${filePath}` : 'Opening Python REPL') + '…\r\n');

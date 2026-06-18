@@ -544,5 +544,25 @@
     "path": "/home/user1/projects/hello.py",
     "file": "/home/user1/projects/hello.py",
     "force_reload": false
+  },
+  {
+    "path": "/bin/python.run",
+    "file": "/bin/python.run",
+    "force_reload": true
+  },
+  {
+    "path": "/home/user1/apps/dashboard.js",
+    "file": "/home/user1/apps/dashboard.js",
+    "force_reload": true
+  },
+  {
+    "path": "/home/user1/apps/dashboard.html",
+    "file": "/home/user1/apps/dashboard.html",
+    "force_reload": true
+  },
+  {
+    "path": "/home/user1/dashboard.json",
+    "file": "/home/user1/dashboard.json",
+    "force_reload": false
   }
 ]

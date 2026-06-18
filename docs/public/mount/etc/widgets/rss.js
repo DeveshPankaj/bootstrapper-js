@@ -37,7 +37,6 @@ const RSSWidget = () => {
   const fetchFeed = async (url) => {
     setFeedData(prev => ({ ...prev, [url]: { ...(prev[url] || {}), loading: true, error: null } }))
     try {
-      // Try direct fetch (works for CORS-open feeds)
       const resp = await fetch(url)
       const text = await resp.text()
       const parsed = parseRSS(text)

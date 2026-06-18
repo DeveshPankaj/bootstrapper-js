@@ -2,11 +2,7 @@ const platform = window.platform;
 const PYTHON_HTML = '/(sw)/home/user1/apps/python.html';
 
 const run = (body, props, filepath) => {
-  if (!body) {
-    const openWindow = platform.host.getService('001-core.layout', 'open-window');
-    if (openWindow) openWindow(platform.host.getCommand('ui.python'), filepath || '');
-    return;
-  }
+  if (!body) return;
   const src = filepath
     ? `${PYTHON_HTML}?file=${encodeURIComponent(filepath)}`
     : PYTHON_HTML;
@@ -15,10 +11,11 @@ const run = (body, props, filepath) => {
   iframe.src = src;
   iframe.style.cssText = 'width:100%;height:100%;border:none;display:block;';
   body.appendChild(iframe);
+  props.setWindowView(true);
 };
 
 platform.host.registerCommand('ui.python', run, {
-  name: 'Python',
+  title: 'Python',
   icon: 'terminal',
   description: 'Python REPL powered by Pyodide',
 });

@@ -96,7 +96,8 @@ let nextPid = 1;
 // command, a widget, the task manager, etc. - can interact with a running
 // window by pid alone.
 type ProcessEntry = {
-  close: () => void;
+  close: () => void;   // SIGTERM: runs callbacks then closes
+  kill: () => void;    // SIGKILL: force-closes, no callbacks
   messages$: Subject<unknown>;
   servicePlatformName: string;
   startedAt: number;
@@ -159,10 +160,14 @@ const registerProcessCommands = () => {
   platform.register('add-desktop', addDesktop);
   platform.host.registerCommand('add-desktop', addDesktop, { callable: true });
 
-  // `process.kill(pid)` - closes the window with the given pid, same as
-  // clicking its close button.
+  // `process.kill(pid)` - sends SIGTERM: runs onDestroy callbacks then closes.
   platform.host.registerCommand("process.kill", (pid: number | string) => {
     processRegistry.get(Number(pid))?.close();
+  });
+
+  // `process.sigkill(pid)` - sends SIGKILL: force-closes without any callbacks.
+  platform.host.registerCommand("process.sigkill", (pid: number | string) => {
+    processRegistry.get(Number(pid))?.kill();
   });
 
   // `process.send-message(pid, message)` - delivers `message` to the process
@@ -305,15 +310,33 @@ export class WindowManager {
     iframe.setAttribute("allowfullscreen", "");
 
     let onCloseCallbacks: Array<Function> = []
+    const signalCallbacks = new Map<string, Array<Function>>()
+
+    const emitSignal = (name: string) => {
+      (signalCallbacks.get(name) ?? []).forEach(cb => { try { cb() } catch (_) {} })
+      try { iframe.contentWindow?.postMessage({ type: 'signal', name }, '*') } catch (_) {}
+    }
+
+    // SIGTERM — notifies the app then closes.
     const closeFunction = () => {
-      onCloseCallbacks.forEach(cb => cb());
-      onCloseCallbacks = [];
+      emitSignal('SIGTERM')
+      onCloseCallbacks.forEach(cb => { try { cb() } catch (_) {} })
+      onCloseCallbacks = []
+      signalCallbacks.clear()
+      this.closeWindow(windowRef);
+    }
+
+    // SIGKILL — immediate removal, no callbacks or signals.
+    const killFunction = () => {
+      onCloseCallbacks = []
+      signalCallbacks.clear()
       this.closeWindow(windowRef);
     }
 
     const messages$ = new Subject<unknown>();
     processRegistry.set(pid, {
       close: closeFunction,
+      kill: killFunction,
       messages$,
       servicePlatformName: command.servicePlatformName,
       startedAt: Date.now(),
@@ -351,6 +374,15 @@ export class WindowManager {
               onCloseCallbacks = onCloseCallbacks.filter(x => x !== cb);
             }
           },
+          onSignal: (name: string, cb: Function) => {
+            if (!signalCallbacks.has(name)) signalCallbacks.set(name, [])
+            signalCallbacks.get(name)!.push(cb)
+            return () => {
+              const arr = signalCallbacks.get(name)
+              if (arr) signalCallbacks.set(name, arr.filter(x => x !== cb))
+            }
+          },
+          kill: killFunction,
           setTitle,
           toggleHeader,
           appendActionButton,

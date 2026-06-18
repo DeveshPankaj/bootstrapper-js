@@ -239,7 +239,7 @@
               }
             } catch (_) {}
           }
-          candidates.push('cd', 'export', 'env', 'alias', 'unalias', 'exit', 'python', 'python3');
+          candidates.push('cd', 'export', 'env', 'alias', 'unalias', 'exit');
           // Add alias names as completable commands
           for (const a of Object.keys(this.aliases)) candidates.push(a);
         } else {
@@ -286,7 +286,7 @@
 
           this.busy = true;
           try {
-            await this.processCommand(command);
+            await this.runWithRedirects(command);
           } catch (err) {
             this.terminal.write(`\r\n${err && err.message ? err.message : err}\r\n`);
           }
@@ -440,13 +440,93 @@
 
         if (commandFile) {
           platform.register('terminal', this.terminal);
-          platform.register('context', this.context);
+          platform.register('context', {
+            ...this.context,
+            PWD: this.context.pwd,
+            HOME: '/home/user1',
+            ...this.env,
+          });
           // `host.exec` returns a promise for `.run`/`.js` commands, allowing
           // async commands (e.g. ones that `await` inside) to finish before the
           // next prompt is shown.
           await platform.host.exec(platform, commandFile, this.context.pwd, ...cmdArgs.slice(1));
         } else {
           await this.handleInternalCommands(cmdArgs);
+        }
+      }
+
+      parseRedirects(raw) {
+        const tokens = raw.match(/>>|>|<|"[^"]*"|'[^']*'|[^\s<>"']+/g) || [];
+        const cmdTokens = [];
+        let stdoutFile = null;
+        let appendMode = false;
+        let stdinFile = null;
+        let i = 0;
+        while (i < tokens.length) {
+          const t = tokens[i];
+          if (t === '>>') { appendMode = true; stdoutFile = tokens[i + 1] || ''; i += 2; continue; }
+          if (t === '>') { appendMode = false; stdoutFile = tokens[i + 1] || ''; i += 2; continue; }
+          if (t === '<') { stdinFile = tokens[i + 1] || ''; i += 2; continue; }
+          if (t.startsWith('>>')) { appendMode = true; stdoutFile = t.slice(2); i++; continue; }
+          if (t.startsWith('>')) { appendMode = false; stdoutFile = t.slice(1); i++; continue; }
+          if (t.startsWith('<')) { stdinFile = t.slice(1); i++; continue; }
+          cmdTokens.push(t);
+          i++;
+        }
+        return { cmd: cmdTokens.join(' '), stdoutFile, appendMode, stdinFile };
+      }
+
+      async runWithRedirects(raw) {
+        const { cmd, stdoutFile, appendMode, stdinFile } = this.parseRedirects(raw);
+
+        if (!stdoutFile && !stdinFile) {
+          return this.processCommand(raw);
+        }
+
+        const resolvePath = (p) => p.startsWith('/') ? p : `${this.context.pwd}/${p}`;
+
+        // < file: append resolved path as last arg (simulates stdin for file-reading commands)
+        let effectiveCmd = cmd;
+        if (stdinFile) {
+          const src = resolvePath(stdinFile);
+          if (!this.fs.existsSync(src)) {
+            this.terminal.write(`bash: ${stdinFile}: No such file or directory\r\n`);
+            return;
+          }
+          effectiveCmd = (cmd ? cmd + ' ' : '') + src;
+        }
+
+        if (!stdoutFile) {
+          return this.processCommand(effectiveCmd);
+        }
+
+        // Capture stdout
+        let captured = '';
+        const origWrite = this.terminal.write.bind(this.terminal);
+        this.terminal.write = (data) => {
+          const text = typeof data === 'string' ? data : new TextDecoder().decode(data);
+          captured += text
+            .replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, '')
+            .replace(/\r\n/g, '\n')
+            .replace(/\r/g, '\n');
+        };
+        try {
+          await this.processCommand(effectiveCmd || '');
+        } finally {
+          this.terminal.write = origWrite;
+        }
+
+        const dest = resolvePath(stdoutFile);
+        try {
+          if (appendMode) {
+            let existing = '';
+            try { existing = this.fs.readFileSync(dest, 'utf8'); } catch (_) {}
+            this.fs.writeFileSync(dest, existing + captured);
+          } else {
+            this.fs.writeFileSync(dest, captured);
+          }
+        } catch (e) {
+          this.terminal.write(`bash: ${stdoutFile}: ${e.message || 'write error'}\r\n`);
         }
       }
 
@@ -494,7 +574,7 @@
           }
           case 'env': {
             const lines = Object.entries(this.env).map(([k, v]) => `${k}=${v}`).join('\r\n');
-            this.terminal.write(lines ? lines + '\r\n' : '(no env vars set)\r\n');
+            if (lines) this.terminal.write(lines + '\r\n');
             break;
           }
           case 'alias': {
@@ -526,23 +606,6 @@
               break;
             }
             delete this.aliases[cmdArgs[1]];
-            break;
-          }
-          case 'python':
-          case 'python3': {
-            if (!platform.host.getCommand('ui.python')) {
-              this.terminal.write('python: runtime not loaded\r\n');
-              break;
-            }
-            let pyArg = '';
-            if (cmdArgs[1]) {
-              pyArg = cmdArgs[1].startsWith('/') ? cmdArgs[1] : `${this.context.pwd}/${cmdArgs[1]}`;
-            }
-            const pyDsl = pyArg
-              ? `service('001-core.layout', 'open-window')(command('ui.python'), '${pyArg}')`
-              : `service('001-core.layout', 'open-window')(command('ui.python'))`;
-            platform.host.execCommand(pyDsl, platform);
-            this.terminal.write((pyArg ? `Running ${pyArg}` : 'Opening Python REPL') + '…\r\n');
             break;
           }
           default:
