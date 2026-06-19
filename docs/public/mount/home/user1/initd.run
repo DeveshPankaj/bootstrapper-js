@@ -24,6 +24,7 @@ service('root', 'exec')('/home/user1/apps/bookmarks.js');
 service('root', 'exec')('/home/user1/apps/app-launcher.js');
 service('root', 'exec')('/home/user1/apps/python.js');
 service('root', 'exec')('/home/user1/apps/dashboard.js');
+service('root', 'exec')('/home/user1/apps/nn-ide.js');
 
 // service('root', 'exec')('/home/user1/settings.html');
 // service('root', 'exec')('/home/user1/apps/xtermjs.html');

@@ -1,0 +1,10 @@
+[
+  {"label": "docs",          "value": 897},
+  {"label": "src",           "value": 245},
+  {"label": "testing",       "value": 101},
+  {"label": "public",        "value": 88},
+  {"label": "dist",          "value": 46},
+  {"label": "drawio",        "value": 18},
+  {"label": "documentation", "value": 17},
+  {"label": "webpack.config.js", "value": 12}
+]

@@ -564,5 +564,40 @@
     "path": "/home/user1/dashboard.json",
     "file": "/home/user1/dashboard.json",
     "force_reload": false
+  },
+  {
+    "path": "/home/user1/projects/git-stats/commits-per-month.json",
+    "file": "/home/user1/projects/git-stats/commits-per-month.json",
+    "force_reload": false
+  },
+  {
+    "path": "/home/user1/projects/git-stats/commits-per-year.json",
+    "file": "/home/user1/projects/git-stats/commits-per-year.json",
+    "force_reload": false
+  },
+  {
+    "path": "/home/user1/projects/git-stats/commits-by-folder.json",
+    "file": "/home/user1/projects/git-stats/commits-by-folder.json",
+    "force_reload": false
+  },
+  {
+    "path": "/home/user1/projects/git-stats/commits-per-day.json",
+    "file": "/home/user1/projects/git-stats/commits-per-day.json",
+    "force_reload": false
+  },
+  {
+    "path": "/home/user1/apps/nn-ide.js",
+    "file": "/home/user1/apps/nn-ide.js",
+    "force_reload": true
+  },
+  {
+    "path": "/home/user1/apps/nn-ide.html",
+    "file": "/home/user1/apps/nn-ide.html",
+    "force_reload": true
+  },
+  {
+    "path": "/home/user1/projects/screen-reader.html",
+    "file": "/home/user1/projects/screen-reader.html",
+    "force_reload": false
   }
 ]
