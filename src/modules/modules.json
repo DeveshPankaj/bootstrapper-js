@@ -56,5 +56,12 @@
       "version": "0.0.1"
     },
     "preload": false
+  },
+  "009-ui.markdown": {
+    "url": "/markdown.bundle.js",
+    "metedata": {
+      "version": "0.0.1"
+    },
+    "preload": false
   }
 }

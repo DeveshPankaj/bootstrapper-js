@@ -19,6 +19,7 @@ module.exports = {
     "game-of-life": "./src/apps/game-of-life/",
     "file-explorer": "./src/apps/file-explorer/",
     "xml-parser": "./src/apps/xml-parser/",
+    markdown: "./src/apps/markdown/",
     modules: "./src/modules/",
   },
   output: {

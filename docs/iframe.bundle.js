@@ -28943,7 +28943,7 @@ platform.host.registerCommand('ui.iframe', (body, props, url, ...args) => {
             // props.close()
         }
     });
-}, { icon: 'box', title: '', fullScreen: false });
+}, { icon: 'box', title: 'Browser', fullScreen: false, fileExtensions: ['.html', '.svg', '.ico'] });
 const render = (container, props, url, ...args) => {
     const root = (0,react_dom_client__WEBPACK_IMPORTED_MODULE_2__.createRoot)(container);
     root.render(react__WEBPACK_IMPORTED_MODULE_0___default().createElement(App, Object.assign({}, props, { "$args": args, url: url })));

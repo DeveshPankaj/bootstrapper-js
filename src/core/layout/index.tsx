@@ -21,7 +21,7 @@ const LAYOUTS_PATH = '/etc/wm/layouts.json'
 const LAYOUT_CONFIG_PATH = '/etc/wm/config.json'
 const WM_CURRENT_PATH = '/etc/wm/current.json'
 const WM_THEMES_DIR = '/etc/wm/themes'
-const WM_DEFAULT_THEME_PATH = `${WM_THEMES_DIR}/ocean.json`
+const WM_DEFAULT_THEME_PATH = `${WM_THEMES_DIR}/dark.json`
 
 type LayoutDef = {
     id: string
@@ -107,7 +107,7 @@ const DEFAULT_WM_SETTINGS: WmSettings = {
         taskbarBackground: 'rgba(0, 0, 0, 0.5)',
         taskbarSize: 56,
         accentColor: '#0a84ff',
-        borderRadius: 6,
+        borderRadius: 5,
         blur: 10,
         shadow: true,
     },

@@ -91,7 +91,7 @@ platform.host.registerCommand('ui.iframe', (body: HTMLBodyElement, props: UICall
             // props.close()
         }
     })
-}, { icon: 'box', title: '', fullScreen: false })
+}, { icon: 'box', title: 'Browser', fullScreen: false, fileExtensions: ['.html', '.svg', '.ico'] })
 
 const render = (container: HTMLElement, props: UICallbackProps, url: string, ...args: any) => {
     const root = createRoot(container)
