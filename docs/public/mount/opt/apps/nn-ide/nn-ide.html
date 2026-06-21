@@ -196,32 +196,32 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
       <div id="bc-log" style="display:none"><div id="log"></div></div>
       <div id="bc-infer" style="display:none"><div id="infer-placeholder">Train a model first, then run inference here.</div></div>
       <div id="bc-diffusion" style="display:none">
-        <div class="tc" id="diff-config">
-          <div class="tcg"><div class="tcl">Dataset Folder</div>
-            <div style="display:flex;gap:4px"><input class="tci" id="diff-folder" placeholder="/home/user1/projects/diffusion-dataset" value="/home/user1/projects/diffusion-dataset" style="flex:1">
-            <button class="btn" onclick="diffLoadDataset()" style="padding:2px 8px">Load</button></div></div>
-          <div class="tcg"><div class="tcl">Image Size</div><input class="tci" id="diff-size" type="number" value="32" min="8" max="64" style="width:50px"></div>
-          <div class="tcg"><div class="tcl">Timesteps</div><input class="tci" id="diff-steps" type="number" value="50" min="10" max="200" style="width:50px"></div>
-          <div class="tcg"><div class="tcl">Epochs</div><input class="tci" id="diff-epochs" type="number" value="100" min="1" style="width:50px"></div>
-          <div class="tcg"><div class="tcl">LR</div><input class="tci" id="diff-lr" value="0.0005" style="width:60px"></div>
-          <div class="tcg"><div class="tcl">Repeats/sample</div><input class="tci" id="diff-repeats" type="number" value="5" min="1" max="20" style="width:40px" title="Train on each sample N times per epoch with different noise"></div>
-          <div class="tcg"><div class="tcl">Preview every</div><input class="tci" id="diff-preview-n" type="number" value="5" min="1" style="width:40px"> epochs</div>
-          <div class="tcg"><div class="tcl">Checkpoint every</div><input class="tci" id="diff-ckpt-n" type="number" value="10" min="0" style="width:40px" title="Save weights every N epochs (0=off)"> epochs</div>
+        <div class="tc">
+          <div class="tcg"><div class="tcl">Dataset</div>
+            <div style="display:flex;gap:4px"><input class="tci" id="df-folder" value="/home/user1/projects/diffusion-dataset" style="flex:1">
+            <button class="btn" onclick="DF.loadDataset()" style="padding:2px 8px">Load</button></div></div>
+          <div class="tcg"><div class="tcl">Size</div><input class="tci" id="df-size" type="number" value="32" min="8" max="64" style="width:56px"></div>
+          <div class="tcg"><div class="tcl">Steps</div><input class="tci" id="df-steps" type="number" value="50" min="10" max="200" style="width:56px"></div>
+          <div class="tcg"><div class="tcl">Epochs</div><input class="tci" id="df-epochs" type="number" value="50" min="1" style="width:56px"></div>
+          <div class="tcg"><div class="tcl">Batch size</div><input class="tci" id="df-bs" type="number" value="64" min="1" max="256" style="width:56px"></div>
+          <div class="tcg"><div class="tcl">LR</div><input class="tci" id="df-lr" value="0.001" style="width:64px"></div>
+          <div class="tcg"><div class="tcl">Preview</div><input class="tci" id="df-prev" type="number" value="5" min="1" style="width:56px"> ep</div>
+          <div class="tcg"><div class="tcl">Ckpt</div><input class="tci" id="df-ckpt" type="number" value="0" min="0" style="width:56px"> ep</div>
         </div>
-        <div id="diff-status" style="font-size:10px;color:var(--dim);margin:6px 0">Ready — load a dataset to begin</div>
-        <div class="pbw"><div class="pb" id="diff-prog"></div></div>
-        <div id="diff-dataset-info" style="font-size:11px;color:var(--text);margin:4px 0"></div>
-        <div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">
-          <div style="font-size:9px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Generated Previews</div>
-          <div id="diff-previews" style="display:flex;gap:6px;flex-wrap:wrap;min-height:40px"></div>
+        <div id="df-status" style="font-size:10px;color:var(--dim);margin:6px 0">Load a dataset to begin</div>
+        <div class="pbw"><div class="pb" id="df-prog"></div></div>
+        <div id="df-info" style="font-size:11px;color:var(--text);margin:4px 0"></div>
+        <div style="margin-top:6px;border-top:1px solid var(--border);padding-top:6px">
+          <div style="font-size:9px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Epoch Previews</div>
+          <div id="df-previews" style="display:flex;gap:4px;flex-wrap:wrap;min-height:36px"></div>
         </div>
-        <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px">
-          <div style="font-size:9px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Text-to-Image Inference</div>
+        <div style="margin-top:6px;border-top:1px solid var(--border);padding-top:6px">
+          <div style="font-size:9px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Text → Image</div>
           <div style="display:flex;gap:6px;align-items:center">
-            <input class="tci" id="diff-prompt" placeholder="a red circle on white background" style="flex:1">
-            <button class="btn pri" id="diff-gen-btn" onclick="diffGenerate()">Generate</button>
+            <input class="tci" id="df-prompt" placeholder="a red circle on white background" style="flex:1">
+            <button class="btn pri" id="df-gen-btn" onclick="DF.generate()">Generate</button>
           </div>
-          <div id="diff-gen-result" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"></div>
+          <div id="df-gen-out" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"></div>
         </div>
       </div>
     </div>
@@ -790,7 +790,7 @@ async function startTraining() {
   if (isTraining) return;
   // Detect diffusion pipeline and route accordingly
   if (nodes.some(n => n.type === 'noise-input' || n.type === 'denoise-out')) {
-    return diffStartTraining();
+    return DF.train();
   }
   isTraining=true; stopReq=false;
   document.getElementById('train-btn').disabled=true;
@@ -1025,7 +1025,7 @@ async function startTraining() {
   }
 }
 
-function stopTraining() { stopReq=true; diffStopReq=true; log('Stop requested…','inf'); }
+function stopTraining() { stopReq=true; DF.stop(); log('Stop requested…','inf'); }
 function quickInfer() {
   if (!tfModel) { log('No model available yet','err'); return; }
   renderInferenceUI();
@@ -1036,7 +1036,10 @@ function setProgLabel(s) { document.getElementById('prog-lbl').textContent=s; }
 async function loadModelWeights() {
   const fs = getFS();
   if (!fs) { alert('VFS unavailable'); return; }
-  const latestDir = '/home/user1/projects/nn-training/latest';
+  const isDiffusion = nodes.some(n => n.type === 'noise-input' || n.type === 'denoise-out');
+  const latestDir = isDiffusion
+    ? '/home/user1/projects/nn-training/diffusion-latest'
+    : '/home/user1/projects/nn-training/latest';
   const defaultPath = fs.existsSync && fs.existsSync(latestDir + '/model.json')
     ? latestDir
     : '/home/user1/projects/nn-training/<run-id>/model';
@@ -1046,11 +1049,19 @@ async function loadModelWeights() {
   try {
     await ensureTf();
     log('Loading model from ' + d + '…', 'inf');
-    if (tfModel) { tfModel.dispose(); tfModel = null; }
-    tfModel = await tf.loadLayersModel(vfsLoadHandler(fs, d));
-    log('Model loaded — params: ' + tfModel.countParams().toLocaleString(), 'ok');
-    renderInferenceUI();
-    switchBTab('infer');
+    const loaded = await tf.loadLayersModel(vfsLoadHandler(fs, d));
+    if (isDiffusion) {
+      if (DF.model) DF.model.dispose();
+      DF.model = loaded;
+      log('Diffusion model loaded — params: ' + loaded.countParams().toLocaleString(), 'ok');
+      switchBTab('diffusion');
+    } else {
+      if (tfModel) { tfModel.dispose(); tfModel = null; }
+      tfModel = loaded;
+      log('Model loaded — params: ' + tfModel.countParams().toLocaleString(), 'ok');
+      renderInferenceUI();
+      switchBTab('infer');
+    }
   } catch(e) {
     log('Load failed: ' + e.message, 'err');
     alert('Failed to load model: ' + e.message);
@@ -1527,405 +1538,252 @@ function toggleBotExpand() {
   }
 }
 
-// ── Diffusion Pipeline ────────────────────────────────────────────────────
-let diffModel = null, diffDataset = null, diffTraining = false, diffStopReq = false;
+// ── Diffusion Pipeline (v2) ────────────────────────────────────────────────
+const DF = (() => {
+  let model = null, dataset = null, training = false, stopped = false;
 
-function diffSetStatus(msg) { document.getElementById('diff-status').textContent = msg; }
+  const $ = id => document.getElementById(id);
+  const status = msg => $('df-status').textContent = msg;
+  const B = () => typeof Buffer !== 'undefined' ? Buffer : window.top.Buffer;
 
-// Render a shape sample to pixel data (Float32Array, values 0-1, HWC layout)
-function renderShapeSample(sample, size) {
-  const cv = document.createElement('canvas'); cv.width = size; cv.height = size;
-  const ctx = cv.getContext('2d');
-  const [br, bg, bb] = sample.bg || [255,255,255];
-  ctx.fillStyle = `rgb(${br},${bg},${bb})`; ctx.fillRect(0, 0, size, size);
-  const [cr, cg, cb] = sample.color;
-  ctx.fillStyle = `rgb(${cr},${cg},${cb})`;
-  const cx = size/2, cy = size/2, r = size*0.35;
-  if (sample.shape === 'circle') {
-    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.fill();
-  } else if (sample.shape === 'square') {
-    ctx.fillRect(cx-r, cy-r, r*2, r*2);
-  } else if (sample.shape === 'triangle') {
-    ctx.beginPath(); ctx.moveTo(cx, cy-r); ctx.lineTo(cx+r, cy+r); ctx.lineTo(cx-r, cy+r); ctx.closePath(); ctx.fill();
-  }
-  const imgData = ctx.getImageData(0, 0, size, size);
-  const floats = new Float32Array(size * size * 3);
-  for (let i = 0; i < size * size; i++) {
-    floats[i*3]   = imgData.data[i*4]   / 255;
-    floats[i*3+1] = imgData.data[i*4+1] / 255;
-    floats[i*3+2] = imgData.data[i*4+2] / 255;
-  }
-  return floats;
-}
-
-// Simple text embedding: hash prompt string to a fixed-size vector
-function textEmbed(prompt, dim=32) {
-  const vec = new Float32Array(dim);
-  for (let i = 0; i < prompt.length; i++) {
-    const c = prompt.charCodeAt(i);
-    vec[i % dim] += Math.sin(c * 0.1 + i * 0.3) * 0.5;
-    vec[(i+7) % dim] += Math.cos(c * 0.2 + i * 0.17) * 0.3;
-  }
-  const mag = Math.sqrt(vec.reduce((s,v) => s+v*v, 0)) || 1;
-  for (let i = 0; i < dim; i++) vec[i] /= mag;
-  return vec;
-}
-
-// DDPM noise schedule (linear beta schedule)
-function makeNoiseSchedule(T) {
-  const betaStart = 0.0001, betaEnd = 0.02;
-  const betas = new Float32Array(T);
-  const alphas = new Float32Array(T);
-  const alphasCumprod = new Float32Array(T);
-  for (let t = 0; t < T; t++) {
-    betas[t] = betaStart + (betaEnd - betaStart) * t / (T - 1);
-    alphas[t] = 1 - betas[t];
-    alphasCumprod[t] = t === 0 ? alphas[0] : alphasCumprod[t-1] * alphas[t];
-  }
-  return { betas, alphas, alphasCumprod };
-}
-
-// Build a tiny UNet-style denoiser (takes: noisy image + timestep embedding + text embedding)
-function buildDiffusionModel(imgSize, channels, T, textDim) {
-  const imgInput = tf.input({ shape: [imgSize, imgSize, channels] });
-  const tInput   = tf.input({ shape: [1] });            // timestep (scalar 0..1)
-  const txtInput = tf.input({ shape: [textDim] });       // text embedding
-
-  // Timestep embedding: expand to spatial
-  let tEmb = tf.layers.dense({ units: 64, activation: 'relu' }).apply(tInput);
-  tEmb = tf.layers.dense({ units: imgSize * imgSize }).apply(tEmb);
-  tEmb = tf.layers.reshape({ targetShape: [imgSize, imgSize, 1] }).apply(tEmb);
-
-  // Text embedding: expand to spatial
-  let txtEmb = tf.layers.dense({ units: 64, activation: 'relu' }).apply(txtInput);
-  txtEmb = tf.layers.dense({ units: imgSize * imgSize }).apply(txtEmb);
-  txtEmb = tf.layers.reshape({ targetShape: [imgSize, imgSize, 1] }).apply(txtEmb);
-
-  // Concatenate: image + time + text → channels+2
-  let x = tf.layers.concatenate().apply([imgInput, tEmb, txtEmb]);
-
-  // Encoder
-  x = tf.layers.conv2d({ filters: 32, kernelSize: 3, padding: 'same', activation: 'relu' }).apply(x);
-  x = tf.layers.conv2d({ filters: 64, kernelSize: 3, padding: 'same', activation: 'relu' }).apply(x);
-
-  // Bottleneck
-  x = tf.layers.conv2d({ filters: 64, kernelSize: 3, padding: 'same', activation: 'relu' }).apply(x);
-
-  // Decoder
-  x = tf.layers.conv2d({ filters: 32, kernelSize: 3, padding: 'same', activation: 'relu' }).apply(x);
-  x = tf.layers.conv2d({ filters: channels, kernelSize: 1, padding: 'same', activation: 'sigmoid' }).apply(x);
-
-  return tf.model({ inputs: [imgInput, tInput, txtInput], outputs: x });
-}
-
-// Load dataset from VFS
-function diffLoadDataset() {
-  const folder = document.getElementById('diff-folder').value.trim();
-  const size = parseInt(document.getElementById('diff-size').value) || 32;
-  if (!folder) { diffSetStatus('Enter a dataset folder path'); return; }
-  const fs = getFS(); if (!fs) { diffSetStatus('VFS unavailable'); return; }
-  try {
-    const raw = fs.readFileSync(folder + '/dataset.json', 'utf8');
-    const meta = JSON.parse(raw);
-    const samples = meta.samples || [];
-    if (!samples.length) { diffSetStatus('No samples in dataset.json'); return; }
-
-    // Render samples to pixel arrays
-    const images = samples.map(s => renderShapeSample(s, size));
-    const prompts = samples.map(s => s.prompt);
-    diffDataset = { images, prompts, size, channels: 3, meta };
-    diffSetStatus(`Loaded ${images.length} samples (${size}×${size}×3)`);
-    document.getElementById('diff-dataset-info').innerHTML =
-      `<strong>${meta.name || 'Dataset'}</strong>: ${samples.length} images, ${size}×${size}px<br>` +
-      `<span style="color:var(--dim)">${meta.description || ''}</span>`;
-    log(`Diffusion: loaded ${images.length} samples from ${folder}`, 'ok');
-  } catch (e) {
-    diffSetStatus('Error: ' + e.message);
-    log('Diffusion dataset error: ' + e.message, 'err');
-  }
-}
-
-// Convert float array to a data URL (works in both Chrome and Firefox iframes)
-function floatsToDataUrl(floats, w, h, ch) {
-  const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
-  const ctx = cv.getContext('2d');
-  const imgData = ctx.createImageData(w, h);
-  for (let i = 0; i < w * h; i++) {
-    imgData.data[i*4]   = Math.min(255, Math.max(0, floats[i*ch]   * 255));
-    imgData.data[i*4+1] = Math.min(255, Math.max(0, floats[i*ch+1] * 255));
-    imgData.data[i*4+2] = Math.min(255, Math.max(0, floats[i*ch+2] * 255));
-    imgData.data[i*4+3] = 255;
-  }
-  ctx.putImageData(imgData, 0, 0);
-  return cv.toDataURL();
-}
-
-// Draw a data URL onto a target canvas (via Image — bypasses Chrome's offscreen canvas restriction)
-function drawDataUrlToCanvas(dataUrl, targetCanvas, tw, th) {
-  const img = new Image();
-  img.onload = () => {
-    const ctx = targetCanvas.getContext('2d');
-    ctx.imageSmoothingEnabled = false;
-    ctx.clearRect(0, 0, tw, th);
-    ctx.drawImage(img, 0, 0, tw, th);
-  };
-  img.src = dataUrl;
-}
-
-function addPreviewImage(dataUrl, label) {
-  const container = document.getElementById('diff-previews');
-  const wrap = document.createElement('div');
-  wrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:2px;';
-  const scaled = document.createElement('canvas');
-  scaled.width = 64; scaled.height = 64;
-  scaled.style.cssText = 'width:64px;height:64px;border:1px solid var(--border);border-radius:4px;image-rendering:pixelated;';
-  wrap.appendChild(scaled);
-  const lbl = document.createElement('div');
-  lbl.style.cssText = 'font-size:9px;color:var(--dim);max-width:64px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;';
-  lbl.textContent = label;
-  wrap.appendChild(lbl);
-  container.appendChild(wrap);
-  drawDataUrlToCanvas(dataUrl, scaled, 64, 64);
-}
-
-// Training loop
-async function diffStartTraining() {
-  if (diffTraining) return;
-  if (!diffDataset) {
-    diffSetStatus('Load a dataset first');
-    diffLoadDataset();
-    if (!diffDataset) return;
-  }
-  diffTraining = true; diffStopReq = false;
-  isTraining = true; stopReq = false;
-  document.getElementById('train-btn').disabled = true;
-  document.getElementById('stop-btn').style.display = '';
-  document.getElementById('diff-previews').innerHTML = '';
-  switchBTab('diffusion');
-
-  const { images, prompts, size, channels } = diffDataset;
-  const T = parseInt(document.getElementById('diff-steps').value) || 50;
-  const epochs = parseInt(document.getElementById('diff-epochs').value) || 20;
-  const lr = parseFloat(document.getElementById('diff-lr').value) || 0.001;
-  const previewEvery = parseInt(document.getElementById('diff-preview-n').value) || 5;
-  const ckptEvery = parseInt(document.getElementById('diff-ckpt-n').value) || 0;
-  const textNode = nodes.find(n => n.type === 'text-embed');
-  const textDim = textNode ? parseInt(textNode.params.dim || 32) : 32;
-
-  try {
-    await ensureTf();
-
-    // Reuse existing model (continue training) or build fresh from graph
-    if (diffModel) {
-      diffSetStatus('Continuing training from existing weights…');
-      log(`Continuing diffusion training (${diffModel.countParams().toLocaleString()} params)`, 'ok');
-    } else {
-      diffSetStatus('Building denoiser from graph…');
-      diffModel = await buildTfModel();
-      log(`Diffusion model (from graph): ${diffModel.countParams().toLocaleString()} params`, 'ok');
+  // Text embedding: deterministic hash → unit vector
+  function embed(prompt, dim) {
+    const v = new Float32Array(dim);
+    for (let i = 0; i < prompt.length; i++) {
+      const c = prompt.charCodeAt(i);
+      v[i % dim]       += Math.sin(c * 0.1 + i * 0.3) * 0.5;
+      v[(i + 7) % dim] += Math.cos(c * 0.2 + i * 0.17) * 0.3;
     }
+    const mag = Math.sqrt(v.reduce((s, x) => s + x * x, 0)) || 1;
+    for (let i = 0; i < dim; i++) v[i] /= mag;
+    return v;
+  }
 
-    const optimizer = tf.train.adam(lr);
-    const schedule = makeNoiseSchedule(T);
-    const N = images.length;
+  // Linear beta schedule
+  function sched(T) {
+    const bS = 1e-4, bE = 0.02;
+    const b = new Float32Array(T), a = new Float32Array(T), aBar = new Float32Array(T);
+    for (let t = 0; t < T; t++) { b[t] = bS + (bE - bS) * t / (T - 1); a[t] = 1 - b[t]; aBar[t] = t === 0 ? a[0] : aBar[t-1] * a[t]; }
+    return { b, a, aBar };
+  }
 
-    // Pre-compute text embeddings
-    const textEmbeddings = prompts.map(p => textEmbed(p, textDim));
+  // Render shape sample → Float32Array (HWC 0-1)
+  function renderSample(s, sz) {
+    const cv = document.createElement('canvas'); cv.width = sz; cv.height = sz;
+    const ctx = cv.getContext('2d');
+    const [br, bg, bb] = s.bg || [255,255,255];
+    ctx.fillStyle = 'rgb('+br+','+bg+','+bb+')'; ctx.fillRect(0, 0, sz, sz);
+    const [cr, cg, cb] = s.color;
+    ctx.fillStyle = 'rgb('+cr+','+cg+','+cb+')';
+    const cx = sz/2, cy = sz/2, r = sz*0.35;
+    if (s.shape === 'circle') { ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fill(); }
+    else if (s.shape === 'square') { ctx.fillRect(cx-r,cy-r,r*2,r*2); }
+    else if (s.shape === 'triangle') { ctx.beginPath(); ctx.moveTo(cx,cy-r); ctx.lineTo(cx+r,cy+r); ctx.lineTo(cx-r,cy+r); ctx.closePath(); ctx.fill(); }
+    else if (s.shape === 'diamond') { ctx.beginPath(); ctx.moveTo(cx,cy-r); ctx.lineTo(cx+r,cy); ctx.lineTo(cx,cy+r); ctx.lineTo(cx-r,cy); ctx.closePath(); ctx.fill(); }
+    else if (s.shape === 'star') { ctx.beginPath(); for(let i=0;i<5;i++){const a=Math.PI/2+i*Math.PI*2/5; ctx.lineTo(cx+Math.cos(a)*r,cy-Math.sin(a)*r); const b=a+Math.PI/5; ctx.lineTo(cx+Math.cos(b)*r*0.4,cy-Math.sin(b)*r*0.4);} ctx.closePath(); ctx.fill(); }
+    else if (s.shape === 'pentagon') { ctx.beginPath(); for(let i=0;i<5;i++){const a=-Math.PI/2+i*Math.PI*2/5; ctx.lineTo(cx+Math.cos(a)*r,cy+Math.sin(a)*r);} ctx.closePath(); ctx.fill(); }
+    else if (s.shape === 'hexagon') { ctx.beginPath(); for(let i=0;i<6;i++){const a=i*Math.PI/3; ctx.lineTo(cx+Math.cos(a)*r,cy+Math.sin(a)*r);} ctx.closePath(); ctx.fill(); }
+    else if (s.shape === 'ellipse') { ctx.beginPath(); ctx.ellipse(cx,cy,r,r*0.6,0,0,Math.PI*2); ctx.fill(); }
+    else if (s.shape === 'cross') { const w=r*0.35; ctx.fillRect(cx-w,cy-r,w*2,r*2); ctx.fillRect(cx-r,cy-w,r*2,w*2); }
+    else if (s.shape === 'ring') { ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.arc(cx,cy,r*0.55,0,Math.PI*2,true); ctx.fill(); }
+    else if (s.shape === 'crescent') { ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fill(); ctx.fillStyle='rgb('+br+','+bg+','+bb+')'; ctx.beginPath(); ctx.arc(cx+r*0.35,cy,r*0.75,0,Math.PI*2); ctx.fill(); ctx.fillStyle='rgb('+cr+','+cg+','+cb+')'; }
+    else if (s.shape === 'arrow') { ctx.beginPath(); ctx.moveTo(cx,cy-r); ctx.lineTo(cx+r*0.7,cy); ctx.lineTo(cx+r*0.25,cy); ctx.lineTo(cx+r*0.25,cy+r); ctx.lineTo(cx-r*0.25,cy+r); ctx.lineTo(cx-r*0.25,cy); ctx.lineTo(cx-r*0.7,cy); ctx.closePath(); ctx.fill(); }
+    const px = ctx.getImageData(0,0,sz,sz).data;
+    const out = new Float32Array(sz*sz*3);
+    for (let i=0;i<sz*sz;i++) { out[i*3]=px[i*4]/255; out[i*3+1]=px[i*4+1]/255; out[i*3+2]=px[i*4+2]/255; }
+    return out;
+  }
 
-    // Save run info
-    const runDir = '/home/user1/projects/nn-training/diffusion-' + new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
+  // Float array → data URL (Chrome-safe)
+  function toUrl(f, w, h) {
+    const cv = document.createElement('canvas'); cv.width=w; cv.height=h;
+    const ctx = cv.getContext('2d'), id = ctx.createImageData(w,h);
+    for (let i=0;i<w*h;i++) { id.data[i*4]=Math.max(0,Math.min(255,f[i*3]*255)); id.data[i*4+1]=Math.max(0,Math.min(255,f[i*3+1]*255)); id.data[i*4+2]=Math.max(0,Math.min(255,f[i*3+2]*255)); id.data[i*4+3]=255; }
+    ctx.putImageData(id,0,0);
+    return cv.toDataURL();
+  }
+
+  // Render data URL onto visible canvas via Image
+  function drawUrl(url, cv, w, h) {
+    const img = new Image();
+    img.onload = () => { const c=cv.getContext('2d'); c.imageSmoothingEnabled=false; c.clearRect(0,0,w,h); c.drawImage(img,0,0,w,h); };
+    img.src = url;
+  }
+
+  function addThumb(url, label) {
+    const wrap = document.createElement('div'); wrap.style.cssText='display:flex;flex-direction:column;align-items:center;gap:2px;';
+    const cv = document.createElement('canvas'); cv.width=56; cv.height=56;
+    cv.style.cssText='width:56px;height:56px;border:1px solid var(--border);border-radius:4px;image-rendering:pixelated;';
+    wrap.appendChild(cv);
+    const lbl = document.createElement('div'); lbl.style.cssText='font-size:8px;color:var(--dim);max-width:56px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;';
+    lbl.textContent = label; wrap.appendChild(lbl);
+    $('df-previews').appendChild(wrap);
+    drawUrl(url, cv, 56, 56);
+  }
+
+  function loadDataset() {
+    const folder = $('df-folder').value.trim(), sz = parseInt($('df-size').value)||32;
+    if (!folder) { status('Enter a dataset folder'); return; }
+    const fs = getFS(); if (!fs) { status('VFS unavailable'); return; }
     try {
-      const fs = getFS(); if (fs) { mkdirpSync(fs, runDir); }
-    } catch(_) {}
+      const meta = JSON.parse(fs.readFileSync(folder+'/dataset.json','utf8'));
+      const samples = meta.samples||[];
+      if (!samples.length) { status('No samples found'); return; }
+      dataset = { images: samples.map(s=>renderSample(s,sz)), prompts: samples.map(s=>s.prompt), sz, meta };
+      status('Loaded '+samples.length+' samples ('+sz+'×'+sz+')');
+      $('df-info').innerHTML = '<strong>'+(meta.name||'Dataset')+'</strong>: '+samples.length+' images, '+sz+'×'+sz+'px<br><span style="color:var(--dim)">'+(meta.description||'')+'</span>';
+      log('Diffusion: loaded '+samples.length+' samples from '+folder, 'ok');
+    } catch(e) { status('Error: '+e.message); log('Dataset error: '+e.message,'err'); }
+  }
 
-    const repeats = parseInt(document.getElementById('diff-repeats').value) || 5;
+  // Reverse diffusion sampling (DDPM x0-prediction)
+  function genSample(sc, sz, ch, txtDim, prompt) {
+    const T=sc.b.length, txtT=tf.tensor2d([Array.from(embed(prompt,txtDim))]);
+    let x = tf.randomNormal([1,sz,sz,ch]);
+    for (let t=T-1; t>=0; t--) {
+      const tT=tf.tensor2d([[t/T]]);
+      const x0=model.predict([x,tT,txtT]);
+      if (t>0) {
+        const aBarT=sc.aBar[t], aBarP=sc.aBar[t-1];
+        const c1=Math.sqrt(aBarP)*sc.b[t]/(1-aBarT);
+        const c2=Math.sqrt(sc.a[t])*(1-aBarP)/(1-aBarT);
+        const mu=x0.mul(c1).add(x.mul(c2));
+        const sigma=Math.sqrt(sc.b[t]*(1-aBarP)/(1-aBarT));
+        const z=tf.randomNormal([1,sz,sz,ch]);
+        const xN=mu.add(z.mul(sigma));
+        x.dispose(); tT.dispose(); x0.dispose(); mu.dispose(); z.dispose();
+        x=xN;
+      } else {
+        x.dispose(); tT.dispose();
+        x=x0;
+      }
+    }
+    txtT.dispose();
+    const out=Array.from(x.dataSync()); x.dispose();
+    return new Float32Array(out.map(v=>Math.max(0,Math.min(1,v))));
+  }
 
-    for (let epoch = 0; epoch < epochs; epoch++) {
-      if (diffStopReq) break;
-      let epochLoss = 0, steps = 0;
+  // Training
+  async function train() {
+    if (training) return;
+    if (!dataset) { loadDataset(); if (!dataset) return; }
+    training=true; stopped=false; isTraining=true; stopReq=false;
+    $('train-btn').disabled=true; $('stop-btn').style.display='';
+    $('df-previews').innerHTML=''; switchBTab('diffusion');
 
-      // Train on each sample individually using optimizer.minimize (most reliable across all backends)
-      for (let i = 0; i < N; i++) {
-        if (diffStopReq) break;
-        for (let r = 0; r < repeats; r++) {
-          const t = Math.floor(Math.random() * T);
-          const alphaCp = schedule.alphasCumprod[t];
-          const sa = Math.sqrt(alphaCp), sna = Math.sqrt(1 - alphaCp);
+    const {images,prompts,sz}=dataset, ch=3, N=images.length;
+    const T=parseInt($('df-steps').value)||50, epochs=parseInt($('df-epochs').value)||50;
+    const lr=parseFloat($('df-lr').value)||0.001;
+    const prevN=parseInt($('df-prev').value)||5, ckptN=parseInt($('df-ckpt').value)||0;
+    const txtNode=nodes.find(n=>n.type==='text-embed');
+    const txtDim=txtNode?parseInt(txtNode.params.dim||32):32;
 
-          const lossVal = optimizer.minimize(() => {
-            const cleanImg = tf.tensor4d(images[i], [1, size, size, channels]);
-            const noise = tf.randomNormal([1, size, size, channels]);
-            const noisyImg = cleanImg.mul(sa).add(noise.mul(sna));
-            const tNorm = tf.tensor2d([[t / T]]);
-            const txtTensor = tf.tensor2d([Array.from(textEmbeddings[i])]);
-            const predicted = diffModel.apply([noisyImg, tNorm, txtTensor]);
-            return tf.losses.meanSquaredError(cleanImg, predicted).mean();
-          }, true);
+    try {
+      await ensureTf();
+      if (model) { status('Continuing from existing weights…'); log('Continuing diffusion ('+model.countParams().toLocaleString()+' params)','ok'); }
+      else { status('Building model from graph…'); model=await buildTfModel(); log('Diffusion model: '+model.countParams().toLocaleString()+' params','ok'); }
 
-          epochLoss += lossVal.dataSync()[0];
-          lossVal.dispose();
-          steps++;
+      const opt=tf.train.adam(lr), sc=sched(T);
+      const txtVecs=prompts.map(p=>embed(p,txtDim));
+      const runDir='/home/user1/projects/nn-training/diff-'+new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
+      try { const fs=getFS(); if(fs) mkdirpSync(fs,runDir); } catch(_) {}
+
+      const BS=Math.min(N, parseInt($('df-bs').value)||64);
+
+      for (let ep=0; ep<epochs; ep++) {
+        if (stopped) break;
+        let epLoss=0, steps=0;
+        const perm=Array.from({length:N},(_,i)=>i);
+        for (let i=N-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[perm[i],perm[j]]=[perm[j],perm[i]];}
+        for (let b=0; b<N; b+=BS) {
+          if (stopped) break;
+          const end=Math.min(b+BS,N), bn=end-b;
+          const batchIdx=perm.slice(b,end);
+          const imgFlat=new Float32Array(bn*sz*sz*ch);
+          const txtFlat=new Float32Array(bn*txtDim);
+          for (let i=0;i<bn;i++){imgFlat.set(images[batchIdx[i]],i*sz*sz*ch);txtFlat.set(txtVecs[batchIdx[i]],i*txtDim);}
+          const bClean=tf.tensor4d(imgFlat,[bn,sz,sz,ch]);
+          const bTxt=tf.tensor2d(txtFlat,[bn,txtDim]);
+          const ts=Array.from({length:bn},()=>Math.floor(Math.random()*T));
+          const saArr=new Float32Array(ts.map(t=>Math.sqrt(sc.aBar[t])));
+          const snaArr=new Float32Array(ts.map(t=>Math.sqrt(1-sc.aBar[t])));
+          const tNorm=new Float32Array(ts.map(t=>t/T));
+          const loss=opt.minimize(()=>{
+            const noise=tf.randomNormal([bn,sz,sz,ch]);
+            const saT=tf.tensor(saArr,[bn,1,1,1]);
+            const snaT=tf.tensor(snaArr,[bn,1,1,1]);
+            const noisy=bClean.mul(saT).add(noise.mul(snaT));
+            const tIn=tf.tensor2d(tNorm,[bn,1]);
+            const pred=model.apply([noisy,tIn,bTxt]);
+            return tf.losses.meanSquaredError(bClean,pred).mean();
+          },true);
+          epLoss+=loss.dataSync()[0]; loss.dispose(); steps++;
+          bClean.dispose(); bTxt.dispose();
         }
-      }
+        const avg=epLoss/steps;
+        $('df-prog').style.width=((ep+1)/epochs*100).toFixed(0)+'%';
+        status('Epoch '+(ep+1)+'/'+epochs+' — loss: '+avg.toFixed(6));
+        log('Diffusion ep '+(ep+1)+'/'+epochs+'  loss='+avg.toFixed(6));
 
-      const avgLoss = epochLoss / steps;
-      const pct = ((epoch + 1) / epochs * 100).toFixed(0);
-      document.getElementById('diff-prog').style.width = pct + '%';
-      diffSetStatus(`Epoch ${epoch+1}/${epochs} — loss: ${avgLoss.toFixed(6)}`);
-      log(`Diffusion ep ${epoch+1}/${epochs}  loss=${avgLoss.toFixed(6)}`);
-
-      // Generate preview every N epochs
-      if ((epoch + 1) % previewEvery === 0 || epoch === epochs - 1) {
-        try {
-          const previewPrompt = prompts[Math.floor(Math.random() * N)];
-          const genResult = diffSampleImage(schedule, size, channels, textDim, previewPrompt);
-          const dataUrl = floatsToDataUrl(genResult, size, size, channels);
-          addPreviewImage(dataUrl, `ep${epoch+1}: ${previewPrompt.slice(0,20)}`);
-
-          // Save preview to VFS
+        if ((ep+1)%prevN===0||ep===epochs-1) {
           try {
-            const fs = getFS();
-            if (fs) {
-              const b64 = dataUrl.split(',')[1];
-              if (b64) {
-                const Buf = typeof Buffer !== 'undefined' ? Buffer : window.top.Buffer;
-                fs.writeFileSync(runDir + '/preview_ep' + (epoch+1) + '.png', Buf.from(b64, 'base64'));
-              }
-            }
-          } catch(_) {}
-        } catch(e) { log('Preview generation error: ' + e.message, 'err'); }
+            const p=prompts[Math.floor(Math.random()*N)];
+            const url=toUrl(genSample(sc,sz,ch,txtDim,p),sz,sz);
+            addThumb(url,'ep'+(ep+1)+': '+p.slice(0,16));
+            try { const fs=getFS(); if(fs){const b=url.split(',')[1]; if(b) fs.writeFileSync(runDir+'/prev_ep'+(ep+1)+'.png',B().from(b,'base64'));} } catch(_){}
+          } catch(e) { log('Preview error: '+e.message,'err'); }
+        }
+        if (ckptN>0&&(ep+1)%ckptN===0) {
+          try { const fs=getFS(); if(fs){const d=runDir+'/ckpt_ep'+(ep+1); await model.save(vfsSaveHandler(fs,d)); log('Checkpoint → '+d,'ok');} } catch(e){log('Ckpt error: '+e.message,'err');}
+        }
+        await tf.nextFrame();
       }
 
-      // Checkpoint: save weights every N epochs
-      if (ckptEvery > 0 && (epoch + 1) % ckptEvery === 0) {
-        try {
-          const fs = getFS();
-          if (fs && diffModel) {
-            const ckptDir = runDir + '/checkpoint_ep' + (epoch + 1);
-            await diffModel.save(vfsSaveHandler(fs, ckptDir));
-            log(`Checkpoint saved → ${ckptDir}`, 'ok');
-          }
-        } catch(e) { log('Checkpoint save error: ' + e.message, 'err'); }
-      }
+      try {
+        const fs=getFS();
+        if (fs&&model&&!stopped) {
+          const d=runDir+'/model'; await model.save(vfsSaveHandler(fs,d));
+          const lat='/home/user1/projects/nn-training/diffusion-latest'; mkdirpSync(fs,lat);
+          fs.writeFileSync(lat+'/model.json',fs.readFileSync(d+'/model.json'));
+          fs.writeFileSync(lat+'/weights.bin',B().from(fs.readFileSync(d+'/weights.bin')));
+          log('Saved → '+d,'ok');
+        }
+      } catch(e) { log('Save error: '+e.message,'err'); }
 
-      await tf.nextFrame();
-    }
-
-    // Save final weights
-    try {
-      const fs = getFS();
-      if (fs && diffModel && !diffStopReq) {
-        const finalDir = runDir + '/model';
-        await diffModel.save(vfsSaveHandler(fs, finalDir));
-        const latestDir = '/home/user1/projects/nn-training/diffusion-latest';
-        mkdirpSync(fs, latestDir);
-        const Buf = (typeof Buffer !== 'undefined' ? Buffer : window.top.Buffer);
-        fs.writeFileSync(latestDir + '/model.json', fs.readFileSync(finalDir + '/model.json'));
-        fs.writeFileSync(latestDir + '/weights.bin', Buf.from(fs.readFileSync(finalDir + '/weights.bin')));
-        log('Final weights saved → ' + finalDir, 'ok');
-        log('Latest diffusion model updated → ' + latestDir, 'ok');
-      }
-    } catch(e) { log('Final save error: ' + e.message, 'err'); }
-
-    diffSetStatus(diffStopReq ? 'Stopped.' : 'Training complete!');
-    log('Diffusion training ' + (diffStopReq ? 'stopped.' : 'complete!'), diffStopReq ? 'inf' : 'ok');
-  } catch(e) {
-    diffSetStatus('Error: ' + e.message);
-    log('Diffusion error: ' + e.message, 'err');
-  } finally {
-    diffTraining = false;
-    isTraining = false;
-    document.getElementById('train-btn').disabled = false;
-    document.getElementById('stop-btn').style.display = 'none';
-  }
-}
-
-function diffStopTraining() { diffStopReq = true; stopReq = true; diffSetStatus('Stopping…'); }
-
-// Sample (generate) an image using iterative denoising.
-// The model predicts x₀ (clean image) from x_t. We iteratively refine:
-// at each step, blend the predicted x₀ back toward x_t for the previous timestep,
-// adding a small amount of noise to maintain stochasticity.
-function diffSampleImage(schedule, size, channels, textDim, prompt) {
-  const T = schedule.betas.length;
-  const txtVec = textEmbed(prompt, textDim);
-  const txtTensor = tf.tensor2d([Array.from(txtVec)]);
-
-  let x = tf.randomNormal([1, size, size, channels]);
-
-  for (let t = T - 1; t >= 0; t--) {
-    const tNorm = tf.tensor2d([[t / T]]);
-    const predicted = diffModel.predict([x, tNorm, txtTensor]);
-
-    if (t > 0) {
-      // Blend: move toward predicted clean image, keep some noise for next step
-      const prevAlphaCp = schedule.alphasCumprod[t - 1];
-      const w = Math.sqrt(prevAlphaCp);       // weight for predicted x₀
-      const nw = Math.sqrt(1 - prevAlphaCp);  // weight for fresh noise
-      const noise = tf.randomNormal([1, size, size, channels]);
-      const xPrev = predicted.mul(w).add(noise.mul(nw));
-      x.dispose(); tNorm.dispose(); predicted.dispose(); noise.dispose();
-      x = xPrev;
-    } else {
-      // Final step: just use the prediction directly
-      x.dispose(); tNorm.dispose();
-      x = predicted;
-    }
+      status(stopped?'Stopped.':'Training complete!');
+      log('Diffusion '+(stopped?'stopped.':'done!'),stopped?'inf':'ok');
+    } catch(e) { status('Error: '+e.message); log('Diffusion error: '+e.message,'err'); }
+    finally { training=false; isTraining=false; $('train-btn').disabled=false; $('stop-btn').style.display='none'; }
   }
 
-  txtTensor.dispose();
-  const result = Array.from(x.dataSync());
-  x.dispose();
-  return new Float32Array(result.map(v => Math.max(0, Math.min(1, v))));
-}
+  function stop() { stopped=true; stopReq=true; status('Stopping…'); }
 
-// Generate from text prompt
-function diffGenerate() {
-  if (!diffModel) { alert('Train a diffusion model first'); return; }
-  const prompt = document.getElementById('diff-prompt').value.trim();
-  if (!prompt) { alert('Enter a text prompt'); return; }
-  const size = parseInt(document.getElementById('diff-size').value) || 32;
-  const T = parseInt(document.getElementById('diff-steps').value) || 50;
-  const textDim = 32;
-  const schedule = makeNoiseSchedule(T);
+  function generate() {
+    if (!model) { alert('Train a diffusion model first'); return; }
+    const prompt=$('df-prompt').value.trim();
+    if (!prompt) { alert('Enter a text prompt'); return; }
+    const sz=parseInt($('df-size').value)||32, T=parseInt($('df-steps').value)||50;
+    const txtNode=nodes.find(n=>n.type==='text-embed');
+    const txtDim=txtNode?parseInt(txtNode.params.dim||32):32;
+    const sc=sched(T);
+    status('Generating…'); $('df-gen-btn').disabled=true;
+    setTimeout(()=>{
+      try {
+        const url=toUrl(genSample(sc,sz,3,txtDim,prompt),sz,sz);
+        const c=$('df-gen-out'); c.innerHTML='';
+        const cv=document.createElement('canvas'); cv.width=128; cv.height=128;
+        cv.style.cssText='width:128px;height:128px;border:1px solid var(--border);border-radius:6px;image-rendering:pixelated;';
+        c.appendChild(cv); drawUrl(url,cv,128,128);
+        const lbl=document.createElement('div'); lbl.style.cssText='font-size:10px;color:var(--dim);margin-top:4px;';
+        lbl.textContent=prompt+' — '+sz+'×'+sz+', '+T+' steps';
+        c.appendChild(lbl); status('Generated!'); log('Generated: '+prompt,'ok');
+      } catch(e) { status('Error: '+e.message); log('Generate error: '+e.message,'err'); }
+      finally { $('df-gen-btn').disabled=false; }
+    },50);
+  }
 
-  diffSetStatus('Generating…');
-  document.getElementById('diff-gen-btn').disabled = true;
-
-  setTimeout(() => {
-    try {
-      const result = diffSampleImage(schedule, size, 3, textDim, prompt);
-      const dataUrl = floatsToDataUrl(result, size, size, 3);
-      const container = document.getElementById('diff-gen-result');
-      const scaled = document.createElement('canvas');
-      scaled.width = 128; scaled.height = 128;
-      scaled.style.cssText = 'width:128px;height:128px;border:1px solid var(--border);border-radius:6px;image-rendering:pixelated;';
-      container.innerHTML = '';
-      container.appendChild(scaled);
-      drawDataUrlToCanvas(dataUrl, scaled, 128, 128);
-      const label = document.createElement('div');
-      label.style.cssText = 'font-size:10px;color:var(--dim);margin-top:4px;';
-      label.textContent = `"${prompt}" — ${size}×${size}, ${T} steps`;
-      container.appendChild(label);
-      diffSetStatus('Generated!');
-      log(`Diffusion generated: "${prompt}"`, 'ok');
-    } catch(e) {
-      diffSetStatus('Error: ' + e.message);
-      log('Diffusion generate error: ' + e.message, 'err');
-    } finally {
-      document.getElementById('diff-gen-btn').disabled = false;
-    }
-  }, 50);
-}
-
-// Helper: canvas to PNG buffer (for VFS save)
-function canvasToPngBuffer(canvas) {
-  const dataUrl = canvas.toDataURL('image/png');
-  const base64 = dataUrl.split(',')[1];
-  if (!base64) return null;
-  const Buf = typeof Buffer !== 'undefined' ? Buffer : window.top.Buffer;
-  return Buf.from(base64, 'base64');
-}
+  return { loadDataset, train, stop, generate, get model(){return model;}, set model(v){model=v;}, get training(){return training;} };
+})();
 
 // ── Boot ───────────────────────────────────────────────────────────────────
 buildPalette();
