@@ -690,5 +690,10 @@
     "path": "/opt/apps/screen-reader/main.html",
     "file": "/opt/apps/screen-reader/main.html",
     "force_reload": true
+  },
+  {
+    "path": "/opt/apps/speed-test/main.html",
+    "file": "/opt/apps/speed-test/main.html",
+    "force_reload": true
   }
 ]

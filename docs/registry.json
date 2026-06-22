@@ -643,6 +643,17 @@
         }
       ],
       "main": "main.html"
+    },
+    {
+      "id": "speed-test",
+      "name": "Speed Test",
+      "description": "Network speed test — measure download and upload throughput directly in the browser.",
+      "version": "1.0.0",
+      "icon": "speed",
+      "category": "Tools",
+      "author": "bootstrapper-js",
+      "files": [{ "dest": "main.html", "src": "/public/mount/opt/apps/speed-test/main.html" }],
+      "main": "main.html"
     }
   ]
 }
