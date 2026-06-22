@@ -15,6 +15,7 @@ const AppLauncher = () => {
     try {
       const hostCmds = platform.host._commands || []
       for (const cmd of hostCmds) {
+        if (cmd.meta?.callable === false) continue
         if (seen.has(cmd.name)) continue
         seen.add(cmd.name)
         // Skip system/internal commands without titles

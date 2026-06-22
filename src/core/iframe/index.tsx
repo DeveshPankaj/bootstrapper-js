@@ -79,7 +79,7 @@ platform.host.registerCommand('ui.iframe', (body: HTMLBodyElement, props: UICall
 
     body.ownerDocument.adoptedStyleSheets.push(styles)
     props.setWindowView(true)
-    
+
     render(container, props, url, ...args)
     fullScreenCallbackRef.current = (...args: any[]) => {
         setTimeout(() => props.toggleFullScreen(), 0);

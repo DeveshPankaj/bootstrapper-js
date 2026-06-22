@@ -518,7 +518,8 @@ const App = (props: UICallbackProps & { file: FileType }) => {
     }
 
     // Handles a drop onto `targetDir` - either moving an item dragged from an explorer
-    // window (`application/x-vfs-path`), or importing files/folders dragged from the OS.
+    // window (`application/x-vfs-path`), importing a file from FS.html (`application/x-fs-export`),
+    // or importing files/folders dragged from the OS.
     const handleDrop = (event: React.DragEvent, targetDir: string) => {
         event.preventDefault()
         event.stopPropagation()
@@ -527,6 +528,21 @@ const App = (props: UICallbackProps & { file: FileType }) => {
         if (vfsPath) {
             moveEntry(vfsPath, targetDir)
             refresh()
+            return
+        }
+
+        // File dragged from FS.html — data is in window.top.__fsDrop
+        const fsExport = event.dataTransfer.getData('application/x-fs-export')
+        if (fsExport) {
+            const drop = (window.top as any)?.__fsDrop
+            if (drop) {
+                try {
+                    const destPath = `${targetDir}/${drop.name}`.replace(/\/+/g, '/')
+                    const content = drop.binary ? Buffer.from(drop.content) : drop.content
+                    fs.writeFileSync(destPath, content)
+                    refresh()
+                } catch (e) { console.error('FS export import failed', e) }
+            }
             return
         }
 

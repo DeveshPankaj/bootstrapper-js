@@ -9,6 +9,10 @@ const fmtUptime = (startedAt) => {
 };
 
 const run = (body, winApi) => {
+  if (!body) {
+    platform.host.execCommand("service('001-core.layout','open-window')(command('ui.task-manager'))", platform);
+    return;
+  }
   winApi.setTitle('Task Manager');
   winApi.setWindowView(true);
 

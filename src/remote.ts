@@ -293,12 +293,17 @@ setTimeout(wireKeybindings, 3000);
 // base64 encoding lets args carry arbitrary strings (paths, JSON, etc.) safely.
 const launchFromQueryParams = () => {
   const params = new URLSearchParams(window.location.search)
+  const openWindow = (app: string, args: unknown[]) => {
+    const argsStr = args.map(a => `'${String(a).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`).join(',')
+    const script = `service('001-core.layout','open-window')(command('${app}')${argsStr ? ',' + argsStr : ''})`
+    platform.host.execCommand(script, platform)
+  }
   try {
     const appsParam = params.get('apps')
     if (appsParam) {
       const entries: Array<{ app: string; args?: unknown[] }> = JSON.parse(atob(appsParam))
       for (const entry of entries) {
-        try { platform.host.callCommand(entry.app, ...(entry.args ?? [])) }
+        try { openWindow(entry.app, entry.args ?? []) }
         catch (e) { console.error('[query-launch]', entry.app, e) }
       }
       return
@@ -307,7 +312,7 @@ const launchFromQueryParams = () => {
     if (appParam) {
       const argsParam = params.get('args')
       const args: unknown[] = argsParam ? JSON.parse(atob(argsParam)) : []
-      platform.host.callCommand(appParam, ...args)
+      openWindow(appParam, args)
     }
   } catch (e) { console.error('[query-launch] failed:', e) }
 }
@@ -371,11 +376,11 @@ platform.host.registerCommand('notify', ({ title = '', body = '', duration = 400
 // Convenience commands for opening the terminal and settings via the keybinding
 // system (and Spotlight). The actual open logic mirrors the taskbar's execCommand calls.
 platform.host.registerCommand('ui.terminal', () => {
-    platform.host.execCommand("service('root', 'exec') ('/home/user1/apps/xtermjs.html')", platform)
+    platform.host.execCommand("service('001-core.layout', 'open-window') (command('ui.iframe'), '/opt/apps/terminal/main.html')", platform)
 }, { icon: 'terminal', title: 'Terminal' })
 
 platform.host.registerCommand('ui.settings', () => {
-    platform.host.execCommand("service('root', 'exec') ('/home/user1/settings.html')", platform)
+    platform.host.execCommand("service('001-core.layout', 'open-window') (command('ui.iframe'), '/opt/apps/settings/main.html')", platform)
 }, { icon: 'settings', title: 'Settings' })
 
 // Fallback 'explorer' command, delegating to the compiled ui.file-explorer module.

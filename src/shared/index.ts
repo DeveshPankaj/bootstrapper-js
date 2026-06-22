@@ -256,7 +256,7 @@ export class Host {
     return factory.call({}, ...Object.values(context));
   }
 
-  public execString(source: string, filenameAlias: string = '/tmp/dynamic.js', _platform?: Platform) {
+  public execString(source: string, filenameAlias: string = '/tmp/dynamic.js', _platform?: Platform, _platformProps?: Record<string, unknown>) {
     function startWorker(source: string) {
       const blob = new Blob([source], { type: "application/javascript" });
       const workerUrl = URL.createObjectURL(blob);
@@ -316,6 +316,9 @@ export class Host {
           newPlatform.register('React', this.platform.getService('React'));
           newPlatform.register('ReactDOM', this.platform.getService('ReactDOM'));
         }
+        if (_platformProps) {
+          Object.assign(newPlatform, _platformProps);
+        }
         const _ctx: any = {
           exports: {}, 
           require: (req_filename: string) => newPlatform.require.bind(newPlatform)(req_filename, filenameAlias, newPlatform), 
@@ -363,23 +366,28 @@ export class Host {
         "": "ui.notepad",
         html: "ui.iframe",
         ts: "ui.notepad",
-        png: "ui.iframe",
-        jpg: "ui.iframe",
-        jpeg: "ui.iframe",
-        gif: "ui.iframe",
-        webp: "ui.iframe",
+        png: "ui.imageviewer",
+        jpg: "ui.imageviewer",
+        jpeg: "ui.imageviewer",
+        gif: "ui.imageviewer",
+        webp: "ui.imageviewer",
         svg: "ui.iframe",
-        bmp: "ui.iframe",
+        bmp: "ui.imageviewer",
         ico: "ui.iframe",
-        avif: "ui.iframe",
+        avif: "ui.imageviewer",
         txt: "ui.notepad",
         md: "ui.markdown",
+        csv: "ui.csv-viewer",
+        db: "ui.sqlite",
+        mmd: "ui.mermaid",
+        mermaid: "ui.mermaid",
       };
 
       if (fileExt === 'js') {
         const fs = this.getFS()
         const source = fs.readFileSync(filepath)
-        return this.execString(source.toString(), '/(sw)' + filepath)
+        const appDir = (plarform as any)?._appDir;
+        return this.execString(source.toString(), '/(sw)' + filepath, undefined, appDir ? { _appDir: appDir } : undefined)
       }
 
       else if (fileExt === 'run') {

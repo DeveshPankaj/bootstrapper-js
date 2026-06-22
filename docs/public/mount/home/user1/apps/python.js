@@ -1,8 +1,12 @@
 const platform = window.platform;
-const PYTHON_HTML = '/(sw)/home/user1/apps/python.html';
+const _APP_DIR = platform._appDir || null;
+const PYTHON_HTML = _APP_DIR ? `/(sw)${_APP_DIR}/python.html` : '/(sw)/home/user1/apps/python.html';
 
 const run = (body, props, filepath) => {
-  if (!body) return;
+  if (!body) {
+    platform.host.execCommand("service('001-core.layout', 'open-window') (command('ui.python'))", platform)
+    return
+  }
   const src = filepath
     ? `${PYTHON_HTML}?file=${encodeURIComponent(filepath)}`
     : PYTHON_HTML;

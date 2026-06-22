@@ -1157,11 +1157,26 @@ export const render = (container: HTMLElement) => {
     })
 
     const showFileActionsHandler = (file: FileType, event: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
-        showContextMenuHandler(event.clientX, event.clientY, [
-            { id: 'edit_file', type: 'action', title: 'Edit', cmd: `service('001-core.layout', 'open-window') (command('ui.notepad'), '${file.path}')` },
-            { id: 'open_file', type: 'action', title: 'Open', cmd: `service('001-core.layout', 'open-window') (command('ui.iframe'), '${file.path}')` },
+        const items: Array<ContextMenuItem> = [
+            { id: 'edit_file',   type: 'action', title: 'Edit',   cmd: `service('001-core.layout', 'open-window') (command('ui.notepad'), '${file.path}')` },
+            { id: 'open_file',   type: 'action', title: 'Open',   cmd: `service('001-core.layout', 'open-window') (command('ui.iframe'), '${file.path}')` },
             { id: 'delete_file', type: 'action', title: 'Delete', cmd: `service('root', 'fs')('rm', '${file.path}')` },
-        ]);
+        ]
+        if (file.type === 'file') {
+            items.push({ id: 'divider_ow', type: 'divider', title: '' })
+            items.push({
+                id: 'open_with', type: 'group', title: 'Open with',
+                children: [
+                    { id: 'ow_notepad', type: 'action', title: 'Text Editor',  cmd: `service('001-core.layout','open-window')(command('ui.notepad'),'${file.path}')` },
+                    { id: 'ow_vscode',  type: 'action', title: 'VS Code',      cmd: `service('001-core.layout','open-window')(command('ui.vs-code'),'${file.path}')` },
+                    { id: 'ow_csv',     type: 'action', title: 'Spreadsheet',  cmd: `service('001-core.layout','open-window')(command('ui.csv-viewer'),'${file.path}')` },
+                    { id: 'ow_image',   type: 'action', title: 'Image Viewer', cmd: `service('001-core.layout','open-window')(command('ui.imageviewer'),'${file.path}')` },
+                    { id: 'ow_python',  type: 'action', title: 'Python REPL',  cmd: `service('001-core.layout','open-window')(command('ui.python'),'${file.path}')` },
+                    { id: 'ow_browser', type: 'action', title: 'Browser',      cmd: `service('001-core.layout','open-window')(command('ui.iframe'),'${file.path}')` },
+                ]
+            })
+        }
+        showContextMenuHandler(event.clientX, event.clientY, items)
     }
 
 
@@ -1204,13 +1219,13 @@ export const render = (container: HTMLElement) => {
                 type: 'action',
                 id: '4',
                 title: 'Settings',
-                cmd: `service('root', 'exec') ('/home/user1/settings.html');`
+                cmd: `command('ui.settings')`
             },
             {
                 type: 'action',
                 id: '0',
                 title: 'XTerm',
-               cmd: `service('root', 'exec') ('/home/user1/apps/xtermjs.html');`
+               cmd: `command('ui.terminal')`
             },
             {
                 type: 'action',

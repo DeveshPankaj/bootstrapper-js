@@ -30,7 +30,7 @@ const BookmarksApp = () => {
 
   const openUrl = (url) => {
     try { platform.host.callCommand('ui.iframe', url) }
-    catch (_) { window.open(url, '_blank') }
+    catch (_) { window.top.open(url, '_blank') }
   }
 
   const add = () => {
@@ -94,7 +94,7 @@ const BookmarksApp = () => {
         </div>
       ) : (
         <div key={item.id} style={cardStyle} onClick={() => openUrl(item.url)}>
-          <img src={getFavicon(item.url)} width={20} height={20} style={{ borderRadius: 4, flexShrink: 0 }} onError={e => e.target.style.display='none'} />
+          {getFavicon(item.url) && <img src={getFavicon(item.url)} width={20} height={20} style={{ borderRadius: 4, flexShrink: 0 }} onError={e => { e.target.style.visibility = 'hidden'; }} />}
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontWeight: 500, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div>
             <div style={{ fontSize: 11, opacity: 0.6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.url}</div>
@@ -113,6 +113,7 @@ const run = (body, props) => {
     return
   }
   props.setTitle('Bookmarks')
+  props.setWindowView(true)
   body.style.cssText = 'margin:0;height:100%;overflow:hidden;'
   const root = ReactDOM.createRoot(body)
   root.render(React.createElement(BookmarksApp))

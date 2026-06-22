@@ -25,10 +25,14 @@ const collectFiles = (dir, depth = 0) => {
 
 const buildIndex = () => {
   const items = []
-  // Registered commands
+  // Registered commands (dedup by name, skip callable:false internals)
   try {
-    const cmds = platform.host.getCommands ? platform.host.getCommands() : []
+    const cmds = (platform.host.commands$ && platform.host.commands$.getValue) ? platform.host.commands$.getValue() : []
+    const seen = new Set()
     for (const cmd of cmds) {
+      if (cmd.meta?.callable === false) continue
+      if (seen.has(cmd.name)) continue
+      seen.add(cmd.name)
       items.push({ label: cmd.meta?.title || cmd.name, subtitle: `command: ${cmd.name}`, type: 'command', cmd })
     }
   } catch (_) {}

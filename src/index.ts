@@ -66,10 +66,12 @@ const initWindow = () => {
         // '/media',
         '/etc',
         '/etc/wm',
+        '/etc/pkg',
+        '/opt',
+        '/opt/apps',
         '/proc',
         // '/lib',                        // Existing system directories
         // '/mnt',
-        // '/opt',
         // '/run',
         '/srv',
         '/sys',
@@ -174,6 +176,13 @@ const initWindow = () => {
     if (navigator.serviceWorker) {
         navigator.serviceWorker.register('/sw.bundle.js', {scope: '/'}).then(function(reg){
             if (reg.active) console.log('serviceworker installed');
+            // On first install the SW isn't controlling the page yet — reload once it activates.
+            const worker = reg.installing || reg.waiting;
+            if (worker) {
+                worker.addEventListener('statechange', () => {
+                    if (worker.state === 'activated') location.reload();
+                });
+            }
             navigator.serviceWorker.addEventListener('message', event => {
                 // console.log(event.data)
 

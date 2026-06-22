@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Xterm</title>
+  <link rel="stylesheet" href="https://unpkg.com/xterm/css/xterm.css">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      height: 100%;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: #000;
+    }
+
+    #tab-bar {
+      flex: 0 0 auto;
+      display: flex;
+      align-items: stretch;
+      background: #1e1e1e;
+      border-bottom: 1px solid #000;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 12px;
+      overflow-x: auto;
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    #tab-bar::-webkit-scrollbar { display: none; }
+
+    #tabs {
+      display: flex;
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+
+    .tab {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.35rem 0.6rem;
+      color: #9aa0a6;
+      background: #1e1e1e;
+      border-right: 1px solid #000;
+      cursor: pointer;
+      white-space: nowrap;
+      max-width: 12rem;
+      min-width: 6rem;
+    }
+
+    .tab .tab-label {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .tab.active {
+      background: #000;
+      color: #00ff00;
+    }
+
+    .tab:hover {
+      background: #2a2a2a;
+    }
+
+    .tab-close {
+      margin-left: auto;
+      width: 1.1rem;
+      height: 1.1rem;
+      line-height: 1.1rem;
+      text-align: center;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+
+    .tab-close:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    #new-tab {
+      flex: 0 0 auto;
+      width: 2rem;
+      border: none;
+      border-right: 1px solid #000;
+      background: #1e1e1e;
+      color: #9aa0a6;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    #new-tab:hover {
+      background: #2a2a2a;
+      color: #00ff00;
+    }
+
+    #terminals {
+      flex: 1 1 auto;
+      position: relative;
+      min-height: 0;
+      min-width: 0;
+    }
+
+    .terminal-pane {
+      position: absolute;
+      inset: 0;
+      padding: 4px;
+    }
+
+    .terminal-pane .terminal-inner {
+      height: 100%;
+      width: 100%;
+    }
+
+    .xterm {
+      width: 100%;
+      height: 100%;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 14px;
+      line-height: 1;
+      background-color: black;
+    }
+  </style>
+</head>
+<body>
+  <div id="tab-bar">
+    <div id="tabs"></div>
+    <button id="new-tab" title="New Terminal Tab">+</button>
+  </div>
+  <div id="terminals"></div>
+
+  <script type="module">
+    import 'https://unpkg.com/xterm/lib/xterm.js';
+
+    const CHAR_WIDTH = 9;
+    const CHAR_HEIGHT = 18;
+    const HISTORY_FILE = '/home/user1/.bash_history';
+
+    class TerminalSession {
+      constructor(app, paneEl) {
+        this.app = app;
+        this.paneEl = paneEl;
+        this.terminal = new Terminal({
+          cursorBlink: true,
+          convertEol: true,
+          fontSize: 14,
+          fontFamily: 'Courier New',
+          theme: {
+            background: '#000000',
+            foreground: '#00FF00',
+          }
+        });
+        this.context = {
+          pwd: '/home/user1',
+          PATH: '/bin:/usr/bin',
+          USER: 'root'
+        };
+        this.env = {};
+        this.aliases = {};
+        this.commandHistory = [];
+        this.historyIndex = 0;
+        this.inputBuffer = '';
+        this.busy = false;
+        this.neofetchMessages = this.initializeMessages();
+        this.fs = platform.host.getFS();
+        this.loadHistory();
+        this.loadAliases();
+      }
+
+      async initializeTerminal() {
+        const container = document.createElement('div');
+        container.className = 'terminal-inner';
+        this.paneEl.appendChild(container);
+
+        this.terminal.open(container);
+        this.resizeTerminal();
+        this.handleTerminalInput();
+
+        this.busy = true;
+        await this.processCommand('info');
+        this.busy = false;
+        this.displayPrompt();
+      }
+
+      dispose() {
+        this.terminal.dispose();
+      }
+
+      resizeTerminal() {
+        const rect = this.paneEl.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return;
+        const cols = Math.max(20, Math.floor(rect.width / CHAR_WIDTH));
+        const rows = Math.max(5, Math.floor(rect.height / CHAR_HEIGHT));
+        this.terminal.resize(cols, rows);
+      }
+
+      handleTerminalInput() {
+        this.terminal.onData(data => this.processInput(data));
+      }
+
+      processInput(data) {
+        if (this.busy) return;
+
+        if (data === '\r') {
+          this.processEnterKey();
+        } else if (data === '\u007F') {
+          this.processBackspace();
+        } else if (data === '\u001b[A') {
+          this.processUpArrow();
+        } else if (data === '\u001b[B') {
+          this.processDownArrow();
+        } else if (data === '\u000C') {
+          this.clearTerminal();
+        } else if (data === '\t') {
+          this.processTabCompletion();
+        } else {
+          this.inputBuffer += data;
+          this.terminal.write(data);
+        }
+      }
+
+      processTabCompletion() {
+        const input = this.inputBuffer;
+        const lastSpace = input.lastIndexOf(' ');
+        const prefix = lastSpace >= 0 ? input.slice(lastSpace + 1) : input;
+        const isFirstToken = lastSpace < 0;
+
+        let candidates = [];
+        if (isFirstToken) {
+          for (const dir of this.context.PATH.split(':')) {
+            try {
+              for (const f of this.fs.readdirSync(dir)) {
+                if (f.endsWith('.run')) candidates.push(f.replace(/\.run$/, ''));
+              }
+            } catch (_) {}
+          }
+          candidates.push('cd', 'export', 'env', 'alias', 'unalias', 'exit');
+          // Add alias names as completable commands
+          for (const a of Object.keys(this.aliases)) candidates.push(a);
+        } else {
+          const slashIdx = prefix.lastIndexOf('/');
+          let searchDir = this.context.pwd;
+          let filePrefix = prefix;
+          if (slashIdx >= 0) {
+            const dirPart = prefix.slice(0, slashIdx) || '/';
+            searchDir = dirPart.startsWith('/') ? dirPart : `${this.context.pwd}/${dirPart}`;
+            filePrefix = prefix.slice(slashIdx + 1);
+          }
+          try {
+            const dirPrefix = slashIdx >= 0 ? prefix.slice(0, slashIdx + 1) : '';
+            candidates = this.fs.readdirSync(searchDir)
+              .filter(e => e.startsWith(filePrefix))
+              .map(e => {
+                try { return this.fs.statSync(`${searchDir}/${e}`).isDirectory() ? dirPrefix + e + '/' : dirPrefix + e; }
+                catch (_) { return dirPrefix + e; }
+              });
+          } catch (_) {}
+        }
+
+        const matches = candidates.filter(c => c.startsWith(prefix));
+        if (matches.length === 0) return;
+        if (matches.length === 1) {
+          const completion = matches[0].slice(prefix.length);
+          this.inputBuffer += completion;
+          this.terminal.write(completion);
+        } else {
+          this.terminal.write('\r\n' + matches.join('  ') + '\r\n');
+          this.displayPrompt();
+        }
+      }
+
+      async processEnterKey() {
+        this.terminal.write('\r\n');
+        const command = this.inputBuffer.trim();
+        this.inputBuffer = '';
+
+        if (command !== '') {
+          this.commandHistory.push(command);
+          this.historyIndex = this.commandHistory.length;
+          this.appendHistory(command);
+
+          this.busy = true;
+          try {
+            await this.runWithRedirects(command);
+          } catch (err) {
+            this.terminal.write(`\r\n${err && err.message ? err.message : err}\r\n`);
+          }
+          this.busy = false;
+        }
+
+        this.terminal.write('\r\n');
+        this.displayPrompt();
+      }
+
+      loadHistory() {
+        try {
+          if (this.fs.existsSync(HISTORY_FILE)) {
+            this.commandHistory = this.fs.readFileSync(HISTORY_FILE, 'utf8')
+              .split('\n')
+              .filter(line => line.trim() !== '');
+            this.historyIndex = this.commandHistory.length;
+          }
+        } catch (err) {
+          console.error('Failed to load history', err);
+        }
+      }
+
+      appendHistory(command) {
+        const fs = this.fs;
+        try {
+          if (fs.existsSync(HISTORY_FILE)) {
+            fs.appendFileSync(HISTORY_FILE, `${command}\n`);
+          } else {
+            fs.writeFileSync(HISTORY_FILE, `${command}\n`);
+          }
+        } catch (err) {
+          console.error('Failed to write history', err);
+        }
+      }
+
+      loadAliases() {
+        const ALIASES_FILE = '/home/user1/.aliases';
+        try {
+          if (!this.fs.existsSync(ALIASES_FILE)) return;
+          const content = this.fs.readFileSync(ALIASES_FILE, 'utf8');
+          for (const line of content.split('\n')) {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed.startsWith('#')) continue;
+            const m = trimmed.match(/^alias\s+([\w-]+)=(.+)/);
+            if (m) this.aliases[m[1]] = m[2].replace(/^['"]|['"]$/g, '');
+          }
+        } catch (err) {
+          console.error('Failed to load aliases', err);
+        }
+      }
+
+      async displayInlineImage(filepath) {
+        try {
+          const data = this.fs.readFileSync(filepath);
+          const ext = filepath.split('.').pop().toLowerCase();
+          const mimes = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml', bmp: 'image/bmp' };
+          const mime = mimes[ext] || 'application/octet-stream';
+          const blob = new Blob([data.buffer ?? data], { type: mime });
+          const url = URL.createObjectURL(blob);
+          this.terminal.write(`\x1b[36m${filepath.split('/').pop()}\x1b[0m\r\n`);
+          const img = document.createElement('img');
+          img.src = url;
+          img.style.cssText = 'max-width:300px;max-height:200px;display:block;margin:4px 8px;border-radius:4px;border:1px solid #333;';
+          img.onload = () => URL.revokeObjectURL(url);
+          img.onerror = () => { URL.revokeObjectURL(url); img.remove(); this.terminal.write('(failed to decode image)\r\n'); };
+          this.paneEl.appendChild(img);
+        } catch (err) {
+          this.terminal.write(`cat: ${err && err.message ? err.message : err}\r\n`);
+        }
+      }
+
+      processBackspace() {
+        if (this.inputBuffer.length > 0) {
+          this.inputBuffer = this.inputBuffer.slice(0, -1);
+          this.terminal.write('\b \b');
+        }
+      }
+
+      processUpArrow() {
+        if (this.commandHistory.length === 0) return;
+        if (this.historyIndex > 0) {
+          this.historyIndex--;
+          this.inputBuffer = this.commandHistory[this.historyIndex];
+          this.redrawInputLine();
+        }
+      }
+
+      processDownArrow() {
+        if (this.historyIndex < this.commandHistory.length - 1) {
+          this.historyIndex++;
+          this.inputBuffer = this.commandHistory[this.historyIndex];
+          this.redrawInputLine();
+        } else if (this.historyIndex < this.commandHistory.length) {
+          this.historyIndex = this.commandHistory.length;
+          this.inputBuffer = '';
+          this.redrawInputLine();
+        }
+      }
+
+      // Clears the current line and redraws the prompt + input buffer. Used
+      // after history navigation so leftover characters from a longer previous
+      // line don't remain on screen.
+      redrawInputLine() {
+        this.terminal.write('\r\x1b[2K');
+        this.displayPrompt();
+      }
+
+      clearTerminal() {
+        this.terminal.write('\x1b[2J\x1b[H');
+        this.displayPrompt();
+      }
+
+      displayPrompt() {
+        this.terminal.write(`\x1b[32mroot\x1b[0m\x1b[36m@pankajdevesh.com\x1b[0m: \x1b[33m~${this.context.pwd}$\x1b[0m ${this.inputBuffer}`);
+      }
+
+      // Splits a command line into arguments, honoring single/double-quoted
+      // substrings (e.g. `edit "my file.txt"` -> ['edit', 'my file.txt']).
+      parseArgs(command) {
+        const matches = command.match(/"([^"]*)"|'([^']*)'|\S+/g) || [];
+        return matches.map(arg => {
+          if ((arg.startsWith('"') && arg.endsWith('"')) || (arg.startsWith("'") && arg.endsWith("'"))) {
+            return arg.slice(1, -1);
+          }
+          return arg;
+        });
+      }
+
+      async processCommand(command) {
+        const cmdArgs = this.parseArgs(command);
+
+        // Alias expansion: if first token matches an alias, expand it
+        const aliasValue = this.aliases[cmdArgs[0]];
+        if (aliasValue) {
+          const expandedArgs = this.parseArgs(aliasValue);
+          cmdArgs.splice(0, 1, ...expandedArgs);
+        }
+
+        // Intercept cat for image files to render inline preview
+        if (cmdArgs[0] === 'cat' && cmdArgs.length >= 2) {
+          const fp = cmdArgs[1].startsWith('/') ? cmdArgs[1] : `${this.context.pwd}/${cmdArgs[1]}`;
+          const IMAGE_EXTS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp'];
+          if (IMAGE_EXTS.some(ext => fp.toLowerCase().endsWith('.' + ext))) {
+            await this.displayInlineImage(fp);
+            return;
+          }
+        }
+
+        const commandFile = this.findCommandFile(cmdArgs[0]);
+
+        if (commandFile) {
+          platform.register('terminal', this.terminal);
+          platform.register('context', {
+            ...this.context,
+            PWD: this.context.pwd,
+            HOME: '/home/user1',
+            ...this.env,
+          });
+          // `host.exec` returns a promise for `.run`/`.js` commands, allowing
+          // async commands (e.g. ones that `await` inside) to finish before the
+          // next prompt is shown.
+          await platform.host.exec(platform, commandFile, this.context.pwd, ...cmdArgs.slice(1));
+        } else {
+          await this.handleInternalCommands(cmdArgs);
+        }
+      }
+
+      parseRedirects(raw) {
+        const tokens = raw.match(/>>|>|<|"[^"]*"|'[^']*'|[^\s<>"']+/g) || [];
+        const cmdTokens = [];
+        let stdoutFile = null;
+        let appendMode = false;
+        let stdinFile = null;
+        let i = 0;
+        while (i < tokens.length) {
+          const t = tokens[i];
+          if (t === '>>') { appendMode = true; stdoutFile = tokens[i + 1] || ''; i += 2; continue; }
+          if (t === '>') { appendMode = false; stdoutFile = tokens[i + 1] || ''; i += 2; continue; }
+          if (t === '<') { stdinFile = tokens[i + 1] || ''; i += 2; continue; }
+          if (t.startsWith('>>')) { appendMode = true; stdoutFile = t.slice(2); i++; continue; }
+          if (t.startsWith('>')) { appendMode = false; stdoutFile = t.slice(1); i++; continue; }
+          if (t.startsWith('<')) { stdinFile = t.slice(1); i++; continue; }
+          cmdTokens.push(t);
+          i++;
+        }
+        return { cmd: cmdTokens.join(' '), stdoutFile, appendMode, stdinFile };
+      }
+
+      async runWithRedirects(raw) {
+        const { cmd, stdoutFile, appendMode, stdinFile } = this.parseRedirects(raw);
+
+        if (!stdoutFile && !stdinFile) {
+          return this.processCommand(raw);
+        }
+
+        const resolvePath = (p) => p.startsWith('/') ? p : `${this.context.pwd}/${p}`;
+
+        // < file: append resolved path as last arg (simulates stdin for file-reading commands)
+        let effectiveCmd = cmd;
+        if (stdinFile) {
+          const src = resolvePath(stdinFile);
+          if (!this.fs.existsSync(src)) {
+            this.terminal.write(`bash: ${stdinFile}: No such file or directory\r\n`);
+            return;
+          }
+          effectiveCmd = (cmd ? cmd + ' ' : '') + src;
+        }
+
+        if (!stdoutFile) {
+          return this.processCommand(effectiveCmd);
+        }
+
+        // Capture stdout
+        let captured = '';
+        const origWrite = this.terminal.write.bind(this.terminal);
+        this.terminal.write = (data) => {
+          const text = typeof data === 'string' ? data : new TextDecoder().decode(data);
+          captured += text
+            .replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, '')
+            .replace(/\r\n/g, '\n')
+            .replace(/\r/g, '\n');
+        };
+        try {
+          await this.processCommand(effectiveCmd || '');
+        } finally {
+          this.terminal.write = origWrite;
+        }
+
+        const dest = resolvePath(stdoutFile);
+        try {
+          if (appendMode) {
+            let existing = '';
+            try { existing = this.fs.readFileSync(dest, 'utf8'); } catch (_) {}
+            this.fs.writeFileSync(dest, existing + captured);
+          } else {
+            this.fs.writeFileSync(dest, captured);
+          }
+        } catch (e) {
+          this.terminal.write(`bash: ${stdoutFile}: ${e.message || 'write error'}\r\n`);
+        }
+      }
+
+      findCommandFile(command) {
+        let commandFile = '';
+        const binDirs = this.context.PATH.split(':');
+        for (const dir of binDirs) {
+          const _commandFile = `${dir}/${command}.run`;
+          if (!this.fs.existsSync(_commandFile)) continue;
+          commandFile = _commandFile;
+          break;
+        }
+        return commandFile;
+      }
+
+      async handleInternalCommands(cmdArgs) {
+        switch (cmdArgs[0]) {
+          case 'cd':
+            this.changeDirectory(cmdArgs);
+            break;
+          case 'exit':
+            if (this.app.sessions.length > 1) {
+              // Close this tab; another session remains active.
+              this.app.closeTab(this);
+            } else {
+              // Last tab — close the terminal window via its header close button.
+              const closeBtn = window.frameElement?.closest?.('.window')?.querySelector?.('[title="close window"]');
+              if (closeBtn) closeBtn.click();
+            }
+            break;
+          case 'export': {
+            if (cmdArgs.length < 2) {
+              this.terminal.write('export: usage: export VAR=value\r\n');
+              break;
+            }
+            const eqIdx = cmdArgs[1].indexOf('=');
+            if (eqIdx < 0) {
+              this.terminal.write(`export: ${cmdArgs[1]}: no value specified (use VAR=value)\r\n`);
+            } else {
+              const varName = cmdArgs[1].slice(0, eqIdx);
+              const varVal = cmdArgs[1].slice(eqIdx + 1);
+              this.env[varName] = varVal;
+            }
+            break;
+          }
+          case 'env': {
+            const lines = Object.entries(this.env).map(([k, v]) => `${k}=${v}`).join('\r\n');
+            if (lines) this.terminal.write(lines + '\r\n');
+            break;
+          }
+          case 'alias': {
+            if (cmdArgs.length < 2) {
+              // List all aliases
+              const alines = Object.entries(this.aliases).map(([k, v]) => `alias ${k}='${v}'`).join('\r\n');
+              this.terminal.write(alines ? alines + '\r\n' : '(no aliases defined)\r\n');
+              break;
+            }
+            const eqIdx = cmdArgs[1].indexOf('=');
+            if (eqIdx < 0) {
+              // Show single alias
+              const n = cmdArgs[1];
+              if (this.aliases[n]) {
+                this.terminal.write(`alias ${n}='${this.aliases[n]}'\r\n`);
+              } else {
+                this.terminal.write(`alias: ${n}: not found\r\n`);
+              }
+            } else {
+              const n = cmdArgs[1].slice(0, eqIdx);
+              const v = cmdArgs[1].slice(eqIdx + 1).replace(/^['"]|['"]$/g, '');
+              this.aliases[n] = v;
+            }
+            break;
+          }
+          case 'unalias': {
+            if (cmdArgs.length < 2) {
+              this.terminal.write('unalias: usage: unalias name\r\n');
+              break;
+            }
+            delete this.aliases[cmdArgs[1]];
+            break;
+          }
+          default:
+            this.terminal.write(`Command not found: ${cmdArgs[0]}\r\n`);
+            break;
+        }
+      }
+
+      changeDirectory(cmdArgs) {
+        if (cmdArgs.length < 2) {
+          this.terminal.write('cd: missing operand\r\n');
+        } else {
+          let newDir = cmdArgs[1];
+          newDir = this.resolveDirectory(newDir);
+          try {
+            if (this.fs.statSync(newDir).isDirectory()) {
+              this.context.pwd = newDir;
+              this.app.updateTabTitle(this, newDir);
+            } else {
+              this.terminal.write(`cd: ${newDir}: Not a directory\r\n`);
+            }
+          } catch (err) {
+            this.terminal.write(`cd: ${newDir}: No such file or directory\r\n`);
+          }
+        }
+      }
+
+      resolveDirectory(dir) {
+        if (dir === '..') {
+          const parentDir = this.context.pwd.split('/').slice(0, -1).join('/');
+          return parentDir || '/';
+        } else if (!dir.startsWith('/')) {
+          return `${this.context.pwd}/${dir}`;
+        }
+        return dir;
+      }
+
+      initializeMessages() {
+        return [
+          this.createNeofetchMessage('Linux Terminal', 'Linux x86_64', 'xterm.js', '10m', '1024', '512MB / 2048MB', 'Intel i5'),
+          this.createNeofetchMessage('Mac Terminal', 'macOS Monterey', 'zsh', '5h 30m', '67', '8GB / 16GB', 'M1 Pro'),
+          this.createNeofetchMessage('Linux Terminal', 'Ubuntu 22.04', 'bash', '1h 45m', '1500', '4GB / 16GB', 'Intel i7'),
+          this.createNeofetchMessage('Windows Terminal', 'Windows 11', 'PowerShell', '2d 12h', '112', '16GB / 32GB', 'Ryzen 7'),
+          this.createNeofetchMessage('Fedora Terminal', 'Fedora 36', 'fish', '3h 20m', '980', '2GB / 8GB', 'AMD Ryzen 5'),
+          this.createNeofetchMessage('Linux Terminal 😎', 'Ubuntu 22.04 🐧', 'bash 🐚', '1h 45m ⏳', '1500 📦', '4GB / 16GB 🧠', 'Intel i7 💻'),
+          this.createCustomMessage('Pankaj Devesh', 'Senior Software Engineer', 'TypeScript, Python', 'pankajdevesh.com', '5 years', 'Fullstack Development', 'Microservices, CLI'),
+          this.createCustomMessage('Pankaj Devesh\'s Cow', 'Senior Software Engineer', 'TypeScript, Python', 'Hello World!', 'Mooing about Code!', 'Senior Software Engineer', 'TypeScript, Python')
+        ];
+      }
+
+      createNeofetchMessage(name, os, shell, uptime, packages, memory, cpu) {
+        return `\x1b[33m        .--.                  \x1b[0m\x1b[34m${name}\x1b[0m
+\x1b[33m       |o_o |                 \x1b[34mOS: ${os}\x1b[0m
+\x1b[33m       |:_/ |                 \x1b[34mShell: ${shell}\x1b[0m
+\x1b[33m      //   \\ \\                \x1b[34mUptime: ${uptime}\x1b[0m
+\x1b[33m     (|     | )               \x1b[34mPackages: ${packages}\x1b[0m
+\x1b[33m    /'\\_   _/\`\\              \x1b[34mMemory: ${memory}\x1b[0m
+\x1b[33m    \\___)=(___/               \x1b[34mCPU: ${cpu}\x1b[0m\r\n`;
+      }
+
+      createCustomMessage(name, role, techStack, website, experience, specialty, areaOfFocus) {
+        return `\x1b[33m        .--.                  \x1b[0m\x1b[34m${name}\x1b[0m
+\x1b[33m       |o_o |                 \x1b[34mRole: ${role}\x1b[0m
+\x1b[33m       |:_/ |                 \x1b[34mTech Stack: ${techStack}\x1b[0m
+\x1b[33m      //   \\ \\                \x1b[34mWebsite: ${website}\x1b[0m
+\x1b[33m     (|     | )               \x1b[34mExperience: ${experience}\x1b[0m
+\x1b[33m    /'\\_   _/\`\\              \x1b[34mSpecialty: ${specialty}\x1b[0m
+\x1b[33m    \\___)=(___/               \x1b[34mArea of Focus: ${areaOfFocus}\x1b[0m\r\n`;
+      }
+    }
+
+    // Manages the tab bar and the set of open terminal sessions/panes.
+    class TerminalApp {
+      constructor() {
+        this.sessions = [];
+        this.tabsEl = document.getElementById('tabs');
+        this.terminalsEl = document.getElementById('terminals');
+
+        document.getElementById('new-tab').addEventListener('click', () => this.addTab());
+        window.addEventListener('resize', () => this.resizeActive());
+
+        this.addTab();
+      }
+
+      addTab() {
+        const pane = document.createElement('div');
+        pane.className = 'terminal-pane';
+        this.terminalsEl.appendChild(pane);
+
+        const session = new TerminalSession(this, pane);
+
+        const tab = document.createElement('div');
+        tab.className = 'tab';
+
+        const label = document.createElement('span');
+        label.className = 'tab-label';
+        label.textContent = `Terminal ${this.sessions.length + 1}`;
+
+        const close = document.createElement('span');
+        close.className = 'tab-close';
+        close.textContent = '×';
+        close.title = 'Close tab';
+        close.addEventListener('click', (event) => {
+          event.stopPropagation();
+          this.closeTab(session);
+        });
+
+        tab.appendChild(label);
+        tab.appendChild(close);
+        tab.addEventListener('click', () => this.activate(session));
+        this.tabsEl.appendChild(tab);
+
+        session.tabEl = tab;
+        session.labelEl = label;
+
+        this.sessions.push(session);
+        this.activate(session);
+        session.initializeTerminal().then(() => session.terminal.focus());
+      }
+
+      closeTab(session) {
+        if (this.sessions.length === 1) return;
+
+        const index = this.sessions.indexOf(session);
+        const wasActive = session.tabEl.classList.contains('active');
+
+        session.dispose();
+        session.tabEl.remove();
+        session.paneEl.remove();
+        this.sessions.splice(index, 1);
+
+        if (wasActive) {
+          const next = this.sessions[Math.max(0, index - 1)];
+          this.activate(next);
+        }
+      }
+
+      activate(session) {
+        this.sessions.forEach(s => {
+          const isActive = s === session;
+          s.paneEl.style.display = isActive ? 'block' : 'none';
+          s.tabEl.classList.toggle('active', isActive);
+        });
+        // Resizing before terminal.open() corrupts the buffer once it scrolls,
+        // so only resize/focus terminals that have already been opened.
+        if (session.terminal.element) {
+          session.resizeTerminal();
+          session.terminal.focus();
+        }
+      }
+
+      resizeActive() {
+        const active = this.sessions.find(s => s.tabEl.classList.contains('active'));
+        if (active) active.resizeTerminal();
+      }
+
+      updateTabTitle(session, pwd) {
+        const base = pwd.split('/').filter(Boolean).pop();
+        session.labelEl.textContent = base ? `~/${base}` : '/';
+        session.labelEl.title = pwd;
+      }
+    }
+
+    window.__terminalApp = new TerminalApp();
+  </script>
+</body>
+</html>

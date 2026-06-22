@@ -83,7 +83,7 @@ export const Commands = ({ onCommandClick, vertical, align = 'start' }: { onComm
 }
 
 const openSettings = () => {
-    platform.host.execCommand(`service('root', 'exec') ('/home/user1/settings.html');`, platform)
+    platform.host.callCommand('ui.settings')
 }
 
 // Desktop ("Space") switcher: one pill per desktop (click to switch,
@@ -173,6 +173,15 @@ export const Taskbar = ({ onCommandClick, vertical, align = 'start' }: { onComma
             {visibleWindows.map(win => <TaskbarWindowIcon key={win.pid} win={win} />)}
             <div className="taskbar-spacer" />
             <DesktopSwitcher />
+            <div className="taskbar-icon-button" aria-label="open-app-drawer" title="App Drawer" onClick={() => platform.host.callCommand('ui.app-drawer')}>
+                <span className="material-symbols-outlined">grid_view</span>
+            </div>
+            <div className="taskbar-icon-button" aria-label="open-pkg-manager" title="App Manager" onClick={() => {
+                const cmd = platform.host.getCommand('ui.pkg-manager')
+                if (cmd) onCommandClick(cmd)
+            }}>
+                <span className="material-symbols-outlined">package_2</span>
+            </div>
             <div className="taskbar-icon-button taskbar-settings" aria-label="open-settings" title="Settings" onClick={openSettings}>
                 <span className="material-symbols-outlined">settings</span>
             </div>

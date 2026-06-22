@@ -1,0 +1,1138 @@
+<style>
+  body {
+    margin: 0;
+  }
+
+  #dragger {
+    width: 10rem;
+    height: 10rem;
+    background: #c2c2c2;
+    cursor: pointer;
+    display: none;
+  }
+</style>
+<script type="module" defer>
+  onload = () => {
+    const React = platform.getService('React');
+    const ReactDOM = platform.getService('ReactDOM');
+    const props = platform.getService('props');
+
+    // console.log(props, React, ReactDOM);
+
+    props.toggleHeader(false);
+
+    const dom = document.getElementById('react-root');
+    const root = ReactDOM.createRoot(dom);
+    const appModuleSource = document.querySelector('script[type="text/React-Jsx"]').innerText;
+
+    const {App} = platform.host.execString(appModuleSource);
+    root.render(React.createElement(App, props, []));
+
+
+
+    // document.getElementById('render-btn').addEventListener('click', () => {
+    //   props.close();
+    // });
+
+    // const dragger = document.getElementById('dragger');
+    const dragger = dom
+
+    let isDragging = false;
+    let startX, startY, startRect;
+
+    const onDragStart = (event) => {
+      isDragging = true;
+      startRect = props.getBoundingClientRect();
+      startX = event.clientX;
+      startY = event.clientY;
+      if(event.target.localName === 'section') event.preventDefault(); // Prevent default dragging behavior
+    };
+
+    const onDrag = (event) => {
+      if (!isDragging) return;
+
+      const deltaX = event.clientX - startX;
+      const deltaY = event.clientY - startY;
+
+      const newRect = {
+        left: startRect.left + deltaX,
+        top: startRect.top + deltaY,
+        right: startRect.right + deltaX,
+        bottom: startRect.bottom + deltaY
+      };
+
+      props.setBoundingClientRect(newRect);
+    };
+
+    const onDragEnd = () => {
+      isDragging = false;
+    };
+
+    dragger.addEventListener('mousedown', onDragStart);
+    window.addEventListener('mousemove', onDrag);
+    window.addEventListener('mouseup', onDragEnd);
+
+    // Function to center the iframe
+    const centerIframe = () => {
+      const currentRect = props.getBoundingClientRect();
+      const iframeWidth = currentRect.right - currentRect.left;
+      const iframeHeight = currentRect.bottom - currentRect.top;
+
+      // Parent dimensions based on iframe size and offsets, using props.host dimensions
+      const parentWidth = iframeWidth + currentRect.left + (props.host.innerWidth - currentRect.right);
+      const parentHeight = iframeHeight + currentRect.top + (props.host.innerHeight - currentRect.bottom);
+
+      // Calculate new centered position
+      const newRect = {
+        left: (parentWidth - iframeWidth) / 2,
+        top: (parentHeight - iframeHeight) / 2,
+        right: (parentWidth + iframeWidth) / 2,
+        bottom: (parentHeight + iframeHeight) / 2
+      };
+
+      props.setBoundingClientRect(newRect);
+    };
+
+    const centerAndResize = () => {
+      // Calculate new centered position
+      const newRect = {
+        left: '15%',
+        top: '5%',
+        height: '90%',
+        width: '70%',
+        borderRadius: '1.5rem'
+      };
+
+      props.setBoundingClientRect(newRect);
+    };
+
+    centerAndResize()
+  };
+
+</script>
+<script type="text/React-Jsx">
+  const React = require('React');
+  const ReactDOM = platform.getService('ReactDOM');
+
+  const fs = platform.host.getFS()
+  const origin = platform.window.location.origin || platform.window.location.ancestorOrigins[0] || '';
+
+  const metaFileRawContent = fs.readFileSync('/user-preferences.json')
+  const userPreferences = JSON.parse(metaFileRawContent)
+  const configWallpapers = userPreferences.wallpapers ?? []
+  const contactInfo = userPreferences.contact ?? {}
+
+  const imageExtensions = new Set([
+    '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.ico', '.avif',
+  ])
+
+  const imageMimeTypes = {
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.gif': 'image/gif',
+    '.webp': 'image/webp',
+    '.svg': 'image/svg+xml',
+    '.bmp': 'image/bmp',
+    '.ico': 'image/x-icon',
+    '.avif': 'image/avif',
+  }
+
+  const getExt = (name) => {
+    const parts = name.split('.')
+    return parts.length > 1 ? `.${parts.at(-1).toLowerCase()}` : ''
+  }
+
+  // Generic image-thumbnail hook: reads each image-extension file in `entries`
+  // from the virtual fs and exposes path -> blob URL. Mirrors the approach in
+  // the file explorer (`/(sw)/...` subresource fetches aren't intercepted from
+  // uncontrolled `about:blank` iframes, so thumbnails are built from blob URLs
+  // read directly via `platform.host.getFS()`).
+  const useThumbnails = (entries, getPath, getExtOf) => {
+    const [thumbnails, setThumbnails] = React.useState({})
+    const key = entries.map(getPath).join(' ')
+    React.useEffect(() => {
+      const urls = []
+      const next = {}
+      entries.forEach(entry => {
+        const ext = getExtOf(entry)
+        if (!imageExtensions.has(ext)) return
+        try {
+          const data = fs.readFileSync(getPath(entry))
+          const blob = new Blob([data], {type: imageMimeTypes[ext] || 'application/octet-stream'})
+          const url = URL.createObjectURL(blob)
+          next[getPath(entry)] = url
+          urls.push(url)
+        } catch (err) {}
+      })
+      setThumbnails(next)
+      return () => urls.forEach(url => URL.revokeObjectURL(url))
+    }, [key])
+    return thumbnails
+  }
+
+  // Generic file picker modal: browses the virtual fs starting at `initialDir`,
+  // optionally restricting selectable files to `accept` (a Set of lowercase
+  // extensions, e.g. imageExtensions). Calls `onSelect(path)` then `onClose()`.
+  // When `mode === 'folder'`, only directories are listed and the footer's
+  // "Choose" button selects the currently open directory (`dir`) rather than
+  // requiring a clicked file.
+  const FilePicker = ({ initialDir, accept, title, mode, onSelect, onClose }) => {
+    const [dir, setDir] = React.useState(initialDir || '/home/user1')
+    const [selected, setSelected] = React.useState(null)
+
+    const readDir = (d) => {
+      try {
+        return fs.readdirSync(d)
+          .map(name => {
+            const path = d === '/' ? `/${name}` : `${d}/${name}`
+            let isDir = false
+            try { isDir = fs.statSync(path).isDirectory() } catch (err) {}
+            return { name, path, isDir, ext: getExt(name) }
+          })
+          .sort((a, b) => (a.isDir === b.isDir) ? a.name.localeCompare(b.name) : (a.isDir ? -1 : 1))
+      } catch (err) {
+        return []
+      }
+    }
+
+    const [entries, setEntries] = React.useState(() => readDir(dir))
+
+    React.useEffect(() => {
+      setEntries(readDir(dir))
+      setSelected(null)
+    }, [dir])
+
+    const thumbnails = useThumbnails(entries.filter(e => !e.isDir), e => e.path, e => e.ext)
+
+    const breadcrumbs = React.useMemo(() => {
+      const parts = dir.split('/').filter(Boolean)
+      const crumbs = [{ name: 'Root', path: '/' }]
+      let acc = ''
+      parts.forEach(p => { acc += `/${p}`; crumbs.push({ name: p, path: acc }) })
+      return crumbs
+    }, [dir])
+
+    const visibleEntries = mode === 'folder'
+      ? entries.filter(e => e.isDir)
+      : entries.filter(e => e.isDir || !accept || accept.has(e.ext))
+
+    const choose = (path) => {
+      onSelect(path)
+      onClose()
+    }
+
+    return (
+      <div className="filepicker-overlay" onClick={onClose}>
+        <div className="filepicker-dialog" onClick={e => e.stopPropagation()}>
+          <div className="filepicker-header">
+            <span>{title || 'Choose a file'}</span>
+            <span className="filepicker-close material-symbols-outlined" onClick={onClose}>close</span>
+          </div>
+          <div className="filepicker-breadcrumbs">
+            {breadcrumbs.map((c, i) => (
+              <React.Fragment key={c.path}>
+                {i > 0 && <span className="material-symbols-outlined sep">chevron_right</span>}
+                <span className="crumb" onClick={() => setDir(c.path)}>{c.name}</span>
+              </React.Fragment>
+            ))}
+          </div>
+          <div className="filepicker-grid">
+            {visibleEntries.length === 0 && (
+              <div className="filepicker-empty">This folder is empty.</div>
+            )}
+            {visibleEntries.map(entry => (
+              <div
+                key={entry.path}
+                className={`filepicker-item ${selected === entry.path ? 'selected' : ''}`}
+                onClick={() => !entry.isDir && setSelected(entry.path)}
+                onDoubleClick={() => entry.isDir ? setDir(entry.path) : choose(entry.path)}
+                title={entry.name}
+              >
+                <div
+                  className="filepicker-icon"
+                  style={thumbnails[entry.path] ? { backgroundImage: `url('${thumbnails[entry.path]}')` } : undefined}
+                >
+                  {!thumbnails[entry.path] && (
+                    <span className="material-symbols-outlined">{entry.isDir ? 'folder' : 'draft'}</span>
+                  )}
+                </div>
+                <span className="filepicker-name">{entry.name}</span>
+              </div>
+            ))}
+          </div>
+          <div className="filepicker-footer">
+            <button className="settings-btn" onClick={onClose}>Cancel</button>
+            {mode === 'folder' ? (
+              <button className="settings-btn primary" onClick={() => choose(dir)}>Choose This Folder</button>
+            ) : (
+              <button className="settings-btn primary" disabled={!selected} onClick={() => choose(selected)}>Choose</button>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Parses '#rrggbb[aa]' or 'rgb(a)(...)' CSS colors into {r, g, b, a}.
+  const parseCssColor = (str) => {
+    str = (str || '').trim()
+    if (str.startsWith('#')) {
+      let hex = str.slice(1)
+      if (hex.length === 3) hex = hex.split('').map(c => c + c).join('')
+      const r = parseInt(hex.slice(0, 2), 16) || 0
+      const g = parseInt(hex.slice(2, 4), 16) || 0
+      const b = parseInt(hex.slice(4, 6), 16) || 0
+      const a = hex.length >= 8 ? parseInt(hex.slice(6, 8), 16) / 255 : 1
+      return { r, g, b, a }
+    }
+    const m = str.match(/rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*([\d.]+)\s*)?\)/)
+    if (m) return { r: +m[1], g: +m[2], b: +m[3], a: m[4] !== undefined ? +m[4] : 1 }
+    return { r: 0, g: 0, b: 0, a: 1 }
+  }
+
+  const rgbToHex = (r, g, b) => '#' + [r, g, b].map(x => Math.round(x).toString(16).padStart(2, '0')).join('')
+
+  // Color + opacity picker that reads/writes an 'rgba(r, g, b, a)' CSS color string.
+  const ColorAlphaInput = ({ value, onChange }) => {
+    const { r, g, b, a } = parseCssColor(value)
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <input type="color" value={rgbToHex(r, g, b)} onChange={e => {
+          const next = parseCssColor(e.target.value)
+          onChange(`rgba(${next.r}, ${next.g}, ${next.b}, ${a})`)
+        }} />
+        <input type="range" min="0" max="1" step="0.01" value={a} title="Opacity"
+          onChange={e => onChange(`rgba(${r}, ${g}, ${b}, ${e.target.value})`)}
+          style={{ width: '5rem' }} />
+        <span style={{ fontSize: '0.75rem', color: '#666', width: '2.5rem', textAlign: 'right' }}>{Math.round(a * 100)}%</span>
+      </div>
+    )
+  }
+
+  const WM_SETTINGS_PATH = '/etc/wm/current.json'
+  const WM_THEMES_DIR = '/etc/wm/themes'
+
+  const DEFAULT_WM_SETTINGS = {
+    appearance: {
+      headerBackground: '#000000',
+      headerColor: '#ffffff',
+      windowBackground: 'rgba(255, 255, 255, 0.15)',
+      taskbarBackground: 'rgba(0, 0, 0, 0.5)',
+      taskbarSize: 56,
+      accentColor: '#0a84ff',
+      borderRadius: 6,
+      blur: 10,
+      shadow: true,
+    },
+    behavior: {
+      dblClickHeaderFullscreen: true,
+      bringToFrontOnClick: true,
+    },
+  }
+
+  // Keep in sync with FS_BACKEND_STORAGE_KEY / FS_BACKEND_QUERY_PARAM in src/index.ts.
+  const FS_BACKEND_STORAGE_KEY = '__app_fs_backend__'
+  const FS_BACKEND_QUERY_PARAM = 'fsBackend'
+
+  const FS_BACKEND_OPTIONS = [
+    { id: 'indexeddb', label: 'IndexedDB', desc: 'Default. Large storage quota (GB-scale) — used for the full filesystem and mounted local folders.' },
+    { id: 'localstorage', label: 'LocalStorage', desc: 'Small quota (~5-10MB). Switch to this to access files saved by older versions of this app that stored data in localStorage.' },
+  ]
+
+  const WIDGETS_DIR = '/etc/widgets'
+  const WIDGETS_CONFIG_PATH = '/etc/widgets/config.json'
+
+  // Widgets hidden by default until the user enables them here, even though
+  // their script is loaded/registered at boot.
+  const DEFAULT_HIDDEN_WIDGETS = ['toolbar']
+
+  const readAvailableWidgets = () => {
+    try {
+      return fs.readdirSync(WIDGETS_DIR)
+        .filter(f => f.endsWith('.js'))
+        .map(f => f.replace(/\.js$/, ''))
+    } catch (err) {
+      return []
+    }
+  }
+
+  const readEnabledWidgetNames = (available) => {
+    try {
+      const cfg = JSON.parse(fs.readFileSync(WIDGETS_CONFIG_PATH, 'utf-8'))
+      if (Array.isArray(cfg.enabled)) return cfg.enabled
+    } catch (err) { /* default: all enabled except DEFAULT_HIDDEN_WIDGETS */ }
+    return available.filter(name => !DEFAULT_HIDDEN_WIDGETS.includes(name))
+  }
+
+  // Renders a live, inert preview of a widget by calling its own `render`.
+  const WidgetPreview = ({ widget }) => {
+    const ref = React.useRef(null)
+
+    React.useEffect(() => {
+      if (!ref.current || !widget) return
+      const el = ref.current
+      const cleanup = widget.render(el, { platform, onDestroy: () => {} })
+      return () => { if (typeof cleanup === 'function') cleanup() }
+    }, [widget])
+
+    return <div className="widget-preview" ref={ref} style={{
+      marginTop: '0.5rem',
+      padding: '0.6rem 0.8rem',
+      background: 'rgba(0, 0, 0, 0.06)',
+      borderRadius: '8px',
+      display: 'inline-block',
+      pointerEvents: 'none',
+    }}></div>
+  }
+
+  // Settings service: lets other vfs scripts dynamically register/unregister
+  // their own Settings page (nav item + content), without editing this file.
+  // `registerSection(name, render, meta)` mirrors `registerWidget` - `render`
+  // is called with a container element + `{platform, onDestroy}` when the
+  // section's nav item is selected. `meta.title`/`meta.icon`/`meta.color`
+  // control the nav item's label/icon/badge color, `meta.marginTop` (e.g.
+  // 'auto') can push a section (and those after it) to the bottom of the
+  // sidebar. `utils` exposes the helpers/constants above so individual
+  // section scripts (e.g. /etc/settings/*.js) don't need to duplicate them.
+  const settingsSectionRemovers = new Map()
+  const settingsUtils = {
+    fs, origin, userPreferences, configWallpapers, contactInfo,
+    imageExtensions, imageMimeTypes, getExt,
+    useThumbnails, FilePicker, WidgetPreview,
+    parseCssColor, rgbToHex, ColorAlphaInput,
+    DEFAULT_WM_SETTINGS, WM_SETTINGS_PATH, WM_THEMES_DIR,
+    FS_BACKEND_STORAGE_KEY, FS_BACKEND_QUERY_PARAM, FS_BACKEND_OPTIONS,
+    WIDGETS_DIR, WIDGETS_CONFIG_PATH, DEFAULT_HIDDEN_WIDGETS,
+    readAvailableWidgets, readEnabledWidgetNames,
+  }
+  // Registered on the root platform (not this settings-window platform) so
+  // other vfs scripts/modules can reach it via `platform.getService('settings')`
+  // regardless of which window/module they're running in.
+  const rootPlatform = platform.host.getModulePlatform('root') ?? platform
+  rootPlatform.register('settings', {
+    utils: settingsUtils,
+    registerSection: (name, render, meta) => {
+      const { remove } = platform.host.registerSettingsSection(name, render, meta)
+      settingsSectionRemovers.set(name, remove)
+      return {
+        remove: () => {
+          remove()
+          settingsSectionRemovers.delete(name)
+        },
+      }
+    },
+    unregisterSection: (name) => {
+      const remove = settingsSectionRemovers.get(name)
+      if (remove) {
+        remove()
+        settingsSectionRemovers.delete(name)
+      }
+    },
+  })
+
+  // All Settings sections - including the built-in pages (About, Projects,
+  // Contact, Wallpaper, Layout, Window Manager, Widgets, Storage) - live as
+  // individual scripts in /etc/settings/ (mirrors the /etc/widgets/
+  // convention - force_reload: false, user-editable), numbered so their
+  // filename order determines sidebar order. Each script calls
+  // `platform.getService('settings').registerSection(name, render, meta)`
+  // (or `platform.host.registerSettingsSection` directly) to add itself.
+  // On every Settings open, scan the folder (sorted) and load any script
+  // whose section isn't registered yet, so reopening Settings doesn't
+  // re-register (and duplicate) sections from scripts loaded on a previous
+  // open.
+  const SETTINGS_SECTIONS_DIR = '/etc/settings'
+
+  const getRegisteredSectionNames = () => {
+    let names = []
+    const sub = platform.host.settingsSections$.subscribe(sections => { names = sections.map(s => s.name) })
+    sub.unsubscribe()
+    return names
+  }
+
+  const loadDynamicSettingsScripts = () => {
+    let files = []
+    try {
+      files = fs.readdirSync(SETTINGS_SECTIONS_DIR).filter(f => f.endsWith('.js')).sort()
+    } catch (err) { return }
+
+    const registered = getRegisteredSectionNames()
+
+    files.forEach(file => {
+      const name = file.replace(/\.js$/, '')
+      if (registered.includes(name)) return
+      try {
+        const source = fs.readFileSync(`${SETTINGS_SECTIONS_DIR}/${file}`, 'utf-8')
+        platform.host.execString(source, `${SETTINGS_SECTIONS_DIR}/${file}`)
+      } catch (err) {
+        console.error(`Failed to load settings section ${file}`, err)
+      }
+    })
+  }
+
+  loadDynamicSettingsScripts()
+
+  // Renders a registered settings section's content into a container,
+  // mirroring `WidgetPreview` (collects `onDestroy` callbacks registered by
+  // `section.render` and runs them on unmount).
+  const DynamicSettingsPage = ({ section }) => {
+    const ref = React.useRef(null)
+
+    React.useEffect(() => {
+      if (!ref.current) return
+      const el = ref.current
+      const destroyCallbacks = []
+      const cleanup = section.render(el, { platform, onDestroy: cb => destroyCallbacks.push(cb) })
+      return () => {
+        if (typeof cleanup === 'function') cleanup()
+        destroyCallbacks.forEach(cb => cb())
+      }
+    }, [section])
+
+    return <div ref={ref}></div>
+  }
+
+  exports.App = (props) => {
+    const onCloseHandler = () => {
+      props.close();
+    };
+
+    // Every Settings page - built-in and dynamically-registered - is a
+    // registered settings section (see /etc/settings/*.js), reflected here
+    // via settingsSections$.
+    const [sections, setSections] = React.useState([])
+    React.useEffect(() => {
+      const sub = platform.host.settingsSections$.subscribe(setSections)
+      return () => sub.unsubscribe()
+    }, [])
+
+    const allPages = sections.map(section => ({
+      id: `dynamic-${section.name}`,
+      name: section.name,
+      label: section.meta?.title ?? section.name,
+      icon: section.meta?.icon ?? 'extension',
+      color: section.meta?.color ?? '#8e8e93',
+      marginTop: section.meta?.marginTop,
+      component: () => <DynamicSettingsPage section={section} />,
+    }))
+
+    const [currentPage, setCurrentPage] = React.useState(null)
+
+    React.useEffect(() => {
+      if (!currentPage && allPages.length) setCurrentPage(allPages[0])
+    }, [allPages, currentPage])
+
+    return (
+      <>
+        <span
+          className="close-button"
+          title="Close window"
+          onClick={onCloseHandler}
+        ></span>
+        <div className="settings-root">
+          <nav className="settings-sidebar">
+            <div className="settings-sidebar-title">Settings</div>
+            <div className="settings-nav-list">
+              {allPages.map(page => (
+                <div
+                  key={page.id}
+                  className={`settings-nav-item ${page.id === currentPage?.id ? 'active' : ''}`}
+                  style={{marginTop: page.marginTop}}
+                  onClick={() => setCurrentPage(page)}
+                >
+                  <span className="settings-nav-icon material-symbols-outlined" style={{background: page.color}}>{page.icon}</span>
+                  <span>{page.label}</span>
+                </div>
+              ))}
+            </div>
+          </nav>
+          <section className="settings-content">
+            {currentPage && <currentPage.component/>}
+          </section>
+        </div>
+      </>
+    );
+  };
+
+</script>
+<style>
+@font-face {
+  font-family: 'Material Symbols Outlined';
+  font-style: normal;
+  font-weight: 100 700;
+  src: url(https://fonts.gstatic.com/s/materialsymbolsoutlined/v138/kJEhBvYX7BgnkSrUwT8OhrdQw4oELdPIeeII9v6oFsLjBuVY.woff2) format('woff2');
+}
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 20px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+}
+
+html, body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+
+.close-button {
+  position: absolute;
+  top: 10px;  /* Distance from the top of the container */
+  right: 10px;  /* Distance from the right of the container */
+  cursor: pointer;
+  width: 24px;  /* Button size */
+  height: 24px;
+  display: inline-block;
+  border-radius: 50%;
+  background-color: transparent;
+  transition: background-color 0.3s, transform 0.3s;
+  z-index: 1000;  /* Ensure it stays on top */
+}
+
+.close-button::before,
+.close-button::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 16px;  /* Length of the "X" lines */
+  height: 2px;  /* Thickness of the "X" lines */
+  background-color: #333;
+  transition: background-color 0.3s;
+}
+
+.close-button::before {
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.close-button::after {
+  transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+.close-button:hover {
+  background-color: #ffffff;
+  transform: scale(1.1);
+}
+
+.close-button:hover::before,
+.close-button:hover::after {
+  background-color: #000;
+}
+
+/* macOS System Settings style shell */
+.settings-root {
+  display: flex;
+  height: 100%;
+  width: 100%;
+  background: #f5f5f7;
+  color: #1d1d1f;
+}
+
+.settings-sidebar {
+  flex: 0 0 13.5rem;
+  background: rgba(246, 246, 248, 0.9);
+  border-right: 1px solid #e0e0e2;
+  overflow: auto;
+  padding: 0.75rem 0.5rem;
+  box-sizing: border-box;
+}
+
+.settings-sidebar-title {
+  font-size: 1.3rem;
+  font-weight: 700;
+  padding: 0.5rem 0.6rem 1rem;
+}
+
+.settings-nav-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.settings-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 0.92rem;
+  color: #1d1d1f;
+}
+
+.settings-nav-item:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.settings-nav-item.active {
+  background: #0a84ff;
+  color: #fff;
+}
+
+.settings-nav-icon {
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.settings-content {
+  flex-grow: 1;
+  overflow: auto;
+  padding: 1.5rem 2rem;
+  box-sizing: border-box;
+}
+
+.settings-page {
+  max-width: 40rem;
+  margin: 0 auto;
+}
+
+.settings-page-title {
+  font-size: 1.7rem;
+  font-weight: 700;
+  margin: 0 0 0.25rem;
+}
+
+.settings-page-subtitle {
+  color: #6e6e73;
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+}
+
+.settings-section-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6e6e73;
+  margin: 1.5rem 0 0.4rem;
+}
+
+.settings-group {
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+}
+
+.settings-group-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.7rem 1rem;
+  border-bottom: 1px solid #f0f0f2;
+}
+
+.settings-row:last-child {
+  border-bottom: none;
+}
+
+.settings-row-label {
+  flex: 1;
+  font-size: 0.92rem;
+}
+
+.settings-row-icon {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.settings-row-text {
+  flex-grow: 1;
+  min-width: 0;
+}
+
+.settings-row-title {
+  font-size: 0.92rem;
+  font-weight: 500;
+}
+
+.settings-row-subtitle {
+  font-size: 0.8rem;
+  color: #6e6e73;
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.settings-row-subtitle:hover {
+  text-decoration: underline;
+}
+
+.settings-hint {
+  color: #6e6e73;
+  font-size: 0.82rem;
+  margin-top: 1.25rem;
+  line-height: 1.5;
+}
+
+.settings-hint code {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+  padding: 0.05rem 0.3rem;
+}
+
+.settings-btn {
+  padding: 0.4rem 0.9rem;
+  border-radius: 7px;
+  border: 1px solid #d2d2d7;
+  background: #fff;
+  color: #1d1d1f;
+  cursor: pointer;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.settings-btn:hover {
+  background: #f5f5f7;
+}
+
+.settings-btn.primary {
+  background: #0a84ff;
+  border-color: #0a84ff;
+  color: #fff;
+}
+
+.settings-btn.primary:hover {
+  background: #0070e0;
+}
+
+.settings-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.settings-input {
+  flex-grow: 1;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid #d2d2d7;
+  border-radius: 7px;
+  font-size: 0.85rem;
+}
+
+/* About */
+.about-card {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.about-avatar {
+  width: 5rem;
+  height: 5rem;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #f0f0f2;
+}
+
+.about-name {
+  margin: 0;
+  font-size: 1.3rem;
+}
+
+.about-role {
+  margin: 0.2rem 0 0;
+  color: #6e6e73;
+  font-size: 0.9rem;
+}
+
+/* Projects */
+.projects-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
+  gap: 0.75rem;
+}
+
+.project-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 1rem 0.5rem;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  text-align: center;
+}
+
+.project-card:hover {
+  background: #eef4ff;
+}
+
+.project-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  object-fit: contain;
+}
+
+.project-name {
+  font-size: 0.78rem;
+  word-break: break-word;
+  color: #1d1d1f;
+}
+
+/* Wallpapers */
+.wallpaper-toolbar {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.wallpaper-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 1rem;
+}
+
+.wallpaper-card {
+  position: relative;
+  border-radius: 10px;
+  overflow: hidden;
+  cursor: pointer;
+  aspect-ratio: 16 / 10;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.wallpaper-card.active {
+  box-shadow: 0 0 0 3px #0a84ff;
+}
+
+.wallpaper-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.wallpaper-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0);
+  transition: background 0.15s;
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.wallpaper-card:not(.active):hover .wallpaper-overlay {
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.wallpaper-card:not(.active) .wallpaper-overlay-label {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.wallpaper-card:not(.active):hover .wallpaper-overlay-label {
+  opacity: 1;
+}
+
+.wallpaper-card.active .wallpaper-overlay {
+  background: rgba(10, 132, 255, 0.18);
+}
+
+.wallpaper-check {
+  font-size: 2rem;
+  color: #fff;
+  filter: drop-shadow(0 1px 3px rgba(0,0,0,0.5));
+}
+
+.wallpaper-context-menu {
+  position: fixed;
+  z-index: 1000;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: rgba(0, 0, 0, 0.2) 0px 2px 10px;
+  overflow: hidden;
+  min-width: 9rem;
+  padding: 4px;
+}
+
+.wallpaper-context-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: #d70015;
+}
+
+.wallpaper-context-menu button:hover {
+  background: rgba(215, 0, 21, 0.08);
+}
+
+/* File picker modal */
+.filepicker-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.filepicker-dialog {
+  background: #fff;
+  border-radius: 12px;
+  width: min(34rem, 90vw);
+  height: min(28rem, 80vh);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+}
+
+.filepicker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #f0f0f2;
+  font-weight: 600;
+}
+
+.filepicker-close {
+  cursor: pointer;
+  color: #6e6e73;
+}
+
+.filepicker-breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.4rem 1rem;
+  font-size: 0.8rem;
+  color: #6e6e73;
+  border-bottom: 1px solid #f0f0f2;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.filepicker-breadcrumbs .crumb {
+  cursor: pointer;
+  padding: 0.1rem 0.3rem;
+  border-radius: 4px;
+}
+
+.filepicker-breadcrumbs .crumb:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.filepicker-breadcrumbs .sep {
+  font-size: 0.9rem;
+}
+
+.filepicker-grid {
+  flex-grow: 1;
+  overflow: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr));
+  gap: 0.5rem;
+  padding: 0.75rem;
+  align-content: flex-start;
+}
+
+.filepicker-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  color: #aaa;
+  padding: 2rem 0;
+  font-size: 0.85rem;
+}
+
+.filepicker-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.4rem;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.filepicker-item:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.filepicker-item.selected {
+  background: rgba(10, 132, 255, 0.15);
+}
+
+.filepicker-icon {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 6px;
+  background-color: #f0f0f2;
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #8e8e93;
+}
+
+.filepicker-name {
+  font-size: 0.72rem;
+  text-align: center;
+  word-break: break-word;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.filepicker-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-top: 1px solid #f0f0f2;
+}
+</style>
+
+<div draggable id="react-root" style="height: 100%; width: 100%;"></div>
+<div draggable id="dragger"></div>
+<!-- <button id="render-btn">Render</button> -->
+

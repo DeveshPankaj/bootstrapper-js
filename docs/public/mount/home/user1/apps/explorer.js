@@ -602,6 +602,20 @@ const App = (props) => {
         title: "Compress to ZIP",
         cmd: `service('/home/user1/apps/explorer.js', 'zip-compress')('${file.path}')`,
       });
+      actions.push({ id: 'divider_open_with', type: 'divider', title: '' });
+      actions.push({
+        id: 'open_with',
+        type: 'group',
+        title: 'Open with',
+        children: [
+          { id: 'ow_notepad',     type: 'action', title: 'Text Editor',   cmd: `service('001-core.layout','open-window')(command('ui.notepad'),'${file.path}')` },
+          { id: 'ow_vscode',      type: 'action', title: 'VS Code',       cmd: `service('001-core.layout','open-window')(command('ui.vs-code'),'${file.path}')` },
+          { id: 'ow_csv',         type: 'action', title: 'Spreadsheet',   cmd: `service('001-core.layout','open-window')(command('ui.csv-viewer'),'${file.path}')` },
+          { id: 'ow_image',       type: 'action', title: 'Image Viewer',  cmd: `service('001-core.layout','open-window')(command('ui.imageviewer'),'${file.path}')` },
+          { id: 'ow_python',      type: 'action', title: 'Python REPL',   cmd: `service('001-core.layout','open-window')(command('ui.python'),'${file.path}')` },
+          { id: 'ow_browser',     type: 'action', title: 'Browser',       cmd: `service('001-core.layout','open-window')(command('ui.iframe'),'${file.path}')` },
+        ],
+      });
     } else {
       actions.push({
         id: "open_file",
@@ -711,7 +725,8 @@ const App = (props) => {
   };
 
   // Handles a drop onto `targetDir` - either moving an item dragged from an explorer
-  // window (`application/x-vfs-path`), or importing files/folders dragged from the OS.
+  // window (`application/x-vfs-path`), importing a file from FS.html (`application/x-fs-export`),
+  // or importing files/folders dragged from the OS.
   const handleDrop = (event, targetDir) => {
     event.preventDefault();
     event.stopPropagation();
@@ -720,6 +735,20 @@ const App = (props) => {
     if (vfsPath) {
       moveEntry(vfsPath, targetDir);
       refresh();
+      return;
+    }
+
+    // File dragged from FS.html — data is in window.top.__fsDrop
+    const fsExport = event.dataTransfer.getData("application/x-fs-export");
+    if (fsExport) {
+      const drop = window.top?.__fsDrop;
+      if (drop) {
+        try {
+          const destPath = `${targetDir}/${drop.name}`.replace(/\/+/g, "/");
+          fs.writeFileSync(destPath, drop.binary ? Buffer.from(drop.content) : drop.content);
+          refresh();
+        } catch (e) { console.error("FS export import failed", e); }
+      }
       return;
     }
 

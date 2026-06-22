@@ -128,26 +128,6 @@
     "file": "/home/user1/projects/temp.js"
   },
   {
-    "path": "/home/user1/settings.html",
-    "file": "/home/user1/settings.html",
-    "force_reload": true
-  },
-  {
-    "path": "/home/user1/apps/explorer.js",
-    "file": "/home/user1/apps/explorer.js",
-    "force_reload": true
-  },
-  {
-    "path": "/home/user1/apps/markdown.js",
-    "file": "/home/user1/apps/markdown.js",
-    "force_reload": true
-  },
-  {
-    "path": "/home/user1/apps/md-renderer.html",
-    "file": "/home/user1/apps/md-renderer.html",
-    "force_reload": true
-  },
-  {
     "path": "/home/user1/quotes/my.md",
     "file": "/home/user1/quotes/my.md",
     "force_reload": true
@@ -155,31 +135,6 @@
   {
     "path": "/home/user1/Notes.md",
     "file": "/home/user1/Notes.md"
-  },
-  {
-    "path": "/home/user1/apps/TOTP.html",
-    "file": "/home/user1/apps/TOTP.html",
-    "force_reload": false
-  },
-  {
-    "path": "/home/user1/apps/WAMP.html",
-    "file": "/home/user1/apps/WAMP.html",
-    "force_reload": false
-  },
-  {
-    "path": "/home/user1/apps/FS.html",
-    "file": "/home/user1/apps/FS.html",
-    "force_reload": false
-  },
-  {
-    "path": "/home/user1/apps/wamp.js",
-    "file": "/home/user1/apps/wamp.js",
-    "force_reload": true
-  },
-  {
-    "path": "/home/user1/apps/task-manager.js",
-    "file": "/home/user1/apps/task-manager.js",
-    "force_reload": true
   },
   {
     "path": "/bin/ps.run",
@@ -210,30 +165,6 @@
     "path": "/lib/utils.js",
     "file": "/lib/utils.js",
     "force_reload": true
-  },
-  {
-    "path": "/home/user1/projects/Snake.html",
-    "file": "/home/user1/projects/Snake.html"
-  },
-  {
-    "path": "/home/user1/projects/WebGL.html",
-    "file": "/home/user1/projects/WebGL.html"
-  },
-  {
-    "path": "/home/user1/projects/VSCode.html",
-    "file": "/home/user1/projects/VSCode.html"
-  },
-  {
-    "path": "/home/user1/projects/WebGL-Earth.html",
-    "file": "/home/user1/projects/WebGL-Earth.html"
-  },
-  {
-    "path": "/home/user1/projects/3js.html",
-    "file": "/home/user1/projects/3js.html"
-  },
-  {
-    "path": "/home/user1/projects/3js-flow.html",
-    "file": "/home/user1/projects/3js-flow.html"
   },
   {
     "path": "/usr/bin/fullscreen.js",
@@ -294,16 +225,6 @@
     "path": "/usr/share/icons/invalid-file-icon.png",
     "file": "/usr/share/icons/invalid-file-icon.png",
     "force_reload": true
-  },
-  {
-    "path": "/home/user1/apps/xtermjs.html",
-    "file": "/home/user1/apps/xtermjs.html",
-    "force_reload": true
-  },
-  {
-    "path": "/home/user1/apps/WebRTC.html",
-    "file": "/home/user1/apps/WebRTC.html",
-    "force_reload": false
   },
   {
     "path": "/user-preferences.json",
@@ -381,11 +302,6 @@
     "force_reload": true
   },
   {
-    "path": "/etc/settings/02-projects.js",
-    "file": "/etc/settings/02-projects.js",
-    "force_reload": true
-  },
-  {
     "path": "/etc/settings/03-contact.js",
     "file": "/etc/settings/03-contact.js",
     "force_reload": true
@@ -456,11 +372,6 @@
     "force_reload": true
   },
   {
-    "path": "/home/user1/apps/imageviewer.js",
-    "file": "/home/user1/apps/imageviewer.js",
-    "force_reload": true
-  },
-  {
     "path": "/opt/spotlight.js",
     "file": "/opt/spotlight.js",
     "force_reload": true
@@ -501,23 +412,8 @@
     "force_reload": true
   },
   {
-    "path": "/home/user1/apps/diff.js",
-    "file": "/home/user1/apps/diff.js",
-    "force_reload": true
-  },
-  {
-    "path": "/home/user1/apps/csv-viewer.js",
-    "file": "/home/user1/apps/csv-viewer.js",
-    "force_reload": true
-  },
-  {
-    "path": "/home/user1/apps/bookmarks.js",
-    "file": "/home/user1/apps/bookmarks.js",
-    "force_reload": true
-  },
-  {
-    "path": "/home/user1/apps/app-launcher.js",
-    "file": "/home/user1/apps/app-launcher.js",
+    "path": "/etc/settings/19-apps.js",
+    "file": "/etc/settings/19-apps.js",
     "force_reload": true
   },
   {
@@ -531,16 +427,6 @@
     "force_reload": true
   },
   {
-    "path": "/home/user1/apps/python.js",
-    "file": "/home/user1/apps/python.js",
-    "force_reload": true
-  },
-  {
-    "path": "/home/user1/apps/python.html",
-    "file": "/home/user1/apps/python.html",
-    "force_reload": true
-  },
-  {
     "path": "/home/user1/projects/hello.py",
     "file": "/home/user1/projects/hello.py",
     "force_reload": false
@@ -548,16 +434,6 @@
   {
     "path": "/bin/python.run",
     "file": "/bin/python.run",
-    "force_reload": true
-  },
-  {
-    "path": "/home/user1/apps/dashboard.js",
-    "file": "/home/user1/apps/dashboard.js",
-    "force_reload": true
-  },
-  {
-    "path": "/home/user1/apps/dashboard.html",
-    "file": "/home/user1/apps/dashboard.html",
     "force_reload": true
   },
   {
@@ -586,18 +462,48 @@
     "force_reload": false
   },
   {
-    "path": "/home/user1/apps/nn-ide.js",
-    "file": "/home/user1/apps/nn-ide.js",
+    "path": "/home/user1/apps/pkg-manager.js",
+    "file": "/home/user1/apps/pkg-manager.js",
     "force_reload": true
   },
   {
-    "path": "/home/user1/apps/nn-ide.html",
-    "file": "/home/user1/apps/nn-ide.html",
+    "path": "/home/user1/apps/app-drawer.js",
+    "file": "/home/user1/apps/app-drawer.js",
     "force_reload": true
   },
   {
-    "path": "/home/user1/projects/screen-reader.html",
-    "file": "/home/user1/projects/screen-reader.html",
+    "path": "/opt/pkg/loader.js",
+    "file": "/opt/pkg/loader.js",
+    "force_reload": true
+  },
+  {
+    "path": "/home/user1/apps/task-manager.js",
+    "file": "/home/user1/apps/task-manager.js",
+    "force_reload": true
+  },
+  {
+    "path": "/home/user1/apps/bookmarks.js",
+    "file": "/home/user1/apps/bookmarks.js",
+    "force_reload": true
+  },
+  {
+    "path": "/home/user1/apps/app-launcher.js",
+    "file": "/home/user1/apps/app-launcher.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/terminal/main.html",
+    "file": "/opt/apps/terminal/main.html",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/settings/main.html",
+    "file": "/opt/apps/settings/main.html",
+    "force_reload": true
+  },
+  {
+    "path": "/etc/pkg/installed.json",
+    "file": "/etc/pkg/installed.json",
     "force_reload": false
   }
 ]

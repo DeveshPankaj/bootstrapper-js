@@ -1,0 +1,28 @@
+[
+  {
+    "id": "terminal",
+    "name": "Terminal",
+    "version": "1.0.0",
+    "description": "xterm.js terminal emulator with tabbed sessions",
+    "icon": "terminal",
+    "category": "System",
+    "author": "bootstrapper-js",
+    "appDir": "/opt/apps/terminal",
+    "mainFile": "/opt/apps/terminal/main.html",
+    "commandName": "ui.terminal",
+    "installedAt": 1750636800000
+  },
+  {
+    "id": "settings",
+    "name": "Settings",
+    "version": "1.0.0",
+    "description": "System settings and preferences",
+    "icon": "settings",
+    "category": "System",
+    "author": "bootstrapper-js",
+    "appDir": "/opt/apps/settings",
+    "mainFile": "/opt/apps/settings/main.html",
+    "commandName": "ui.settings",
+    "installedAt": 1750636800000
+  }
+]

@@ -1,0 +1,497 @@
+{
+  "name": "Default Apps",
+  "version": "2",
+  "description": "Built-in apps bundled with bootstrapper-js. Source URLs resolve from the registry host origin.",
+  "apps": [
+    {
+      "id": "file-explorer",
+      "name": "File Explorer",
+      "description": "Full-featured file explorer with context menus, drag-and-drop, and file operations.",
+      "version": "1.0.0",
+      "icon": "folder",
+      "category": "Files",
+      "author": "bootstrapper-js",
+      "commandName": "explorer",
+      "files": [{ "dest": "main.js", "src": "/public/mount/home/user1/apps/explorer.js" }],
+      "main": "main.js"
+    },
+    {
+      "id": "explorer-sifi",
+      "name": "Files (Minimal)",
+      "description": "A clean, minimal file explorer with warm-beige accents and a resizable tree sidebar.",
+      "version": "1.0.0",
+      "icon": "folder_open",
+      "category": "Files",
+      "author": "bootstrapper-js",
+      "commandName": "explorer-sifi",
+      "files": [{ "dest": "main.js", "src": "/public/mount/home/user1/apps/explorer-sifi.js" }],
+      "main": "main.js"
+    },
+    {
+      "id": "image-viewer",
+      "name": "Image Viewer",
+      "description": "View images stored in the VFS. Supports PNG, JPG, WebP, and other browser-renderable formats.",
+      "version": "1.0.0",
+      "icon": "image",
+      "category": "Files",
+      "author": "bootstrapper-js",
+      "commandName": "ui.imageviewer",
+      "files": [{ "dest": "main.js", "src": "/public/mount/home/user1/apps/imageviewer.js" }],
+      "main": "main.js"
+    },
+    {
+      "id": "terminal",
+      "name": "Terminal",
+      "description": "xterm.js-powered terminal with tabbed sessions, shell commands, and VFS access.",
+      "version": "1.0.0",
+      "icon": "terminal",
+      "category": "System",
+      "author": "bootstrapper-js",
+      "commandName": "ui.terminal",
+      "files": [{ "dest": "main.html", "src": "/public/mount/opt/apps/terminal/main.html" }],
+      "main": "main.html"
+    },
+    {
+      "id": "settings",
+      "name": "Settings",
+      "description": "System settings and preferences — wallpaper, layout, window manager, widgets, keybindings, and storage.",
+      "version": "1.0.0",
+      "icon": "settings",
+      "category": "System",
+      "author": "bootstrapper-js",
+      "commandName": "ui.settings",
+      "files": [{ "dest": "main.html", "src": "/public/mount/opt/apps/settings/main.html" }],
+      "main": "main.html"
+    },
+    {
+      "id": "app-drawer",
+      "name": "App Drawer",
+      "description": "Full-screen app launcher with pinned apps, recent history, and category browsing.",
+      "version": "1.0.0",
+      "icon": "apps",
+      "category": "System",
+      "author": "bootstrapper-js",
+      "commandName": "ui.app-drawer",
+      "files": [{ "dest": "main.js", "src": "/public/mount/home/user1/apps/app-drawer.js" }],
+      "main": "main.js"
+    },
+    {
+      "id": "app-launcher",
+      "name": "App Launcher",
+      "description": "Compact app launcher overlay for quickly opening registered apps and commands.",
+      "version": "1.0.0",
+      "icon": "rocket_launch",
+      "category": "System",
+      "author": "bootstrapper-js",
+      "commandName": "ui.app-launcher",
+      "files": [{ "dest": "main.js", "src": "/public/mount/home/user1/apps/app-launcher.js" }],
+      "main": "main.js"
+    },
+    {
+      "id": "pkg-manager",
+      "name": "App Manager",
+      "description": "Install and manage apps from registries. Supports custom registry URLs with per-app install/uninstall.",
+      "version": "1.0.0",
+      "icon": "package_2",
+      "category": "System",
+      "author": "bootstrapper-js",
+      "commandName": "ui.pkg-manager",
+      "files": [
+        { "dest": "main.js", "src": "/public/mount/home/user1/apps/pkg-manager.js" },
+        { "dest": "loader.js", "src": "/public/mount/opt/pkg/loader.js" }
+      ],
+      "main": "main.js"
+    },
+    {
+      "id": "spotlight",
+      "name": "Spotlight Search",
+      "description": "Global search overlay triggered by Ctrl+K / Cmd+K. Searches apps, commands, and VFS files.",
+      "version": "1.0.0",
+      "icon": "search",
+      "category": "System",
+      "author": "bootstrapper-js",
+      "commandName": "ui.spotlight",
+      "files": [{ "dest": "main.js", "src": "/public/mount/home/user1/apps/spotlight.js" }],
+      "main": "main.js"
+    },
+    {
+      "id": "task-manager",
+      "name": "Task Manager",
+      "description": "Monitor and manage running processes, memory usage, and system resources.",
+      "version": "1.0.0",
+      "icon": "monitor_heart",
+      "category": "System",
+      "author": "bootstrapper-js",
+      "commandName": "ui.task-manager",
+      "files": [{ "dest": "main.js", "src": "/public/mount/home/user1/apps/task-manager.js" }],
+      "main": "main.js"
+    },
+    {
+      "id": "regex-tester",
+      "name": "Regex Tester",
+      "description": "Test and debug regular expressions with live match highlighting and capture group details.",
+      "version": "1.0.0",
+      "icon": "manage_search",
+      "category": "Dev",
+      "author": "bootstrapper-js",
+      "commandName": "ui.regex-tester",
+      "files": [{ "dest": "main.js", "src": "/public/mount/home/user1/apps/regex-tester.js" }],
+      "main": "main.js"
+    },
+    {
+      "id": "dev-utils",
+      "name": "Dev Utils",
+      "description": "All-in-one developer utilities: JWT decoder, Base64, URL encode, SHA hash, UUID generator, color picker, and timestamp converter.",
+      "version": "1.0.0",
+      "icon": "handyman",
+      "category": "Dev",
+      "author": "bootstrapper-js",
+      "commandName": "ui.dev-utils",
+      "files": [{ "dest": "main.js", "src": "/public/mount/home/user1/apps/dev-utils.js" }],
+      "main": "main.js"
+    },
+    {
+      "id": "mermaid-viewer",
+      "name": "Diagram",
+      "description": "Mermaid diagram editor and renderer with zoom, pan, pin overlay, and PNG export.",
+      "version": "1.0.0",
+      "icon": "account_tree",
+      "category": "Dev",
+      "author": "bootstrapper-js",
+      "commandName": "ui.mermaid",
+      "files": [{ "dest": "main.js", "src": "/public/mount/home/user1/apps/mermaid-viewer.js" }],
+      "main": "main.js"
+    },
+    {
+      "id": "http-client",
+      "name": "HTTP Client",
+      "description": "A Postman-style HTTP client. Build and send requests, inspect responses, and save collections to VFS.",
+      "version": "1.0.0",
+      "icon": "http",
+      "category": "Dev",
+      "author": "bootstrapper-js",
+      "commandName": "ui.http-client",
+      "files": [{ "dest": "main.js", "src": "/public/mount/home/user1/apps/http-client.js" }],
+      "main": "main.js"
+    },
+    {
+      "id": "snippet-manager",
+      "name": "Snippets",
+      "description": "Persistent code snippet manager. Organize snippets by language and tags, stored in the VFS.",
+      "version": "1.0.0",
+      "icon": "code_blocks",
+      "category": "Dev",
+      "author": "bootstrapper-js",
+      "commandName": "ui.snippets",
+      "files": [{ "dest": "main.js", "src": "/public/mount/home/user1/apps/snippet-manager.js" }],
+      "main": "main.js"
+    },
+    {
+      "id": "sqlite-browser",
+      "name": "SQLite Browser",
+      "description": "Browse and query SQLite .db files stored in the VFS. Powered by sql.js (WASM).",
+      "version": "1.0.0",
+      "icon": "database",
+      "category": "Dev",
+      "author": "bootstrapper-js",
+      "commandName": "ui.sqlite",
+      "files": [{ "dest": "main.js", "src": "/public/mount/home/user1/apps/sqlite-browser.js" }],
+      "main": "main.js"
+    },
+    {
+      "id": "diff-viewer",
+      "name": "Diff Viewer",
+      "description": "Side-by-side file diff viewer for comparing any two VFS files.",
+      "version": "1.0.0",
+      "icon": "difference",
+      "category": "Dev",
+      "author": "bootstrapper-js",
+      "commandName": "ui.diff",
+      "files": [{ "dest": "main.js", "src": "/public/mount/home/user1/apps/diff.js" }],
+      "main": "main.js"
+    },
+    {
+      "id": "python-repl",
+      "name": "Python",
+      "description": "Run Python scripts directly in the browser using Pyodide (WASM). Open .py files or write inline.",
+      "version": "1.0.0",
+      "icon": "code",
+      "category": "Dev",
+      "author": "bootstrapper-js",
+      "commandName": "ui.python",
+      "files": [
+        { "dest": "main.js", "src": "/public/mount/home/user1/apps/python.js" },
+        { "dest": "python.html", "src": "/public/mount/home/user1/apps/python.html" }
+      ],
+      "main": "main.js"
+    },
+    {
+      "id": "nn-ide",
+      "name": "NN IDE",
+      "description": "Neural network IDE for designing and training models visually in the browser.",
+      "version": "1.0.0",
+      "icon": "hub",
+      "category": "Dev",
+      "author": "bootstrapper-js",
+      "commandName": "ui.nn-ide",
+      "files": [
+        { "dest": "main.js", "src": "/public/mount/home/user1/apps/nn-ide.js" },
+        { "dest": "nn-ide.html", "src": "/public/mount/home/user1/apps/nn-ide.html" }
+      ],
+      "main": "main.js"
+    },
+    {
+      "id": "markdown-reader",
+      "name": "Markdown",
+      "description": "Markdown file reader and renderer with syntax highlighting.",
+      "version": "1.0.0",
+      "icon": "description",
+      "category": "Editors",
+      "author": "bootstrapper-js",
+      "commandName": "ui.markdown",
+      "files": [
+        { "dest": "main.js", "src": "/public/mount/home/user1/apps/markdown.js" },
+        { "dest": "md-renderer.html", "src": "/public/mount/home/user1/apps/md-renderer.html" }
+      ],
+      "main": "main.js"
+    },
+    {
+      "id": "csv-viewer",
+      "name": "Spreadsheet",
+      "description": "CSV viewer with sortable columns and basic filtering.",
+      "version": "1.0.0",
+      "icon": "table_chart",
+      "category": "Office",
+      "author": "bootstrapper-js",
+      "commandName": "ui.csv-viewer",
+      "files": [{ "dest": "main.js", "src": "/public/mount/home/user1/apps/csv-viewer.js" }],
+      "main": "main.js"
+    },
+    {
+      "id": "dashboard",
+      "name": "Dashboard",
+      "description": "Customizable dashboard with configurable widgets and stats panels.",
+      "version": "1.0.0",
+      "icon": "dashboard",
+      "category": "Tools",
+      "author": "bootstrapper-js",
+      "commandName": "ui.dashboard",
+      "files": [
+        { "dest": "main.js", "src": "/public/mount/home/user1/apps/dashboard.js" },
+        { "dest": "dashboard.html", "src": "/public/mount/home/user1/apps/dashboard.html" }
+      ],
+      "main": "main.js"
+    },
+    {
+      "id": "bookmarks",
+      "name": "Bookmarks",
+      "description": "Browser bookmarks manager. Save, organize, and open URLs stored in the VFS.",
+      "version": "1.0.0",
+      "icon": "bookmarks",
+      "category": "Web",
+      "author": "bootstrapper-js",
+      "commandName": "ui.bookmarks",
+      "files": [{ "dest": "main.js", "src": "/public/mount/home/user1/apps/bookmarks.js" }],
+      "main": "main.js"
+    },
+    {
+      "id": "wamp-client",
+      "name": "WAMP Client",
+      "description": "WebSocket Application Messaging Protocol client for real-time pub/sub and RPC.",
+      "version": "1.0.0",
+      "icon": "settings_ethernet",
+      "category": "Web",
+      "author": "bootstrapper-js",
+      "commandName": "webamp",
+      "files": [
+        { "dest": "main.js", "src": "/public/mount/home/user1/apps/wamp.js" },
+        { "dest": "WAMP.html", "src": "/public/mount/home/user1/apps/WAMP.html" }
+      ],
+      "main": "main.js"
+    },
+    {
+      "id": "webrtc",
+      "name": "WebRTC",
+      "description": "Peer-to-peer video/audio communication using WebRTC.",
+      "version": "1.0.0",
+      "icon": "video_call",
+      "category": "Web",
+      "author": "bootstrapper-js",
+      "files": [{ "dest": "main.html", "src": "/public/mount/home/user1/apps/WebRTC.html" }],
+      "main": "main.html"
+    },
+    {
+      "id": "totp-auth",
+      "name": "TOTP Authenticator",
+      "description": "Time-based one-time password (TOTP/2FA) authenticator. Stores secrets locally in the VFS.",
+      "version": "1.0.0",
+      "icon": "lock",
+      "category": "Tools",
+      "author": "bootstrapper-js",
+      "files": [{ "dest": "main.html", "src": "/public/mount/home/user1/apps/TOTP.html" }],
+      "main": "main.html"
+    },
+    {
+      "id": "fs-inspector",
+      "name": "FS Inspector",
+      "description": "Inspect the virtual filesystem internals, mounted backends, and raw storage.",
+      "version": "1.0.0",
+      "icon": "storage",
+      "category": "Tools",
+      "author": "bootstrapper-js",
+      "files": [{ "dest": "main.html", "src": "/public/mount/home/user1/apps/FS.html" }],
+      "main": "main.html"
+    },
+    {
+      "id": "portfolio",
+      "name": "Portfolio",
+      "description": "Visual project showcase. Reads project.json files from /home/user1/projects/ and renders a card gallery.",
+      "version": "1.0.0",
+      "icon": "work",
+      "category": "Portfolio",
+      "author": "bootstrapper-js",
+      "commandName": "ui.portfolio",
+      "files": [{ "dest": "main.js", "src": "/public/mount/home/user1/apps/portfolio.js" }],
+      "main": "main.js"
+    },
+    {
+      "id": "snake-game",
+      "name": "Snake",
+      "description": "Classic Snake game built with canvas. Use arrow keys to play.",
+      "version": "1.0.0",
+      "icon": "sports_esports",
+      "category": "Games",
+      "author": "bootstrapper-js",
+      "files": [{ "dest": "main.html", "src": "/public/mount/home/user1/projects/Snake.html" }],
+      "main": "main.html"
+    },
+    {
+      "id": "snake-lstm",
+      "name": "Snake AI (LSTM)",
+      "description": "Snake game with an LSTM neural network agent that learns to play autonomously.",
+      "version": "1.0.0",
+      "icon": "psychology",
+      "category": "AI",
+      "author": "bootstrapper-js",
+      "files": [{ "dest": "main.html", "src": "/public/mount/home/user1/projects/Snake-LSTM.html" }],
+      "main": "main.html"
+    },
+    {
+      "id": "snake-qlearning",
+      "name": "Snake AI (Q-Learning)",
+      "description": "Snake game with a Q-Learning reinforcement learning agent trained in the browser.",
+      "version": "1.0.0",
+      "icon": "model_training",
+      "category": "AI",
+      "author": "bootstrapper-js",
+      "files": [{ "dest": "main.html", "src": "/public/mount/home/user1/projects/Snake-QLearning.html" }],
+      "main": "main.html"
+    },
+    {
+      "id": "webgl-demo",
+      "name": "WebGL Demo",
+      "description": "Interactive WebGL 3D graphics demo running entirely in the browser.",
+      "version": "1.0.0",
+      "icon": "view_in_ar",
+      "category": "Demos",
+      "author": "bootstrapper-js",
+      "files": [{ "dest": "main.html", "src": "/public/mount/home/user1/projects/WebGL.html" }],
+      "main": "main.html"
+    },
+    {
+      "id": "webgl-earth",
+      "name": "WebGL Earth",
+      "description": "Rotating 3D Earth globe rendered with WebGL.",
+      "version": "1.0.0",
+      "icon": "public",
+      "category": "Demos",
+      "author": "bootstrapper-js",
+      "files": [{ "dest": "main.html", "src": "/public/mount/home/user1/projects/WebGL-Earth.html" }],
+      "main": "main.html"
+    },
+    {
+      "id": "threejs-demo",
+      "name": "Three.js Demo",
+      "description": "Interactive 3D scene built with Three.js.",
+      "version": "1.0.0",
+      "icon": "deployed_code",
+      "category": "Demos",
+      "author": "bootstrapper-js",
+      "files": [{ "dest": "main.html", "src": "/public/mount/home/user1/projects/3js.html" }],
+      "main": "main.html"
+    },
+    {
+      "id": "threejs-flow",
+      "name": "Flow Simulation",
+      "description": "Particle flow simulation using Three.js and custom shaders.",
+      "version": "1.0.0",
+      "icon": "blur_on",
+      "category": "Demos",
+      "author": "bootstrapper-js",
+      "files": [{ "dest": "main.html", "src": "/public/mount/home/user1/projects/3js-flow.html" }],
+      "main": "main.html"
+    },
+    {
+      "id": "glsl-shader",
+      "name": "GLSL Shader",
+      "description": "Interactive GLSL fragment and vertex shader playground with Three.js and OrbitControls.",
+      "version": "1.0.0",
+      "icon": "gradient",
+      "category": "Demos",
+      "author": "bootstrapper-js",
+      "files": [
+        { "dest": "index.html", "src": "/public/mount/home/user1/projects/GLSL/index.html" },
+        { "dest": "index.js", "src": "/public/mount/home/user1/projects/GLSL/index.js" },
+        { "dest": "fragmentShader.js", "src": "/public/mount/home/user1/projects/GLSL/fragmentShader.js" },
+        { "dest": "vertexShader.js", "src": "/public/mount/home/user1/projects/GLSL/vertexShader.js" },
+        { "dest": "lib/jsm/controls/OrbitControls.js", "src": "/public/mount/home/user1/projects/GLSL/lib/jsm/controls/OrbitControls.js" },
+        { "dest": "lib/three.module.js", "src": "/public/mount/home/user1/projects/GLSL/lib/three.module.js" }
+      ],
+      "main": "index.html"
+    },
+    {
+      "id": "vscode-online",
+      "name": "VS Code",
+      "description": "VS Code editor running in the browser via Microsoft's web build.",
+      "version": "1.0.0",
+      "icon": "code",
+      "category": "Editors",
+      "author": "bootstrapper-js",
+      "files": [{ "dest": "main.html", "src": "/public/mount/home/user1/projects/VSCode.html" }],
+      "main": "main.html"
+    },
+    {
+      "id": "analyze",
+      "name": "Analyzer",
+      "description": "Data analysis tool for exploring and visualizing datasets.",
+      "version": "1.0.0",
+      "icon": "analytics",
+      "category": "Tools",
+      "author": "bootstrapper-js",
+      "files": [{ "dest": "main.html", "src": "/public/mount/home/user1/projects/Analyze.html" }],
+      "main": "main.html"
+    },
+    {
+      "id": "anova",
+      "name": "ANOVA",
+      "description": "Analysis of Variance (ANOVA) statistical testing tool.",
+      "version": "1.0.0",
+      "icon": "bar_chart",
+      "category": "Tools",
+      "author": "bootstrapper-js",
+      "files": [{ "dest": "main.html", "src": "/public/mount/home/user1/projects/Anova.html" }],
+      "main": "main.html"
+    },
+    {
+      "id": "screen-reader",
+      "name": "Screen Reader",
+      "description": "Accessibility screen reader demo and testing tool.",
+      "version": "1.0.0",
+      "icon": "accessibility",
+      "category": "Tools",
+      "author": "bootstrapper-js",
+      "files": [{ "dest": "main.html", "src": "/public/mount/home/user1/projects/screen-reader.html" }],
+      "main": "main.html"
+    }
+  ]
+}
