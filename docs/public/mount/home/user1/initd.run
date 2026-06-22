@@ -5,14 +5,8 @@
  * If you want to add new programs to run on system initialization, refer to the '/.initd.run' file.
  */
 
-// System scripts
-service('root', 'exec')('/opt/spotlight.js');
+// Load all installed apps (reads /etc/pkg/installed.json, exec's JS apps)
+service('root', 'exec')('/opt/apps/pkg-manager/loader.js');
 
-// Bootstrap: App Drawer + App Manager (always available — kept in meta.json)
-service('root', 'exec')('/home/user1/apps/app-drawer.js');
-service('root', 'exec')('/home/user1/apps/pkg-manager.js');
-
-// Load all previously installed registry apps
-service('root', 'exec')('/opt/pkg/loader.js');
-
+// User custom startup script
 service('root', 'exec')('/.initd.run');

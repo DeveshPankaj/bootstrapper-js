@@ -12,7 +12,12 @@
       "category": "Files",
       "author": "bootstrapper-js",
       "commandName": "explorer",
-      "files": [{ "dest": "main.js", "src": "/public/mount/home/user1/apps/explorer.js" }],
+      "files": [
+        {
+          "dest": "main.js",
+          "src": "/public/mount/opt/apps/file-explorer/main.js"
+        }
+      ],
       "main": "main.js"
     },
     {
@@ -24,7 +29,12 @@
       "category": "Files",
       "author": "bootstrapper-js",
       "commandName": "explorer-sifi",
-      "files": [{ "dest": "main.js", "src": "/public/mount/home/user1/apps/explorer-sifi.js" }],
+      "files": [
+        {
+          "dest": "main.js",
+          "src": "/public/mount/opt/apps/explorer-sifi/main.js"
+        }
+      ],
       "main": "main.js"
     },
     {
@@ -36,7 +46,12 @@
       "category": "Files",
       "author": "bootstrapper-js",
       "commandName": "ui.imageviewer",
-      "files": [{ "dest": "main.js", "src": "/public/mount/home/user1/apps/imageviewer.js" }],
+      "files": [
+        {
+          "dest": "main.js",
+          "src": "/public/mount/opt/apps/image-viewer/main.js"
+        }
+      ],
       "main": "main.js"
     },
     {
@@ -48,7 +63,12 @@
       "category": "System",
       "author": "bootstrapper-js",
       "commandName": "ui.terminal",
-      "files": [{ "dest": "main.html", "src": "/public/mount/opt/apps/terminal/main.html" }],
+      "files": [
+        {
+          "dest": "main.html",
+          "src": "/public/mount/opt/apps/terminal/main.html"
+        }
+      ],
       "main": "main.html"
     },
     {
@@ -60,7 +80,12 @@
       "category": "System",
       "author": "bootstrapper-js",
       "commandName": "ui.settings",
-      "files": [{ "dest": "main.html", "src": "/public/mount/opt/apps/settings/main.html" }],
+      "files": [
+        {
+          "dest": "main.html",
+          "src": "/public/mount/opt/apps/settings/main.html"
+        }
+      ],
       "main": "main.html"
     },
     {
@@ -72,7 +97,12 @@
       "category": "System",
       "author": "bootstrapper-js",
       "commandName": "ui.app-drawer",
-      "files": [{ "dest": "main.js", "src": "/public/mount/home/user1/apps/app-drawer.js" }],
+      "files": [
+        {
+          "dest": "main.js",
+          "src": "/public/mount/opt/apps/app-drawer/main.js"
+        }
+      ],
       "main": "main.js"
     },
     {
@@ -84,7 +114,12 @@
       "category": "System",
       "author": "bootstrapper-js",
       "commandName": "ui.app-launcher",
-      "files": [{ "dest": "main.js", "src": "/public/mount/home/user1/apps/app-launcher.js" }],
+      "files": [
+        {
+          "dest": "main.js",
+          "src": "/public/mount/opt/apps/app-launcher/main.js"
+        }
+      ],
       "main": "main.js"
     },
     {
@@ -97,8 +132,14 @@
       "author": "bootstrapper-js",
       "commandName": "ui.pkg-manager",
       "files": [
-        { "dest": "main.js", "src": "/public/mount/home/user1/apps/pkg-manager.js" },
-        { "dest": "loader.js", "src": "/public/mount/opt/pkg/loader.js" }
+        {
+          "dest": "main.js",
+          "src": "/public/mount/opt/apps/pkg-manager/main.js"
+        },
+        {
+          "dest": "loader.js",
+          "src": "/public/mount/opt/apps/pkg-manager/loader.js"
+        }
       ],
       "main": "main.js"
     },
@@ -111,7 +152,12 @@
       "category": "System",
       "author": "bootstrapper-js",
       "commandName": "ui.spotlight",
-      "files": [{ "dest": "main.js", "src": "/public/mount/home/user1/apps/spotlight.js" }],
+      "files": [
+        {
+          "dest": "main.js",
+          "src": "/public/mount/opt/apps/spotlight/main.js"
+        }
+      ],
       "main": "main.js"
     },
     {
@@ -123,7 +169,12 @@
       "category": "System",
       "author": "bootstrapper-js",
       "commandName": "ui.task-manager",
-      "files": [{ "dest": "main.js", "src": "/public/mount/home/user1/apps/task-manager.js" }],
+      "files": [
+        {
+          "dest": "main.js",
+          "src": "/public/mount/opt/apps/task-manager/main.js"
+        }
+      ],
       "main": "main.js"
     },
     {
@@ -135,7 +186,12 @@
       "category": "Dev",
       "author": "bootstrapper-js",
       "commandName": "ui.dev-utils",
-      "files": [{ "dest": "main.js", "src": "/public/mount/home/user1/apps/dev-utils.js" }],
+      "files": [
+        {
+          "dest": "main.js",
+          "src": "/public/mount/opt/apps/dev-utils/main.js"
+        }
+      ],
       "main": "main.js"
     },
     {
@@ -147,7 +203,12 @@
       "category": "Dev",
       "author": "bootstrapper-js",
       "commandName": "ui.sqlite",
-      "files": [{ "dest": "main.js", "src": "/public/mount/home/user1/apps/sqlite-browser.js" }],
+      "files": [
+        {
+          "dest": "main.js",
+          "src": "/public/mount/opt/apps/sqlite-browser/main.js"
+        }
+      ],
       "main": "main.js"
     },
     {
@@ -159,7 +220,12 @@
       "category": "Dev",
       "author": "bootstrapper-js",
       "commandName": "ui.mermaid",
-      "files": [{ "dest": "main.js", "src": "/public/mount/home/user1/apps/mermaid-viewer.js" }],
+      "files": [
+        {
+          "dest": "main.js",
+          "src": "/public/mount/opt/apps/mermaid-viewer/main.js"
+        }
+      ],
       "main": "main.js"
     },
     {
@@ -171,7 +237,12 @@
       "category": "Dev",
       "author": "bootstrapper-js",
       "commandName": "ui.diff",
-      "files": [{ "dest": "main.js", "src": "/public/mount/home/user1/apps/diff.js" }],
+      "files": [
+        {
+          "dest": "main.js",
+          "src": "/public/mount/opt/apps/diff-viewer/main.js"
+        }
+      ],
       "main": "main.js"
     },
     {
@@ -184,8 +255,14 @@
       "author": "bootstrapper-js",
       "commandName": "ui.python",
       "files": [
-        { "dest": "main.js", "src": "/public/mount/home/user1/apps/python.js" },
-        { "dest": "python.html", "src": "/public/mount/home/user1/apps/python.html" }
+        {
+          "dest": "main.js",
+          "src": "/public/mount/opt/apps/python-repl/main.js"
+        },
+        {
+          "dest": "python.html",
+          "src": "/public/mount/opt/apps/python-repl/python.html"
+        }
       ],
       "main": "main.js"
     },
@@ -199,8 +276,14 @@
       "author": "bootstrapper-js",
       "commandName": "ui.nn-ide",
       "files": [
-        { "dest": "main.js", "src": "/public/mount/home/user1/apps/nn-ide.js" },
-        { "dest": "nn-ide.html", "src": "/public/mount/home/user1/apps/nn-ide.html" }
+        {
+          "dest": "main.js",
+          "src": "/public/mount/opt/apps/nn-ide/main.js"
+        },
+        {
+          "dest": "nn-ide.html",
+          "src": "/public/mount/opt/apps/nn-ide/nn-ide.html"
+        }
       ],
       "main": "main.js"
     },
@@ -214,8 +297,14 @@
       "author": "bootstrapper-js",
       "commandName": "ui.markdown",
       "files": [
-        { "dest": "main.js", "src": "/public/mount/home/user1/apps/markdown.js" },
-        { "dest": "md-renderer.html", "src": "/public/mount/home/user1/apps/md-renderer.html" }
+        {
+          "dest": "main.js",
+          "src": "/public/mount/opt/apps/markdown-reader/main.js"
+        },
+        {
+          "dest": "md-renderer.html",
+          "src": "/public/mount/opt/apps/markdown-reader/md-renderer.html"
+        }
       ],
       "main": "main.js"
     },
@@ -228,7 +317,12 @@
       "category": "Office",
       "author": "bootstrapper-js",
       "commandName": "ui.csv-viewer",
-      "files": [{ "dest": "main.js", "src": "/public/mount/home/user1/apps/csv-viewer.js" }],
+      "files": [
+        {
+          "dest": "main.js",
+          "src": "/public/mount/opt/apps/csv-viewer/main.js"
+        }
+      ],
       "main": "main.js"
     },
     {
@@ -241,8 +335,14 @@
       "author": "bootstrapper-js",
       "commandName": "ui.dashboard",
       "files": [
-        { "dest": "main.js", "src": "/public/mount/home/user1/apps/dashboard.js" },
-        { "dest": "dashboard.html", "src": "/public/mount/home/user1/apps/dashboard.html" }
+        {
+          "dest": "main.js",
+          "src": "/public/mount/opt/apps/dashboard/main.js"
+        },
+        {
+          "dest": "dashboard.html",
+          "src": "/public/mount/opt/apps/dashboard/dashboard.html"
+        }
       ],
       "main": "main.js"
     },
@@ -255,7 +355,12 @@
       "category": "Web",
       "author": "bootstrapper-js",
       "commandName": "ui.bookmarks",
-      "files": [{ "dest": "main.js", "src": "/public/mount/home/user1/apps/bookmarks.js" }],
+      "files": [
+        {
+          "dest": "main.js",
+          "src": "/public/mount/opt/apps/bookmarks/main.js"
+        }
+      ],
       "main": "main.js"
     },
     {
@@ -268,8 +373,14 @@
       "author": "bootstrapper-js",
       "commandName": "webamp",
       "files": [
-        { "dest": "main.js", "src": "/public/mount/home/user1/apps/wamp.js" },
-        { "dest": "WAMP.html", "src": "/public/mount/home/user1/apps/WAMP.html" }
+        {
+          "dest": "main.js",
+          "src": "/public/mount/opt/apps/wamp-client/main.js"
+        },
+        {
+          "dest": "WAMP.html",
+          "src": "/public/mount/opt/apps/wamp-client/WAMP.html"
+        }
       ],
       "main": "main.js"
     },
@@ -281,7 +392,12 @@
       "icon": "video_call",
       "category": "Web",
       "author": "bootstrapper-js",
-      "files": [{ "dest": "main.html", "src": "/public/mount/home/user1/apps/WebRTC.html" }],
+      "files": [
+        {
+          "dest": "main.html",
+          "src": "/public/mount/opt/apps/webrtc/main.html"
+        }
+      ],
       "main": "main.html"
     },
     {
@@ -292,7 +408,12 @@
       "icon": "lock",
       "category": "Tools",
       "author": "bootstrapper-js",
-      "files": [{ "dest": "main.html", "src": "/public/mount/home/user1/apps/TOTP.html" }],
+      "files": [
+        {
+          "dest": "main.html",
+          "src": "/public/mount/opt/apps/totp-auth/main.html"
+        }
+      ],
       "main": "main.html"
     },
     {
@@ -303,7 +424,12 @@
       "icon": "storage",
       "category": "Tools",
       "author": "bootstrapper-js",
-      "files": [{ "dest": "main.html", "src": "/public/mount/home/user1/apps/FS.html" }],
+      "files": [
+        {
+          "dest": "main.html",
+          "src": "/public/mount/opt/apps/fs-inspector/main.html"
+        }
+      ],
       "main": "main.html"
     },
     {
@@ -314,7 +440,12 @@
       "icon": "sports_esports",
       "category": "Games",
       "author": "bootstrapper-js",
-      "files": [{ "dest": "main.html", "src": "/public/mount/home/user1/projects/Snake.html" }],
+      "files": [
+        {
+          "dest": "main.html",
+          "src": "/public/mount/opt/apps/snake-game/main.html"
+        }
+      ],
       "main": "main.html"
     },
     {
@@ -325,7 +456,12 @@
       "icon": "psychology",
       "category": "AI",
       "author": "bootstrapper-js",
-      "files": [{ "dest": "main.html", "src": "/public/mount/home/user1/projects/Snake-LSTM.html" }],
+      "files": [
+        {
+          "dest": "main.html",
+          "src": "/public/mount/opt/apps/snake-lstm/main.html"
+        }
+      ],
       "main": "main.html"
     },
     {
@@ -336,7 +472,12 @@
       "icon": "model_training",
       "category": "AI",
       "author": "bootstrapper-js",
-      "files": [{ "dest": "main.html", "src": "/public/mount/home/user1/projects/Snake-QLearning.html" }],
+      "files": [
+        {
+          "dest": "main.html",
+          "src": "/public/mount/opt/apps/snake-qlearning/main.html"
+        }
+      ],
       "main": "main.html"
     },
     {
@@ -347,7 +488,12 @@
       "icon": "view_in_ar",
       "category": "Demos",
       "author": "bootstrapper-js",
-      "files": [{ "dest": "main.html", "src": "/public/mount/home/user1/projects/WebGL.html" }],
+      "files": [
+        {
+          "dest": "main.html",
+          "src": "/public/mount/opt/apps/webgl-demo/main.html"
+        }
+      ],
       "main": "main.html"
     },
     {
@@ -358,7 +504,12 @@
       "icon": "public",
       "category": "Demos",
       "author": "bootstrapper-js",
-      "files": [{ "dest": "main.html", "src": "/public/mount/home/user1/projects/WebGL-Earth.html" }],
+      "files": [
+        {
+          "dest": "main.html",
+          "src": "/public/mount/opt/apps/webgl-earth/main.html"
+        }
+      ],
       "main": "main.html"
     },
     {
@@ -369,7 +520,12 @@
       "icon": "deployed_code",
       "category": "Demos",
       "author": "bootstrapper-js",
-      "files": [{ "dest": "main.html", "src": "/public/mount/home/user1/projects/3js.html" }],
+      "files": [
+        {
+          "dest": "main.html",
+          "src": "/public/mount/opt/apps/threejs-demo/main.html"
+        }
+      ],
       "main": "main.html"
     },
     {
@@ -380,7 +536,12 @@
       "icon": "blur_on",
       "category": "Demos",
       "author": "bootstrapper-js",
-      "files": [{ "dest": "main.html", "src": "/public/mount/home/user1/projects/3js-flow.html" }],
+      "files": [
+        {
+          "dest": "main.html",
+          "src": "/public/mount/opt/apps/threejs-flow/main.html"
+        }
+      ],
       "main": "main.html"
     },
     {
@@ -392,12 +553,30 @@
       "category": "Demos",
       "author": "bootstrapper-js",
       "files": [
-        { "dest": "index.html", "src": "/public/mount/home/user1/projects/GLSL/index.html" },
-        { "dest": "index.js", "src": "/public/mount/home/user1/projects/GLSL/index.js" },
-        { "dest": "fragmentShader.js", "src": "/public/mount/home/user1/projects/GLSL/fragmentShader.js" },
-        { "dest": "vertexShader.js", "src": "/public/mount/home/user1/projects/GLSL/vertexShader.js" },
-        { "dest": "lib/jsm/controls/OrbitControls.js", "src": "/public/mount/home/user1/projects/GLSL/lib/jsm/controls/OrbitControls.js" },
-        { "dest": "lib/three.module.js", "src": "/public/mount/home/user1/projects/GLSL/lib/three.module.js" }
+        {
+          "dest": "index.html",
+          "src": "/public/mount/opt/apps/glsl-shader/index.html"
+        },
+        {
+          "dest": "index.js",
+          "src": "/public/mount/opt/apps/glsl-shader/index.js"
+        },
+        {
+          "dest": "fragmentShader.js",
+          "src": "/public/mount/opt/apps/glsl-shader/fragmentShader.js"
+        },
+        {
+          "dest": "vertexShader.js",
+          "src": "/public/mount/opt/apps/glsl-shader/vertexShader.js"
+        },
+        {
+          "dest": "lib/jsm/controls/OrbitControls.js",
+          "src": "/public/mount/opt/apps/glsl-shader/lib/jsm/controls/OrbitControls.js"
+        },
+        {
+          "dest": "lib/three.module.js",
+          "src": "/public/mount/opt/apps/glsl-shader/lib/three.module.js"
+        }
       ],
       "main": "index.html"
     },
@@ -409,7 +588,12 @@
       "icon": "code",
       "category": "Editors",
       "author": "bootstrapper-js",
-      "files": [{ "dest": "main.html", "src": "/public/mount/home/user1/projects/VSCode.html" }],
+      "files": [
+        {
+          "dest": "main.html",
+          "src": "/public/mount/opt/apps/vscode-online/main.html"
+        }
+      ],
       "main": "main.html"
     },
     {
@@ -420,7 +604,12 @@
       "icon": "analytics",
       "category": "Tools",
       "author": "bootstrapper-js",
-      "files": [{ "dest": "main.html", "src": "/public/mount/home/user1/projects/Analyze.html" }],
+      "files": [
+        {
+          "dest": "main.html",
+          "src": "/public/mount/opt/apps/analyze/main.html"
+        }
+      ],
       "main": "main.html"
     },
     {
@@ -431,7 +620,12 @@
       "icon": "bar_chart",
       "category": "Tools",
       "author": "bootstrapper-js",
-      "files": [{ "dest": "main.html", "src": "/public/mount/home/user1/projects/Anova.html" }],
+      "files": [
+        {
+          "dest": "main.html",
+          "src": "/public/mount/opt/apps/anova/main.html"
+        }
+      ],
       "main": "main.html"
     },
     {
@@ -442,7 +636,12 @@
       "icon": "accessibility",
       "category": "Tools",
       "author": "bootstrapper-js",
-      "files": [{ "dest": "main.html", "src": "/public/mount/home/user1/projects/screen-reader.html" }],
+      "files": [
+        {
+          "dest": "main.html",
+          "src": "/public/mount/opt/apps/screen-reader/main.html"
+        }
+      ],
       "main": "main.html"
     }
   ]

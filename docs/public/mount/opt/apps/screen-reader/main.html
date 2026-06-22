@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Screen Reader</title>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<style>
+:root {
+  --bg:      #1a1b23;
+  --surface: #22232e;
+  --s2:      #2a2b38;
+  --s3:      #33354a;
+  --border:  #3a3c4e;
+  --text:    #cdd6f4;
+  --dim:     #6c7086;
+  --bright:  #f0f4ff;
+  --accent:  #89b4fa;
+  --green:   #a6e3a1;
+  --yellow:  #f9e2af;
+  --red:     #f38ba8;
+  --teal:    #94e2d5;
+  --r:       6px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;overflow:hidden}
+#app{display:flex;flex-direction:column;height:100%}
+
+/* Header */
+#hdr{display:flex;align-items:center;gap:8px;padding:7px 12px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap}
+#logo{font-size:14px;font-weight:700;color:var(--bright);white-space:nowrap;display:flex;align-items:center;gap:6px}
+#logo span{font-size:18px}
+.sp{flex:1}
+.btn{padding:5px 12px;border-radius:var(--r);border:1px solid var(--border);background:var(--s2);color:var(--text);cursor:pointer;font-size:12px;white-space:nowrap;transition:background .1s;display:inline-flex;align-items:center;gap:4px}
+.btn:hover{background:var(--s3)}
+.btn.pri{background:var(--accent);color:#000;border-color:var(--accent);font-weight:600}
+.btn.pri:hover{opacity:.9}
+.btn.danger{color:var(--red);border-color:#5c1f2e}
+.btn.danger:hover{background:#2e1020}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+#rec-dot{width:8px;height:8px;border-radius:50%;background:var(--dim);flex-shrink:0;transition:background .3s}
+#rec-dot.active{background:var(--red);box-shadow:0 0 6px var(--red);animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* Body */
+#body{display:flex;flex:1;overflow:hidden}
+
+/* Left controls */
+#ctrl{width:200px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:10px}
+#ctrl::-webkit-scrollbar{width:3px} #ctrl::-webkit-scrollbar-thumb{background:var(--border)}
+.sec-lbl{font-size:9px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
+.ctrl-row{display:flex;flex-direction:column;gap:3px}
+.ctrl-row label{font-size:11px;color:var(--dim)}
+.ctrl-row select,.ctrl-row input[type=range],.ctrl-row input[type=number]{width:100%;padding:3px 7px;background:var(--s2);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:12px;outline:none;appearance:none}
+.ctrl-row select:focus,.ctrl-row input:focus{border-color:var(--accent)}
+.ctrl-row .val{font-size:11px;font-weight:700;color:var(--bright);text-align:right}
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:3px 0}
+.toggle-row span{font-size:11px;color:var(--dim)}
+.tog{width:32px;height:18px;border-radius:9px;background:var(--s3);border:1px solid var(--border);cursor:pointer;position:relative;transition:background .2s;flex-shrink:0}
+.tog.on{background:var(--accent)}
+.tog::after{content:'';position:absolute;width:12px;height:12px;border-radius:50%;background:#fff;top:2px;left:2px;transition:left .2s}
+.tog.on::after{left:16px}
+.divider{border:none;border-top:1px solid var(--border)}
+
+/* Canvas area */
+#cv-wrap{flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--bg);position:relative}
+#cv-scroll{flex:1;overflow:auto;display:flex;align-items:flex-start;justify-content:flex-start;padding:8px}
+#cv-scroll::-webkit-scrollbar{width:5px;height:5px} #cv-scroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+#c{display:block;border:1px solid var(--border);border-radius:var(--r);max-width:none}
+#placeholder{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;height:100%;color:var(--dim);font-size:13px;pointer-events:none}
+#placeholder .icon{font-size:48px;opacity:.3}
+
+/* Scan region overlay */
+#region-overlay{position:absolute;inset:0;cursor:crosshair;display:none;z-index:10}
+#region-box{position:absolute;border:2px dashed var(--accent);background:rgba(137,180,250,.08);pointer-events:none;display:none}
+
+/* Right text panel */
+#txt-panel{width:280px;flex-shrink:0;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column}
+#txt-hdr{padding:6px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px;flex-shrink:0}
+#txt-hdr .title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--dim)}
+#txt-body{flex:1;overflow-y:auto;padding:10px;font-family:monospace;font-size:12px;line-height:1.7;white-space:pre-wrap;word-break:break-word;color:var(--text)}
+#txt-body::-webkit-scrollbar{width:3px} #txt-body::-webkit-scrollbar-thumb{background:var(--border)}
+#txt-body .word-conf-high{color:var(--green)}
+#txt-body .word-conf-mid{color:var(--yellow)}
+#txt-body .word-conf-low{color:var(--red)}
+#txt-body .empty{color:var(--dim);font-style:italic;font-family:inherit}
+#txt-foot{padding:6px 10px;border-top:1px solid var(--border);display:flex;align-items:center;gap:6px;font-size:10px;color:var(--dim);flex-shrink:0;flex-wrap:wrap}
+
+/* Status bar */
+#status{display:flex;align-items:center;gap:14px;padding:4px 12px;background:var(--surface);border-top:1px solid var(--border);font-size:10px;color:var(--dim);flex-shrink:0;flex-wrap:wrap}
+.stat{display:flex;align-items:center;gap:4px}
+.stat-val{color:var(--bright);font-weight:600;font-variant-numeric:tabular-nums}
+#ocr-prog{height:3px;background:var(--s3);border-radius:2px;overflow:hidden;width:80px;flex-shrink:0}
+#ocr-bar{height:100%;background:var(--accent);width:0;transition:width .3s}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- Header -->
+  <div id="hdr">
+    <div id="logo"><span>🔍</span> Screen Reader</div>
+    <div id="rec-dot"></div>
+    <button class="btn pri" id="start-btn" onclick="startCapture()">▶ Start</button>
+    <button class="btn danger" id="stop-btn" onclick="stopCapture()" disabled>■ Stop</button>
+    <button class="btn" id="snap-btn" onclick="snapshot()" disabled title="Single-shot OCR">📸 Snapshot</button>
+    <button class="btn" id="region-btn" onclick="toggleRegionMode()" title="Draw a region to scan">⬚ Region</button>
+    <div class="sp"></div>
+    <button class="btn" onclick="uploadImage()" title="OCR an image file">📂 Open Image</button>
+    <button class="btn" onclick="copyText()" title="Copy extracted text">⎘ Copy</button>
+    <button class="btn" onclick="clearText()">✕ Clear</button>
+  </div>
+
+  <div id="body">
+
+    <!-- Left: Controls -->
+    <div id="ctrl">
+
+      <div>
+        <div class="sec-lbl">OCR</div>
+        <div class="ctrl-row">
+          <label>Language</label>
+          <select id="lang">
+            <option value="eng">English</option>
+            <option value="fra">French</option>
+            <option value="deu">German</option>
+            <option value="spa">Spanish</option>
+            <option value="ita">Italian</option>
+            <option value="por">Portuguese</option>
+            <option value="rus">Russian</option>
+            <option value="chi_sim">Chinese (Simplified)</option>
+            <option value="jpn">Japanese</option>
+            <option value="kor">Korean</option>
+            <option value="ara">Arabic</option>
+          </select>
+        </div>
+        <div class="ctrl-row" style="margin-top:8px">
+          <label>Interval (s) <span class="val" id="iv-val">2</span></label>
+          <input type="range" id="interval" min="0.5" max="10" step="0.5" value="2" oninput="document.getElementById('iv-val').textContent=this.value">
+        </div>
+        <div class="ctrl-row" style="margin-top:8px">
+          <label>Min confidence <span class="val" id="conf-val">60%</span></label>
+          <input type="range" id="min-conf" min="0" max="100" step="5" value="60" oninput="document.getElementById('conf-val').textContent=this.value+'%'">
+        </div>
+        <div class="ctrl-row" style="margin-top:8px">
+          <label>Min word area (px²) <span class="val" id="area-val">200</span></label>
+          <input type="range" id="min-area" min="0" max="2000" step="100" value="200" oninput="document.getElementById('area-val').textContent=this.value">
+        </div>
+      </div>
+
+      <hr class="divider">
+
+      <div>
+        <div class="sec-lbl">Overlays</div>
+        <div class="toggle-row"><span>Line boxes</span><div class="tog on" id="tog-lines" onclick="toggle(this)"></div></div>
+        <div class="toggle-row"><span>Word boxes</span><div class="tog on" id="tog-words" onclick="toggle(this)"></div></div>
+        <div class="toggle-row"><span>Box labels</span><div class="tog" id="tog-labels" onclick="toggle(this)"></div></div>
+        <div class="toggle-row"><span>Confidence colour</span><div class="tog on" id="tog-confcol" onclick="toggle(this)"></div></div>
+      </div>
+
+      <hr class="divider">
+
+      <div>
+        <div class="sec-lbl">Text output</div>
+        <div class="toggle-row"><span>Auto-scroll</span><div class="tog on" id="tog-scroll" onclick="toggle(this)"></div></div>
+        <div class="toggle-row"><span>Confidence highlight</span><div class="tog on" id="tog-txthigh" onclick="toggle(this)"></div></div>
+        <div class="toggle-row"><span>Append mode</span><div class="tog" id="tog-append" onclick="toggle(this)"></div></div>
+      </div>
+
+    </div>
+
+    <!-- Center: canvas -->
+    <div id="cv-wrap">
+      <div id="cv-scroll">
+        <div id="placeholder">
+          <div class="icon">🖥️</div>
+          <div>Click <strong>Start</strong> to share your screen</div>
+          <div style="font-size:11px">or <strong>Open Image</strong> to OCR a file</div>
+        </div>
+        <canvas id="c" style="display:none"></canvas>
+      </div>
+      <div id="region-overlay"></div>
+      <div id="region-box"></div>
+    </div>
+
+    <!-- Right: text output -->
+    <div id="txt-panel">
+      <div id="txt-hdr">
+        <div class="title">Extracted Text</div>
+        <div class="sp"></div>
+        <span id="word-count" style="font-size:10px;color:var(--dim)">0 words</span>
+      </div>
+      <div id="txt-body"><span class="empty">No text detected yet…</span></div>
+      <div id="txt-foot">
+        <span id="char-count">0 chars</span>
+        <span>·</span>
+        <span id="avg-conf">—</span>
+        <div class="sp"></div>
+        <span id="last-ocr-time">—</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Status bar -->
+  <div id="status">
+    <div class="stat">State: <span class="stat-val" id="st-state">Idle</span></div>
+    <div id="ocr-prog"><div id="ocr-bar"></div></div>
+    <div class="stat">OCR time: <span class="stat-val" id="st-time">—</span></div>
+    <div class="stat">Words: <span class="stat-val" id="st-words">0</span></div>
+    <div class="stat">Avg conf: <span class="stat-val" id="st-conf">—</span></div>
+    <div class="stat">FPS: <span class="stat-val" id="st-fps">—</span></div>
+    <div class="sp"></div>
+    <div id="st-region" style="color:var(--teal);display:none">Region active</div>
+  </div>
+
+</div>
+
+<!-- Hidden file input for image upload -->
+<input type="file" id="file-input" accept="image/*" style="display:none" onchange="handleImageFile(this)">
+
+<script>
+const canvas   = document.getElementById('c');
+const ctx      = canvas.getContext('2d');
+const txtBody  = document.getElementById('txt-body');
+const placeholder = document.getElementById('placeholder');
+
+let stream, video, running=false, busy=false;
+let intervalTimer=null, frameCount=0, fpsTimer=null, lastFps=0;
+let regionActive=false, regionDrawing=false, regionStart={x:0,y:0}, region=null;
+
+// ── Toggle helper ──────────────────────────────────────────────────────────
+function toggle(el) { el.classList.toggle('on'); }
+function tog(id) { return document.getElementById(id).classList.contains('on'); }
+
+// ── Start screen capture ───────────────────────────────────────────────────
+async function startCapture() {
+  try {
+    stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+    video  = document.createElement('video');
+    video.srcObject = stream;
+    await video.play();
+    canvas.width  = video.videoWidth;
+    canvas.height = video.videoHeight;
+    showCanvas();
+    running = true;
+    setBtn(true);
+    setState('Live');
+    startFps();
+    scheduleOCR();
+    stream.getVideoTracks()[0].addEventListener('ended', stopCapture);
+  } catch(e) {
+    setState('Error'); console.error(e);
+  }
+}
+
+// ── Stop ───────────────────────────────────────────────────────────────────
+function stopCapture() {
+  running = false;
+  clearTimeout(intervalTimer);
+  stopFps();
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  setBtn(false);
+  setState('Stopped');
+  document.getElementById('rec-dot').classList.remove('active');
+}
+
+// ── Snapshot (single shot) ─────────────────────────────────────────────────
+async function snapshot() {
+  if (!video || !running) return;
+  drawFrame();
+  await runOCR();
+}
+
+// ── Image file upload ──────────────────────────────────────────────────────
+function uploadImage() { document.getElementById('file-input').click(); }
+
+function handleImageFile(input) {
+  const file = input.files[0]; if (!file) return;
+  const url  = URL.createObjectURL(file);
+  const img  = new Image();
+  img.onload = async () => {
+    canvas.width  = img.width;
+    canvas.height = img.height;
+    ctx.drawImage(img, 0, 0);
+    showCanvas();
+    URL.revokeObjectURL(url);
+    setState('Scanning…');
+    await runOCR();
+    setState('Done');
+  };
+  img.src = url;
+  input.value='';
+}
+
+// ── OCR schedule ──────────────────────────────────────────────────────────
+function scheduleOCR() {
+  if (!running) return;
+  const iv = parseFloat(document.getElementById('interval').value) * 1000;
+  intervalTimer = setTimeout(async () => {
+    if (!running) return;
+    drawFrame();
+    await runOCR();
+    scheduleOCR();
+  }, iv);
+}
+
+function drawFrame() {
+  if (video) ctx.drawImage(video, 0, 0);
+  frameCount++;
+}
+
+// ── Core OCR ──────────────────────────────────────────────────────────────
+async function runOCR() {
+  if (busy) return;
+  busy = true;
+  document.getElementById('rec-dot').classList.add('active');
+  setBar(10);
+
+  const t0 = Date.now();
+  const lang = document.getElementById('lang').value;
+  const minConf = parseInt(document.getElementById('min-conf').value);
+  const minArea = parseInt(document.getElementById('min-area').value);
+
+  // Crop to region if set
+  let src = canvas;
+  if (region) {
+    const tmp = document.createElement('canvas');
+    tmp.width=region.w; tmp.height=region.h;
+    tmp.getContext('2d').drawImage(canvas, region.x, region.y, region.w, region.h, 0, 0, region.w, region.h);
+    src = tmp;
+  }
+
+  try {
+    setBar(30);
+    const result = await Tesseract.recognize(src, lang);
+    setBar(80);
+
+    // Redraw clean frame
+    if (video) ctx.drawImage(video, 0, 0);
+    else if (region) ctx.clearRect(0,0,0,0); // static image: keep as-is
+
+    const offsetX = region ? region.x : 0;
+    const offsetY = region ? region.y : 0;
+    const showLines  = tog('tog-lines');
+    const showWords  = tog('tog-words');
+    const showLabels = tog('tog-labels');
+    const confCol    = tog('tog-confcol');
+
+    // Draw region outline if active
+    if (region) {
+      ctx.strokeStyle='rgba(137,180,250,.6)';
+      ctx.lineWidth=2;
+      ctx.strokeRect(region.x, region.y, region.w, region.h);
+    }
+
+    let fullText='', totalConf=0, wordCount=0;
+    const wordData=[]; // for rich text
+
+    if (showLines && result.data.lines) {
+      for (const line of result.data.lines) {
+        const {x0,y0,x1,y1}=line.bbox;
+        ctx.strokeStyle='rgba(249,226,175,.8)';
+        ctx.lineWidth=2;
+        ctx.strokeRect(offsetX+x0, offsetY+y0, x1-x0, y1-y0);
+      }
+    }
+
+    if (result.data.words) {
+      for (const word of result.data.words) {
+        const {text, confidence, bbox:{x0,y0,x1,y1}} = word;
+        const w=x1-x0, h=y1-y0, area=w*h;
+        if (area < minArea || confidence < minConf) continue;
+
+        const col = confidence>=80 ? 'rgba(166,227,161,.9)' : confidence>=50 ? 'rgba(249,226,175,.9)' : 'rgba(243,139,168,.9)';
+
+        if (showWords) {
+          ctx.strokeStyle = confCol ? col : 'rgba(137,180,250,.8)';
+          ctx.lineWidth=1.5;
+          ctx.strokeRect(offsetX+x0, offsetY+y0, w, h);
+        }
+
+        if (showLabels) {
+          ctx.fillStyle = confCol ? col : 'rgba(137,180,250,.9)';
+          ctx.font = '11px sans-serif';
+          ctx.fillText(text, offsetX+x0, offsetY+Math.max(12, y0-2));
+        }
+
+        wordData.push({text, confidence});
+        totalConf += confidence; wordCount++;
+      }
+    }
+
+    // Full text from lines
+    fullText = (result.data.lines||[]).map(l=>l.text).join('\n').trim();
+
+    updateTextPanel(fullText, wordData, totalConf, wordCount);
+
+    const elapsed = Date.now()-t0;
+    document.getElementById('st-time').textContent = elapsed+'ms';
+    document.getElementById('last-ocr-time').textContent = new Date().toLocaleTimeString();
+
+    setBar(100);
+    setTimeout(()=>setBar(0), 400);
+  } catch(e) {
+    console.error(e); setState('Error');
+  }
+
+  document.getElementById('rec-dot').classList.remove('active');
+  if (running) document.getElementById('rec-dot').classList.add('active');
+  busy = false;
+}
+
+// ── Text panel ────────────────────────────────────────────────────────────
+function updateTextPanel(text, wordData, totalConf, wordCount) {
+  const avgConf = wordCount ? Math.round(totalConf/wordCount) : null;
+  const confStr = avgConf!=null ? avgConf+'%' : '—';
+  const chars   = text.length;
+
+  document.getElementById('word-count').textContent = wordCount + ' words';
+  document.getElementById('char-count').textContent = chars + ' chars';
+  document.getElementById('avg-conf').textContent   = 'avg conf: ' + confStr;
+  document.getElementById('st-words').textContent   = wordCount;
+  document.getElementById('st-conf').textContent    = confStr;
+
+  const append    = tog('tog-append');
+  const highlight = tog('tog-txthigh');
+
+  if (!text) return;
+
+  if (highlight) {
+    // Build rich HTML with confidence-coloured spans per word
+    // We only have per-word confidence from wordData; use plain text as base
+    const html = wordData.map(({text:t, confidence:c}) => {
+      const cls = c>=80 ? 'word-conf-high' : c>=50 ? 'word-conf-mid' : 'word-conf-low';
+      return `<span class="${cls}" title="${Math.round(c)}%">${escHtml(t)}</span>`;
+    }).join(' ');
+
+    if (append) {
+      txtBody.innerHTML += (txtBody.innerHTML ? '\n' : '') + html;
+    } else {
+      txtBody.innerHTML = html;
+    }
+  } else {
+    if (append) {
+      txtBody.textContent += (txtBody.textContent ? '\n' : '') + text;
+    } else {
+      txtBody.textContent = text;
+    }
+  }
+
+  if (tog('tog-scroll')) txtBody.scrollTop = txtBody.scrollHeight;
+}
+
+function escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function copyText() {
+  const t = txtBody.textContent.trim();
+  if (!t) return;
+  navigator.clipboard.writeText(t).catch(()=>{});
+}
+
+function clearText() {
+  txtBody.innerHTML = '<span class="empty">No text detected yet…</span>';
+  document.getElementById('word-count').textContent='0 words';
+  document.getElementById('char-count').textContent='0 chars';
+  document.getElementById('avg-conf').textContent='—';
+  document.getElementById('st-words').textContent='0';
+  document.getElementById('st-conf').textContent='—';
+}
+
+// ── Region selector ────────────────────────────────────────────────────────
+function toggleRegionMode() {
+  regionActive = !regionActive;
+  const overlay = document.getElementById('region-overlay');
+  const btn     = document.getElementById('region-btn');
+  const lbl     = document.getElementById('st-region');
+  if (regionActive) {
+    overlay.style.display = 'block';
+    btn.style.background  = 'var(--accent)';
+    btn.style.color       = '#000';
+  } else {
+    overlay.style.display = 'none';
+    btn.style.background  = '';
+    btn.style.color       = '';
+    region = null;
+    document.getElementById('region-box').style.display='none';
+    lbl.style.display='none';
+  }
+}
+
+(function setupRegion(){
+  const overlay = document.getElementById('region-overlay');
+  const box     = document.getElementById('region-box');
+  const scroll  = document.getElementById('cv-scroll');
+
+  overlay.addEventListener('mousedown', e => {
+    if (!regionActive) return;
+    regionDrawing = true;
+    const r = scroll.getBoundingClientRect();
+    regionStart = { x: e.clientX - r.left + scroll.scrollLeft, y: e.clientY - r.top + scroll.scrollTop };
+    box.style.cssText=`display:block;left:${regionStart.x}px;top:${regionStart.y}px;width:0;height:0`;
+  });
+  overlay.addEventListener('mousemove', e => {
+    if (!regionDrawing) return;
+    const r = scroll.getBoundingClientRect();
+    const cx = e.clientX - r.left + scroll.scrollLeft;
+    const cy = e.clientY - r.top  + scroll.scrollTop;
+    const x=Math.min(cx,regionStart.x), y=Math.min(cy,regionStart.y);
+    const w=Math.abs(cx-regionStart.x), h=Math.abs(cy-regionStart.y);
+    box.style.left=x+'px'; box.style.top=y+'px';
+    box.style.width=w+'px'; box.style.height=h+'px';
+  });
+  overlay.addEventListener('mouseup', e => {
+    if (!regionDrawing) return;
+    regionDrawing = false;
+    const r = scroll.getBoundingClientRect();
+    const cx = e.clientX - r.left + scroll.scrollLeft;
+    const cy = e.clientY - r.top  + scroll.scrollTop;
+    const x=Math.min(cx,regionStart.x), y=Math.min(cy,regionStart.y);
+    const w=Math.abs(cx-regionStart.x), h=Math.abs(cy-regionStart.y);
+    if (w<10||h<10) { region=null; box.style.display='none'; return; }
+    region={x:Math.round(x-8),y:Math.round(y-8),w:Math.round(w),h:Math.round(h)};
+    document.getElementById('st-region').style.display='block';
+    toggleRegionMode(); // exit draw mode after region set
+  });
+})();
+
+// ── FPS counter ────────────────────────────────────────────────────────────
+function startFps() {
+  frameCount=0;
+  fpsTimer = setInterval(()=>{
+    document.getElementById('st-fps').textContent = frameCount;
+    frameCount=0;
+  }, 1000);
+}
+function stopFps() { clearInterval(fpsTimer); document.getElementById('st-fps').textContent='—'; }
+
+// ── UI helpers ─────────────────────────────────────────────────────────────
+function showCanvas() {
+  placeholder.style.display='none';
+  canvas.style.display='block';
+}
+function setState(s) { document.getElementById('st-state').textContent=s; }
+function setBar(pct) { document.getElementById('ocr-bar').style.width=pct+'%'; }
+function setBtn(active) {
+  document.getElementById('start-btn').disabled = active;
+  document.getElementById('stop-btn').disabled  = !active;
+  document.getElementById('snap-btn').disabled  = !active;
+}
+</script>
+</body>
+</html>

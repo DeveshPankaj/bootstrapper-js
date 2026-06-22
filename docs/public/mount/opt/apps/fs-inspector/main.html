@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>File System</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #1e1e2e;
+      --sidebar: #181825;
+      --sidebar-hover: #252538;
+      --sidebar-active: #313147;
+      --border: #313244;
+      --text: #cdd6f4;
+      --muted: #6c7086;
+      --accent: #89b4fa;
+      --accent2: #a6e3a1;
+      --accent3: #f38ba8;
+      --folder: #f9e2af;
+      --toolbar: #11111b;
+      --input-bg: #24243a;
+      --button-bg: #313244;
+      --button-hover: #45475a;
+      --statusbar: #181825;
+      --editor: #1e1e2e;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+      font-size: 13px;
+    }
+
+    /* ── Toolbar ── */
+    #toolbar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      background: var(--toolbar);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    #toolbar .toolbar-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-right: 4px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 10px;
+      border-radius: 6px;
+      border: none;
+      background: var(--button-bg);
+      color: var(--text);
+      font-size: 12px;
+      cursor: pointer;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+    .btn:hover { background: var(--button-hover); }
+    .btn.primary { background: var(--accent); color: #11111b; font-weight: 600; }
+    .btn.primary:hover { background: #b4c9f8; }
+    #toolbar .spacer { flex: 1; }
+
+    /* ── Main layout ── */
+    #main {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── Sidebar ── */
+    #sidebar {
+      width: 220px;
+      background: var(--sidebar);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    #sidebar-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 10px 6px;
+      border-bottom: 1px solid var(--border);
+    }
+    #sidebar-header .label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    #breadcrumb {
+      font-size: 11px;
+      color: var(--muted);
+      padding: 4px 10px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      border-bottom: 1px solid var(--border);
+      min-height: 22px;
+    }
+    #breadcrumb b { color: var(--text); }
+    #breadcrumb .crumb { color: var(--accent); cursor: pointer; }
+    #breadcrumb .crumb:hover { text-decoration: underline; }
+    #fileList {
+      list-style: none;
+      overflow-y: auto;
+      flex: 1;
+      padding: 4px 0;
+    }
+    #fileList::-webkit-scrollbar { width: 5px; }
+    #fileList::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    #fileList li {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 5px 12px;
+      cursor: pointer;
+      border-radius: 4px;
+      margin: 1px 4px;
+      transition: background 0.1s;
+      user-select: none;
+    }
+    #fileList li:hover { background: var(--sidebar-hover); }
+    #fileList li.active { background: var(--sidebar-active); }
+    #fileList li.drag-over { outline: 2px dashed var(--accent); outline-offset: -2px; }
+    #fileList li .file-icon { font-size: 14px; flex-shrink: 0; }
+    #fileList li .file-name {
+      font-size: 12.5px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex: 1;
+    }
+    #fileList li.is-folder .file-name { color: var(--folder); }
+    #fileList li.is-back .file-name { color: var(--accent); font-style: italic; }
+
+    /* ── Editor pane ── */
+    #editor-pane {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    #editor-topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 6px 12px;
+      background: var(--toolbar);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .file-tab {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12.5px;
+      color: var(--text);
+    }
+    #tab-dirty { color: var(--accent3); font-size: 10px; display: none; }
+    .save-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    #fileName {
+      background: var(--input-bg);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      color: var(--text);
+      padding: 4px 8px;
+      font-size: 12px;
+      width: 160px;
+      outline: none;
+    }
+    #fileName:focus { border-color: var(--accent); }
+    #fileName::placeholder { color: var(--muted); }
+
+    /* ── CodeMirror host ── */
+    #cm-host {
+      flex: 1;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    #cm-host .cm-editor {
+      height: 100%;
+      font-size: 13px;
+    }
+    #cm-host .cm-scroller { overflow: auto; }
+    #cm-host .cm-content { padding: 12px 0; }
+    #cm-host .cm-line { padding: 0 20px; }
+    #cm-host .cm-gutters {
+      background: #181825;
+      border-right: 1px solid var(--border);
+      color: var(--muted);
+    }
+
+    /* ── Image preview ── */
+    #img-preview {
+      flex: 1;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      overflow: auto;
+      background: var(--editor);
+      padding: 20px;
+    }
+    #img-preview img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      border-radius: 6px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    }
+
+    /* ── Drop zone overlay on editor ── */
+    #drop-overlay {
+      display: none;
+      position: absolute;
+      inset: 0;
+      background: rgba(137,180,250,0.08);
+      border: 2px dashed var(--accent);
+      border-radius: 6px;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      color: var(--accent);
+      pointer-events: none;
+      z-index: 10;
+    }
+    #drop-overlay.visible { display: flex; }
+    #editor-wrap {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* ── Placeholder ── */
+    #no-file-placeholder {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      color: var(--muted);
+      text-align: center;
+    }
+    #no-file-placeholder .big-icon { font-size: 52px; opacity: 0.3; }
+
+    /* ── Status bar ── */
+    #statusbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 3px 12px;
+      background: var(--statusbar);
+      border-top: 1px solid var(--border);
+      font-size: 11px;
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+    #statusbar .spacer { flex: 1; }
+    #status-msg { color: var(--accent2); transition: opacity 0.4s; }
+    #status-msg.fade { opacity: 0; }
+
+    /* ── Resizer ── */
+    #resizer {
+      width: 4px;
+      cursor: col-resize;
+      background: transparent;
+      flex-shrink: 0;
+      transition: background 0.15s;
+    }
+    #resizer:hover, #resizer.dragging { background: var(--accent); }
+
+    /* ── Context menu ── */
+    #ctx-menu {
+      position: fixed;
+      z-index: 9999;
+      background: #1e1e2e;
+      border: 1px solid #45475a;
+      border-radius: 8px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.55);
+      padding: 4px;
+      min-width: 170px;
+      display: none;
+      font-size: 12.5px;
+    }
+    #ctx-menu.visible { display: block; }
+    .ctx-item {
+      padding: 6px 10px;
+      border-radius: 5px;
+      cursor: pointer;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      white-space: nowrap;
+    }
+    .ctx-item:hover { background: var(--sidebar-active); }
+    .ctx-item.danger { color: var(--accent3); }
+    .ctx-item.hidden { display: none; }
+    .ctx-divider { height: 1px; background: var(--border); margin: 3px 4px; }
+  </style>
+</head>
+<body>
+
+  <div id="toolbar">
+    <span class="toolbar-title">📁 File System</span>
+    <button class="btn" id="selectFolder">🗂️ Open Folder</button>
+    <button class="btn" id="newFileBtn" style="display:none">📄 New File</button>
+    <button class="btn" id="refreshBtn" style="display:none" title="Refresh">🔄</button>
+    <div class="spacer"></div>
+  </div>
+
+  <div id="main">
+    <div id="sidebar">
+      <div id="sidebar-header">
+        <span class="label" id="folder-label">No folder open</span>
+      </div>
+      <div id="breadcrumb"></div>
+      <ul id="fileList"></ul>
+    </div>
+
+    <div id="resizer"></div>
+
+    <div id="editor-pane">
+      <div id="editor-topbar">
+        <div class="file-tab">
+          <span id="tab-icon">📝</span>
+          <span id="tab-name" style="color:var(--muted)">No file open</span>
+          <span id="tab-dirty">●</span>
+        </div>
+        <div class="save-row">
+          <input id="fileName" type="text" placeholder="filename.txt" />
+          <button class="btn primary" id="saveFile">💾 Save</button>
+        </div>
+      </div>
+
+      <div id="editor-wrap">
+        <div id="drop-overlay">Drop VFS file here to import</div>
+        <div id="no-file-placeholder">
+          <div class="big-icon">📂</div>
+          <p>Open a folder and select a file<br>or drag a file from the file explorer</p>
+        </div>
+        <div id="cm-host" style="display:none"></div>
+        <div id="img-preview"><img id="img-el" src="" alt="" /></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Context menu -->
+  <div id="ctx-menu">
+    <div class="ctx-item" data-action="open">📂 Open</div>
+    <div class="ctx-item" data-action="rename">✏️ Rename</div>
+    <div class="ctx-item" data-action="duplicate">📋 Duplicate</div>
+    <div class="ctx-divider ctx-entry-only"></div>
+    <div class="ctx-item" data-action="new-file">📄 New File</div>
+    <div class="ctx-item" data-action="new-folder">📁 New Folder</div>
+    <div class="ctx-divider"></div>
+    <div class="ctx-item danger" data-action="delete">🗑️ Delete</div>
+  </div>
+
+  <div id="statusbar">
+    <span id="status-folder" style="color:var(--accent)">—</span>
+    <span id="status-lang" style="display:none"></span>
+    <span id="status-lines-wrap" style="display:none">Ln: <span id="status-lines">0</span></span>
+    <span id="status-chars-wrap" style="display:none">Ch: <span id="status-chars">0</span></span>
+    <span class="spacer"></span>
+    <span id="status-msg"></span>
+  </div>
+
+  <script type="module">
+    import { EditorView, keymap, lineNumbers, highlightActiveLine,
+             highlightActiveLineGutter, drawSelection, dropCursor,
+             rectangularSelection, crosshairCursor, highlightSpecialChars
+           } from 'https://esm.sh/@codemirror/view@6'
+    import { EditorState, Compartment } from 'https://esm.sh/@codemirror/state@6'
+    import { history, defaultKeymap, historyKeymap } from 'https://esm.sh/@codemirror/commands@6'
+    import { foldGutter, indentOnInput, syntaxHighlighting,
+             defaultHighlightStyle, bracketMatching, foldKeymap
+           } from 'https://esm.sh/@codemirror/language@6'
+    import { closeBrackets, autocompletion,
+             closeBracketsKeymap, completionKeymap
+           } from 'https://esm.sh/@codemirror/autocomplete@6'
+    import { searchKeymap, highlightSelectionMatches } from 'https://esm.sh/@codemirror/search@6'
+    import { javascript } from 'https://esm.sh/@codemirror/lang-javascript@6'
+    import { html as langHtml } from 'https://esm.sh/@codemirror/lang-html@6'
+    import { css as langCss } from 'https://esm.sh/@codemirror/lang-css@6'
+    import { json as langJson } from 'https://esm.sh/@codemirror/lang-json@6'
+    import { python as langPython } from 'https://esm.sh/@codemirror/lang-python@6'
+    import { markdown as langMarkdown } from 'https://esm.sh/@codemirror/lang-markdown@6'
+    import { sql as langSql } from 'https://esm.sh/@codemirror/lang-sql@6'
+    import { oneDark } from 'https://esm.sh/@codemirror/theme-one-dark@6'
+
+    const basicSetup = [
+      lineNumbers(), highlightActiveLineGutter(), highlightSpecialChars(),
+      history(), foldGutter(), drawSelection(), dropCursor(),
+      EditorState.allowMultipleSelections.of(true),
+      indentOnInput(),
+      syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+      bracketMatching(), closeBrackets(), autocompletion(),
+      rectangularSelection(), crosshairCursor(),
+      highlightActiveLine(), highlightSelectionMatches(),
+      keymap.of([
+        ...closeBracketsKeymap, ...defaultKeymap, ...searchKeymap,
+        ...historyKeymap, ...foldKeymap, ...completionKeymap,
+      ]),
+    ]
+
+    const $ = id => document.getElementById(id)
+
+    // ── State ──
+    let currentDirHandle = null
+    let parentDirHandles = []
+    let currentFileHandle = null
+    let currentBlobUrl = null
+    let isDirty = false
+    let statusTimer = null
+    let editorView = null
+
+    const langConf = new Compartment()
+
+    const IMAGE_EXTS = new Set(['png','jpg','jpeg','gif','webp','bmp','avif','svg','ico'])
+
+    // ── Helpers ──
+    const extIcon = ext => ({
+      js:'🟨', ts:'🔷', jsx:'⚛️', tsx:'⚛️', json:'📋',
+      html:'🌐', css:'🎨', scss:'🎨', md:'📝', txt:'📄',
+      sh:'⚙️', run:'⚙️', py:'🐍', rb:'💎', go:'🐹', rs:'🦀',
+      png:'🖼️', jpg:'🖼️', jpeg:'🖼️', gif:'🖼️', webp:'🖼️',
+      svg:'🔵', pdf:'📕', zip:'📦', csv:'📊', sql:'🗄️',
+      yaml:'⚙️', yml:'⚙️', xml:'📰', env:'🔐',
+    }[ext?.toLowerCase()] || '📄')
+
+    const getLang = (name) => {
+      const ext = name.split('.').pop()?.toLowerCase()
+      switch (ext) {
+        case 'js': case 'jsx': case 'mjs': return [javascript({ jsx: true }), 'JavaScript']
+        case 'ts': case 'tsx': return [javascript({ typescript: true, jsx: true }), 'TypeScript']
+        case 'html': case 'htm': return [langHtml(), 'HTML']
+        case 'css': case 'scss': case 'less': return [langCss(), 'CSS']
+        case 'json': return [langJson(), 'JSON']
+        case 'py': return [langPython(), 'Python']
+        case 'md': case 'markdown': return [langMarkdown(), 'Markdown']
+        case 'sql': return [langSql(), 'SQL']
+        default: return [[], ext?.toUpperCase() || 'Plain']
+      }
+    }
+
+    const showStatus = (msg, ms = 3000) => {
+      const el = $('status-msg')
+      el.textContent = msg
+      el.classList.remove('fade')
+      clearTimeout(statusTimer)
+      statusTimer = setTimeout(() => el.classList.add('fade'), ms)
+    }
+
+    const updateStats = () => {
+      if (!editorView) return
+      const doc = editorView.state.doc
+      $('status-lines').textContent = doc.lines
+      $('status-chars').textContent = doc.length
+    }
+
+    // ── Init CodeMirror ──
+    editorView = new EditorView({
+      parent: $('cm-host'),
+      state: EditorState.create({
+        doc: '',
+        extensions: [
+          basicSetup,
+          oneDark,
+          langConf.of([]),
+          EditorView.updateListener.of(u => {
+            if (u.docChanged) {
+              if (!isDirty) { isDirty = true; $('tab-dirty').style.display = 'inline' }
+              updateStats()
+            }
+          }),
+        ]
+      })
+    })
+
+    // ── Breadcrumb ──
+    const renderBreadcrumb = () => {
+      const parts = [...parentDirHandles.map(h => h.name), currentDirHandle?.name].filter(Boolean)
+      $('breadcrumb').innerHTML = parts.map((p, i) =>
+        i < parts.length - 1
+          ? `<span class="crumb" data-idx="${i}">${p}</span> /`
+          : `<b>${p}</b>`
+      ).join(' ')
+      $('breadcrumb').querySelectorAll('.crumb').forEach(el => {
+        el.addEventListener('click', async () => {
+          const idx = parseInt(el.dataset.idx)
+          const steps = parentDirHandles.length - idx
+          for (let i = 0; i < steps; i++) currentDirHandle = parentDirHandles.pop()
+          await listFiles()
+        })
+      })
+    }
+
+    // ── List files ──
+    const listFiles = async () => {
+      const ul = $('fileList')
+      ul.innerHTML = ''
+      renderBreadcrumb()
+
+      if (parentDirHandles.length > 0) {
+        const li = makeItem('⬆️', '.. Parent', 'is-back')
+        li.addEventListener('click', navigateToParent)
+        ul.appendChild(li)
+      }
+
+      const entries = []
+      try {
+        for await (const [name, handle] of currentDirHandle.entries()) entries.push({ name, handle })
+      } catch (e) { console.error(e) }
+      entries.sort((a, b) => {
+        if (a.handle.kind !== b.handle.kind) return a.handle.kind === 'directory' ? -1 : 1
+        return a.name.localeCompare(b.name)
+      })
+
+      for (const { name, handle } of entries) {
+        const ext = name.includes('.') ? name.split('.').pop() : ''
+        const icon = handle.kind === 'directory' ? '📁' : extIcon(ext)
+        const li = makeItem(icon, name, handle.kind === 'directory' ? 'is-folder' : 'is-file')
+        if (currentFileHandle?.name === name) li.classList.add('active')
+
+        li.addEventListener('click', () => {
+          handle.kind === 'file' ? loadFile(handle, name) : navigateToFolder(handle)
+        })
+
+        li.addEventListener('contextmenu', e => {
+          e.preventDefault(); e.stopPropagation()
+          showCtxMenu(e.clientX, e.clientY, { handle, name, isFolder: handle.kind === 'directory' })
+        })
+
+        // drag FROM FS to explorer
+        if (handle.kind === 'file') {
+          li.draggable = true
+          li.addEventListener('dragstart', async (e) => {
+            // Read content and cache for drop target
+            const file = await handle.getFile()
+            if (IMAGE_EXTS.has(ext?.toLowerCase())) {
+              const buf = await file.arrayBuffer()
+              window.top.__fsDrop = { name, content: buf, binary: true, type: file.type }
+            } else {
+              const text = await file.text()
+              window.top.__fsDrop = { name, content: text, binary: false, type: file.type }
+            }
+            e.dataTransfer.setData('application/x-fs-export', name)
+            e.dataTransfer.effectAllowed = 'copy'
+          })
+          li.addEventListener('dragend', () => {
+            setTimeout(() => { window.top.__fsDrop = null }, 500)
+          })
+        }
+
+        // drag INTO FS from explorer (folder as drop target)
+        if (handle.kind === 'directory') {
+          li.addEventListener('dragover', e => { e.preventDefault(); e.stopPropagation(); li.classList.add('drag-over') })
+          li.addEventListener('dragleave', () => li.classList.remove('drag-over'))
+          li.addEventListener('drop', async (e) => {
+            e.preventDefault(); e.stopPropagation()
+            li.classList.remove('drag-over')
+            // Enter folder first so we can write there
+            await navigateToFolder(handle)
+            await handleVfsDrop(e.dataTransfer)
+          })
+        }
+
+        ul.appendChild(li)
+      }
+    }
+
+    const makeItem = (icon, name, cls) => {
+      const li = document.createElement('li')
+      li.className = cls
+      li.innerHTML = `<span class="file-icon">${icon}</span><span class="file-name">${name}</span>`
+      return li
+    }
+
+    const navigateToFolder = async handle => {
+      parentDirHandles.push(currentDirHandle)
+      currentDirHandle = handle
+      await listFiles()
+    }
+    const navigateToParent = async () => {
+      if (parentDirHandles.length > 0) { currentDirHandle = parentDirHandles.pop(); await listFiles() }
+    }
+
+    // ── Load file ──
+    const loadFile = async (handle, name) => {
+      const ext = name.includes('.') ? name.split('.').pop()?.toLowerCase() : ''
+      currentFileHandle = handle
+      $('fileName').value = name
+      $('tab-icon').textContent = extIcon(ext)
+      $('tab-name').textContent = name
+      $('tab-name').style.color = ''
+      $('tab-dirty').style.display = 'none'
+      isDirty = false
+      $('no-file-placeholder').style.display = 'none'
+      $('status-lines-wrap').style.display = ''
+      $('status-chars-wrap').style.display = ''
+      $('status-lang').style.display = ''
+
+      // Highlight active
+      $('fileList').querySelectorAll('li').forEach(li => {
+        li.classList.toggle('active', li.querySelector('.file-name')?.textContent === name)
+      })
+
+      if (IMAGE_EXTS.has(ext)) {
+        // Image preview
+        if (currentBlobUrl) URL.revokeObjectURL(currentBlobUrl)
+        const file = await handle.getFile()
+        currentBlobUrl = URL.createObjectURL(file)
+        $('img-el').src = currentBlobUrl
+        $('cm-host').style.display = 'none'
+        $('img-preview').style.display = 'flex'
+        $('status-lang').textContent = ext.toUpperCase()
+        $('status-lines').textContent = '—'
+        $('status-chars').textContent = file.size + ' bytes'
+        showStatus(`Opened ${name}`)
+        return
+      }
+
+      // Text / code
+      $('img-preview').style.display = 'none'
+      $('cm-host').style.display = 'flex'
+      try {
+        const file = await handle.getFile()
+        const text = await file.text()
+        const [lang, langName] = getLang(name)
+        editorView.dispatch({
+          changes: { from: 0, to: editorView.state.doc.length, insert: text },
+          effects: langConf.reconfigure(lang),
+        })
+        $('status-lang').textContent = langName
+        updateStats()
+        editorView.focus()
+        showStatus(`Opened ${name}`)
+      } catch (e) { console.error(e); showStatus('❌ Failed to read file') }
+    }
+
+    // ── Save ──
+    const handleSave = async () => {
+      if (!currentDirHandle) { showStatus('⚠️ No folder open'); return }
+      const name = $('fileName').value.trim()
+      if (!name) { $('fileName').focus(); showStatus('⚠️ Enter a filename'); return }
+      try {
+        const handle = await currentDirHandle.getFileHandle(name, { create: true })
+        const writable = await handle.createWritable()
+        await writable.write(editorView.state.doc.toString())
+        await writable.close()
+        currentFileHandle = handle
+        $('tab-name').textContent = name
+        $('tab-dirty').style.display = 'none'
+        isDirty = false
+        const ext = name.split('.').pop()?.toLowerCase()
+        $('tab-icon').textContent = extIcon(ext)
+        const [, langName] = getLang(name)
+        $('status-lang').textContent = langName
+        await listFiles()
+        showStatus(`✓ Saved ${name}`)
+      } catch (e) { console.error(e); showStatus('❌ Save failed') }
+    }
+
+    // ── VFS drop handler (explorer → FS) ──
+    const handleVfsDrop = async (dataTransfer) => {
+      const vfsPath = dataTransfer.getData('application/x-vfs-path')
+      if (!vfsPath) return
+      const platform = window.platform
+      if (!platform) { showStatus('❌ Platform not available'); return }
+      try {
+        const vfs = platform.host.getFS()
+        const content = vfs.readFileSync(vfsPath)
+        const name = vfsPath.split('/').pop()
+        const handle = await currentDirHandle.getFileHandle(name, { create: true })
+        const writable = await handle.createWritable()
+        await writable.write(content)
+        await writable.close()
+        await listFiles()
+        showStatus(`✓ Imported ${name} from VFS`)
+      } catch (e) { console.error(e); showStatus('❌ Import failed') }
+    }
+
+    // ── Drop zone on editor (explorer → FS into current dir) ──
+    const editorWrap = $('editor-wrap')
+    editorWrap.addEventListener('dragover', e => {
+      if (e.dataTransfer.types.includes('application/x-vfs-path') || e.dataTransfer.types.includes('application/x-fs-export')) return
+      e.preventDefault(); e.stopPropagation()
+      $('drop-overlay').classList.add('visible')
+    })
+    editorWrap.addEventListener('dragleave', () => $('drop-overlay').classList.remove('visible'))
+    editorWrap.addEventListener('drop', async e => {
+      e.preventDefault(); e.stopPropagation()
+      $('drop-overlay').classList.remove('visible')
+      if (!currentDirHandle) { showStatus('⚠️ Open a folder first'); return }
+      await handleVfsDrop(e.dataTransfer)
+    })
+
+    // Allow x-vfs-path drops
+    editorWrap.addEventListener('dragover', e => {
+      if (e.dataTransfer.types.includes('application/x-vfs-path')) {
+        e.preventDefault(); e.stopPropagation()
+        $('drop-overlay').classList.add('visible')
+      }
+    })
+
+    // ── Open folder ──
+    $('selectFolder').addEventListener('click', async () => {
+      try {
+        currentDirHandle = await window.showDirectoryPicker({ mode: 'readwrite' })
+        parentDirHandles = []
+        $('folder-label').textContent = currentDirHandle.name
+        $('status-folder').textContent = currentDirHandle.name
+        $('newFileBtn').style.display = ''
+        $('refreshBtn').style.display = ''
+        await listFiles()
+        showStatus(`📂 Opened ${currentDirHandle.name}`)
+      } catch (e) {
+        if (e.name !== 'AbortError') { console.error(e); showStatus('❌ Could not open folder') }
+      }
+    })
+
+    $('saveFile').addEventListener('click', handleSave)
+
+    $('newFileBtn').addEventListener('click', () => {
+      currentFileHandle = null
+      editorView.dispatch({ changes: { from: 0, to: editorView.state.doc.length, insert: '' } })
+      $('fileName').value = ''
+      $('fileName').focus()
+      $('tab-icon').textContent = '📄'
+      $('tab-name').textContent = 'Untitled'
+      $('tab-name').style.color = 'var(--muted)'
+      $('tab-dirty').style.display = 'none'
+      $('no-file-placeholder').style.display = 'none'
+      $('cm-host').style.display = 'flex'
+      $('img-preview').style.display = 'none'
+      isDirty = false
+      $('fileList').querySelectorAll('li').forEach(li => li.classList.remove('active'))
+      updateStats()
+    })
+
+    $('refreshBtn').addEventListener('click', () => listFiles().then(() => showStatus('Refreshed')))
+
+    // Right-click on sidebar background (not on an item) → New File / New Folder
+    $('fileList').addEventListener('contextmenu', e => {
+      if (!currentDirHandle) return
+      if (e.target.closest('li')) return  // handled by item listener
+      e.preventDefault()
+      showCtxMenu(e.clientX, e.clientY, null)
+    })
+
+    document.addEventListener('keydown', e => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); handleSave() }
+    })
+
+    // ── Context menu ──
+    const ctxMenu = $('ctx-menu')
+    let ctxTarget = null  // { handle, name, isFolder } or null for background
+
+    const showCtxMenu = (x, y, target) => {
+      ctxTarget = target
+      const isEntry = !!target
+      // Toggle entry-only items
+      ctxMenu.querySelectorAll('[data-action="open"],[data-action="rename"],[data-action="duplicate"],[data-action="delete"]')
+        .forEach(el => el.classList.toggle('hidden', !isEntry))
+      ctxMenu.querySelectorAll('.ctx-entry-only')
+        .forEach(el => el.classList.toggle('hidden', !isEntry))
+      // Position
+      ctxMenu.style.left = '0'; ctxMenu.style.top = '0'
+      ctxMenu.classList.add('visible')
+      const r = ctxMenu.getBoundingClientRect()
+      const vw = window.innerWidth, vh = window.innerHeight
+      ctxMenu.style.left = Math.min(x, vw - r.width - 6) + 'px'
+      ctxMenu.style.top  = Math.min(y, vh - r.height - 6) + 'px'
+    }
+
+    const hideCtxMenu = () => { ctxMenu.classList.remove('visible'); ctxTarget = null }
+
+    document.addEventListener('click', hideCtxMenu)
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') hideCtxMenu() })
+
+    // ── FS operations ──
+    const copyFolder = async (srcHandle, destHandle) => {
+      for await (const [name, handle] of srcHandle.entries()) {
+        if (handle.kind === 'file') {
+          const file = await handle.getFile()
+          const w = await (await destHandle.getFileHandle(name, { create: true })).createWritable()
+          await w.write(await file.arrayBuffer()); await w.close()
+        } else {
+          await copyFolder(handle, await destHandle.getDirectoryHandle(name, { create: true }))
+        }
+      }
+    }
+
+    const findCopyName = async (base, ext, isFolder) => {
+      const tryName = (n) => isFolder
+        ? currentDirHandle.getDirectoryHandle(n).then(() => true).catch(() => false)
+        : currentDirHandle.getFileHandle(n).then(() => true).catch(() => false)
+      let name = `${base} (copy)${ext}`
+      if (!await tryName(name)) return name
+      for (let i = 2; i < 100; i++) {
+        name = `${base} (copy ${i})${ext}`
+        if (!await tryName(name)) return name
+      }
+      return name
+    }
+
+    const handleCtxAction = async (action) => {
+      hideCtxMenu()
+      if (!currentDirHandle && action !== 'new-file' && action !== 'new-folder') return
+
+      if (action === 'new-file') {
+        const name = prompt('New file name:')
+        if (!name?.trim()) return
+        try {
+          const handle = await currentDirHandle.getFileHandle(name.trim(), { create: true })
+          await listFiles()
+          await loadFile(handle, name.trim())
+          showStatus(`✓ Created ${name.trim()}`)
+        } catch (e) { showStatus('❌ ' + e.message) }
+        return
+      }
+
+      if (action === 'new-folder') {
+        const name = prompt('New folder name:')
+        if (!name?.trim()) return
+        try {
+          await currentDirHandle.getDirectoryHandle(name.trim(), { create: true })
+          await listFiles()
+          showStatus(`✓ Created folder ${name.trim()}`)
+        } catch (e) { showStatus('❌ ' + e.message) }
+        return
+      }
+
+      if (!ctxTarget) return
+      const { handle, name, isFolder } = ctxTarget
+
+      if (action === 'open') {
+        isFolder ? await navigateToFolder(handle) : await loadFile(handle, name)
+        return
+      }
+
+      if (action === 'rename') {
+        const newName = prompt(`Rename "${name}" to:`, name)
+        if (!newName?.trim() || newName === name) return
+        try {
+          if (isFolder) {
+            const dest = await currentDirHandle.getDirectoryHandle(newName.trim(), { create: true })
+            await copyFolder(handle, dest)
+            await currentDirHandle.removeEntry(name, { recursive: true })
+          } else {
+            const file = await handle.getFile()
+            const dest = await currentDirHandle.getFileHandle(newName.trim(), { create: true })
+            const w = await dest.createWritable()
+            await w.write(await file.arrayBuffer()); await w.close()
+            await currentDirHandle.removeEntry(name)
+            if (currentFileHandle?.name === name) await loadFile(dest, newName.trim())
+          }
+          await listFiles()
+          showStatus(`✓ Renamed to ${newName.trim()}`)
+        } catch (e) { showStatus('❌ Rename failed: ' + e.message) }
+        return
+      }
+
+      if (action === 'duplicate') {
+        try {
+          const base = isFolder ? name : name.replace(/\.[^.]+$/, '')
+          const ext  = isFolder ? '' : (name.includes('.') ? '.' + name.split('.').pop() : '')
+          const copyName = await findCopyName(base, ext, isFolder)
+          if (isFolder) {
+            await copyFolder(handle, await currentDirHandle.getDirectoryHandle(copyName, { create: true }))
+          } else {
+            const file = await handle.getFile()
+            const dest = await currentDirHandle.getFileHandle(copyName, { create: true })
+            const w = await dest.createWritable()
+            await w.write(await file.arrayBuffer()); await w.close()
+          }
+          await listFiles()
+          showStatus(`✓ Duplicated as ${copyName}`)
+        } catch (e) { showStatus('❌ Duplicate failed: ' + e.message) }
+        return
+      }
+
+      if (action === 'delete') {
+        const label = isFolder ? `folder "${name}" and all its contents` : `"${name}"`
+        if (!confirm(`Delete ${label}?`)) return
+        try {
+          await currentDirHandle.removeEntry(name, { recursive: true })
+          if (currentFileHandle?.name === name) {
+            currentFileHandle = null
+            $('tab-name').textContent = 'No file open'
+            $('tab-name').style.color = 'var(--muted)'
+            $('cm-host').style.display = 'none'
+            $('img-preview').style.display = 'none'
+            $('no-file-placeholder').style.display = ''
+          }
+          await listFiles()
+          showStatus(`✓ Deleted ${name}`)
+        } catch (e) { showStatus('❌ Delete failed: ' + e.message) }
+      }
+    }
+
+    ctxMenu.addEventListener('click', e => {
+      const item = e.target.closest('[data-action]')
+      if (item) handleCtxAction(item.dataset.action)
+    })
+
+    // ── Sidebar resize ──
+    const sidebar = $('sidebar'), resizer = $('resizer')
+    let resizing = false
+    resizer.addEventListener('mousedown', e => { resizing = true; resizer.classList.add('dragging'); e.preventDefault() })
+    document.addEventListener('mousemove', e => {
+      if (!resizing) return
+      sidebar.style.width = Math.max(140, Math.min(400, e.clientX)) + 'px'
+    })
+    document.addEventListener('mouseup', () => { resizing = false; resizer.classList.remove('dragging') })
+  </script>
+</body>
+</html>

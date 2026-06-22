@@ -372,8 +372,8 @@
     "force_reload": true
   },
   {
-    "path": "/opt/spotlight.js",
-    "file": "/opt/spotlight.js",
+    "path": "/opt/apps/spotlight/main.js",
+    "file": "/opt/apps/spotlight/main.js",
     "force_reload": true
   },
   {
@@ -462,33 +462,33 @@
     "force_reload": false
   },
   {
-    "path": "/home/user1/apps/pkg-manager.js",
-    "file": "/home/user1/apps/pkg-manager.js",
+    "path": "/opt/apps/pkg-manager/main.js",
+    "file": "/opt/apps/pkg-manager/main.js",
     "force_reload": true
   },
   {
-    "path": "/home/user1/apps/app-drawer.js",
-    "file": "/home/user1/apps/app-drawer.js",
+    "path": "/opt/apps/app-drawer/main.js",
+    "file": "/opt/apps/app-drawer/main.js",
     "force_reload": true
   },
   {
-    "path": "/opt/pkg/loader.js",
-    "file": "/opt/pkg/loader.js",
+    "path": "/opt/apps/pkg-manager/loader.js",
+    "file": "/opt/apps/pkg-manager/loader.js",
     "force_reload": true
   },
   {
-    "path": "/home/user1/apps/task-manager.js",
-    "file": "/home/user1/apps/task-manager.js",
+    "path": "/opt/apps/task-manager/main.js",
+    "file": "/opt/apps/task-manager/main.js",
     "force_reload": true
   },
   {
-    "path": "/home/user1/apps/bookmarks.js",
-    "file": "/home/user1/apps/bookmarks.js",
+    "path": "/opt/apps/bookmarks/main.js",
+    "file": "/opt/apps/bookmarks/main.js",
     "force_reload": true
   },
   {
-    "path": "/home/user1/apps/app-launcher.js",
-    "file": "/home/user1/apps/app-launcher.js",
+    "path": "/opt/apps/app-launcher/main.js",
+    "file": "/opt/apps/app-launcher/main.js",
     "force_reload": true
   },
   {
@@ -505,5 +505,195 @@
     "path": "/etc/pkg/installed.json",
     "file": "/etc/pkg/installed.json",
     "force_reload": false
+  },
+  {
+    "path": "/opt/apps/file-explorer/main.js",
+    "file": "/opt/apps/file-explorer/main.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/explorer-sifi/main.js",
+    "file": "/opt/apps/explorer-sifi/main.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/image-viewer/main.js",
+    "file": "/opt/apps/image-viewer/main.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/dev-utils/main.js",
+    "file": "/opt/apps/dev-utils/main.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/sqlite-browser/main.js",
+    "file": "/opt/apps/sqlite-browser/main.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/mermaid-viewer/main.js",
+    "file": "/opt/apps/mermaid-viewer/main.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/diff-viewer/main.js",
+    "file": "/opt/apps/diff-viewer/main.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/python-repl/main.js",
+    "file": "/opt/apps/python-repl/main.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/python-repl/python.html",
+    "file": "/opt/apps/python-repl/python.html",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/nn-ide/main.js",
+    "file": "/opt/apps/nn-ide/main.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/nn-ide/nn-ide.html",
+    "file": "/opt/apps/nn-ide/nn-ide.html",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/markdown-reader/main.js",
+    "file": "/opt/apps/markdown-reader/main.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/markdown-reader/md-renderer.html",
+    "file": "/opt/apps/markdown-reader/md-renderer.html",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/csv-viewer/main.js",
+    "file": "/opt/apps/csv-viewer/main.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/dashboard/main.js",
+    "file": "/opt/apps/dashboard/main.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/dashboard/dashboard.html",
+    "file": "/opt/apps/dashboard/dashboard.html",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/wamp-client/main.js",
+    "file": "/opt/apps/wamp-client/main.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/wamp-client/WAMP.html",
+    "file": "/opt/apps/wamp-client/WAMP.html",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/webrtc/main.html",
+    "file": "/opt/apps/webrtc/main.html",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/totp-auth/main.html",
+    "file": "/opt/apps/totp-auth/main.html",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/fs-inspector/main.html",
+    "file": "/opt/apps/fs-inspector/main.html",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/snake-game/main.html",
+    "file": "/opt/apps/snake-game/main.html",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/snake-lstm/main.html",
+    "file": "/opt/apps/snake-lstm/main.html",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/snake-qlearning/main.html",
+    "file": "/opt/apps/snake-qlearning/main.html",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/webgl-demo/main.html",
+    "file": "/opt/apps/webgl-demo/main.html",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/webgl-earth/main.html",
+    "file": "/opt/apps/webgl-earth/main.html",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/threejs-demo/main.html",
+    "file": "/opt/apps/threejs-demo/main.html",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/threejs-flow/main.html",
+    "file": "/opt/apps/threejs-flow/main.html",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/glsl-shader/index.html",
+    "file": "/opt/apps/glsl-shader/index.html",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/glsl-shader/index.js",
+    "file": "/opt/apps/glsl-shader/index.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/glsl-shader/fragmentShader.js",
+    "file": "/opt/apps/glsl-shader/fragmentShader.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/glsl-shader/vertexShader.js",
+    "file": "/opt/apps/glsl-shader/vertexShader.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/glsl-shader/lib/jsm/controls/OrbitControls.js",
+    "file": "/opt/apps/glsl-shader/lib/jsm/controls/OrbitControls.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/glsl-shader/lib/three.module.js",
+    "file": "/opt/apps/glsl-shader/lib/three.module.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/vscode-online/main.html",
+    "file": "/opt/apps/vscode-online/main.html",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/analyze/main.html",
+    "file": "/opt/apps/analyze/main.html",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/anova/main.html",
+    "file": "/opt/apps/anova/main.html",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/screen-reader/main.html",
+    "file": "/opt/apps/screen-reader/main.html",
+    "force_reload": true
   }
 ]

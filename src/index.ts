@@ -156,7 +156,14 @@ const initWindow = () => {
                 const fileData = await (await fetch(path)).arrayBuffer() as any;
 
                 const dir = item.path.slice(0, item.path.lastIndexOf('/')) || "/"
-                if(!fs.existsSync(dir)) fs.mkdirSync(dir, {recursive: true})
+                if(!fs.existsSync(dir)) {
+                    const parts = dir.split('/').filter(Boolean)
+                    let cur = ''
+                    for (const part of parts) {
+                        cur += '/' + part
+                        try { fs.mkdirSync(cur) } catch (e: any) { if (e.code !== 'EEXIST') throw e }
+                    }
+                }
                 fs.writeFileSync(item.path, Buffer.from(fileData));
                 fileCount++;
 
