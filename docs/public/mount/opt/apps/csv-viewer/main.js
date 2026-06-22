@@ -305,4 +305,4 @@ const run = (body, props, filepath) => {
   props.setWindowView(true)
 }
 
-platform.host.registerCommand('ui.csv-viewer', run, { title: 'Spreadsheet', icon: 'table_chart' })
+platform.host.registerCommand('ui.csv-viewer', run, { title: 'Spreadsheet', icon: 'table_chart', fileExtensions: ['.csv', '.tsv'] })

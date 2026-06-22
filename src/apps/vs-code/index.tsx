@@ -79,7 +79,7 @@ platform.host.registerCommand('ui.vs-code', (body: HTMLBodyElement, props: UICal
             // props.close()
         }
     })
-}, {icon: 'data_object', title: 'VS Code', fullScreen: false})
+}, {icon: 'data_object', title: 'VS Code', fullScreen: false, fileExtensions: ['*']})
 
 const render = (container: HTMLElement, props: UICallbackProps, url: string) => {
     const root = createRoot(container)

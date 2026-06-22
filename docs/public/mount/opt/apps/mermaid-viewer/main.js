@@ -410,4 +410,5 @@ const run = (...args) => {
 
 platform.host.registerCommand('ui.mermaid', run, {
   callable: false, icon: 'account_tree', title: 'Diagram', fullScreen: false, category: 'Dev',
+  fileExtensions: ['.mmd', '.mermaid'],
 });

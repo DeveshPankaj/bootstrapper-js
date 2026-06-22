@@ -210,6 +210,25 @@ export class Host {
     return allCommands.find((x) => x.name === command_name);
   }
 
+  public getCommandsForExtension(ext: string) {
+    const seen = new Set<string>();
+    const results: Array<{ name: string; title: string; icon: string; wildcard: boolean }> = [];
+    const dotExt = ext.startsWith('.') ? ext.toLowerCase() : `.${ext}`.toLowerCase();
+    for (const cmd of this.commands.getValue()) {
+      if (seen.has(cmd.name)) continue;
+      const exts = (cmd.meta as any)?.fileExtensions as string[] | undefined;
+      if (!exts || !Array.isArray(exts)) continue;
+      seen.add(cmd.name);
+      const isWild = exts.includes('*');
+      const isMatch = isWild || exts.some(e => (e.startsWith('.') ? e : `.${e}`).toLowerCase() === dotExt);
+      if (isMatch) {
+        results.push({ name: cmd.name, title: (cmd.meta as any)?.title || cmd.name, icon: (cmd.meta as any)?.icon || 'apps', wildcard: isWild });
+      }
+    }
+    results.sort((a, b) => (a.wildcard === b.wildcard ? a.title.localeCompare(b.title) : a.wildcard ? 1 : -1));
+    return results;
+  }
+
   public callCommand(command_name: string, ...args: any) {
     const command = this.getCommand(command_name);
     if (!command) { console.log(`Command [${command_name}] not registered!`); return; }
@@ -397,7 +416,10 @@ export class Host {
       }
 
       else {
-        script = `service('001-core.layout', 'open-window') (command('${appExtMap[fileExt as string] ?? appExtMap[""]}'), '${filepath}'${args.length ? ", " : ""}${args.map((x) => `"${x}"`).join(", ")})`;
+        const registered = this.getCommandsForExtension(fileExt as string);
+        const bestMatch = registered.find(r => !r.wildcard) || registered[0];
+        const cmdName = bestMatch ? bestMatch.name : (appExtMap[fileExt as string] ?? appExtMap[""]);
+        script = `service('001-core.layout', 'open-window') (command('${cmdName}'), '${filepath}'${args.length ? ", " : ""}${args.map((x) => `"${x}"`).join(", ")})`;
       }
 
 

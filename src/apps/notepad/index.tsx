@@ -147,7 +147,7 @@ platform.host.registerCommand('ui.notepad', (body: HTMLBodyElement, props: UICal
     fullScreenCallbackRef.current = props.toggleFullScreen
     resizeCallbackRef.current = props.setBoundingClientRect
 
-}, { icon: 'edit_note', title: 'Edit (about.html)', fullScreen: false })
+}, { icon: 'edit_note', title: 'Edit (about.html)', fullScreen: false, fileExtensions: ['*'] })
 
 const render = (container: HTMLElement, props: UICallbackProps & { file: FileType }) => {
 

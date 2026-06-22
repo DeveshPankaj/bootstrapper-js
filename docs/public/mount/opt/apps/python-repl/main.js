@@ -22,4 +22,5 @@ platform.host.registerCommand('ui.python', run, {
   title: 'Python',
   icon: 'terminal',
   description: 'Python REPL powered by Pyodide',
+  fileExtensions: ['.py'],
 });

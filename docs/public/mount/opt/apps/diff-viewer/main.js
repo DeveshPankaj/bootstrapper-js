@@ -144,4 +144,4 @@ const run = (body, props, fileA, fileB) => {
   props.onDestroy(() => setTimeout(() => root.unmount(), 0))
 }
 
-platform.host.registerCommand('ui.diff', run, { title: 'Diff Viewer', icon: 'difference' })
+platform.host.registerCommand('ui.diff', run, { title: 'Diff Viewer', icon: 'difference', fileExtensions: ['*'] })

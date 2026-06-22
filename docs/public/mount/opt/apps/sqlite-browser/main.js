@@ -430,4 +430,5 @@ platform.host.registerCommand('ui.sqlite', run, {
   icon: 'database',
   title: 'SQLite Browser',
   category: 'Dev',
+  fileExtensions: ['.db', '.sqlite', '.sqlite3'],
 });

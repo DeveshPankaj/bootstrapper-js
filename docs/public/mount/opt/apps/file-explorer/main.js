@@ -603,19 +603,16 @@ const App = (props) => {
         cmd: `service('/home/user1/apps/explorer.js', 'zip-compress')('${file.path}')`,
       });
       actions.push({ id: 'divider_open_with', type: 'divider', title: '' });
-      actions.push({
-        id: 'open_with',
-        type: 'group',
-        title: 'Open with',
-        children: [
-          { id: 'ow_notepad',     type: 'action', title: 'Text Editor',   cmd: `service('001-core.layout','open-window')(command('ui.notepad'),'${file.path}')` },
-          { id: 'ow_vscode',      type: 'action', title: 'VS Code',       cmd: `service('001-core.layout','open-window')(command('ui.vs-code'),'${file.path}')` },
-          { id: 'ow_csv',         type: 'action', title: 'Spreadsheet',   cmd: `service('001-core.layout','open-window')(command('ui.csv-viewer'),'${file.path}')` },
-          { id: 'ow_image',       type: 'action', title: 'Image Viewer',  cmd: `service('001-core.layout','open-window')(command('ui.imageviewer'),'${file.path}')` },
-          { id: 'ow_python',      type: 'action', title: 'Python REPL',   cmd: `service('001-core.layout','open-window')(command('ui.python'),'${file.path}')` },
-          { id: 'ow_browser',     type: 'action', title: 'Browser',       cmd: `service('001-core.layout','open-window')(command('ui.iframe'),'${file.path}')` },
-        ],
-      });
+      const fileExt = file.name.split('.').pop().toLowerCase();
+      const openWithApps = platform.host.getCommandsForExtension ? platform.host.getCommandsForExtension(fileExt) : [];
+      const openWithChildren = openWithApps.map(app => ({
+        id: `ow_${app.name}`, type: 'action', title: app.title,
+        cmd: `service('001-core.layout','open-window')(command('${app.name}'),'${file.path}')`,
+      }));
+      openWithChildren.push(
+        { id: 'ow_browser', type: 'action', title: 'Browser', cmd: `service('001-core.layout','open-window')(command('ui.iframe'),'${file.path}')` }
+      );
+      actions.push({ id: 'open_with', type: 'group', title: 'Open with', children: openWithChildren });
     } else {
       actions.push({
         id: "open_file",

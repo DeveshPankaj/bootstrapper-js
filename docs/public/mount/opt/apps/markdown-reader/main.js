@@ -17,5 +17,6 @@ const { remove } = platform.host.registerCommand("ui.markdown", run, {
   icon: "folder",
   title: "Markdown",
   fullScreen: false,
-  header: {style: {backgroundColor: ''}}
+  header: {style: {backgroundColor: ''}},
+  fileExtensions: ['.md', '.markdown'],
 });

@@ -116,4 +116,4 @@ const run = (...args) => {
   props.setWindowView(true);
 };
 
-platform.host.registerCommand('ui.imageviewer', run, { icon: 'image', title: 'Image Viewer' });
+platform.host.registerCommand('ui.imageviewer', run, { icon: 'image', title: 'Image Viewer', fileExtensions: ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.avif', '.svg'] });
