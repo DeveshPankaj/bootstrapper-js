@@ -110,6 +110,8 @@ const DesktopSwitcher = () => {
         return () => document.removeEventListener('click', close)
     }, [menu])
 
+    if (desktops.length <= 1) return null
+
     return (
         <div className="desktop-switcher">
             {desktops.map((d, idx) => (
