@@ -646,6 +646,11 @@ const DiscoverView = ({ registryApps, installed, loading, fetchError, onInstall,
 
 const InstalledView = ({ installed, onUninstall, uninstallingId }) => {
   const [confirmId, setConfirmId] = useState(null);
+  const [search, setSearch] = useState('');
+
+  const filtered = search
+    ? installed.filter(p => p.name?.toLowerCase().includes(search.toLowerCase()) || p.id?.toLowerCase().includes(search.toLowerCase()) || p.category?.toLowerCase().includes(search.toLowerCase()))
+    : installed;
 
   const handleOpen = (pkg) => {
     try {
@@ -676,18 +681,19 @@ const InstalledView = ({ installed, onUninstall, uninstallingId }) => {
     <>
       <div className="pkg-toolbar">
         <span className="pkg-title">Installed</span>
-        <span style={{ fontSize: 12, color: '#888' }}>{installed.length} app{installed.length !== 1 ? 's' : ''}</span>
+        <span style={{ fontSize: 12, color: '#888' }}>{filtered.length} of {installed.length} app{installed.length !== 1 ? 's' : ''}</span>
+        <input className="pkg-search" placeholder="Search installed…" value={search} onChange={e => setSearch(e.target.value)} />
       </div>
       <div className="pkg-scroll">
-        {installed.length === 0 ? (
+        {filtered.length === 0 ? (
           <div className="pkg-empty">
-            <Icon name="inbox" />
-            <p>No apps installed.</p>
-            <p style={{ opacity: 0.7 }}>Browse the Discover tab to find apps.</p>
+            <Icon name={search ? 'search_off' : 'inbox'} />
+            <p>{search ? `No results for "${search}"` : 'No apps installed.'}</p>
+            {!search && <p style={{ opacity: 0.7 }}>Browse the Discover tab to find apps.</p>}
           </div>
         ) : (
           <div className="pkg-list">
-            {installed.map(pkg => {
+            {filtered.map(pkg => {
               const isUninstalling = uninstallingId === pkg.id;
               const isConfirming = confirmId === pkg.id;
               return (
