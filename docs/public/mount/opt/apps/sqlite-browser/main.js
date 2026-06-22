@@ -161,25 +161,59 @@ const ResultTable = ({ columns, values }) => (
   </table>
 );
 
-// ── File picker modal ──
-const FilePickerModal = ({ onSelect, onClose }) => {
-  const dbFiles = scanDbFiles(['/home/user1', '/mnt', '/opt/apps', '/tmp']);
+// ── File picker modal (directory browser) ──
+const FilePickerModal = ({ onSelect, onClose, filter }) => {
+  const [dir, setDir] = useState('/home/user1');
+  const [entries, setEntries] = useState([]);
+
+  const listDir = useCallback((d) => {
+    try {
+      const items = fs.readdirSync(d).map(name => {
+        const full = d === '/' ? `/${name}` : `${d}/${name}`;
+        try {
+          const isDir = fs.statSync(full).isDirectory();
+          return { name, path: full, isDir };
+        } catch (_) { return { name, path: full, isDir: false }; }
+      });
+      items.sort((a, b) => (a.isDir === b.isDir ? a.name.localeCompare(b.name) : a.isDir ? -1 : 1));
+      setEntries(items);
+      setDir(d);
+    } catch (_) { setEntries([]); }
+  }, []);
+
+  useEffect(() => { listDir(dir); }, []);
+
+  const navigate = (d) => listDir(d);
+  const goUp = () => { const parent = dir.split('/').slice(0, -1).join('/') || '/'; navigate(parent); };
+  const breadcrumbs = dir === '/' ? ['/'] : ['/', ...dir.split('/').filter(Boolean)];
+
+  const filtered = filter ? entries.filter(e => e.isDir || filter(e.name)) : entries;
+
   return (
     <div className="sq-modal-overlay" onClick={onClose}>
-      <div className="sq-modal" onClick={e => e.stopPropagation()}>
+      <div className="sq-modal" onClick={e => e.stopPropagation()} style={{ height: '70%' }}>
         <div className="sq-modal-header">
-          Open Database
+          Open File
           <button className="sq-btn" onClick={onClose} style={{ padding: '2px 8px' }}>✕</button>
         </div>
+        <div style={{ padding: '6px 12px', borderBottom: '1px solid #e0dbd4', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, flexWrap: 'wrap' }}>
+          <button className="sq-btn" onClick={goUp} disabled={dir === '/'} style={{ padding: '2px 6px' }}><Icon name="arrow_upward" /></button>
+          {breadcrumbs.map((part, i) => {
+            const path = i === 0 ? '/' : '/' + breadcrumbs.slice(1, i + 1).join('/');
+            return <span key={i}><span style={{ cursor: 'pointer', color: '#c4a478' }} onClick={() => navigate(path)}>{part}</span>{i < breadcrumbs.length - 1 && <span style={{ margin: '0 2px', color: '#ccc' }}>/</span>}</span>;
+          })}
+        </div>
         <div className="sq-modal-body">
-          {dbFiles.length === 0 ? (
-            <div style={{ padding: 24, color: '#bbb', textAlign: 'center' }}>
-              <div>No .db / .sqlite files found</div>
-              <div style={{ fontSize: 11, marginTop: 4 }}>Create a new database or drop a file into VFS first</div>
-            </div>
-          ) : dbFiles.map(path => (
-            <div key={path} className="sq-modal-file" onClick={() => { onSelect(path); onClose(); }}>
-              <Icon name="database" />{path}
+          {filtered.length === 0 ? (
+            <div style={{ padding: 24, color: '#bbb', textAlign: 'center', fontSize: 12 }}>Empty directory</div>
+          ) : filtered.map(entry => (
+            <div key={entry.path} className="sq-modal-file" onClick={() => {
+              if (entry.isDir) navigate(entry.path);
+              else { onSelect(entry.path); onClose(); }
+            }}>
+              <Icon name={entry.isDir ? 'folder' : 'description'} />
+              <span style={{ flex: 1 }}>{entry.name}</span>
+              {entry.isDir && <Icon name="chevron_right" />}
             </div>
           ))}
         </div>
@@ -360,7 +394,7 @@ const App = ({ initialFile }) => {
         )}
       </div>
       <div className="sq-status">{status || 'Ready'}</div>
-      {showOpen && <FilePickerModal onSelect={openFile} onClose={() => setShowOpen(false)} />}
+      {showOpen && <FilePickerModal onSelect={openFile} onClose={() => setShowOpen(false)} filter={name => /\.(db|sqlite|sqlite3)$/i.test(name)} />}
       {showSave && <SaveModal defaultName={dbName} onSave={doSave} onClose={() => setShowSave(false)} />}
     </div>
   );
