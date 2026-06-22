@@ -6,7 +6,6 @@ const { useState, useEffect, useRef, useCallback } = React;
 
 const SQL_JS_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js';
 const SQL_WASM_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.wasm';
-
 const FONT_URL = 'https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0';
 
 const CSS = `
@@ -80,24 +79,75 @@ const CSS = `
 .sq-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; color: #bbb; gap: 8px; }
 .sq-empty .material-symbols-outlined { font-size: 48px; }
 .sq-loading { display: flex; align-items: center; justify-content: center; flex: 1; color: #999; font-size: 13px; }
+.sq-modal-overlay {
+  position: absolute; inset: 0; background: rgba(0,0,0,.3); display: flex;
+  align-items: center; justify-content: center; z-index: 10;
+}
+.sq-modal {
+  background: #fff; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,.2);
+  width: 400px; max-height: 70%; display: flex; flex-direction: column; overflow: hidden;
+}
+.sq-modal-header {
+  padding: 12px 16px; border-bottom: 1px solid #e0dbd4; font-weight: 600; font-size: 14px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.sq-modal-body { flex: 1; overflow-y: auto; padding: 8px; }
+.sq-modal-file {
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 6px;
+  cursor: pointer; font-size: 12.5px; color: #3a3a3c;
+}
+.sq-modal-file:hover { background: #f0ede9; }
+.sq-modal-footer { padding: 10px 16px; border-top: 1px solid #e0dbd4; display: flex; gap: 8px; }
+.sq-modal-footer input {
+  flex: 1; padding: 6px 10px; border: 1px solid #d4d0ca; border-radius: 6px;
+  font-size: 12.5px; outline: none; font-family: 'SF Mono', Menlo, monospace;
+}
+.sq-modal-footer input:focus { border-color: #c4a478; }
 `;
 
 const Icon = ({ name, size }) => <span className="material-symbols-outlined" style={{ fontSize: size || 16 }}>{name}</span>;
 
+// Load sql.js in a fresh hidden iframe (the top document has webpack __dirname polyfills
+// that confuse sql.js's Node detection; a clean iframe avoids that).
 let _sqlPromise = null;
 const loadSqlJs = () => {
   if (_sqlPromise) return _sqlPromise;
   _sqlPromise = new Promise((resolve, reject) => {
-    const script = document.createElement('script');
+    const iframe = top.document.createElement('iframe');
+    iframe.style.display = 'none';
+    top.document.body.appendChild(iframe);
+    const iframeWin = iframe.contentWindow;
+    const script = iframeWin.document.createElement('script');
     script.src = SQL_JS_CDN;
     script.onload = () => {
-      const initSqlJs = window.initSqlJs || self.initSqlJs;
-      initSqlJs({ locateFile: () => SQL_WASM_CDN }).then(resolve).catch(reject);
+      const initFn = iframeWin.initSqlJs;
+      if (!initFn) { reject(new Error('initSqlJs not found')); return; }
+      initFn({ locateFile: () => SQL_WASM_CDN })
+        .then(SQL => { resolve(SQL); })
+        .catch(reject);
     };
-    script.onerror = () => reject(new Error('Failed to load sql.js'));
-    document.head.appendChild(script);
+    script.onerror = () => reject(new Error('Failed to load sql.js script'));
+    iframeWin.document.head.appendChild(script);
   });
   return _sqlPromise;
+};
+
+const scanDbFiles = (dirs) => {
+  const files = [];
+  const walk = (dir, depth) => {
+    if (depth > 4) return;
+    try {
+      for (const name of fs.readdirSync(dir)) {
+        const path = `${dir}/${name}`;
+        try {
+          if (fs.statSync(path).isDirectory()) walk(path, depth + 1);
+          else if (/\.(db|sqlite|sqlite3)$/i.test(name)) files.push(path);
+        } catch (_) {}
+      }
+    } catch (_) {}
+  };
+  for (const d of dirs) walk(d, 0);
+  return files;
 };
 
 const ResultTable = ({ columns, values }) => (
@@ -111,6 +161,55 @@ const ResultTable = ({ columns, values }) => (
   </table>
 );
 
+// ── File picker modal ──
+const FilePickerModal = ({ onSelect, onClose }) => {
+  const dbFiles = scanDbFiles(['/home/user1', '/mnt', '/opt/apps', '/tmp']);
+  return (
+    <div className="sq-modal-overlay" onClick={onClose}>
+      <div className="sq-modal" onClick={e => e.stopPropagation()}>
+        <div className="sq-modal-header">
+          Open Database
+          <button className="sq-btn" onClick={onClose} style={{ padding: '2px 8px' }}>✕</button>
+        </div>
+        <div className="sq-modal-body">
+          {dbFiles.length === 0 ? (
+            <div style={{ padding: 24, color: '#bbb', textAlign: 'center' }}>
+              <div>No .db / .sqlite files found</div>
+              <div style={{ fontSize: 11, marginTop: 4 }}>Create a new database or drop a file into VFS first</div>
+            </div>
+          ) : dbFiles.map(path => (
+            <div key={path} className="sq-modal-file" onClick={() => { onSelect(path); onClose(); }}>
+              <Icon name="database" />{path}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ── Save dialog modal ──
+const SaveModal = ({ defaultName, onSave, onClose }) => {
+  const [path, setPath] = useState(`/home/user1/${defaultName || 'database.db'}`);
+  const inputRef = useRef(null);
+  useEffect(() => { setTimeout(() => inputRef.current?.focus(), 50); }, []);
+  return (
+    <div className="sq-modal-overlay" onClick={onClose}>
+      <div className="sq-modal" onClick={e => e.stopPropagation()} style={{ width: 360 }}>
+        <div className="sq-modal-header">
+          Save Database
+          <button className="sq-btn" onClick={onClose} style={{ padding: '2px 8px' }}>✕</button>
+        </div>
+        <div className="sq-modal-footer">
+          <input ref={inputRef} value={path} onChange={e => setPath(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { onSave(path); onClose(); }}} />
+          <button className="sq-btn primary" onClick={() => { onSave(path); onClose(); }}>Save</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ── Main app ──
 const App = ({ initialFile }) => {
   const [SQL, setSQL] = useState(null);
   const [db, setDb] = useState(null);
@@ -122,9 +221,13 @@ const App = ({ initialFile }) => {
   const [status, setStatus] = useState('');
   const [loading, setLoading] = useState(true);
   const [dbName, setDbName] = useState('');
+  const [showOpen, setShowOpen] = useState(false);
+  const [showSave, setShowSave] = useState(false);
 
   useEffect(() => {
-    loadSqlJs().then(sql => { setSQL(sql); setLoading(false); }).catch(e => { setError('Failed to load sql.js: ' + e.message); setLoading(false); });
+    loadSqlJs()
+      .then(sql => { setSQL(sql); setLoading(false); })
+      .catch(e => { setError('Failed to load sql.js: ' + e.message); setLoading(false); });
   }, []);
 
   useEffect(() => {
@@ -135,7 +238,7 @@ const App = ({ initialFile }) => {
     if (!SQL) return;
     try {
       const data = fs.readFileSync(path);
-      const uArr = data instanceof Buffer ? new Uint8Array(data) : new Uint8Array(data);
+      const uArr = new Uint8Array(data instanceof Buffer ? data : data);
       const newDb = new SQL.Database(uArr);
       if (db) db.close();
       setDb(newDb);
@@ -153,31 +256,6 @@ const App = ({ initialFile }) => {
     }
   }, [SQL, db]);
 
-  const browseFile = useCallback(() => {
-    if (!SQL) return;
-    try {
-      const scanDir = (dir) => {
-        const files = [];
-        try {
-          for (const name of fs.readdirSync(dir)) {
-            const path = `${dir}/${name}`;
-            try {
-              if (fs.statSync(path).isDirectory()) files.push(...scanDir(path));
-              else if (name.endsWith('.db') || name.endsWith('.sqlite') || name.endsWith('.sqlite3')) files.push(path);
-            } catch (_) {}
-          }
-        } catch (_) {}
-        return files;
-      };
-      const dbFiles = [...scanDir('/home/user1'), ...scanDir('/mnt')];
-      if (dbFiles.length === 0) { setError('No .db/.sqlite files found in /home/user1 or /mnt'); return; }
-      if (dbFiles.length === 1) { openFile(dbFiles[0]); return; }
-      const choice = dbFiles.map((f, i) => `${i + 1}. ${f}`).join('\n');
-      const idx = parseInt(prompt(`Found ${dbFiles.length} database files:\n${choice}\n\nEnter number:`), 10);
-      if (idx >= 1 && idx <= dbFiles.length) openFile(dbFiles[idx - 1]);
-    } catch (e) { setError('Browse failed: ' + e.message); }
-  }, [SQL, openFile]);
-
   const createNew = useCallback(() => {
     if (!SQL) return;
     if (db) db.close();
@@ -192,16 +270,15 @@ const App = ({ initialFile }) => {
     setStatus('New empty database created');
   }, [SQL, db]);
 
-  const saveFile = useCallback(() => {
+  const doSave = useCallback((path) => {
     if (!db) return;
-    const path = prompt('Save to VFS path:', `/home/user1/${dbName || 'database.db'}`);
-    if (!path) return;
     try {
       const data = db.export();
       fs.writeFileSync(path, Buffer.from(data));
+      setDbName(path.split('/').pop());
       setStatus(`Saved to ${path} (${data.byteLength} bytes)`);
     } catch (e) { setError('Save failed: ' + e.message); }
-  }, [db, dbName]);
+  }, [db]);
 
   const selectTable = useCallback((name) => {
     setActiveTable(name);
@@ -233,21 +310,22 @@ const App = ({ initialFile }) => {
   if (loading) return <div className="sq-root"><div className="sq-loading">Loading sql.js…</div></div>;
 
   return (
-    <div className="sq-root">
+    <div className="sq-root" style={{ position: 'relative' }}>
       <div className="sq-toolbar">
         <div className="sq-toolbar-title">{dbName ? `SQLite — ${dbName}` : 'SQLite Browser'}</div>
-        <button className="sq-btn" onClick={createNew}><Icon name="add" /> New</button>
-        <button className="sq-btn" onClick={browseFile}><Icon name="folder_open" /> Open</button>
-        <button className="sq-btn" onClick={saveFile} disabled={!db}><Icon name="save" /> Save</button>
+        <button className="sq-btn" onClick={createNew} disabled={!SQL}><Icon name="add" /> New</button>
+        <button className="sq-btn" onClick={() => setShowOpen(true)} disabled={!SQL}><Icon name="folder_open" /> Open</button>
+        <button className="sq-btn" onClick={() => setShowSave(true)} disabled={!db}><Icon name="save" /> Save</button>
       </div>
+      {error && <div className="sq-error">{error}</div>}
       <div className="sq-body">
         {!db ? (
           <div className="sq-empty">
             <Icon name="database" size={48} />
-            <div>No database open</div>
+            <div>{SQL ? 'No database open' : 'Loading sql.js engine…'}</div>
             <div style={{ display: 'flex', gap: 8 }}>
               <button className="sq-btn primary" onClick={createNew}>Create New</button>
-              <button className="sq-btn" onClick={browseFile}>Open from VFS</button>
+              <button className="sq-btn" onClick={() => setShowOpen(true)}>Open from VFS</button>
             </div>
           </div>
         ) : (
@@ -259,7 +337,7 @@ const App = ({ initialFile }) => {
                   <Icon name="table_chart" />{t}
                 </div>
               ))}
-              {tables.length === 0 && <div style={{ padding: '12px 8px', color: '#bbb', fontSize: 12 }}>No tables yet</div>}
+              {tables.length === 0 && <div style={{ padding: '12px 8px', color: '#bbb', fontSize: 12 }}>No tables yet — run CREATE TABLE</div>}
             </div>
             <div className="sq-main-area">
               <div className="sq-editor">
@@ -282,6 +360,8 @@ const App = ({ initialFile }) => {
         )}
       </div>
       <div className="sq-status">{status || 'Ready'}</div>
+      {showOpen && <FilePickerModal onSelect={openFile} onClose={() => setShowOpen(false)} />}
+      {showSave && <SaveModal defaultName={dbName} onSave={doSave} onClose={() => setShowSave(false)} />}
     </div>
   );
 };
