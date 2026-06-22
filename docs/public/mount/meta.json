@@ -397,11 +397,6 @@
     "force_reload": true
   },
   {
-    "path": "/etc/settings/16-app-manager.js",
-    "file": "/etc/settings/16-app-manager.js",
-    "force_reload": true
-  },
-  {
     "path": "/etc/settings/17-startup.js",
     "file": "/etc/settings/17-startup.js",
     "force_reload": true
