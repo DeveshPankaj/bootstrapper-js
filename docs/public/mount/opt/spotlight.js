@@ -25,15 +25,31 @@ const collectFiles = (dir, depth = 0) => {
 
 const buildIndex = () => {
   const items = []
+  const seen = new Set()
   // Registered commands (dedup by name, skip callable:false internals)
   try {
     const cmds = (platform.host.commands$ && platform.host.commands$.getValue) ? platform.host.commands$.getValue() : []
-    const seen = new Set()
     for (const cmd of cmds) {
       if (cmd.meta?.callable === false) continue
       if (seen.has(cmd.name)) continue
       seen.add(cmd.name)
-      items.push({ label: cmd.meta?.title || cmd.name, subtitle: `command: ${cmd.name}`, type: 'command', cmd })
+      items.push({ label: cmd.meta?.title || cmd.name, subtitle: `command: ${cmd.name}`, type: 'command', cmd, icon: cmd.meta?.icon })
+    }
+  } catch (_) {}
+  // Installed apps (covers HTML apps whose commands aren't registered at boot)
+  try {
+    const installed = JSON.parse(fs.readFileSync('/etc/pkg/installed.json', 'utf8') || '[]')
+    for (const pkg of installed) {
+      if (pkg.commandName && seen.has(pkg.commandName)) continue
+      if (seen.has(pkg.id)) continue
+      seen.add(pkg.commandName || pkg.id)
+      items.push({
+        label: pkg.name || pkg.id,
+        subtitle: `app: ${pkg.id}`,
+        type: 'installed-app',
+        pkg,
+        icon: pkg.icon,
+      })
     }
   } catch (_) {}
   // VFS files
@@ -70,8 +86,20 @@ const Spotlight = ({ onClose }) => {
     onClose()
     setTimeout(() => {
       try {
-        if (item.type === 'command') item.cmd.exec()
-        else platform.host.exec(platform, item.path)
+        if (item.type === 'command') {
+          item.cmd.exec()
+        } else if (item.type === 'installed-app') {
+          const pkg = item.pkg
+          if (pkg.commandName) {
+            try { platform.host.callCommand(pkg.commandName) } catch (_) {
+              platform.host.exec(platform, pkg.mainFile)
+            }
+          } else {
+            platform.host.exec(platform, pkg.mainFile)
+          }
+        } else {
+          platform.host.exec(platform, item.path)
+        }
       } catch (err) { console.error('spotlight exec error', err) }
     }, 80)
   }
