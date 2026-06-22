@@ -10,7 +10,8 @@
     "appDir": "/opt/apps/file-explorer",
     "mainFile": "/opt/apps/file-explorer/main.js",
     "commandName": "explorer",
-    "installedAt": 1750636800000
+    "installedAt": 1750636800000,
+    "registryUrl": "/registry.json"
   },
   {
     "id": "terminal",
@@ -23,7 +24,8 @@
     "appDir": "/opt/apps/terminal",
     "mainFile": "/opt/apps/terminal/main.html",
     "commandName": "ui.terminal",
-    "installedAt": 1750636800000
+    "installedAt": 1750636800000,
+    "registryUrl": "/registry.json"
   },
   {
     "id": "settings",
@@ -36,7 +38,8 @@
     "appDir": "/opt/apps/settings",
     "mainFile": "/opt/apps/settings/main.html",
     "commandName": "ui.settings",
-    "installedAt": 1750636800000
+    "installedAt": 1750636800000,
+    "registryUrl": "/registry.json"
   },
   {
     "id": "app-drawer",
@@ -49,7 +52,8 @@
     "appDir": "/opt/apps/app-drawer",
     "mainFile": "/opt/apps/app-drawer/main.js",
     "commandName": "ui.app-drawer",
-    "installedAt": 1750636800000
+    "installedAt": 1750636800000,
+    "registryUrl": "/registry.json"
   },
   {
     "id": "pkg-manager",
@@ -62,7 +66,8 @@
     "appDir": "/opt/apps/pkg-manager",
     "mainFile": "/opt/apps/pkg-manager/main.js",
     "commandName": "ui.pkg-manager",
-    "installedAt": 1750636800000
+    "installedAt": 1750636800000,
+    "registryUrl": "/registry.json"
   },
   {
     "id": "spotlight",
@@ -75,7 +80,8 @@
     "appDir": "/opt/apps/spotlight",
     "mainFile": "/opt/apps/spotlight/main.js",
     "commandName": "ui.spotlight",
-    "installedAt": 1750636800000
+    "installedAt": 1750636800000,
+    "registryUrl": "/registry.json"
   },
   {
     "id": "sqlite-browser",
@@ -88,7 +94,8 @@
     "appDir": "/opt/apps/sqlite-browser",
     "mainFile": "/opt/apps/sqlite-browser/main.js",
     "commandName": "ui.sqlite",
-    "installedAt": 1750636800000
+    "installedAt": 1750636800000,
+    "registryUrl": "/registry.json"
   },
   {
     "id": "nn-ide",
@@ -101,7 +108,8 @@
     "appDir": "/opt/apps/nn-ide",
     "mainFile": "/opt/apps/nn-ide/main.js",
     "commandName": "ui.nn-ide",
-    "installedAt": 1750636800000
+    "installedAt": 1750636800000,
+    "registryUrl": "/registry.json"
   },
   {
     "id": "wamp-client",
@@ -114,6 +122,7 @@
     "appDir": "/opt/apps/wamp-client",
     "mainFile": "/opt/apps/wamp-client/main.js",
     "commandName": "webamp",
-    "installedAt": 1750636800000
+    "installedAt": 1750636800000,
+    "registryUrl": "/registry.json"
   }
 ]

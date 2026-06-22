@@ -373,6 +373,10 @@ const CSS = `
 }
 
 .pkg-version { font-size: 11px; color: #aaa; margin-left: 2px; }
+.pkg-registry-badge {
+  font-size: 10px; color: #8a7a6a; background: rgba(0,0,0,.05); padding: 1px 6px;
+  border-radius: 4px; margin-left: 2px; cursor: default;
+}
 
 .pkg-installed-badge {
   display: inline-flex;
@@ -611,6 +615,7 @@ const DiscoverView = ({ registryApps, installed, loading, fetchError, onInstall,
                   <div className="pkg-card-footer">
                     {app.category && <span className="pkg-tag">{app.category}</span>}
                     <span className="pkg-version">v{app.version}</span>
+                    {app._registryUrl && <span className="pkg-registry-badge" title={app._registryUrl}>{(() => { try { return new URL(app._registryUrl).hostname; } catch(_) { return 'local'; } })()}</span>}
                     <div style={{ flex: 1 }} />
                     {isInstalled ? (
                       <span className="pkg-installed-badge">
@@ -697,6 +702,7 @@ const InstalledView = ({ installed, onUninstall, uninstallingId }) => {
                       v{pkg.version}
                       {pkg.category && <> · {pkg.category}</>}
                       {pkg.author && <> · {pkg.author}</>}
+                      {pkg.registryUrl && <> · <span title={pkg.registryUrl}>{(() => { try { return new URL(pkg.registryUrl).hostname; } catch(_) { return 'local'; } })()}</span></>}
                       {pkg.installedAt && <> · Installed {fmtDate(pkg.installedAt)}</>}
                     </div>
                   </div>
