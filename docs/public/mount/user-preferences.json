@@ -1,7 +1,8 @@
 {
-    "wallpaper": "https://wallpapercave.com/wp/wp11284901.png",
-    "default_wallpaper": "/public/wallpaper-1.webp",
+    "wallpaper": "/public/wp-12.png",
+    "default_wallpaper": "/public/wp-12.png",
     "wallpapers": [
+      "/public/wp-12.png",
       "/public/wallpaper-1.webp",
       "/public/wallpaper-2.jpg",
       "/public/wallpaper-3.jpg",
