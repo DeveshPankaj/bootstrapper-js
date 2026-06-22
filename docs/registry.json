@@ -127,18 +127,6 @@
       "main": "main.js"
     },
     {
-      "id": "regex-tester",
-      "name": "Regex Tester",
-      "description": "Test and debug regular expressions with live match highlighting and capture group details.",
-      "version": "1.0.0",
-      "icon": "manage_search",
-      "category": "Dev",
-      "author": "bootstrapper-js",
-      "commandName": "ui.regex-tester",
-      "files": [{ "dest": "main.js", "src": "/public/mount/home/user1/apps/regex-tester.js" }],
-      "main": "main.js"
-    },
-    {
       "id": "dev-utils",
       "name": "Dev Utils",
       "description": "All-in-one developer utilities: JWT decoder, Base64, URL encode, SHA hash, UUID generator, color picker, and timestamp converter.",
@@ -151,42 +139,6 @@
       "main": "main.js"
     },
     {
-      "id": "mermaid-viewer",
-      "name": "Diagram",
-      "description": "Mermaid diagram editor and renderer with zoom, pan, pin overlay, and PNG export.",
-      "version": "1.0.0",
-      "icon": "account_tree",
-      "category": "Dev",
-      "author": "bootstrapper-js",
-      "commandName": "ui.mermaid",
-      "files": [{ "dest": "main.js", "src": "/public/mount/home/user1/apps/mermaid-viewer.js" }],
-      "main": "main.js"
-    },
-    {
-      "id": "http-client",
-      "name": "HTTP Client",
-      "description": "A Postman-style HTTP client. Build and send requests, inspect responses, and save collections to VFS.",
-      "version": "1.0.0",
-      "icon": "http",
-      "category": "Dev",
-      "author": "bootstrapper-js",
-      "commandName": "ui.http-client",
-      "files": [{ "dest": "main.js", "src": "/public/mount/home/user1/apps/http-client.js" }],
-      "main": "main.js"
-    },
-    {
-      "id": "snippet-manager",
-      "name": "Snippets",
-      "description": "Persistent code snippet manager. Organize snippets by language and tags, stored in the VFS.",
-      "version": "1.0.0",
-      "icon": "code_blocks",
-      "category": "Dev",
-      "author": "bootstrapper-js",
-      "commandName": "ui.snippets",
-      "files": [{ "dest": "main.js", "src": "/public/mount/home/user1/apps/snippet-manager.js" }],
-      "main": "main.js"
-    },
-    {
       "id": "sqlite-browser",
       "name": "SQLite Browser",
       "description": "Browse and query SQLite .db files stored in the VFS. Powered by sql.js (WASM).",
@@ -196,6 +148,18 @@
       "author": "bootstrapper-js",
       "commandName": "ui.sqlite",
       "files": [{ "dest": "main.js", "src": "/public/mount/home/user1/apps/sqlite-browser.js" }],
+      "main": "main.js"
+    },
+    {
+      "id": "mermaid-viewer",
+      "name": "Diagram",
+      "description": "Mermaid diagram editor and renderer with zoom, pan, pin overlay, and PNG export.",
+      "version": "1.0.0",
+      "icon": "account_tree",
+      "category": "Dev",
+      "author": "bootstrapper-js",
+      "commandName": "ui.mermaid",
+      "files": [{ "dest": "main.js", "src": "/public/mount/home/user1/apps/mermaid-viewer.js" }],
       "main": "main.js"
     },
     {
@@ -341,18 +305,6 @@
       "author": "bootstrapper-js",
       "files": [{ "dest": "main.html", "src": "/public/mount/home/user1/apps/FS.html" }],
       "main": "main.html"
-    },
-    {
-      "id": "portfolio",
-      "name": "Portfolio",
-      "description": "Visual project showcase. Reads project.json files from /home/user1/projects/ and renders a card gallery.",
-      "version": "1.0.0",
-      "icon": "work",
-      "category": "Portfolio",
-      "author": "bootstrapper-js",
-      "commandName": "ui.portfolio",
-      "files": [{ "dest": "main.js", "src": "/public/mount/home/user1/apps/portfolio.js" }],
-      "main": "main.js"
     },
     {
       "id": "snake-game",
