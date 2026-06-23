@@ -32245,7 +32245,7 @@ platform.host.registerCommand('ui.notepad', (body, props, file) => {
     render(container, Object.assign(Object.assign({}, props), { file }));
     fullScreenCallbackRef.current = props.toggleFullScreen;
     resizeCallbackRef.current = props.setBoundingClientRect;
-}, { icon: 'edit_note', title: 'Edit (about.html)', fullScreen: false });
+}, { icon: 'edit_note', title: 'Edit (about.html)', fullScreen: false, fileExtensions: ['*'] });
 const render = (container, props) => {
     const root = createRoot(container);
     root.render(React.createElement(App, Object.assign({}, props)));
