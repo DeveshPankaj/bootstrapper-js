@@ -1718,15 +1718,14 @@ async function diffStartTraining() {
     // Reuse existing model (continue training) or build fresh from graph
     if (diffModel) {
       diffSetStatus('Continuing training from existing weights…');
-      diffModel.compile({ optimizer: tf.train.adam(lr), loss: 'meanSquaredError' });
       log(`Continuing diffusion training (${diffModel.countParams().toLocaleString()} params)`, 'ok');
     } else {
       diffSetStatus('Building denoiser from graph…');
       diffModel = await buildTfModel();
-      diffModel.compile({ optimizer: tf.train.adam(lr), loss: 'meanSquaredError' });
       log(`Diffusion model (from graph): ${diffModel.countParams().toLocaleString()} params`, 'ok');
     }
 
+    const optimizer = tf.train.adam(lr);
     const schedule = makeNoiseSchedule(T);
     const N = images.length;
 
@@ -1741,47 +1740,35 @@ async function diffStartTraining() {
 
     const repeats = parseInt(document.getElementById('diff-repeats').value) || 5;
 
-    const px = size * size * channels;
-
     for (let epoch = 0; epoch < epochs; epoch++) {
       if (diffStopReq) break;
+      let epochLoss = 0, steps = 0;
 
-      // Build a batch with all samples × repeats, each with different noise/timestep
-      const batchN = N * repeats;
-      const cleanBuf = new Float32Array(batchN * px);
-      const noisyBuf = new Float32Array(batchN * px);
-      const tBuf = new Float32Array(batchN);
-      const txtBuf = new Float32Array(batchN * textDim);
-
+      // Train on each sample individually using optimizer.minimize (most reliable across all backends)
       for (let i = 0; i < N; i++) {
+        if (diffStopReq) break;
         for (let r = 0; r < repeats; r++) {
-          const idx = i * repeats + r;
           const t = Math.floor(Math.random() * T);
           const alphaCp = schedule.alphasCumprod[t];
           const sa = Math.sqrt(alphaCp), sna = Math.sqrt(1 - alphaCp);
-          const off = idx * px;
-          cleanBuf.set(images[i], off);
-          for (let j = 0; j < px; j++) {
-            // Box-Muller for proper Gaussian noise
-            const u1 = Math.random() || 1e-10, u2 = Math.random();
-            const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
-            noisyBuf[off + j] = images[i][j] * sa + z * sna;
-          }
-          tBuf[idx] = t / T;
-          txtBuf.set(textEmbeddings[i], idx * textDim);
+
+          const lossVal = optimizer.minimize(() => {
+            const cleanImg = tf.tensor4d(images[i], [1, size, size, channels]);
+            const noise = tf.randomNormal([1, size, size, channels]);
+            const noisyImg = cleanImg.mul(sa).add(noise.mul(sna));
+            const tNorm = tf.tensor2d([[t / T]]);
+            const txtTensor = tf.tensor2d([Array.from(textEmbeddings[i])]);
+            const predicted = diffModel.apply([noisyImg, tNorm, txtTensor]);
+            return tf.losses.meanSquaredError(cleanImg, predicted).mean();
+          }, true);
+
+          epochLoss += lossVal.dataSync()[0];
+          lossVal.dispose();
+          steps++;
         }
       }
 
-      const cleanT = tf.tensor4d(cleanBuf, [batchN, size, size, channels]);
-      const noisyT = tf.tensor4d(noisyBuf, [batchN, size, size, channels]);
-      const tT = tf.tensor2d(tBuf, [batchN, 1]);
-      const txtT = tf.tensor2d(txtBuf, [batchN, textDim]);
-
-      // Use model.fit (reliable loss reporting) instead of trainOnBatch (returns 0 in Chrome WebGL)
-      const history = await diffModel.fit([noisyT, tT, txtT], cleanT, { epochs: 1, batchSize: batchN, verbose: 0 });
-      const avgLoss = history.history.loss[0];
-
-      cleanT.dispose(); noisyT.dispose(); tT.dispose(); txtT.dispose();
+      const avgLoss = epochLoss / steps;
       const pct = ((epoch + 1) / epochs * 100).toFixed(0);
       document.getElementById('diff-prog').style.width = pct + '%';
       diffSetStatus(`Epoch ${epoch+1}/${epochs} — loss: ${avgLoss.toFixed(6)}`);
