@@ -103,6 +103,11 @@ const ImageViewer = ({ filePath }) => {
 
 const run = (...args) => {
   const [body, props, filePath] = args;
+  if (!body) {
+    const path = filePath || args[2] || '';
+    platform.host.execCommand(`service('001-core.layout','open-window')(command('ui.imageviewer'),'${path.replace(/'/g,"\\'")}')`, platform);
+    return;
+  }
   const container = platform.window.document.createElement('div');
   const root = createRoot(container);
   body.appendChild(container);

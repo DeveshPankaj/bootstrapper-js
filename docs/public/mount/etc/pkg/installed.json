@@ -1,5 +1,19 @@
 [
   {
+    "id": "image-viewer",
+    "name": "Image Viewer",
+    "version": "1.0.0",
+    "description": "View images stored in the VFS. Supports PNG, JPG, WebP, and other browser-renderable formats.",
+    "icon": "image",
+    "category": "Files",
+    "author": "bootstrapper-js",
+    "appDir": "/opt/apps/image-viewer",
+    "mainFile": "/opt/apps/image-viewer/main.js",
+    "commandName": "ui.imageviewer",
+    "installedAt": 1750636800000,
+    "registryUrl": "/registry.json"
+  },
+  {
     "id": "file-explorer",
     "name": "File Explorer",
     "version": "1.0.0",

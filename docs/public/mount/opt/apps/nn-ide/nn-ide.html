@@ -202,8 +202,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
             <button class="btn" onclick="diffLoadDataset()" style="padding:2px 8px">Load</button></div></div>
           <div class="tcg"><div class="tcl">Image Size</div><input class="tci" id="diff-size" type="number" value="32" min="8" max="64" style="width:50px"></div>
           <div class="tcg"><div class="tcl">Timesteps</div><input class="tci" id="diff-steps" type="number" value="50" min="10" max="200" style="width:50px"></div>
-          <div class="tcg"><div class="tcl">Epochs</div><input class="tci" id="diff-epochs" type="number" value="20" min="1" style="width:50px"></div>
-          <div class="tcg"><div class="tcl">LR</div><input class="tci" id="diff-lr" value="0.001" style="width:60px"></div>
+          <div class="tcg"><div class="tcl">Epochs</div><input class="tci" id="diff-epochs" type="number" value="100" min="1" style="width:50px"></div>
+          <div class="tcg"><div class="tcl">LR</div><input class="tci" id="diff-lr" value="0.0005" style="width:60px"></div>
+          <div class="tcg"><div class="tcl">Repeats/sample</div><input class="tci" id="diff-repeats" type="number" value="5" min="1" max="20" style="width:40px" title="Train on each sample N times per epoch with different noise"></div>
           <div class="tcg"><div class="tcl">Preview every</div><input class="tci" id="diff-preview-n" type="number" value="5" min="1" style="width:40px"> epochs</div>
           <div class="tcg"><div class="tcl">Checkpoint every</div><input class="tci" id="diff-ckpt-n" type="number" value="10" min="0" style="width:40px" title="Save weights every N epochs (0=off)"> epochs</div>
         </div>
@@ -329,7 +330,7 @@ function portPos(nodeId, side, idx) {
 }
 
 // ── Render ─────────────────────────────────────────────────────────────────
-function renderAll() { renderNodes(); renderEdges(); }
+function renderAll() { renderNodes(); requestAnimationFrame(renderEdges); }
 
 function pSummary(node) {
   return Object.entries(node.params||{}).map(([k,v])=>`${k}:${v}`).join('  ');
@@ -1728,34 +1729,36 @@ async function diffStartTraining() {
       const fs = getFS(); if (fs) { mkdirpSync(fs, runDir); }
     } catch(_) {}
 
+    const repeats = parseInt(document.getElementById('diff-repeats').value) || 5;
+
     for (let epoch = 0; epoch < epochs; epoch++) {
       if (diffStopReq) break;
       let epochLoss = 0, batchCount = 0;
 
-      // For each sample, pick random timestep, add noise, train denoiser to predict clean image
+      // For each sample, train multiple times with different timesteps and noise
       for (let i = 0; i < N; i++) {
         if (diffStopReq) break;
-        const t = Math.floor(Math.random() * T);
-        const alphaCp = schedule.alphasCumprod[t];
-        const sqrtAlpha = Math.sqrt(alphaCp);
-        const sqrtOneMinusAlpha = Math.sqrt(1 - alphaCp);
-
-        // Clean image tensor
         const cleanImg = tf.tensor4d(images[i], [1, size, size, channels]);
-        // Random noise
-        const noise = tf.randomNormal([1, size, size, channels]);
-        // Noisy image: x_t = sqrt(alpha_bar) * x_0 + sqrt(1 - alpha_bar) * noise
-        const noisyImg = cleanImg.mul(sqrtAlpha).add(noise.mul(sqrtOneMinusAlpha));
-
-        const tNorm = tf.tensor2d([[t / T]]);
         const txtTensor = tf.tensor2d([Array.from(textEmbeddings[i])]);
 
-        // Train: predict clean image from noisy
-        const loss = await diffModel.trainOnBatch([noisyImg, tNorm, txtTensor], cleanImg);
-        epochLoss += typeof loss === 'number' ? loss : loss[0];
-        batchCount++;
+        for (let r = 0; r < repeats; r++) {
+          const t = Math.floor(Math.random() * T);
+          const alphaCp = schedule.alphasCumprod[t];
+          const sqrtAlpha = Math.sqrt(alphaCp);
+          const sqrtOneMinusAlpha = Math.sqrt(1 - alphaCp);
 
-        cleanImg.dispose(); noise.dispose(); noisyImg.dispose(); tNorm.dispose(); txtTensor.dispose();
+          const noise = tf.randomNormal([1, size, size, channels]);
+          const noisyImg = cleanImg.mul(sqrtAlpha).add(noise.mul(sqrtOneMinusAlpha));
+          const tNorm = tf.tensor2d([[t / T]]);
+
+          const loss = await diffModel.trainOnBatch([noisyImg, tNorm, txtTensor], cleanImg);
+          epochLoss += typeof loss === 'number' ? loss : loss[0];
+          batchCount++;
+
+          noise.dispose(); noisyImg.dispose(); tNorm.dispose();
+        }
+
+        cleanImg.dispose(); txtTensor.dispose();
       }
 
       const avgLoss = epochLoss / batchCount;
@@ -1830,49 +1833,40 @@ async function diffStartTraining() {
 
 function diffStopTraining() { diffStopReq = true; stopReq = true; diffSetStatus('Stopping…'); }
 
-// Sample (generate) an image using reverse diffusion
+// Sample (generate) an image using iterative denoising.
+// The model predicts x₀ (clean image) from x_t. We iteratively refine:
+// at each step, blend the predicted x₀ back toward x_t for the previous timestep,
+// adding a small amount of noise to maintain stochasticity.
 function diffSampleImage(schedule, size, channels, textDim, prompt) {
   const T = schedule.betas.length;
   const txtVec = textEmbed(prompt, textDim);
   const txtTensor = tf.tensor2d([Array.from(txtVec)]);
 
-  // Start from pure noise
   let x = tf.randomNormal([1, size, size, channels]);
 
-  // Reverse diffusion: denoise step by step
   for (let t = T - 1; t >= 0; t--) {
     const tNorm = tf.tensor2d([[t / T]]);
     const predicted = diffModel.predict([x, tNorm, txtTensor]);
 
-    // Simplified DDPM step: blend predicted clean with current noisy
-    const alpha = schedule.alphas[t];
-    const alphaCp = schedule.alphasCumprod[t];
-    const beta = schedule.betas[t];
-
-    // x_{t-1} = (1/sqrt(alpha_t)) * (x_t - (beta_t / sqrt(1-alpha_bar_t)) * (x_t - predicted)) + sigma * z
-    const sqrtAlpha = Math.sqrt(alpha);
-    const coeff = beta / Math.sqrt(1 - alphaCp);
-
-    const diff = x.sub(predicted).mul(coeff);
-    const xPrev = x.sub(diff).div(sqrtAlpha);
-
-    x.dispose(); tNorm.dispose(); predicted.dispose(); diff.dispose();
-
     if (t > 0) {
-      const sigma = Math.sqrt(beta);
-      const noise = tf.randomNormal([1, size, size, channels]).mul(sigma);
-      const xWithNoise = xPrev.add(noise);
-      xPrev.dispose(); noise.dispose();
-      x = xWithNoise;
-    } else {
+      // Blend: move toward predicted clean image, keep some noise for next step
+      const prevAlphaCp = schedule.alphasCumprod[t - 1];
+      const w = Math.sqrt(prevAlphaCp);       // weight for predicted x₀
+      const nw = Math.sqrt(1 - prevAlphaCp);  // weight for fresh noise
+      const noise = tf.randomNormal([1, size, size, channels]);
+      const xPrev = predicted.mul(w).add(noise.mul(nw));
+      x.dispose(); tNorm.dispose(); predicted.dispose(); noise.dispose();
       x = xPrev;
+    } else {
+      // Final step: just use the prediction directly
+      x.dispose(); tNorm.dispose();
+      x = predicted;
     }
   }
 
   txtTensor.dispose();
   const result = Array.from(x.dataSync());
   x.dispose();
-  // Clamp to 0-1
   return new Float32Array(result.map(v => Math.max(0, Math.min(1, v))));
 }
 

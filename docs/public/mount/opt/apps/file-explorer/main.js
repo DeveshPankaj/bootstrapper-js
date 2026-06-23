@@ -603,8 +603,8 @@ const App = (props) => {
         cmd: `service('/home/user1/apps/explorer.js', 'zip-compress')('${file.path}')`,
       });
       actions.push({ id: 'divider_open_with', type: 'divider', title: '' });
-      const fileExt = file.name.split('.').pop().toLowerCase();
-      const openWithApps = platform.host.getCommandsForExtension ? platform.host.getCommandsForExtension(fileExt) : [];
+      const owExt = file.name.split('.').pop().toLowerCase();
+      const openWithApps = platform.host.getCommandsForExtension ? platform.host.getCommandsForExtension(owExt) : [];
       const openWithChildren = openWithApps.map(app => ({
         id: `ow_${app.name}`, type: 'action', title: app.title,
         cmd: `service('001-core.layout','open-window')(command('${app.name}'),'${file.path}')`,
