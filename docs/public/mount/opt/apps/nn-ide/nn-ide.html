@@ -175,6 +175,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
               <option value="adam">Adam</option><option value="sgd">SGD</option><option value="rmsprop">RMSProp</option>
             </select></div>
           <div class="tcg"><div class="tcl">Auto-Infer</div><input class="tci" id="tc-autoinfer" type="number" value="0" min="0" style="width:50px" title="Run inference every N epochs (0=off)"></div>
+          <div class="tcg"><div class="tcl">Checkpoint</div><input class="tci" id="tc-ckpt" type="number" value="0" min="0" style="width:50px" title="Save weights every N epochs (0=off)"></div>
         </div>
         <div class="pbw"><div class="pb" id="prog"></div></div>
         <div id="prog-lbl" style="font-size:10px;color:var(--dim);margin-bottom:5px">Ready</div>
@@ -204,10 +205,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
           <div class="tcg"><div class="tcl">Epochs</div><input class="tci" id="diff-epochs" type="number" value="20" min="1" style="width:50px"></div>
           <div class="tcg"><div class="tcl">LR</div><input class="tci" id="diff-lr" value="0.001" style="width:60px"></div>
           <div class="tcg"><div class="tcl">Preview every</div><input class="tci" id="diff-preview-n" type="number" value="5" min="1" style="width:40px"> epochs</div>
-          <div class="tcg">
-            <button class="btn pri" id="diff-train-btn" onclick="diffStartTraining()">▶ Train Diffusion</button>
-            <button class="btn danger" id="diff-stop-btn" style="display:none" onclick="diffStopTraining()">■ Stop</button>
-          </div>
+          <div class="tcg"><div class="tcl">Checkpoint every</div><input class="tci" id="diff-ckpt-n" type="number" value="10" min="0" style="width:40px" title="Save weights every N epochs (0=off)"> epochs</div>
         </div>
         <div id="diff-status" style="font-size:10px;color:var(--dim);margin:6px 0">Ready — load a dataset to begin</div>
         <div class="pbw"><div class="pb" id="diff-prog"></div></div>
@@ -802,16 +800,22 @@ async function startTraining() {
 
   try {
     await ensureTf();
-    log('Building model…','inf');
-    if (tfModel) { tfModel.dispose(); tfModel=null; }
-    tfModel = await buildTfModel();
-    log(`Params: ${tfModel.countParams().toLocaleString()}`,'ok');
 
     const optName = document.getElementById('tc-opt').value;
     const lr = parseFloat(document.getElementById('tc-lr').value)||0.001;
     const epochs = parseInt(document.getElementById('tc-ep').value)||5;
     const batchSize = parseInt(document.getElementById('tc-bs').value)||64;
     const dsType = document.getElementById('tc-ds').value;
+    const ckptEvery = parseInt(document.getElementById('tc-ckpt').value)||0;
+
+    // Reuse existing model (continue training) or build fresh
+    if (tfModel) {
+      log('Continuing training from existing weights…','inf');
+    } else {
+      log('Building model…','inf');
+      tfModel = await buildTfModel();
+    }
+    log(`Params: ${tfModel.countParams().toLocaleString()}`,'ok');
 
     const opt = optName==='sgd' ? tf.train.sgd(lr) : optName==='rmsprop' ? tf.train.rmsprop(lr) : tf.train.adam(lr);
     tfModel.compile({optimizer:opt, loss:'categoricalCrossentropy', metrics:['accuracy']});
@@ -952,6 +956,18 @@ async function startTraining() {
             }
           }
 
+          // Checkpoint: save weights every N epochs
+          if (ckptEvery > 0 && (epoch + 1) % ckptEvery === 0) {
+            try {
+              const fs = getFS();
+              if (fs && tfModel) {
+                const ckptDir = trainRunDir + '/checkpoint_ep' + (epoch + 1);
+                await tfModel.save(vfsSaveHandler(fs, ckptDir));
+                log(`Checkpoint saved → ${ckptDir}`, 'ok');
+              }
+            } catch(e) { log('Checkpoint save error: ' + e.message, 'err'); }
+          }
+
           await tf.nextFrame();
         }
       }
@@ -1008,7 +1024,7 @@ async function startTraining() {
   }
 }
 
-function stopTraining() { stopReq=true; log('Stop requested…','inf'); }
+function stopTraining() { stopReq=true; diffStopReq=true; log('Stop requested…','inf'); }
 function quickInfer() {
   if (!tfModel) { log('No model available yet','err'); return; }
   renderInferenceUI();
@@ -1671,8 +1687,6 @@ async function diffStartTraining() {
   }
   diffTraining = true; diffStopReq = false;
   isTraining = true; stopReq = false;
-  document.getElementById('diff-train-btn').disabled = true;
-  document.getElementById('diff-stop-btn').style.display = '';
   document.getElementById('train-btn').disabled = true;
   document.getElementById('stop-btn').style.display = '';
   document.getElementById('diff-previews').innerHTML = '';
@@ -1683,17 +1697,24 @@ async function diffStartTraining() {
   const epochs = parseInt(document.getElementById('diff-epochs').value) || 20;
   const lr = parseFloat(document.getElementById('diff-lr').value) || 0.001;
   const previewEvery = parseInt(document.getElementById('diff-preview-n').value) || 5;
+  const ckptEvery = parseInt(document.getElementById('diff-ckpt-n').value) || 0;
   const textNode = nodes.find(n => n.type === 'text-embed');
   const textDim = textNode ? parseInt(textNode.params.dim || 32) : 32;
 
   try {
     await ensureTf();
-    diffSetStatus('Building denoiser from graph…');
 
-    if (diffModel) { diffModel.dispose(); diffModel = null; }
-    diffModel = await buildTfModel();
-    diffModel.compile({ optimizer: tf.train.adam(lr), loss: 'meanSquaredError' });
-    log(`Diffusion model (from graph): ${diffModel.countParams().toLocaleString()} params`, 'ok');
+    // Reuse existing model (continue training) or build fresh from graph
+    if (diffModel) {
+      diffSetStatus('Continuing training from existing weights…');
+      diffModel.compile({ optimizer: tf.train.adam(lr), loss: 'meanSquaredError' });
+      log(`Continuing diffusion training (${diffModel.countParams().toLocaleString()} params)`, 'ok');
+    } else {
+      diffSetStatus('Building denoiser from graph…');
+      diffModel = await buildTfModel();
+      diffModel.compile({ optimizer: tf.train.adam(lr), loss: 'meanSquaredError' });
+      log(`Diffusion model (from graph): ${diffModel.countParams().toLocaleString()} params`, 'ok');
+    }
 
     const schedule = makeNoiseSchedule(T);
     const N = images.length;
@@ -1763,8 +1784,36 @@ async function diffStartTraining() {
         } catch(e) { log('Preview generation error: ' + e.message, 'err'); }
       }
 
+      // Checkpoint: save weights every N epochs
+      if (ckptEvery > 0 && (epoch + 1) % ckptEvery === 0) {
+        try {
+          const fs = getFS();
+          if (fs && diffModel) {
+            const ckptDir = runDir + '/checkpoint_ep' + (epoch + 1);
+            await diffModel.save(vfsSaveHandler(fs, ckptDir));
+            log(`Checkpoint saved → ${ckptDir}`, 'ok');
+          }
+        } catch(e) { log('Checkpoint save error: ' + e.message, 'err'); }
+      }
+
       await tf.nextFrame();
     }
+
+    // Save final weights
+    try {
+      const fs = getFS();
+      if (fs && diffModel && !diffStopReq) {
+        const finalDir = runDir + '/model';
+        await diffModel.save(vfsSaveHandler(fs, finalDir));
+        const latestDir = '/home/user1/projects/nn-training/diffusion-latest';
+        mkdirpSync(fs, latestDir);
+        const Buf = (typeof Buffer !== 'undefined' ? Buffer : window.top.Buffer);
+        fs.writeFileSync(latestDir + '/model.json', fs.readFileSync(finalDir + '/model.json'));
+        fs.writeFileSync(latestDir + '/weights.bin', Buf.from(fs.readFileSync(finalDir + '/weights.bin')));
+        log('Final weights saved → ' + finalDir, 'ok');
+        log('Latest diffusion model updated → ' + latestDir, 'ok');
+      }
+    } catch(e) { log('Final save error: ' + e.message, 'err'); }
 
     diffSetStatus(diffStopReq ? 'Stopped.' : 'Training complete!');
     log('Diffusion training ' + (diffStopReq ? 'stopped.' : 'complete!'), diffStopReq ? 'inf' : 'ok');
@@ -1774,8 +1823,6 @@ async function diffStartTraining() {
   } finally {
     diffTraining = false;
     isTraining = false;
-    document.getElementById('diff-train-btn').disabled = false;
-    document.getElementById('diff-stop-btn').style.display = 'none';
     document.getElementById('train-btn').disabled = false;
     document.getElementById('stop-btn').style.display = 'none';
   }
