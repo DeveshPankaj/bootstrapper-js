@@ -1645,8 +1645,8 @@ function diffLoadDataset() {
   }
 }
 
-// Canvas helper: render float array to canvas
-function floatsToCanvas(floats, w, h, ch) {
+// Convert float array to a data URL (works in both Chrome and Firefox iframes)
+function floatsToDataUrl(floats, w, h, ch) {
   const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
   const ctx = cv.getContext('2d');
   const imgData = ctx.createImageData(w, h);
@@ -1657,25 +1657,35 @@ function floatsToCanvas(floats, w, h, ch) {
     imgData.data[i*4+3] = 255;
   }
   ctx.putImageData(imgData, 0, 0);
-  return cv;
+  return cv.toDataURL();
 }
 
-function addPreviewImage(canvas, label) {
+// Draw a data URL onto a target canvas (via Image — bypasses Chrome's offscreen canvas restriction)
+function drawDataUrlToCanvas(dataUrl, targetCanvas, tw, th) {
+  const img = new Image();
+  img.onload = () => {
+    const ctx = targetCanvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    ctx.clearRect(0, 0, tw, th);
+    ctx.drawImage(img, 0, 0, tw, th);
+  };
+  img.src = dataUrl;
+}
+
+function addPreviewImage(dataUrl, label) {
   const container = document.getElementById('diff-previews');
   const wrap = document.createElement('div');
   wrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:2px;';
   const scaled = document.createElement('canvas');
   scaled.width = 64; scaled.height = 64;
   scaled.style.cssText = 'width:64px;height:64px;border:1px solid var(--border);border-radius:4px;image-rendering:pixelated;';
-  const sctx = scaled.getContext('2d');
-  sctx.imageSmoothingEnabled = false;
-  sctx.drawImage(canvas, 0, 0, 64, 64);
   wrap.appendChild(scaled);
   const lbl = document.createElement('div');
   lbl.style.cssText = 'font-size:9px;color:var(--dim);max-width:64px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;';
   lbl.textContent = label;
   wrap.appendChild(lbl);
   container.appendChild(wrap);
+  drawDataUrlToCanvas(dataUrl, scaled, 64, 64);
 }
 
 // Training loop
@@ -1772,16 +1782,18 @@ async function diffStartTraining() {
         try {
           const previewPrompt = prompts[Math.floor(Math.random() * N)];
           const genResult = diffSampleImage(schedule, size, channels, textDim, previewPrompt);
-          const cv = floatsToCanvas(genResult, size, size, channels);
-          addPreviewImage(cv, `ep${epoch+1}: ${previewPrompt.slice(0,20)}`);
+          const dataUrl = floatsToDataUrl(genResult, size, size, channels);
+          addPreviewImage(dataUrl, `ep${epoch+1}: ${previewPrompt.slice(0,20)}`);
 
           // Save preview to VFS
           try {
             const fs = getFS();
             if (fs) {
-              const imgData = cv.getContext('2d').getImageData(0, 0, size, size);
-              const png = canvasToPngBuffer(cv);
-              if (png) fs.writeFileSync(runDir + '/preview_ep' + (epoch+1) + '.png', png);
+              const b64 = dataUrl.split(',')[1];
+              if (b64) {
+                const Buf = typeof Buffer !== 'undefined' ? Buffer : window.top.Buffer;
+                fs.writeFileSync(runDir + '/preview_ep' + (epoch+1) + '.png', Buf.from(b64, 'base64'));
+              }
             }
           } catch(_) {}
         } catch(e) { log('Preview generation error: ' + e.message, 'err'); }
@@ -1886,16 +1898,14 @@ function diffGenerate() {
   setTimeout(() => {
     try {
       const result = diffSampleImage(schedule, size, 3, textDim, prompt);
-      const cv = floatsToCanvas(result, size, size, 3);
+      const dataUrl = floatsToDataUrl(result, size, size, 3);
       const container = document.getElementById('diff-gen-result');
       const scaled = document.createElement('canvas');
       scaled.width = 128; scaled.height = 128;
       scaled.style.cssText = 'width:128px;height:128px;border:1px solid var(--border);border-radius:6px;image-rendering:pixelated;';
-      const sctx = scaled.getContext('2d');
-      sctx.imageSmoothingEnabled = false;
-      sctx.drawImage(cv, 0, 0, 128, 128);
       container.innerHTML = '';
       container.appendChild(scaled);
+      drawDataUrlToCanvas(dataUrl, scaled, 128, 128);
       const label = document.createElement('div');
       label.style.cssText = 'font-size:10px;color:var(--dim);margin-top:4px;';
       label.textContent = `"${prompt}" — ${size}×${size}, ${T} steps`;
