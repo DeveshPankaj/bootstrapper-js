@@ -1163,18 +1163,15 @@ export const render = (container: HTMLElement) => {
             { id: 'delete_file', type: 'action', title: 'Delete', cmd: `service('root', 'fs')('rm', '${file.path}')` },
         ]
         if (file.type === 'file') {
+            const ext = file.name.split('.').pop()?.toLowerCase() || ''
+            const registered = platform.host.getCommandsForExtension(ext)
+            const owChildren = registered.map(app => ({
+                id: `ow_${app.name}`, type: 'action' as const, title: app.title,
+                cmd: `service('001-core.layout','open-window')(command('${app.name}'),'${file.path}')`,
+            }))
+            owChildren.push({ id: 'ow_browser', type: 'action' as const, title: 'Browser', cmd: `service('001-core.layout','open-window')(command('ui.iframe'),'${file.path}')` })
             items.push({ id: 'divider_ow', type: 'divider', title: '' })
-            items.push({
-                id: 'open_with', type: 'group', title: 'Open with',
-                children: [
-                    { id: 'ow_notepad', type: 'action', title: 'Text Editor',  cmd: `service('001-core.layout','open-window')(command('ui.notepad'),'${file.path}')` },
-                    { id: 'ow_vscode',  type: 'action', title: 'VS Code',      cmd: `service('001-core.layout','open-window')(command('ui.vs-code'),'${file.path}')` },
-                    { id: 'ow_csv',     type: 'action', title: 'Spreadsheet',  cmd: `service('001-core.layout','open-window')(command('ui.csv-viewer'),'${file.path}')` },
-                    { id: 'ow_image',   type: 'action', title: 'Image Viewer', cmd: `service('001-core.layout','open-window')(command('ui.imageviewer'),'${file.path}')` },
-                    { id: 'ow_python',  type: 'action', title: 'Python REPL',  cmd: `service('001-core.layout','open-window')(command('ui.python'),'${file.path}')` },
-                    { id: 'ow_browser', type: 'action', title: 'Browser',      cmd: `service('001-core.layout','open-window')(command('ui.iframe'),'${file.path}')` },
-                ]
-            })
+            items.push({ id: 'open_with', type: 'group', title: 'Open with', children: owChildren })
         }
         showContextMenuHandler(event.clientX, event.clientY, items)
     }

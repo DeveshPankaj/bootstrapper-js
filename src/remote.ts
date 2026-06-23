@@ -391,8 +391,15 @@ platform.host.registerCommand('ui.settings', () => {
 // 2. Called with no args (e.g. from a keybinding or Spotlight) — routes through
 //    open-window so the window manager sets up body/props correctly.
 platform.host.registerCommand('explorer', (...args: unknown[]) => {
+    // Respect Settings > Apps > Default File Explorer preference
+    try {
+        const prefs = JSON.parse(host.getFS().readFileSync('/user-preferences.json', 'utf-8') as string)
+        if (prefs.default_explorer && prefs.default_explorer !== 'explorer') {
+            const alt = platform.host.getCommand(prefs.default_explorer)
+            if (alt) { alt.exec(...args); return }
+        }
+    } catch (_) {}
     if (!args.length || args[0] == null) {
-        // Standalone call: use open-window so the window gets proper body/props.
         platform.host.execCommand("service('001-core.layout', 'open-window') (command('explorer'))", platform)
         return
     }
