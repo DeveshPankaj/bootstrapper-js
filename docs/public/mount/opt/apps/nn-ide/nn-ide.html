@@ -122,6 +122,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
     <div id="logo">🧠 Neural Network IDE</div>
     <button class="btn" onclick="loadPreset('mnist-dense')">📋 MNIST Dense</button>
     <button class="btn" onclick="loadPreset('mnist-conv')">📋 MNIST Conv</button>
+    <button class="btn" onclick="loadPreset('diffusion-32')">📋 Diffusion 32×32</button>
     <button class="btn" onclick="clearGraph()">🗑 Clear</button>
     <div class="sp"></div>
     <button class="btn" onclick="saveGraph()">💾 Save</button>
@@ -259,6 +260,13 @@ const NDEFS = {
   'tanh':        {label:'Tanh',         color:'#f783ac', cat:'Activations',nIn:1,  nOut:1, p:{}},
   'softmax':     {label:'Softmax',      color:'#f783ac', cat:'Activations',nIn:1,  nOut:1, p:{}},
   'gelu':        {label:'GELU',         color:'#f783ac', cat:'Activations',nIn:1,  nOut:1, p:{}},
+  // Diffusion
+  'noise-input': {label:'Noise Input',  color:'#ffd43b', cat:'Diffusion',  nIn:0,  nOut:1, p:{width:'32',height:'32',channels:'3'}},
+  'time-embed':  {label:'Time Embed',   color:'#ffd43b', cat:'Diffusion',  nIn:0,  nOut:1, p:{dim:'64'}},
+  'text-embed':  {label:'Text Embed',   color:'#ffd43b', cat:'Diffusion',  nIn:0,  nOut:1, p:{dim:'32'}},
+  'denoise-out': {label:'Denoise Output',color:'#ff6b6b',cat:'Diffusion',  nIn:1,  nOut:0, p:{channels:'3'}},
+  'conv2d-t':    {label:'Conv2D↑',      color:'#ffd43b', cat:'Diffusion',  nIn:1,  nOut:1, p:{filters:'32',kernelSize:'3',padding:'same',activation:'relu'}},
+  'upsample2d':  {label:'UpSample2D',   color:'#ffd43b', cat:'Diffusion',  nIn:1,  nOut:1, p:{size:'2'}},
 };
 const ACTS = ['linear','relu','sigmoid','tanh','softmax','elu','selu','gelu'];
 
@@ -625,13 +633,61 @@ async function buildTfModel() {
       case 'tanh':    { out = tf.layers.activation({activation:'tanh'}).apply(t0); break; }
       case 'softmax': { out = tf.layers.softmax().apply(t0); break; }
       case 'gelu':    { out = tf.layers.activation({activation:'gelu'}).apply(t0); break; }
+      // Diffusion nodes
+      case 'noise-input': {
+        out = tf.input({shape:[parseInt(p.height||32), parseInt(p.width||32), parseInt(p.channels||3)]});
+        break;
+      }
+      case 'time-embed': {
+        const dim = parseInt(p.dim||64);
+        const noiseNode = nodes.find(n=>n.type==='noise-input');
+        const iw = noiseNode ? parseInt(noiseNode.params.width||32) : 32;
+        const ih = noiseNode ? parseInt(noiseNode.params.height||32) : 32;
+        const tIn = tf.input({shape:[1]});
+        let tE = tf.layers.dense({units:dim, activation:'relu'}).apply(tIn);
+        tE = tf.layers.dense({units:iw*ih}).apply(tE);
+        out = tf.layers.reshape({targetShape:[ih,iw,1]}).apply(tE);
+        tMap.set(node.id+'_input', tIn);
+        break;
+      }
+      case 'text-embed': {
+        const dim = parseInt(p.dim||32);
+        const noiseNode = nodes.find(n=>n.type==='noise-input');
+        const iw = noiseNode ? parseInt(noiseNode.params.width||32) : 32;
+        const ih = noiseNode ? parseInt(noiseNode.params.height||32) : 32;
+        const txtIn = tf.input({shape:[dim]});
+        let txtE = tf.layers.dense({units:64, activation:'relu'}).apply(txtIn);
+        txtE = tf.layers.dense({units:iw*ih}).apply(txtE);
+        out = tf.layers.reshape({targetShape:[ih,iw,1]}).apply(txtE);
+        tMap.set(node.id+'_input', txtIn);
+        break;
+      }
+      case 'denoise-out': {
+        const ch = parseInt(p.channels||3);
+        out = tf.layers.conv2d({filters:ch, kernelSize:1, padding:'same', activation:'sigmoid'}).apply(t0);
+        break;
+      }
+      case 'conv2d-t': {
+        out = tf.layers.conv2d({filters:parseInt(p.filters||32), kernelSize:parseInt(p.kernelSize||3), padding:p.padding||'same', activation:p.activation||'relu'}).apply(t0);
+        break;
+      }
+      case 'upsample2d': {
+        out = tf.layers.upSampling2d({size:[parseInt(p.size||2), parseInt(p.size||2)]}).apply(t0);
+        break;
+      }
       default: throw new Error(`Unknown node type: ${node.type}`);
     }
     tMap.set(node.id, out);
   }
 
-  const ins  = sorted.filter(n=>n.type==='input'||n.type==='img-input').map(n=>tMap.get(n.id));
-  const outs = sorted.filter(n=>n.type==='output').map(n=>tMap.get(n.id));
+  const inputTypes = ['input','img-input','noise-input'];
+  const embedTypes = ['time-embed','text-embed'];
+  const outputTypes = ['output','denoise-out'];
+  const ins  = [
+    ...sorted.filter(n=>inputTypes.includes(n.type)).map(n=>tMap.get(n.id)),
+    ...sorted.filter(n=>embedTypes.includes(n.type)).map(n=>tMap.get(n.id+'_input')),
+  ].filter(Boolean);
+  const outs = sorted.filter(n=>outputTypes.includes(n.type)).map(n=>tMap.get(n.id));
   if (!ins.length)  throw new Error('No input node.');
   if (!outs.length) throw new Error('No output node.');
   return tf.model({inputs:ins, outputs:outs});
@@ -733,6 +789,10 @@ async function ensureTf() {
 
 async function startTraining() {
   if (isTraining) return;
+  // Detect diffusion pipeline and route accordingly
+  if (nodes.some(n => n.type === 'noise-input' || n.type === 'denoise-out')) {
+    return diffStartTraining();
+  }
   isTraining=true; stopReq=false;
   document.getElementById('train-btn').disabled=true;
   document.getElementById('stop-btn').style.display='';
@@ -1020,6 +1080,32 @@ const PRESETS = {
       {id:'e8',from:'n8',to:'n9',fromPort:0,toPort:0},
     ],
   },
+  'diffusion-32': {
+    mode: 'diffusion',
+    nodes:[
+      // Left column: inputs
+      {id:'d1', type:'noise-input', x:60,  y:20,   params:{width:'32',height:'32',channels:'3'}},
+      {id:'d2', type:'time-embed',  x:60,  y:160,  params:{dim:'64'}},
+      {id:'d3', type:'text-embed',  x:60,  y:300,  params:{dim:'32'}},
+      // Right column: UNet denoiser
+      {id:'d4', type:'concatenate', x:280, y:80,   params:{axis:'-1'}},
+      {id:'d5', type:'conv2d',      x:280, y:220,  params:{filters:'32',kernelSize:'3',padding:'same',activation:'relu'}},
+      {id:'d6', type:'conv2d',      x:280, y:360,  params:{filters:'64',kernelSize:'3',padding:'same',activation:'relu'}},
+      {id:'d7', type:'conv2d',      x:280, y:500,  params:{filters:'64',kernelSize:'3',padding:'same',activation:'relu'}},
+      {id:'d8', type:'conv2d',      x:280, y:640,  params:{filters:'32',kernelSize:'3',padding:'same',activation:'relu'}},
+      {id:'d9', type:'denoise-out', x:280, y:780,  params:{channels:'3'}},
+    ],
+    edges:[
+      {id:'de1',from:'d1',to:'d4',fromPort:0,toPort:0},
+      {id:'de2',from:'d2',to:'d4',fromPort:0,toPort:1},
+      {id:'de3',from:'d3',to:'d4',fromPort:0,toPort:2},
+      {id:'de4',from:'d4',to:'d5',fromPort:0,toPort:0},
+      {id:'de5',from:'d5',to:'d6',fromPort:0,toPort:0},
+      {id:'de6',from:'d6',to:'d7',fromPort:0,toPort:0},
+      {id:'de7',from:'d7',to:'d8',fromPort:0,toPort:0},
+      {id:'de8',from:'d8',to:'d9',fromPort:0,toPort:0},
+    ],
+  },
 };
 
 function loadPreset(name) {
@@ -1028,6 +1114,12 @@ function loadPreset(name) {
   edges=p.edges.map(e=>({...e}));
   tx=40; ty=20; scale=1; applyTransform();
   selectNode(null); renderAll();
+  // Switch to diffusion tab when loading a diffusion preset
+  if (p.mode === 'diffusion') {
+    switchBTab('diffusion');
+    document.getElementById('tc-ds').value = 'folder';
+    onDsChange();
+  }
   log('Loaded preset: '+name,'inf');
 }
 
@@ -1572,27 +1664,36 @@ function addPreviewImage(canvas, label) {
 // Training loop
 async function diffStartTraining() {
   if (diffTraining) return;
-  if (!diffDataset) { diffSetStatus('Load a dataset first'); return; }
+  if (!diffDataset) {
+    diffSetStatus('Load a dataset first');
+    diffLoadDataset();
+    if (!diffDataset) return;
+  }
   diffTraining = true; diffStopReq = false;
+  isTraining = true; stopReq = false;
   document.getElementById('diff-train-btn').disabled = true;
   document.getElementById('diff-stop-btn').style.display = '';
+  document.getElementById('train-btn').disabled = true;
+  document.getElementById('stop-btn').style.display = '';
   document.getElementById('diff-previews').innerHTML = '';
+  switchBTab('diffusion');
 
   const { images, prompts, size, channels } = diffDataset;
   const T = parseInt(document.getElementById('diff-steps').value) || 50;
   const epochs = parseInt(document.getElementById('diff-epochs').value) || 20;
   const lr = parseFloat(document.getElementById('diff-lr').value) || 0.001;
   const previewEvery = parseInt(document.getElementById('diff-preview-n').value) || 5;
-  const textDim = 32;
+  const textNode = nodes.find(n => n.type === 'text-embed');
+  const textDim = textNode ? parseInt(textNode.params.dim || 32) : 32;
 
   try {
     await ensureTf();
-    diffSetStatus('Building denoiser…');
+    diffSetStatus('Building denoiser from graph…');
 
     if (diffModel) { diffModel.dispose(); diffModel = null; }
-    diffModel = buildDiffusionModel(size, channels, T, textDim);
+    diffModel = await buildTfModel();
     diffModel.compile({ optimizer: tf.train.adam(lr), loss: 'meanSquaredError' });
-    log(`Diffusion model: ${diffModel.countParams().toLocaleString()} params`, 'ok');
+    log(`Diffusion model (from graph): ${diffModel.countParams().toLocaleString()} params`, 'ok');
 
     const schedule = makeNoiseSchedule(T);
     const N = images.length;
@@ -1672,12 +1773,15 @@ async function diffStartTraining() {
     log('Diffusion error: ' + e.message, 'err');
   } finally {
     diffTraining = false;
+    isTraining = false;
     document.getElementById('diff-train-btn').disabled = false;
     document.getElementById('diff-stop-btn').style.display = 'none';
+    document.getElementById('train-btn').disabled = false;
+    document.getElementById('stop-btn').style.display = 'none';
   }
 }
 
-function diffStopTraining() { diffStopReq = true; diffSetStatus('Stopping…'); }
+function diffStopTraining() { diffStopReq = true; stopReq = true; diffSetStatus('Stopping…'); }
 
 // Sample (generate) an image using reverse diffusion
 function diffSampleImage(schedule, size, channels, textDim, prompt) {
