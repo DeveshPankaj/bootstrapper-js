@@ -695,5 +695,10 @@
     "path": "/opt/apps/speed-test/main.html",
     "file": "/opt/apps/speed-test/main.html",
     "force_reload": true
+  },
+  {
+    "path": "/home/user1/projects/diffusion-dataset/dataset.json",
+    "file": "/home/user1/projects/diffusion-dataset/dataset.json",
+    "force_reload": false
   }
 ]

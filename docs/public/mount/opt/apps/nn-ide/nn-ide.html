@@ -129,6 +129,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
     <button class="btn" onclick="loadModelWeights()">📦 Load Weights</button>
     <button class="btn pri" id="train-btn" onclick="startTraining()">▶ Train</button>
     <button class="btn danger" id="stop-btn" style="display:none" onclick="stopTraining()">■ Stop</button>
+    <button class="btn" id="qinfer-btn" style="display:none" onclick="quickInfer()">▷ Quick Predict</button>
   </div>
 
   <div id="main">
@@ -151,6 +152,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
       <div class="btab act" id="bt-train" onclick="switchBTab('train')">Training</div>
       <div class="btab" id="bt-log" onclick="switchBTab('log')">Log</div>
       <div class="btab" id="bt-infer" onclick="switchBTab('infer')">▷ Inference</div>
+      <div class="btab" id="bt-diffusion" onclick="switchBTab('diffusion')">🎨 Diffusion</div>
       <button id="bot-expand" title="Expand / Collapse" onclick="toggleBotExpand()">⌄</button>
     </div>
     <div id="bc">
@@ -171,6 +173,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
             <select class="tcs" id="tc-opt">
               <option value="adam">Adam</option><option value="sgd">SGD</option><option value="rmsprop">RMSProp</option>
             </select></div>
+          <div class="tcg"><div class="tcl">Auto-Infer</div><input class="tci" id="tc-autoinfer" type="number" value="0" min="0" style="width:50px" title="Run inference every N epochs (0=off)"></div>
         </div>
         <div class="pbw"><div class="pb" id="prog"></div></div>
         <div id="prog-lbl" style="font-size:10px;color:var(--dim);margin-bottom:5px">Ready</div>
@@ -180,9 +183,47 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
           <div class="met"><div class="ml">Val Loss</div><div class="mv" id="m-vloss">—</div></div>
           <div class="met"><div class="ml">Val Acc</div><div class="mv" id="m-vacc">—</div></div>
         </div>
+        <div id="train-infer-preview" style="display:none;margin-top:8px;border-top:1px solid var(--border);padding-top:8px">
+          <div style="font-size:9px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Live Inference Preview</div>
+          <div style="display:flex;gap:10px;align-items:flex-start">
+            <canvas id="train-infer-canvas" width="56" height="56" style="width:56px;height:56px;background:#000;border:1px solid var(--border);border-radius:4px"></canvas>
+            <div id="train-infer-result" style="font-size:11px;color:var(--text);flex:1"></div>
+          </div>
+        </div>
       </div>
       <div id="bc-log" style="display:none"><div id="log"></div></div>
       <div id="bc-infer" style="display:none"><div id="infer-placeholder">Train a model first, then run inference here.</div></div>
+      <div id="bc-diffusion" style="display:none">
+        <div class="tc" id="diff-config">
+          <div class="tcg"><div class="tcl">Dataset Folder</div>
+            <div style="display:flex;gap:4px"><input class="tci" id="diff-folder" placeholder="/home/user1/projects/diffusion-dataset" value="/home/user1/projects/diffusion-dataset" style="flex:1">
+            <button class="btn" onclick="diffLoadDataset()" style="padding:2px 8px">Load</button></div></div>
+          <div class="tcg"><div class="tcl">Image Size</div><input class="tci" id="diff-size" type="number" value="32" min="8" max="64" style="width:50px"></div>
+          <div class="tcg"><div class="tcl">Timesteps</div><input class="tci" id="diff-steps" type="number" value="50" min="10" max="200" style="width:50px"></div>
+          <div class="tcg"><div class="tcl">Epochs</div><input class="tci" id="diff-epochs" type="number" value="20" min="1" style="width:50px"></div>
+          <div class="tcg"><div class="tcl">LR</div><input class="tci" id="diff-lr" value="0.001" style="width:60px"></div>
+          <div class="tcg"><div class="tcl">Preview every</div><input class="tci" id="diff-preview-n" type="number" value="5" min="1" style="width:40px"> epochs</div>
+          <div class="tcg">
+            <button class="btn pri" id="diff-train-btn" onclick="diffStartTraining()">▶ Train Diffusion</button>
+            <button class="btn danger" id="diff-stop-btn" style="display:none" onclick="diffStopTraining()">■ Stop</button>
+          </div>
+        </div>
+        <div id="diff-status" style="font-size:10px;color:var(--dim);margin:6px 0">Ready — load a dataset to begin</div>
+        <div class="pbw"><div class="pb" id="diff-prog"></div></div>
+        <div id="diff-dataset-info" style="font-size:11px;color:var(--text);margin:4px 0"></div>
+        <div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">
+          <div style="font-size:9px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Generated Previews</div>
+          <div id="diff-previews" style="display:flex;gap:6px;flex-wrap:wrap;min-height:40px"></div>
+        </div>
+        <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px">
+          <div style="font-size:9px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Text-to-Image Inference</div>
+          <div style="display:flex;gap:6px;align-items:center">
+            <input class="tci" id="diff-prompt" placeholder="a red circle on white background" style="flex:1">
+            <button class="btn pri" id="diff-gen-btn" onclick="diffGenerate()">Generate</button>
+          </div>
+          <div id="diff-gen-result" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"></div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -695,6 +736,7 @@ async function startTraining() {
   isTraining=true; stopReq=false;
   document.getElementById('train-btn').disabled=true;
   document.getElementById('stop-btn').style.display='';
+  document.getElementById('qinfer-btn').style.display='';
   switchBTab('log');
   setProgLabel('Starting…');
 
@@ -775,6 +817,81 @@ async function startTraining() {
               fs.writeFileSync(trainRunDir+'/epochs.json', JSON.stringify(epochHistory, null, 2));
           } catch(_) {}
 
+          // Auto-inference preview
+          const autoInferInterval = parseInt(document.getElementById('tc-autoinfer').value) || 0;
+          if (autoInferInterval > 0 && (epoch + 1) % autoInferInterval === 0) {
+            try {
+              // Pick a random test sample and run inference
+              const previewEl = document.getElementById('train-infer-preview');
+              previewEl.style.display = '';
+              const sampleIdx = Math.floor(Math.random() * (xTe.shape[0]));
+              const sample = xTe.slice([sampleIdx, 0], [1, -1]);
+              const pred = tfModel.predict(sample);
+              const probs = Array.from(pred.dataSync());
+              pred.dispose();
+
+              // Draw sample on mini canvas
+              const miniCv = document.getElementById('train-infer-canvas');
+              const miniCtx = miniCv.getContext('2d');
+              const sampleData = Array.from(sample.dataSync());
+              sample.dispose();
+              const imgNode = nodes.find(n => n.type === 'img-input');
+              const w = imgNode ? parseInt(imgNode.params.width || 28) : 28;
+              const h = imgNode ? parseInt(imgNode.params.height || 28) : 28;
+              const ch = imgNode ? parseInt(imgNode.params.channels || 1) : 1;
+              const off = document.createElement('canvas'); off.width = w; off.height = h;
+              const octx = off.getContext('2d');
+              const imgData = octx.createImageData(w, h);
+              for (let i = 0; i < w * h; i++) {
+                const v = ch === 1 ? sampleData[i] * 255 : 0;
+                if (ch === 1) {
+                  imgData.data[i * 4] = imgData.data[i * 4 + 1] = imgData.data[i * 4 + 2] = v;
+                } else {
+                  imgData.data[i * 4] = sampleData[i * 3] * 255;
+                  imgData.data[i * 4 + 1] = sampleData[i * 3 + 1] * 255;
+                  imgData.data[i * 4 + 2] = sampleData[i * 3 + 2] * 255;
+                }
+                imgData.data[i * 4 + 3] = 255;
+              }
+              octx.putImageData(imgData, 0, 0);
+              miniCtx.clearRect(0, 0, 56, 56);
+              miniCtx.imageSmoothingEnabled = false;
+              miniCtx.drawImage(off, 0, 0, 56, 56);
+
+              // Show prediction
+              const resEl = document.getElementById('train-infer-result');
+              const top3 = probs.map((p, i) => ({ p, i })).sort((a, b) => b.p - a.p).slice(0, 3);
+              const ds = document.getElementById('tc-ds').value;
+              const labels = ds === 'mnist' ? DIGIT_LABELS : null;
+              resEl.innerHTML = top3.map(({ p, i }) => {
+                const name = labels?.[i] ?? `Class ${i}`;
+                return `<div style="display:flex;justify-content:space-between"><span>${name}</span><span style="color:var(--accent)">${(p * 100).toFixed(1)}%</span></div>`;
+              }).join('');
+
+              // Save preview image to VFS
+              try {
+                const fs = getFS();
+                if (fs) {
+                  miniCv.toBlob(blob => {
+                    if (!blob) return;
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                      try {
+                        const Buf = typeof Buffer !== 'undefined' ? Buffer : window.top.Buffer;
+                        fs.writeFileSync(trainRunDir + '/preview_ep' + (epoch + 1) + '.png', Buf.from(reader.result));
+                      } catch(_) {}
+                    };
+                    reader.readAsArrayBuffer(blob);
+                  });
+                }
+              } catch (_) {}
+
+              log(`Auto-infer ep${epoch + 1}: top prediction = ${labels?.[top3[0].i] ?? 'Class ' + top3[0].i} (${(top3[0].p * 100).toFixed(1)}%)`, 'inf');
+            } catch (e) {
+              log('Auto-infer error: ' + e.message, 'err');
+            }
+          }
+
           await tf.nextFrame();
         }
       }
@@ -827,10 +944,16 @@ async function startTraining() {
     isTraining=false;
     document.getElementById('train-btn').disabled=false;
     document.getElementById('stop-btn').style.display='none';
+    document.getElementById('qinfer-btn').style.display='none';
   }
 }
 
 function stopTraining() { stopReq=true; log('Stop requested…','inf'); }
+function quickInfer() {
+  if (!tfModel) { log('No model available yet','err'); return; }
+  renderInferenceUI();
+  switchBTab('infer');
+}
 function setProgLabel(s) { document.getElementById('prog-lbl').textContent=s; }
 
 async function loadModelWeights() {
@@ -1232,12 +1355,12 @@ function showPredictions(resEl, probs) {
 // ── Bottom tabs ────────────────────────────────────────────────────────────
 function switchBTab(name) {
   bTab=name;
-  document.getElementById('bt-train').classList.toggle('act',name==='train');
-  document.getElementById('bt-log').classList.toggle('act',name==='log');
-  document.getElementById('bt-infer').classList.toggle('act',name==='infer');
-  document.getElementById('bc-train').style.display=name==='train'?'':'none';
-  document.getElementById('bc-log').style.display=name==='log'?'':'none';
-  document.getElementById('bc-infer').style.display=name==='infer'?'':'none';
+  ['train','log','infer','diffusion'].forEach(t => {
+    const tab = document.getElementById('bt-'+t);
+    const content = document.getElementById('bc-'+t);
+    if (tab) tab.classList.toggle('act', name===t);
+    if (content) content.style.display = name===t ? '' : 'none';
+  });
 }
 function onDsChange() {
   document.getElementById('tc-folder-g').style.display=document.getElementById('tc-ds').value==='folder'?'':'none';
@@ -1293,6 +1416,363 @@ function toggleBotExpand() {
     btn.textContent = '⌄';
     _botExpanded = false;
   }
+}
+
+// ── Diffusion Pipeline ────────────────────────────────────────────────────
+let diffModel = null, diffDataset = null, diffTraining = false, diffStopReq = false;
+
+function diffSetStatus(msg) { document.getElementById('diff-status').textContent = msg; }
+
+// Render a shape sample to pixel data (Float32Array, values 0-1, HWC layout)
+function renderShapeSample(sample, size) {
+  const cv = document.createElement('canvas'); cv.width = size; cv.height = size;
+  const ctx = cv.getContext('2d');
+  const [br, bg, bb] = sample.bg || [255,255,255];
+  ctx.fillStyle = `rgb(${br},${bg},${bb})`; ctx.fillRect(0, 0, size, size);
+  const [cr, cg, cb] = sample.color;
+  ctx.fillStyle = `rgb(${cr},${cg},${cb})`;
+  const cx = size/2, cy = size/2, r = size*0.35;
+  if (sample.shape === 'circle') {
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.fill();
+  } else if (sample.shape === 'square') {
+    ctx.fillRect(cx-r, cy-r, r*2, r*2);
+  } else if (sample.shape === 'triangle') {
+    ctx.beginPath(); ctx.moveTo(cx, cy-r); ctx.lineTo(cx+r, cy+r); ctx.lineTo(cx-r, cy+r); ctx.closePath(); ctx.fill();
+  }
+  const imgData = ctx.getImageData(0, 0, size, size);
+  const floats = new Float32Array(size * size * 3);
+  for (let i = 0; i < size * size; i++) {
+    floats[i*3]   = imgData.data[i*4]   / 255;
+    floats[i*3+1] = imgData.data[i*4+1] / 255;
+    floats[i*3+2] = imgData.data[i*4+2] / 255;
+  }
+  return floats;
+}
+
+// Simple text embedding: hash prompt string to a fixed-size vector
+function textEmbed(prompt, dim=32) {
+  const vec = new Float32Array(dim);
+  for (let i = 0; i < prompt.length; i++) {
+    const c = prompt.charCodeAt(i);
+    vec[i % dim] += Math.sin(c * 0.1 + i * 0.3) * 0.5;
+    vec[(i+7) % dim] += Math.cos(c * 0.2 + i * 0.17) * 0.3;
+  }
+  const mag = Math.sqrt(vec.reduce((s,v) => s+v*v, 0)) || 1;
+  for (let i = 0; i < dim; i++) vec[i] /= mag;
+  return vec;
+}
+
+// DDPM noise schedule (linear beta schedule)
+function makeNoiseSchedule(T) {
+  const betaStart = 0.0001, betaEnd = 0.02;
+  const betas = new Float32Array(T);
+  const alphas = new Float32Array(T);
+  const alphasCumprod = new Float32Array(T);
+  for (let t = 0; t < T; t++) {
+    betas[t] = betaStart + (betaEnd - betaStart) * t / (T - 1);
+    alphas[t] = 1 - betas[t];
+    alphasCumprod[t] = t === 0 ? alphas[0] : alphasCumprod[t-1] * alphas[t];
+  }
+  return { betas, alphas, alphasCumprod };
+}
+
+// Build a tiny UNet-style denoiser (takes: noisy image + timestep embedding + text embedding)
+function buildDiffusionModel(imgSize, channels, T, textDim) {
+  const imgInput = tf.input({ shape: [imgSize, imgSize, channels] });
+  const tInput   = tf.input({ shape: [1] });            // timestep (scalar 0..1)
+  const txtInput = tf.input({ shape: [textDim] });       // text embedding
+
+  // Timestep embedding: expand to spatial
+  let tEmb = tf.layers.dense({ units: 64, activation: 'relu' }).apply(tInput);
+  tEmb = tf.layers.dense({ units: imgSize * imgSize }).apply(tEmb);
+  tEmb = tf.layers.reshape({ targetShape: [imgSize, imgSize, 1] }).apply(tEmb);
+
+  // Text embedding: expand to spatial
+  let txtEmb = tf.layers.dense({ units: 64, activation: 'relu' }).apply(txtInput);
+  txtEmb = tf.layers.dense({ units: imgSize * imgSize }).apply(txtEmb);
+  txtEmb = tf.layers.reshape({ targetShape: [imgSize, imgSize, 1] }).apply(txtEmb);
+
+  // Concatenate: image + time + text → channels+2
+  let x = tf.layers.concatenate().apply([imgInput, tEmb, txtEmb]);
+
+  // Encoder
+  x = tf.layers.conv2d({ filters: 32, kernelSize: 3, padding: 'same', activation: 'relu' }).apply(x);
+  x = tf.layers.conv2d({ filters: 64, kernelSize: 3, padding: 'same', activation: 'relu' }).apply(x);
+
+  // Bottleneck
+  x = tf.layers.conv2d({ filters: 64, kernelSize: 3, padding: 'same', activation: 'relu' }).apply(x);
+
+  // Decoder
+  x = tf.layers.conv2d({ filters: 32, kernelSize: 3, padding: 'same', activation: 'relu' }).apply(x);
+  x = tf.layers.conv2d({ filters: channels, kernelSize: 1, padding: 'same', activation: 'sigmoid' }).apply(x);
+
+  return tf.model({ inputs: [imgInput, tInput, txtInput], outputs: x });
+}
+
+// Load dataset from VFS
+function diffLoadDataset() {
+  const folder = document.getElementById('diff-folder').value.trim();
+  const size = parseInt(document.getElementById('diff-size').value) || 32;
+  if (!folder) { diffSetStatus('Enter a dataset folder path'); return; }
+  const fs = getFS(); if (!fs) { diffSetStatus('VFS unavailable'); return; }
+  try {
+    const raw = fs.readFileSync(folder + '/dataset.json', 'utf8');
+    const meta = JSON.parse(raw);
+    const samples = meta.samples || [];
+    if (!samples.length) { diffSetStatus('No samples in dataset.json'); return; }
+
+    // Render samples to pixel arrays
+    const images = samples.map(s => renderShapeSample(s, size));
+    const prompts = samples.map(s => s.prompt);
+    diffDataset = { images, prompts, size, channels: 3, meta };
+    diffSetStatus(`Loaded ${images.length} samples (${size}×${size}×3)`);
+    document.getElementById('diff-dataset-info').innerHTML =
+      `<strong>${meta.name || 'Dataset'}</strong>: ${samples.length} images, ${size}×${size}px<br>` +
+      `<span style="color:var(--dim)">${meta.description || ''}</span>`;
+    log(`Diffusion: loaded ${images.length} samples from ${folder}`, 'ok');
+  } catch (e) {
+    diffSetStatus('Error: ' + e.message);
+    log('Diffusion dataset error: ' + e.message, 'err');
+  }
+}
+
+// Canvas helper: render float array to canvas
+function floatsToCanvas(floats, w, h, ch) {
+  const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+  const ctx = cv.getContext('2d');
+  const imgData = ctx.createImageData(w, h);
+  for (let i = 0; i < w * h; i++) {
+    imgData.data[i*4]   = Math.min(255, Math.max(0, floats[i*ch]   * 255));
+    imgData.data[i*4+1] = Math.min(255, Math.max(0, floats[i*ch+1] * 255));
+    imgData.data[i*4+2] = Math.min(255, Math.max(0, floats[i*ch+2] * 255));
+    imgData.data[i*4+3] = 255;
+  }
+  ctx.putImageData(imgData, 0, 0);
+  return cv;
+}
+
+function addPreviewImage(canvas, label) {
+  const container = document.getElementById('diff-previews');
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:2px;';
+  const scaled = document.createElement('canvas');
+  scaled.width = 64; scaled.height = 64;
+  scaled.style.cssText = 'width:64px;height:64px;border:1px solid var(--border);border-radius:4px;image-rendering:pixelated;';
+  const sctx = scaled.getContext('2d');
+  sctx.imageSmoothingEnabled = false;
+  sctx.drawImage(canvas, 0, 0, 64, 64);
+  wrap.appendChild(scaled);
+  const lbl = document.createElement('div');
+  lbl.style.cssText = 'font-size:9px;color:var(--dim);max-width:64px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;';
+  lbl.textContent = label;
+  wrap.appendChild(lbl);
+  container.appendChild(wrap);
+}
+
+// Training loop
+async function diffStartTraining() {
+  if (diffTraining) return;
+  if (!diffDataset) { diffSetStatus('Load a dataset first'); return; }
+  diffTraining = true; diffStopReq = false;
+  document.getElementById('diff-train-btn').disabled = true;
+  document.getElementById('diff-stop-btn').style.display = '';
+  document.getElementById('diff-previews').innerHTML = '';
+
+  const { images, prompts, size, channels } = diffDataset;
+  const T = parseInt(document.getElementById('diff-steps').value) || 50;
+  const epochs = parseInt(document.getElementById('diff-epochs').value) || 20;
+  const lr = parseFloat(document.getElementById('diff-lr').value) || 0.001;
+  const previewEvery = parseInt(document.getElementById('diff-preview-n').value) || 5;
+  const textDim = 32;
+
+  try {
+    await ensureTf();
+    diffSetStatus('Building denoiser…');
+
+    if (diffModel) { diffModel.dispose(); diffModel = null; }
+    diffModel = buildDiffusionModel(size, channels, T, textDim);
+    diffModel.compile({ optimizer: tf.train.adam(lr), loss: 'meanSquaredError' });
+    log(`Diffusion model: ${diffModel.countParams().toLocaleString()} params`, 'ok');
+
+    const schedule = makeNoiseSchedule(T);
+    const N = images.length;
+
+    // Pre-compute text embeddings
+    const textEmbeddings = prompts.map(p => textEmbed(p, textDim));
+
+    // Save run info
+    const runDir = '/home/user1/projects/nn-training/diffusion-' + new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
+    try {
+      const fs = getFS(); if (fs) { mkdirpSync(fs, runDir); }
+    } catch(_) {}
+
+    for (let epoch = 0; epoch < epochs; epoch++) {
+      if (diffStopReq) break;
+      let epochLoss = 0, batchCount = 0;
+
+      // For each sample, pick random timestep, add noise, train denoiser to predict clean image
+      for (let i = 0; i < N; i++) {
+        if (diffStopReq) break;
+        const t = Math.floor(Math.random() * T);
+        const alphaCp = schedule.alphasCumprod[t];
+        const sqrtAlpha = Math.sqrt(alphaCp);
+        const sqrtOneMinusAlpha = Math.sqrt(1 - alphaCp);
+
+        // Clean image tensor
+        const cleanImg = tf.tensor4d(images[i], [1, size, size, channels]);
+        // Random noise
+        const noise = tf.randomNormal([1, size, size, channels]);
+        // Noisy image: x_t = sqrt(alpha_bar) * x_0 + sqrt(1 - alpha_bar) * noise
+        const noisyImg = cleanImg.mul(sqrtAlpha).add(noise.mul(sqrtOneMinusAlpha));
+
+        const tNorm = tf.tensor2d([[t / T]]);
+        const txtTensor = tf.tensor2d([Array.from(textEmbeddings[i])]);
+
+        // Train: predict clean image from noisy
+        const loss = await diffModel.trainOnBatch([noisyImg, tNorm, txtTensor], cleanImg);
+        epochLoss += typeof loss === 'number' ? loss : loss[0];
+        batchCount++;
+
+        cleanImg.dispose(); noise.dispose(); noisyImg.dispose(); tNorm.dispose(); txtTensor.dispose();
+      }
+
+      const avgLoss = epochLoss / batchCount;
+      const pct = ((epoch + 1) / epochs * 100).toFixed(0);
+      document.getElementById('diff-prog').style.width = pct + '%';
+      diffSetStatus(`Epoch ${epoch+1}/${epochs} — loss: ${avgLoss.toFixed(6)}`);
+      log(`Diffusion ep ${epoch+1}/${epochs}  loss=${avgLoss.toFixed(6)}`);
+
+      // Generate preview every N epochs
+      if ((epoch + 1) % previewEvery === 0 || epoch === epochs - 1) {
+        try {
+          const previewPrompt = prompts[Math.floor(Math.random() * N)];
+          const genResult = diffSampleImage(schedule, size, channels, textDim, previewPrompt);
+          const cv = floatsToCanvas(genResult, size, size, channels);
+          addPreviewImage(cv, `ep${epoch+1}: ${previewPrompt.slice(0,20)}`);
+
+          // Save preview to VFS
+          try {
+            const fs = getFS();
+            if (fs) {
+              const imgData = cv.getContext('2d').getImageData(0, 0, size, size);
+              const png = canvasToPngBuffer(cv);
+              if (png) fs.writeFileSync(runDir + '/preview_ep' + (epoch+1) + '.png', png);
+            }
+          } catch(_) {}
+        } catch(e) { log('Preview generation error: ' + e.message, 'err'); }
+      }
+
+      await tf.nextFrame();
+    }
+
+    diffSetStatus(diffStopReq ? 'Stopped.' : 'Training complete!');
+    log('Diffusion training ' + (diffStopReq ? 'stopped.' : 'complete!'), diffStopReq ? 'inf' : 'ok');
+  } catch(e) {
+    diffSetStatus('Error: ' + e.message);
+    log('Diffusion error: ' + e.message, 'err');
+  } finally {
+    diffTraining = false;
+    document.getElementById('diff-train-btn').disabled = false;
+    document.getElementById('diff-stop-btn').style.display = 'none';
+  }
+}
+
+function diffStopTraining() { diffStopReq = true; diffSetStatus('Stopping…'); }
+
+// Sample (generate) an image using reverse diffusion
+function diffSampleImage(schedule, size, channels, textDim, prompt) {
+  const T = schedule.betas.length;
+  const txtVec = textEmbed(prompt, textDim);
+  const txtTensor = tf.tensor2d([Array.from(txtVec)]);
+
+  // Start from pure noise
+  let x = tf.randomNormal([1, size, size, channels]);
+
+  // Reverse diffusion: denoise step by step
+  for (let t = T - 1; t >= 0; t--) {
+    const tNorm = tf.tensor2d([[t / T]]);
+    const predicted = diffModel.predict([x, tNorm, txtTensor]);
+
+    // Simplified DDPM step: blend predicted clean with current noisy
+    const alpha = schedule.alphas[t];
+    const alphaCp = schedule.alphasCumprod[t];
+    const beta = schedule.betas[t];
+
+    // x_{t-1} = (1/sqrt(alpha_t)) * (x_t - (beta_t / sqrt(1-alpha_bar_t)) * (x_t - predicted)) + sigma * z
+    const sqrtAlpha = Math.sqrt(alpha);
+    const coeff = beta / Math.sqrt(1 - alphaCp);
+
+    const diff = x.sub(predicted).mul(coeff);
+    const xPrev = x.sub(diff).div(sqrtAlpha);
+
+    x.dispose(); tNorm.dispose(); predicted.dispose(); diff.dispose();
+
+    if (t > 0) {
+      const sigma = Math.sqrt(beta);
+      const noise = tf.randomNormal([1, size, size, channels]).mul(sigma);
+      const xWithNoise = xPrev.add(noise);
+      xPrev.dispose(); noise.dispose();
+      x = xWithNoise;
+    } else {
+      x = xPrev;
+    }
+  }
+
+  txtTensor.dispose();
+  const result = Array.from(x.dataSync());
+  x.dispose();
+  // Clamp to 0-1
+  return new Float32Array(result.map(v => Math.max(0, Math.min(1, v))));
+}
+
+// Generate from text prompt
+function diffGenerate() {
+  if (!diffModel) { alert('Train a diffusion model first'); return; }
+  const prompt = document.getElementById('diff-prompt').value.trim();
+  if (!prompt) { alert('Enter a text prompt'); return; }
+  const size = parseInt(document.getElementById('diff-size').value) || 32;
+  const T = parseInt(document.getElementById('diff-steps').value) || 50;
+  const textDim = 32;
+  const schedule = makeNoiseSchedule(T);
+
+  diffSetStatus('Generating…');
+  document.getElementById('diff-gen-btn').disabled = true;
+
+  setTimeout(() => {
+    try {
+      const result = diffSampleImage(schedule, size, 3, textDim, prompt);
+      const cv = floatsToCanvas(result, size, size, 3);
+      const container = document.getElementById('diff-gen-result');
+      const scaled = document.createElement('canvas');
+      scaled.width = 128; scaled.height = 128;
+      scaled.style.cssText = 'width:128px;height:128px;border:1px solid var(--border);border-radius:6px;image-rendering:pixelated;';
+      const sctx = scaled.getContext('2d');
+      sctx.imageSmoothingEnabled = false;
+      sctx.drawImage(cv, 0, 0, 128, 128);
+      container.innerHTML = '';
+      container.appendChild(scaled);
+      const label = document.createElement('div');
+      label.style.cssText = 'font-size:10px;color:var(--dim);margin-top:4px;';
+      label.textContent = `"${prompt}" — ${size}×${size}, ${T} steps`;
+      container.appendChild(label);
+      diffSetStatus('Generated!');
+      log(`Diffusion generated: "${prompt}"`, 'ok');
+    } catch(e) {
+      diffSetStatus('Error: ' + e.message);
+      log('Diffusion generate error: ' + e.message, 'err');
+    } finally {
+      document.getElementById('diff-gen-btn').disabled = false;
+    }
+  }, 50);
+}
+
+// Helper: canvas to PNG buffer (for VFS save)
+function canvasToPngBuffer(canvas) {
+  const dataUrl = canvas.toDataURL('image/png');
+  const base64 = dataUrl.split(',')[1];
+  if (!base64) return null;
+  const Buf = typeof Buffer !== 'undefined' ? Buffer : window.top.Buffer;
+  return Buf.from(base64, 'base64');
 }
 
 // ── Boot ───────────────────────────────────────────────────────────────────

@@ -1,0 +1,18 @@
+{
+  "name": "Simple Shapes",
+  "description": "Sample dataset of 32x32 geometric shapes for diffusion model training. Each sample defines a shape, color, and background that the pipeline renders to pixel data at runtime.",
+  "size": 32,
+  "channels": 3,
+  "samples": [
+    { "prompt": "a red circle on white background",       "shape": "circle",   "color": [255, 50, 50],   "bg": [255, 255, 255] },
+    { "prompt": "a blue square on white background",      "shape": "square",   "color": [50, 50, 255],   "bg": [255, 255, 255] },
+    { "prompt": "a green triangle on white background",   "shape": "triangle", "color": [50, 200, 50],   "bg": [255, 255, 255] },
+    { "prompt": "a yellow circle on black background",    "shape": "circle",   "color": [255, 255, 50],  "bg": [0, 0, 0] },
+    { "prompt": "a purple square on gray background",     "shape": "square",   "color": [150, 50, 200],  "bg": [128, 128, 128] },
+    { "prompt": "an orange triangle on dark background",  "shape": "triangle", "color": [255, 150, 50],  "bg": [30, 30, 30] },
+    { "prompt": "a white circle on blue background",      "shape": "circle",   "color": [255, 255, 255], "bg": [40, 40, 180] },
+    { "prompt": "a cyan square on dark background",       "shape": "square",   "color": [50, 230, 230],  "bg": [20, 20, 40] },
+    { "prompt": "a red triangle on green background",     "shape": "triangle", "color": [220, 40, 40],   "bg": [40, 160, 40] },
+    { "prompt": "a pink circle on white background",      "shape": "circle",   "color": [255, 120, 180], "bg": [255, 255, 255] }
+  ]
+}
