@@ -64,6 +64,46 @@ const CSS = `
   position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
 }
 .du-color-values { display: flex; flex-direction: column; gap: 4px; font-family: 'SF Mono', Menlo, monospace; font-size: 12px; }
+.du-dropzone {
+  border: 2px dashed #d4d0ca; border-radius: 8px; padding: 24px; text-align: center;
+  color: #999; font-size: 13px; cursor: pointer; transition: border-color .15s, background .15s;
+}
+.du-dropzone:hover, .du-dropzone.dragover { border-color: #c4a478; background: rgba(196,164,120,.06); }
+.du-dropzone input[type=file] { display: none; }
+.du-thumb-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.du-thumb {
+  width: 64px; height: 64px; border-radius: 6px; border: 1px solid #d4d0ca;
+  object-fit: cover; background: #f5f2ee;
+}
+.du-file-item {
+  display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: #f5f2ee;
+  border-radius: 6px; font-size: 12px; margin-bottom: 4px;
+}
+.du-file-item .du-file-remove {
+  margin-left: auto; cursor: pointer; color: #c44; font-size: 16px; border: none; background: none; padding: 0 4px;
+}
+.du-preview-img {
+  max-width: 100%; max-height: 200px; border-radius: 6px; border: 1px solid #d4d0ca; margin-top: 8px; cursor: zoom-in;
+}
+.du-lightbox {
+  position: fixed; inset: 0; z-index: 9999; background: rgba(0,0,0,.85);
+  display: flex; align-items: center; justify-content: center; cursor: zoom-out;
+}
+.du-lightbox img {
+  max-width: none; max-height: none; transition: transform .15s ease; transform-origin: center;
+  border-radius: 4px; box-shadow: 0 4px 32px rgba(0,0,0,.5);
+}
+.du-lb-controls {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 10000;
+  display: flex; gap: 6px; background: rgba(30,30,30,.8); border-radius: 8px; padding: 6px 10px;
+}
+.du-lb-controls button {
+  border: none; background: transparent; color: #fff; font-size: 20px; cursor: pointer;
+  width: 32px; height: 32px; border-radius: 6px; display: flex; align-items: center; justify-content: center;
+}
+.du-lb-controls button:hover { background: rgba(255,255,255,.15); }
+.du-lb-zoom { color: rgba(255,255,255,.6); font-size: 12px; display: flex; align-items: center; padding: 0 6px;
+}
 `;
 
 const TOOLS = [
@@ -75,6 +115,9 @@ const TOOLS = [
   { id: 'timestamp', name: 'Timestamp',  icon: 'schedule' },
   { id: 'color',     name: 'Color',      icon: 'palette' },
   { id: 'json',      name: 'JSON',       icon: 'data_object' },
+  { id: 'resize',    name: 'Resize Image', icon: 'photo_size_select_large' },
+  { id: 'img2pdf',   name: 'Image → PDF',  icon: 'picture_as_pdf' },
+  { id: 'joinpdf',   name: 'Join PDFs',    icon: 'merge' },
 ];
 
 const Icon = ({ name }) => <span className="material-symbols-outlined" style={{ fontSize: 18 }}>{name}</span>;
@@ -255,7 +298,318 @@ const JsonTool = () => {
   </>;
 };
 
-const TOOL_COMPONENTS = { base64: Base64Tool, url: UrlTool, jwt: JwtTool, hash: HashTool, uuid: UuidTool, timestamp: TimestampTool, color: ColorTool, json: JsonTool };
+// ── Image Lightbox ──
+const Lightbox = ({ src, onClose }) => {
+  const [zoom, setZoom] = useState(1);
+  const zoomIn = e => { e.stopPropagation(); setZoom(z => Math.min(z + 0.25, 5)); };
+  const zoomOut = e => { e.stopPropagation(); setZoom(z => Math.max(z - 0.25, 0.25)); };
+  const reset = e => { e.stopPropagation(); setZoom(1); };
+  useEffect(() => {
+    const onKey = e => { if (e.key === 'Escape') onClose(); else if (e.key === '+' || e.key === '=') { e.preventDefault(); setZoom(z => Math.min(z + 0.25, 5)); } else if (e.key === '-') { e.preventDefault(); setZoom(z => Math.max(z - 0.25, 0.25)); } else if (e.key === '0') setZoom(1); };
+    const onWheel = e => { e.preventDefault(); setZoom(z => Math.max(0.25, Math.min(5, z + (e.deltaY > 0 ? -0.15 : 0.15)))); };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('wheel', onWheel, { passive: false });
+    return () => { document.removeEventListener('keydown', onKey); document.removeEventListener('wheel', onWheel); };
+  }, [onClose]);
+  return <>
+    <div className="du-lightbox" onClick={onClose}>
+      <img src={src} style={{ transform: `scale(${zoom})` }} onClick={e => e.stopPropagation()} />
+    </div>
+    <div className="du-lb-controls">
+      <button onClick={zoomOut} title="Zoom out (-)">−</button>
+      <div className="du-lb-zoom">{Math.round(zoom * 100)}%</div>
+      <button onClick={zoomIn} title="Zoom in (+)">+</button>
+      <button onClick={reset} title="Reset (0)">⊙</button>
+      <button onClick={onClose} title="Close (Esc)">✕</button>
+    </div>
+  </>;
+};
+
+const PreviewImg = ({ src, style, className }) => {
+  const [open, setOpen] = useState(false);
+  return <>
+    <img className={className || 'du-preview-img'} src={src} style={style} onClick={() => setOpen(true)} />
+    {open && <Lightbox src={src} onClose={() => setOpen(false)} />}
+  </>;
+};
+
+// ── CDN loader helper ──
+const loadScript = (url) => {
+  const win = document.defaultView || window;
+  if (win.__loadedScripts?.[url]) return Promise.resolve();
+  return new Promise((ok, err) => {
+    const s = document.createElement('script');
+    s.src = url; s.onload = () => { (win.__loadedScripts = win.__loadedScripts || {})[url] = true; ok(); }; s.onerror = err;
+    document.head.appendChild(s);
+  });
+};
+
+// ── Drop zone component ──
+const DropZone = ({ accept, multiple, onFiles, label }) => {
+  const ref = useRef(null);
+  const [over, setOver] = useState(false);
+  const pick = () => ref.current?.click();
+  const onDrop = e => { e.preventDefault(); setOver(false); onFiles(Array.from(e.dataTransfer.files)); };
+  return React.createElement('div', {
+    className: 'du-dropzone' + (over ? ' dragover' : ''),
+    onClick: pick, onDragOver: e => { e.preventDefault(); setOver(true); },
+    onDragLeave: () => setOver(false), onDrop
+  },
+    React.createElement('input', { ref, type: 'file', accept: accept || '', multiple: !!multiple, onChange: e => { onFiles(Array.from(e.target.files)); e.target.value = ''; } }),
+    React.createElement('span', { className: 'material-symbols-outlined', style: { fontSize: 28, display: 'block', marginBottom: 6 } }, 'upload_file'),
+    label || 'Drop files here or click to browse'
+  );
+};
+
+// ── Resize Image ──
+const ResizeTool = () => {
+  const [file, setFile] = useState(null);
+  const [preview, setPreview] = useState('');
+  const [origSize, setOrigSize] = useState({ w: 0, h: 0 });
+  const [mode, setMode] = useState('percent');
+  const [pct, setPct] = useState(50);
+  const [w, setW] = useState(0);
+  const [h, setH] = useState(0);
+  const [lock, setLock] = useState(true);
+  const [result, setResult] = useState('');
+  const [resultSize, setResultSize] = useState(null);
+  const previewTimerRef = useRef(null);
+  const imgRef = useRef(null);
+
+  const loadFile = (files) => {
+    const f = files[0]; if (!f || !f.type.startsWith('image/')) return;
+    setFile(f); setResult(''); setResultSize(null);
+    const url = URL.createObjectURL(f);
+    setPreview(url);
+    const img = new Image();
+    img.onload = () => {
+      imgRef.current = img;
+      setOrigSize({ w: img.width, h: img.height }); setW(img.width); setH(img.height);
+    };
+    img.src = url;
+  };
+
+  const targetW = () => mode === 'percent' ? Math.round((origSize.w * pct) / 100) : w;
+  const targetH = () => mode === 'percent' ? Math.round((origSize.h * pct) / 100) : h;
+
+  const doResize = useCallback(() => {
+    if (!imgRef.current) return;
+    const nw = targetW(), nh = targetH();
+    if (nw < 1 || nh < 1) return;
+    const cv = document.createElement('canvas'); cv.width = nw; cv.height = nh;
+    cv.getContext('2d').drawImage(imgRef.current, 0, 0, nw, nh);
+    cv.toBlob(blob => {
+      if (!blob) return;
+      setResult(prev => { if (prev) URL.revokeObjectURL(prev); return URL.createObjectURL(blob); });
+      setResultSize({ w: nw, h: nh, bytes: blob.size });
+    }, file?.type || 'image/png');
+  }, [file, mode, pct, w, h, origSize]);
+
+  useEffect(() => {
+    if (!file) return;
+    clearTimeout(previewTimerRef.current);
+    previewTimerRef.current = setTimeout(doResize, 200);
+    return () => clearTimeout(previewTimerRef.current);
+  }, [doResize, file]);
+
+  const download = () => {
+    if (!result) return;
+    const a = document.createElement('a');
+    a.href = result; a.download = 'resized_' + (file?.name || 'image.png'); a.click();
+  };
+
+  const setWidth = v => { setW(v); if (lock && origSize.w) setH(Math.round(v * origSize.h / origSize.w)); };
+  const setHeight = v => { setH(v); if (lock && origSize.h) setW(Math.round(v * origSize.w / origSize.h)); };
+
+  return <>
+    <DropZone accept="image/*" onFiles={loadFile} label="Drop an image or click to browse" />
+    {preview && <>
+      <div className="du-row" style={{ marginTop: 12 }}>
+        <div className="du-label">Mode</div>
+        <div className="du-actions">
+          <button className={'du-btn' + (mode === 'percent' ? ' primary' : '')} onClick={() => setMode('percent')}>By %</button>
+          <button className={'du-btn' + (mode === 'pixels' ? ' primary' : '')} onClick={() => setMode('pixels')}>By Pixels</button>
+        </div>
+      </div>
+      {mode === 'percent' ? (
+        <div className="du-row">
+          <div className="du-label">Scale (%)</div>
+          <input className="du-input" type="number" min="1" max="500" value={pct} onChange={e => setPct(+e.target.value)} style={{ width: 100 }} />
+        </div>
+      ) : (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+          <div className="du-row" style={{ flex: 1 }}><div className="du-label">Width</div><input className="du-input" type="number" min="1" value={w} onChange={e => setWidth(+e.target.value)} /></div>
+          <button className={'du-btn' + (lock ? ' primary' : '')} onClick={() => setLock(!lock)} style={{ marginBottom: 16, fontSize: 16 }}>{lock ? '🔗' : '🔓'}</button>
+          <div className="du-row" style={{ flex: 1 }}><div className="du-label">Height</div><input className="du-input" type="number" min="1" value={h} onChange={e => setHeight(+e.target.value)} /></div>
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: 16, marginTop: 12, flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 140 }}>
+          <div className="du-label" style={{ marginBottom: 4 }}>Original ({origSize.w} x {origSize.h}) — {file ? (file.size < 1048576 ? (file.size / 1024).toFixed(1) + ' KB' : (file.size / 1048576).toFixed(1) + ' MB') : ''}</div>
+          <PreviewImg src={preview} style={{ maxHeight: 180 }} />
+        </div>
+        <div style={{ flex: 1, minWidth: 140 }}>
+          <div className="du-label" style={{ marginBottom: 4 }}>Preview ({targetW()} x {targetH()}){resultSize ? ` — ${(resultSize.bytes / 1024).toFixed(1)} KB` : ''}</div>
+          {result ? <PreviewImg src={result} style={{ maxHeight: 180 }} /> : <div className="du-output" style={{ height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Generating…</div>}
+        </div>
+      </div>
+      <div className="du-actions" style={{ marginTop: 10 }}>
+        {result && <button className="du-btn primary" onClick={download}><Icon name="download" /> Download</button>}
+      </div>
+    </>}
+  </>;
+};
+
+// ── Image to PDF ──
+const Img2PdfTool = () => {
+  const [files, setFiles] = useState([]);
+  const [previews, setPreviews] = useState([]);
+  const [status, setStatus] = useState('');
+
+  const addFiles = (newFiles) => {
+    const imgs = newFiles.filter(f => f.type.startsWith('image/'));
+    setFiles(prev => [...prev, ...imgs]);
+    setPreviews(prev => [...prev, ...imgs.map(f => URL.createObjectURL(f))]);
+  };
+  const removeFile = (i) => {
+    URL.revokeObjectURL(previews[i]);
+    setFiles(prev => prev.filter((_, j) => j !== i));
+    setPreviews(prev => prev.filter((_, j) => j !== i));
+  };
+
+  const convert = async () => {
+    if (!files.length) return;
+    setStatus('Loading jsPDF…');
+    const doc = document.ownerDocument || document;
+    await loadScript.call(null, 'https://cdn.jsdelivr.net/npm/jspdf@2/dist/jspdf.umd.min.js');
+    const jsPDF = (window.jspdf || window.top.jspdf || {}).jsPDF;
+    if (!jsPDF) { setStatus('Failed to load jsPDF'); return; }
+
+    setStatus('Generating PDF…');
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'px', format: 'a4' });
+    const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
+    const pad = 20;
+
+    for (let i = 0; i < files.length; i++) {
+      if (i > 0) pdf.addPage();
+      setStatus(`Processing image ${i + 1}/${files.length}…`);
+      const dataUrl = await new Promise(ok => {
+        const reader = new FileReader();
+        reader.onload = () => ok(reader.result);
+        reader.readAsDataURL(files[i]);
+      });
+      const img = await new Promise(ok => { const im = new Image(); im.onload = () => ok(im); im.src = dataUrl; });
+      const scale = Math.min((pageW - pad * 2) / img.width, (pageH - pad * 2) / img.height, 1);
+      const iw = img.width * scale, ih = img.height * scale;
+      const x = (pageW - iw) / 2, y = (pageH - ih) / 2;
+      pdf.addImage(dataUrl, 'JPEG', x, y, iw, ih);
+    }
+
+    const blob = pdf.output('blob');
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'images.pdf'; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    setStatus(`Done — ${files.length} image(s), ${(blob.size / 1024).toFixed(0)} KB`);
+  };
+
+  return <>
+    <DropZone accept="image/*" multiple onFiles={addFiles} label="Drop images or click to browse (multiple)" />
+    {files.length > 0 && <>
+      <div style={{ marginTop: 8 }}>
+        {files.map((f, i) => (
+          <div className="du-file-item" key={i}>
+            <img className="du-thumb" src={previews[i]} style={{ width: 32, height: 32 }} />
+            <span>{f.name}</span>
+            <span style={{ color: '#999', fontSize: 11 }}>({(f.size / 1024).toFixed(0)} KB)</span>
+            <button className="du-file-remove" onClick={() => removeFile(i)}>×</button>
+          </div>
+        ))}
+      </div>
+      <div className="du-actions" style={{ marginTop: 8 }}>
+        <button className="du-btn primary" onClick={convert}>Convert to PDF</button>
+        <button className="du-btn" onClick={() => { previews.forEach(URL.revokeObjectURL); setFiles([]); setPreviews([]); setStatus(''); }}>Clear All</button>
+      </div>
+      {status && <div style={{ marginTop: 8, fontSize: 12, color: '#888' }}>{status}</div>}
+    </>}
+  </>;
+};
+
+// ── Join PDFs ──
+const JoinPdfTool = () => {
+  const [files, setFiles] = useState([]);
+  const [status, setStatus] = useState('');
+
+  const addFiles = (newFiles) => {
+    const pdfs = newFiles.filter(f => f.type === 'application/pdf' || f.name.endsWith('.pdf'));
+    setFiles(prev => [...prev, ...pdfs]);
+  };
+  const removeFile = (i) => setFiles(prev => prev.filter((_, j) => j !== i));
+  const moveFile = (i, dir) => {
+    setFiles(prev => {
+      const a = [...prev]; const j = i + dir;
+      if (j < 0 || j >= a.length) return a;
+      [a[i], a[j]] = [a[j], a[i]]; return a;
+    });
+  };
+
+  const merge = async () => {
+    if (files.length < 2) { setStatus('Need at least 2 PDFs'); return; }
+    setStatus('Loading pdf-lib…');
+    await loadScript('https://cdn.jsdelivr.net/npm/pdf-lib@1/dist/pdf-lib.min.js');
+    const PDFDocument = (window.PDFLib || window.top.PDFLib || {}).PDFDocument;
+    if (!PDFDocument) { setStatus('Failed to load pdf-lib'); return; }
+
+    setStatus('Merging…');
+    const merged = await PDFDocument.create();
+    for (let i = 0; i < files.length; i++) {
+      setStatus(`Processing ${i + 1}/${files.length}: ${files[i].name}`);
+      const buf = await files[i].arrayBuffer();
+      try {
+        const src = await PDFDocument.load(buf);
+        const pages = await merged.copyPages(src, src.getPageIndices());
+        pages.forEach(p => merged.addPage(p));
+      } catch (e) {
+        setStatus(`Error in ${files[i].name}: ${e.message}`);
+        return;
+      }
+    }
+
+    const out = await merged.save();
+    const blob = new Blob([out], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'merged.pdf'; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    setStatus(`Done — ${merged.getPageCount()} pages, ${(blob.size / 1024).toFixed(0)} KB`);
+  };
+
+  return <>
+    <DropZone accept=".pdf,application/pdf" multiple onFiles={addFiles} label="Drop PDFs or click to browse" />
+    {files.length > 0 && <>
+      <div style={{ marginTop: 8 }}>
+        {files.map((f, i) => (
+          <div className="du-file-item" key={i}>
+            <Icon name="description" />
+            <span>{f.name}</span>
+            <span style={{ color: '#999', fontSize: 11 }}>({(f.size / 1024).toFixed(0)} KB)</span>
+            <button className="du-file-remove" onClick={() => moveFile(i, -1)} style={{ color: '#555', marginLeft: 'auto' }} title="Move up">↑</button>
+            <button className="du-file-remove" onClick={() => moveFile(i, 1)} style={{ color: '#555' }} title="Move down">↓</button>
+            <button className="du-file-remove" onClick={() => removeFile(i)}>×</button>
+          </div>
+        ))}
+      </div>
+      <div className="du-actions" style={{ marginTop: 8 }}>
+        <button className="du-btn primary" onClick={merge}>Merge PDFs</button>
+        <button className="du-btn" onClick={() => { setFiles([]); setStatus(''); }}>Clear All</button>
+      </div>
+      {status && <div style={{ marginTop: 8, fontSize: 12, color: '#888' }}>{status}</div>}
+    </>}
+  </>;
+};
+
+const TOOL_COMPONENTS = { base64: Base64Tool, url: UrlTool, jwt: JwtTool, hash: HashTool, uuid: UuidTool, timestamp: TimestampTool, color: ColorTool, json: JsonTool, resize: ResizeTool, img2pdf: Img2PdfTool, joinpdf: JoinPdfTool };
 
 const App = () => {
   const [active, setActive] = useState('base64');

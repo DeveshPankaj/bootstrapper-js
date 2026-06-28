@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8">
 <title>Neural Network IDE</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/litegraph.js@0.7.18/css/litegraph.css">
+<script src="https://cdn.jsdelivr.net/npm/litegraph.js@0.7.18/build/litegraph.min.js"></script>
 <style>
 :root {
   --bg:#0d0e11; --surface:#141518; --s2:#1c1d22; --s3:#24252c;
@@ -24,51 +26,18 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .btn:disabled{opacity:.4;cursor:not-allowed}
 
 /* Main */
-#main{display:flex;flex:1;overflow:hidden}
+#main{display:flex;flex:1;overflow:hidden;position:relative}
+#graph-canvas{flex:1;display:block}
 
-/* Palette */
-#pal{width:148px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);overflow-y:auto;padding:8px 5px;display:flex;flex-direction:column;gap:8px}
-#pal::-webkit-scrollbar{width:3px} #pal::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
-.pg-lbl{font-size:9px;font-weight:700;color:var(--dim);letter-spacing:1px;text-transform:uppercase;padding:0 3px;margin-top:2px}
-.pn{display:flex;align-items:center;gap:5px;padding:4px 7px;border-radius:5px;border:1px solid var(--border);background:var(--s2);cursor:grab;user-select:none;font-size:11px;font-weight:500;transition:border-color .1s}
-.pn:hover{border-color:#4a4d5a} .pn:active{cursor:grabbing}
-.pn-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
-
-/* Canvas */
-#cv-wrap{flex:1;position:relative;overflow:hidden;background:var(--bg);background-image:radial-gradient(circle,#2e303835 1px,transparent 1px);background-size:22px 22px;cursor:default}
-#cv-inner{position:absolute;top:0;left:0;transform-origin:0 0}
-#cv-svg{position:absolute;top:0;left:0;width:10000px;height:10000px;overflow:visible;pointer-events:none}
-
-/* Nodes */
-.nn-node{position:absolute;min-width:136px;background:var(--surface);border:2px solid var(--border);border-radius:var(--r);user-select:none;transition:border-color .12s}
-.nn-node.sel{border-color:var(--accent)}
-.nn-node-hdr{padding:5px 7px 4px;display:flex;align-items:center;gap:4px;cursor:grab;border-radius:6px 6px 0 0}
-.nn-node-hdr:active{cursor:grabbing}
-.nd{width:7px;height:7px;border-radius:50%;flex-shrink:0}
-.nl{font-size:11px;font-weight:600;color:var(--bright);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ndel{width:15px;height:15px;border-radius:3px;border:none;background:transparent;color:var(--dim);cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center}
-.ndel:hover{background:#3a1515;color:var(--red)}
-.np{padding:2px 8px 3px;font-size:10px;color:var(--dim);line-height:1.45;font-family:monospace}
-
-/* Ports */
-.ports-row{display:flex;padding:0 8px}
-.ports-row.in{margin-top:-7px;justify-content:flex-start;gap:8px}
-.ports-row.out{margin-bottom:-7px;justify-content:flex-end}
-.port{width:13px;height:13px;border-radius:50%;border:2px solid var(--border);background:var(--s2);cursor:crosshair;transition:border-color .1s,background .1s;position:relative;z-index:5}
-.port:hover,.port.hot{border-color:var(--accent);background:var(--accent)}
-.port.in-port{margin-top:0} .port.out-port{margin-bottom:0}
-
-/* Right panel */
-#rp{width:210px;flex-shrink:0;background:var(--surface);border-left:1px solid var(--border);overflow-y:auto;display:flex;flex-direction:column}
-#rp::-webkit-scrollbar{width:3px} #rp::-webkit-scrollbar-thumb{background:var(--border)}
-#pp{padding:10px;display:flex;flex-direction:column;gap:7px}
-#pp h3{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase}
-.pr{display:flex;flex-direction:column;gap:2px}
-.pl{font-size:9px;color:var(--dim);font-weight:600;text-transform:uppercase;letter-spacing:.4px}
-.pi{padding:4px 7px;background:var(--s2);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:12px;outline:none;font-family:inherit;width:100%}
-.pi:focus,.ps:focus{border-color:var(--accent)}
-.ps{padding:4px 7px;background:var(--s2);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:12px;outline:none;font-family:inherit;width:100%}
-.ps option{background:var(--s2)}
+/* LiteGraph dark theme overrides */
+.litegraph .litegraph-base{background-color:var(--bg) !important}
+.litecontextmenu{background:var(--surface) !important;border:1px solid var(--border) !important;color:var(--text) !important;font-family:inherit !important}
+.litecontextmenu .litemenu-entry{color:var(--text) !important}
+.litecontextmenu .litemenu-entry:hover{background:var(--s3) !important}
+.litecontextmenu .litemenu-entry.separator{border-bottom-color:var(--border) !important}
+.litegraph .dialog{background:var(--surface) !important;border:1px solid var(--border) !important;color:var(--text) !important}
+.litegraph .dialog input,.litegraph .dialog textarea,.litegraph .dialog select{background:var(--s2) !important;color:var(--text) !important;border:1px solid var(--border) !important}
+.litegraph .dialog .btn{background:var(--s2) !important;color:var(--text) !important;border:1px solid var(--border) !important}
 
 /* Bottom */
 #bot-resize{height:6px;cursor:ns-resize;background:transparent;flex-shrink:0;border-top:1px solid var(--border);transition:background .15s;z-index:10}
@@ -124,6 +93,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
     <button class="btn" onclick="loadPreset('mnist-conv')">📋 MNIST Conv</button>
     <button class="btn" onclick="loadPreset('diffusion-32')">📋 Diffusion 32×32</button>
     <button class="btn" onclick="clearGraph()">🗑 Clear</button>
+    <button class="btn" onclick="arrangeGraph()">⇄ Arrange</button>
     <div class="sp"></div>
     <button class="btn" onclick="saveGraph()">💾 Save</button>
     <button class="btn" onclick="loadGraph()">📂 Load</button>
@@ -134,17 +104,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
   </div>
 
   <div id="main">
-    <div id="pal"></div>
-
-    <div id="cv-wrap">
-      <div id="cv-inner">
-        <svg id="cv-svg"></svg>
-      </div>
-    </div>
-
-    <div id="rp"><div id="pp">
-      <div style="color:var(--dim);font-size:11px;padding:8px 0">Select a node to edit properties.</div>
-    </div></div>
+    <canvas id="graph-canvas"></canvas>
   </div>
 
   <div id="bot-resize"></div>
@@ -271,12 +231,9 @@ const ACTS = ['linear','relu','sigmoid','tanh','softmax','elu','selu','gelu'];
 
 // ── State ──────────────────────────────────────────────────────────────────
 let nodes = [], edges = [];
-let selId = null;
-let connFrom = null; // {nodeId, idx}
-let tx = 0, ty = 0, scale = 1;
-let dragSt = null, panSt = null;
 let isTraining = false, stopReq = false, tfModel = null;
 let mnistCache = null, bTab = 'train';
+let graph = null, graphCanvas = null;
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 function uid() { return Math.random().toString(36).slice(2,9); }
@@ -291,276 +248,111 @@ function log(msg, cls='') {
   el.scrollTop = el.scrollHeight;
 }
 
-// ── Palette ────────────────────────────────────────────────────────────────
-function buildPalette() {
-  const pal = document.getElementById('pal');
-  pal.innerHTML = '';
-  const cats = {};
-  for (const [t,d] of Object.entries(NDEFS)) {
-    (cats[d.cat] = cats[d.cat]||[]).push([t,d]);
-  }
-  for (const [cat,items] of Object.entries(cats)) {
-    const l = document.createElement('div');
-    l.className = 'pg-lbl'; l.textContent = cat; pal.appendChild(l);
-    for (const [type,d] of items) {
-      const el = document.createElement('div');
-      el.className = 'pn'; el.draggable = true;
-      el.innerHTML = `<div class="pn-dot" style="background:${d.color}"></div>${d.label}`;
-      el.addEventListener('dragstart', e => { e.dataTransfer.setData('nn-type', type); e.dataTransfer.effectAllowed='copy'; });
-      pal.appendChild(el);
-    }
-  }
-}
+// ── LiteGraph: register node types from NDEFS ─────────────────────────────
+(function registerNodeTypes() {
+  for (const [type, def] of Object.entries(NDEFS)) {
+    const path = def.cat + '/' + def.label;
+    const nnType = type;
+    const defColor = def.color;
+    const nIn = def.nIn, nOut = def.nOut;
+    const defParams = def.p;
 
-// ── Canvas transform ───────────────────────────────────────────────────────
-function applyTransform() {
-  document.getElementById('cv-inner').style.transform = `translate(${tx}px,${ty}px) scale(${scale})`;
-}
-
-// Port world-coord helper
-function portPos(nodeId, side, idx) {
-  const el = document.querySelector(`.nn-node[data-id="${nodeId}"]`);
-  if (!el) return null;
-  const ports = el.querySelectorAll(side==='out'?'.out-port':'.in-port');
-  const pe = ports[idx]||ports[ports.length-1];
-  if (!pe) return null;
-  const ir = document.getElementById('cv-inner').getBoundingClientRect();
-  const pr = pe.getBoundingClientRect();
-  return { x:(pr.left+pr.width/2-ir.left)/scale, y:(pr.top+pr.height/2-ir.top)/scale };
-}
-
-// ── Render ─────────────────────────────────────────────────────────────────
-function renderAll() { renderNodes(); requestAnimationFrame(renderEdges); }
-
-function pSummary(node) {
-  return Object.entries(node.params||{}).map(([k,v])=>`${k}:${v}`).join('  ');
-}
-
-function renderNodes() {
-  const inner = document.getElementById('cv-inner');
-  inner.querySelectorAll('.nn-node').forEach(e=>e.remove());
-  for (const node of nodes) {
-    const d = nd(node.type); if (!d) continue;
-    const el = document.createElement('div');
-    el.className = 'nn-node'+(node.id===selId?' sel':'');
-    el.dataset.id = node.id;
-    el.style.left = node.x+'px'; el.style.top = node.y+'px';
-
-    // Input ports
-    if (d.nIn !== 0) {
-      const cnt = d.nIn===-1 ? Math.max(2, edges.filter(e=>e.to===node.id).length+1) : d.nIn;
-      const row = document.createElement('div'); row.className = 'ports-row in';
-      for (let i=0;i<cnt;i++) {
-        const p = document.createElement('div');
-        p.className = 'port in-port'; p.dataset.node=node.id; p.dataset.side='in'; p.dataset.idx=i;
-        p.addEventListener('click', onPortClick);
-        row.appendChild(p);
+    function NNNode() {
+      this.properties = {};
+      if (nIn > 0) for (let i = 0; i < nIn; i++) this.addInput('in' + (i || ''), 'tensor');
+      else if (nIn === -1) { this.addInput('in0', 'tensor'); this.addInput('in1', 'tensor'); this.addInput('in2', 'tensor'); }
+      if (nOut > 0) for (let i = 0; i < nOut; i++) this.addOutput('out' + (i || ''), 'tensor');
+      for (const [k, v] of Object.entries(defParams)) {
+        this.properties[k] = v;
+        if (k === 'activation') {
+          this.addWidget('combo', k, v, (val) => { this.properties[k] = val; }, { values: ACTS });
+        } else {
+          this.addWidget('text', k, v, (val) => { this.properties[k] = val; });
+        }
       }
-      el.appendChild(row);
+      this.nnType = nnType;
+      this.color = defColor;
+      this.size = this.computeSize();
+      this.size[0] = Math.max(this.size[0], 180);
     }
+    NNNode.title = def.label;
+    NNNode.desc = nnType;
+    NNNode.prototype.onExecute = function() {};
+    LiteGraph.registerNodeType(path, NNNode);
+  }
+})();
 
-    // Header
-    const hdr = document.createElement('div'); hdr.className='nn-node-hdr';
-    hdr.innerHTML = `<div class="nd" style="background:${d.color}"></div><div class="nl">${d.label}</div>`;
-    const del = document.createElement('button'); del.className='ndel'; del.textContent='✕';
-    del.onclick = e => { e.stopPropagation(); deleteNode(node.id); };
-    hdr.appendChild(del);
-    hdr.addEventListener('mousedown', e => startNodeDrag(e, node.id));
-    el.appendChild(hdr);
+// ── LiteGraph: init ───────────────────────────────────────────────────────
+function initGraph() {
+  graph = new LGraph();
+  const canvas = document.getElementById('graph-canvas');
+  graphCanvas = new LGraphCanvas(canvas, graph);
+  graphCanvas.background_image = null;
+  graphCanvas.clear_background_color = '#0d0e11';
+  graphCanvas.render_connections_border = false;
+  graphCanvas.default_link_color = '#4a4d5a';
+  graphCanvas.highquality_render = true;
+  graph.start();
 
-    // Param summary
-    const ps = pSummary(node);
-    if (ps) { const p=document.createElement('div'); p.className='np'; p.textContent=ps; el.appendChild(p); }
+  function resize() {
+    const main = document.getElementById('main');
+    canvas.width = main.clientWidth;
+    canvas.height = main.clientHeight;
+    graphCanvas.setDirty(true, true);
+  }
+  resize();
+  new ResizeObserver(resize).observe(document.getElementById('main'));
+}
 
-    // Output port
-    if (d.nOut !== 0) {
-      const row = document.createElement('div'); row.className='ports-row out';
-      const p = document.createElement('div');
-      p.className='port out-port'; p.dataset.node=node.id; p.dataset.side='out'; p.dataset.idx=0;
-      p.addEventListener('click', onPortClick);
-      row.appendChild(p); el.appendChild(row);
-    }
-
-    el.addEventListener('click', e => { if (!e.target.classList.contains('port')) selectNode(node.id); });
-    inner.appendChild(el);
+// Sync LiteGraph → internal nodes/edges arrays (for buildTfModel)
+function syncFromGraph() {
+  nodes = []; edges = [];
+  if (!graph) return;
+  for (const n of graph._nodes) {
+    nodes.push({
+      id: String(n.id), type: n.nnType,
+      x: n.pos[0], y: n.pos[1],
+      params: { ...n.properties }
+    });
+  }
+  const links = graph.links || {};
+  for (const key in links) {
+    const lk = links[key];
+    if (!lk) continue;
+    edges.push({
+      id: String(lk.id), from: String(lk.origin_id), to: String(lk.target_id),
+      fromPort: lk.origin_slot, toPort: lk.target_slot
+    });
   }
 }
 
-function edgePath(x1,y1,x2,y2) {
-  const cy = (y1+y2)/2;
-  return `M${x1} ${y1} C${x1} ${cy},${x2} ${cy},${x2} ${y2}`;
+function clearGraph() {
+  if (!confirm('Clear the graph?')) return;
+  graph.clear();
+  graphCanvas.setDirty(true, true);
 }
 
-function renderEdges() {
-  const svg = document.getElementById('cv-svg');
-  svg.innerHTML = `<defs>
-    <marker id="arr" markerWidth="7" markerHeight="7" refX="3" refY="3" orient="auto">
-      <path d="M0,0 L0,6 L6,3 z" fill="#4a4d5a"/></marker>
-    <marker id="arr-a" markerWidth="7" markerHeight="7" refX="3" refY="3" orient="auto">
-      <path d="M0,0 L0,6 L6,3 z" fill="#4dabf7"/></marker>
-  </defs>`;
-
-  for (const edge of edges) {
-    const fp = portPos(edge.from,'out',edge.fromPort||0);
-    const tp = portPos(edge.to,'in',edge.toPort||0);
-    if (!fp||!tp) continue;
-    const active = selId&&(edge.from===selId||edge.to===selId);
-    const path = document.createElementNS('http://www.w3.org/2000/svg','path');
-    path.setAttribute('d', edgePath(fp.x,fp.y,tp.x,tp.y));
-    path.setAttribute('stroke', active?'#4dabf7':'#4a4d5a');
-    path.setAttribute('stroke-width','2'); path.setAttribute('fill','none');
-    path.setAttribute('marker-end', active?'url(#arr-a)':'url(#arr)');
-    path.style.pointerEvents='stroke'; path.style.cursor='pointer';
-    path.title='Click to delete';
-    path.addEventListener('click', ()=>deleteEdge(edge.id));
-    svg.appendChild(path);
+function arrangeGraph() {
+  if (!graph || !graph._nodes.length) return;
+  syncFromGraph();
+  const sorted = topoSort();
+  if (!sorted.length) return;
+  const idToLG = {};
+  for (const n of graph._nodes) idToLG[String(n.id)] = n;
+  let x = 80, y = 40, col = 0;
+  const COL_W = 220, ROW_H = 140, PER_COL = 6;
+  for (let i = 0; i < sorted.length; i++) {
+    const lg = idToLG[sorted[i].id];
+    if (lg) { lg.pos[0] = x + col * COL_W; lg.pos[1] = y + (i % PER_COL) * ROW_H; }
+    if ((i + 1) % PER_COL === 0) col++;
   }
-
-  // Preview line while connecting
-  if (connFrom) {
-    const fp = portPos(connFrom.nodeId,'out',connFrom.idx||0);
-    if (fp && connFrom.mx!=null) {
-      const path = document.createElementNS('http://www.w3.org/2000/svg','path');
-      path.setAttribute('d', edgePath(fp.x,fp.y,connFrom.mx,connFrom.my));
-      path.setAttribute('stroke','#4dabf7'); path.setAttribute('stroke-width','2');
-      path.setAttribute('stroke-dasharray','5,3'); path.setAttribute('fill','none');
-      svg.appendChild(path);
-    }
-  }
+  graphCanvas.setDirty(true, true);
 }
 
-// ── Port click ─────────────────────────────────────────────────────────────
-function onPortClick(e) {
-  e.stopPropagation();
-  const side = e.target.dataset.side, nodeId = e.target.dataset.node;
-  const idx = parseInt(e.target.dataset.idx||0);
-  if (side==='out') {
-    connFrom = { nodeId, idx };
-    log(`Connecting from ${nd(gn(nodeId).type).label}…`,'inf');
-  } else if (side==='in' && connFrom) {
-    if (connFrom.nodeId!==nodeId) {
-      if (!edges.find(e=>e.from===connFrom.nodeId&&e.to===nodeId&&e.toPort===idx)) {
-        edges.push({id:uid(),from:connFrom.nodeId,to:nodeId,fromPort:connFrom.idx,toPort:idx});
-        log(`Connected ${nd(gn(connFrom.nodeId).type).label} → ${nd(gn(nodeId).type).label}`);
-      }
-    }
-    connFrom=null; renderAll();
-  }
-}
-
-// ── Node drag ──────────────────────────────────────────────────────────────
-function startNodeDrag(e, nodeId) {
-  e.stopPropagation();
-  selectNode(nodeId);
-  const node = gn(nodeId);
-  dragSt = {nodeId, sx:e.clientX, sy:e.clientY, ox:node.x, oy:node.y};
-}
-
-// ── Canvas pan & zoom ──────────────────────────────────────────────────────
-const cvWrap = document.getElementById('cv-wrap');
-
-cvWrap.addEventListener('mousedown', e => {
-  const t = e.target;
-  if (t===cvWrap||t.id==='cv-inner'||t.id==='cv-svg') {
-    panSt = {sx:e.clientX,sy:e.clientY,otx:tx,oty:ty};
-    if (connFrom) { connFrom=null; renderEdges(); }
-    selectNode(null);
-  }
-});
-
-cvWrap.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect='copy'; });
-cvWrap.addEventListener('drop', e => {
-  const type = e.dataTransfer.getData('nn-type');
-  if (!type||!NDEFS[type]) return;
-  const r = cvWrap.getBoundingClientRect();
-  addNode(type, (e.clientX-r.left-tx)/scale - 68, (e.clientY-r.top-ty)/scale - 28);
-});
-
-document.addEventListener('mousemove', e => {
-  if (dragSt) {
-    const node = gn(dragSt.nodeId); if (!node) return;
-    node.x = dragSt.ox + (e.clientX-dragSt.sx)/scale;
-    node.y = dragSt.oy + (e.clientY-dragSt.sy)/scale;
-    const el = document.querySelector(`.nn-node[data-id="${dragSt.nodeId}"]`);
-    if (el) { el.style.left=node.x+'px'; el.style.top=node.y+'px'; }
-    renderEdges();
-  }
-  if (panSt) {
-    tx = panSt.otx + (e.clientX-panSt.sx);
-    ty = panSt.oty + (e.clientY-panSt.sy);
-    applyTransform();
-  }
-  if (connFrom) {
-    const ir = document.getElementById('cv-inner').getBoundingClientRect();
-    connFrom.mx = (e.clientX-ir.left)/scale;
-    connFrom.my = (e.clientY-ir.top)/scale;
-    renderEdges();
-  }
-});
-
-document.addEventListener('mouseup', () => { dragSt=null; panSt=null; });
-
-cvWrap.addEventListener('wheel', e => {
-  e.preventDefault();
-  const r = cvWrap.getBoundingClientRect();
-  const mx=e.clientX-r.left, my=e.clientY-r.top;
-  const ns = Math.max(0.15, Math.min(3, scale*(e.deltaY>0?0.9:1.1)));
-  tx = mx-(mx-tx)*(ns/scale); ty = my-(my-ty)*(ns/scale); scale=ns;
-  applyTransform();
-}, {passive:false});
-
-// ── CRUD ───────────────────────────────────────────────────────────────────
-function addNode(type, x, y) {
-  const d = nd(type); if (!d) return;
-  const node = {id:uid(), type, x:x||100, y:y||100, params:{...d.p}};
-  nodes.push(node); renderAll(); selectNode(node.id); return node;
-}
-function deleteNode(id) {
-  nodes = nodes.filter(n=>n.id!==id);
-  edges = edges.filter(e=>e.from!==id&&e.to!==id);
-  if (selId===id) selectNode(null);
-  renderAll();
-}
-function deleteEdge(id) { edges=edges.filter(e=>e.id!==id); renderAll(); }
-function clearGraph() { if (!confirm('Clear the graph?')) return; nodes=[]; edges=[]; selectNode(null); renderAll(); }
-
-// ── Selection + props ──────────────────────────────────────────────────────
-function selectNode(id) { selId=id; renderPropsPanel(); renderAll(); }
-
-function renderPropsPanel() {
-  const pp = document.getElementById('pp');
-  pp.innerHTML = '';
-  if (!selId) { pp.innerHTML='<div style="color:var(--dim);font-size:11px;padding:8px 0">Select a node to edit properties.</div>'; return; }
-  const node = gn(selId); if (!node) return;
-  const d = nd(node.type);
-  const title = document.createElement('h3');
-  title.textContent = d.label; title.style.color = d.color; pp.appendChild(title);
-  const typeEl = document.createElement('div');
-  typeEl.style.cssText='font-size:10px;color:var(--dim);margin-bottom:6px;font-family:monospace;';
-  typeEl.textContent=node.type; pp.appendChild(typeEl);
-
-  for (const [key] of Object.entries(d.p)) {
-    const row = document.createElement('div'); row.className='pr';
-    const lbl = document.createElement('div'); lbl.className='pl'; lbl.textContent=key; row.appendChild(lbl);
-    if (key==='activation') {
-      const sel = document.createElement('select'); sel.className='ps';
-      for (const a of ACTS) { const o=document.createElement('option'); o.value=a; o.textContent=a; if((node.params[key]||'')===a) o.selected=true; sel.appendChild(o); }
-      sel.onchange=()=>{ node.params[key]=sel.value; renderAll(); };
-      row.appendChild(sel);
-    } else {
-      const inp = document.createElement('input'); inp.className='pi';
-      inp.value=node.params[key]??''; inp.oninput=()=>{ node.params[key]=inp.value; renderAll(); };
-      row.appendChild(inp);
-    }
-    pp.appendChild(row);
-  }
-
-  const sep=document.createElement('div'); sep.style.cssText='border-top:1px solid var(--border);margin:8px 0;'; pp.appendChild(sep);
-  const db=document.createElement('button'); db.className='btn danger'; db.style.width='100%'; db.textContent='🗑 Delete Node'; db.onclick=()=>deleteNode(selId); pp.appendChild(db);
-}
 
 // ── Topological sort ───────────────────────────────────────────────────────
 function topoSort() {
+  syncFromGraph();
   const adj = new Map(nodes.map(n=>[n.id,[]]));
   const inDeg = new Map(nodes.map(n=>[n.id,0]));
   for (const e of edges) {
@@ -700,25 +492,19 @@ const MNIST_DIR  = '/home/user1/projects/mnist';
 const MNIST_IMG_CACHE = MNIST_DIR + '/mnist_images.png';
 const MNIST_LBL_CACHE = MNIST_DIR + '/mnist_labels_uint8';
 
-function imgBufToFloats(imgArrayBuffer) {
-  return new Promise((ok, err) => {
-    const img = new Image();
-    img.onload = () => {
-      const buf = new ArrayBuffer(MNIST_N * IMG_SZ * 4);
-      const cv = document.createElement('canvas'); cv.width=img.width; cv.height=CHUNK;
-      const ctx = cv.getContext('2d');
-      for (let i=0; i<MNIST_N/CHUNK; i++) {
-        const view = new Float32Array(buf, i*IMG_SZ*CHUNK*4, IMG_SZ*CHUNK);
-        ctx.drawImage(img, 0, i*CHUNK, img.width, CHUNK, 0, 0, img.width, CHUNK);
-        const px = ctx.getImageData(0, 0, cv.width, CHUNK).data;
-        for (let j=0; j<px.length/4; j++) view[j]=px[j*4]/255;
-      }
-      URL.revokeObjectURL(img.src);
-      ok(new Float32Array(buf));
-    };
-    img.onerror = err;
-    img.src = URL.createObjectURL(new Blob([imgArrayBuffer], {type:'image/png'}));
-  });
+async function imgBufToFloats(imgArrayBuffer) {
+  const bitmap = await createImageBitmap(new Blob([imgArrayBuffer], {type:'image/png'}));
+  const buf = new ArrayBuffer(MNIST_N * IMG_SZ * 4);
+  const cv = document.createElement('canvas'); cv.width=bitmap.width; cv.height=CHUNK;
+  const ctx = cv.getContext('2d', {willReadFrequently: true});
+  for (let i=0; i<MNIST_N/CHUNK; i++) {
+    const view = new Float32Array(buf, i*IMG_SZ*CHUNK*4, IMG_SZ*CHUNK);
+    ctx.drawImage(bitmap, 0, i*CHUNK, bitmap.width, CHUNK, 0, 0, bitmap.width, CHUNK);
+    const px = ctx.getImageData(0, 0, cv.width, CHUNK).data;
+    for (let j=0; j<px.length/4; j++) view[j]=px[j*4]/255;
+  }
+  bitmap.close();
+  return new Float32Array(buf);
 }
 
 async function loadMnist() {
@@ -788,7 +574,7 @@ async function ensureTf() {
 
 async function startTraining() {
   if (isTraining) return;
-  // Detect diffusion pipeline and route accordingly
+  syncFromGraph();
   if (nodes.some(n => n.type === 'noise-input' || n.type === 'denoise-out')) {
     return DF.train();
   }
@@ -1036,6 +822,7 @@ function setProgLabel(s) { document.getElementById('prog-lbl').textContent=s; }
 async function loadModelWeights() {
   const fs = getFS();
   if (!fs) { alert('VFS unavailable'); return; }
+  syncFromGraph();
   const isDiffusion = nodes.some(n => n.type === 'noise-input' || n.type === 'denoise-out');
   const latestDir = isDiffusion
     ? '/home/user1/projects/nn-training/diffusion-latest'
@@ -1137,18 +924,36 @@ const PRESETS = {
 };
 
 function loadPreset(name) {
-  const p=PRESETS[name]; if (!p) return;
-  nodes=p.nodes.map(n=>({...n,params:{...n.params}}));
-  edges=p.edges.map(e=>({...e}));
-  tx=40; ty=20; scale=1; applyTransform();
-  selectNode(null); renderAll();
-  // Switch to diffusion tab when loading a diffusion preset
+  const p = PRESETS[name]; if (!p) return;
+  graph.clear();
+  const idMap = {};
+  for (const n of p.nodes) {
+    const def = NDEFS[n.type]; if (!def) continue;
+    const lgPath = def.cat + '/' + def.label;
+    const lgNode = LiteGraph.createNode(lgPath);
+    if (!lgNode) continue;
+    lgNode.pos = [n.x, n.y];
+    lgNode.nnType = n.type;
+    for (const [k, v] of Object.entries(n.params || {})) {
+      lgNode.properties[k] = v;
+      if (lgNode.widgets) { const w = lgNode.widgets.find(w => w.name === k); if (w) w.value = v; }
+    }
+    graph.add(lgNode);
+    idMap[n.id] = lgNode.id;
+  }
+  for (const e of p.edges) {
+    const from = graph.getNodeById(idMap[e.from]);
+    const to = graph.getNodeById(idMap[e.to]);
+    if (from && to) from.connect(e.fromPort || 0, to, e.toPort || 0);
+  }
+  graphCanvas.ds.reset();
+  graphCanvas.setDirty(true, true);
   if (p.mode === 'diffusion') {
     switchBTab('diffusion');
     document.getElementById('tc-ds').value = 'folder';
     onDsChange();
   }
-  log('Loaded preset: '+name,'inf');
+  log('Loaded preset: ' + name, 'inf');
 }
 
 // ── Save / Load graph ──────────────────────────────────────────────────────
@@ -1221,6 +1026,7 @@ function vfsLoadHandler(fs, dir) {
 
 function saveGraph() {
   const fs=getFS(); if (!fs) { alert('VFS not available'); return; }
+  syncFromGraph();
   fs.writeFileSync(GRAPH_PATH, JSON.stringify({nodes,edges},null,2));
   log('Graph saved to '+GRAPH_PATH,'ok');
 }
@@ -1228,8 +1034,28 @@ function loadGraph() {
   const fs=getFS(); if (!fs) { alert('VFS not available'); return; }
   if (!fs.existsSync(GRAPH_PATH)) { alert('No saved graph at '+GRAPH_PATH); return; }
   const d=JSON.parse(fs.readFileSync(GRAPH_PATH,'utf8'));
-  nodes=d.nodes||[]; edges=d.edges||[];
-  selectNode(null); renderAll(); log('Graph loaded','inf');
+  graph.clear();
+  const idMap = {};
+  for (const n of (d.nodes||[])) {
+    const def = NDEFS[n.type]; if (!def) continue;
+    const lgNode = LiteGraph.createNode(def.cat + '/' + def.label);
+    if (!lgNode) continue;
+    lgNode.pos = [n.x||100, n.y||100];
+    lgNode.nnType = n.type;
+    for (const [k, v] of Object.entries(n.params || {})) {
+      lgNode.properties[k] = v;
+      if (lgNode.widgets) { const w = lgNode.widgets.find(w => w.name === k); if (w) w.value = v; }
+    }
+    graph.add(lgNode);
+    idMap[n.id] = lgNode.id;
+  }
+  for (const e of (d.edges||[])) {
+    const from = graph.getNodeById(idMap[e.from]);
+    const to = graph.getNodeById(idMap[e.to]);
+    if (from && to) from.connect(e.fromPort || 0, to, e.toPort || 0);
+  }
+  graphCanvas.setDirty(true, true);
+  log('Graph loaded','inf');
 }
 
 // ── Inference ──────────────────────────────────────────────────────────────
@@ -1331,7 +1157,7 @@ function buildDrawPad(wrap, modelW, modelH, channels, flatTotal=null) {
   const cv=document.createElement('canvas');
   cv.id='draw-pad'; cv.width=DISPLAY_W; cv.height=DISPLAY_H;
   cv.style.cssText=`width:${DISPLAY_W}px;height:${DISPLAY_H}px;background:#000;border:1px solid var(--border);border-radius:6px;cursor:crosshair;touch-action:none;display:block;`;
-  inferCanvas=cv; inferCtx=cv.getContext('2d');
+  inferCanvas=cv; inferCtx=cv.getContext('2d', {willReadFrequently: true});
   clearDrawPad(); section.appendChild(cv);
 
   function drawAt(x,y) {
@@ -1372,7 +1198,7 @@ function buildDrawPad(wrap, modelW, modelH, channels, flatTotal=null) {
   // Tensor factory — 4D for img-input, 2D flat for plain input
   inferGetTensor=()=>{
     const off=document.createElement('canvas'); off.width=modelW; off.height=modelH;
-    const octx=off.getContext('2d');
+    const octx=off.getContext('2d', {willReadFrequently: true});
     octx.drawImage(cv,0,0,modelW,modelH);
     const px=octx.getImageData(0,0,modelW,modelH).data;
     const n=modelW*modelH;
@@ -1486,14 +1312,6 @@ function onDsChange() {
   document.getElementById('tc-folder-g').style.display=document.getElementById('tc-ds').value==='folder'?'':'none';
 }
 
-// ── Keyboard ───────────────────────────────────────────────────────────────
-document.addEventListener('keydown', e => {
-  if (e.key==='Escape') { connFrom=null; renderEdges(); }
-  if ((e.key==='Delete'||e.key==='Backspace') && selId) {
-    const tag=(document.activeElement||{}).tagName||'';
-    if (!['INPUT','TEXTAREA','SELECT'].includes(tag)) deleteNode(selId);
-  }
-});
 
 // ── Bottom panel resize & expand ──────────────────────────────────────────
 (function() {
@@ -1570,7 +1388,7 @@ const DF = (() => {
   // Render shape sample → Float32Array (HWC 0-1)
   function renderSample(s, sz) {
     const cv = document.createElement('canvas'); cv.width = sz; cv.height = sz;
-    const ctx = cv.getContext('2d');
+    const ctx = cv.getContext('2d', {willReadFrequently: true});
     const [br, bg, bb] = s.bg || [255,255,255];
     ctx.fillStyle = 'rgb('+br+','+bg+','+bb+')'; ctx.fillRect(0, 0, sz, sz);
     const [cr, cg, cb] = s.color;
@@ -1672,9 +1490,6 @@ const DF = (() => {
     $('df-previews').innerHTML=''; switchBTab('diffusion');
 
     const {images,prompts,sz}=dataset, ch=3, N=images.length;
-    const T=parseInt($('df-steps').value)||50, epochs=parseInt($('df-epochs').value)||50;
-    const lr=parseFloat($('df-lr').value)||0.001;
-    const prevN=parseInt($('df-prev').value)||5, ckptN=parseInt($('df-ckpt').value)||0;
     const txtNode=nodes.find(n=>n.type==='text-embed');
     const txtDim=txtNode?parseInt(txtNode.params.dim||32):32;
 
@@ -1683,15 +1498,25 @@ const DF = (() => {
       if (model) { status('Continuing from existing weights…'); log('Continuing diffusion ('+model.countParams().toLocaleString()+' params)','ok'); }
       else { status('Building model from graph…'); model=await buildTfModel(); log('Diffusion model: '+model.countParams().toLocaleString()+' params','ok'); }
 
-      const opt=tf.train.adam(lr), sc=sched(T);
       const txtVecs=prompts.map(p=>embed(p,txtDim));
       const runDir='/home/user1/projects/nn-training/diff-'+new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
       try { const fs=getFS(); if(fs) mkdirpSync(fs,runDir); } catch(_) {}
 
-      const BS=Math.min(N, parseInt($('df-bs').value)||64);
+      let curLr=parseFloat($('df-lr').value)||0.001;
+      model.compile({optimizer:tf.train.adam(curLr), loss:'meanSquaredError'});
 
-      for (let ep=0; ep<epochs; ep++) {
+      for (let ep=0; ; ep++) {
         if (stopped) break;
+        const epochs=parseInt($('df-epochs').value)||50;
+        if (ep>=epochs) break;
+        const newLr=parseFloat($('df-lr').value)||0.001;
+        if (newLr!==curLr) { curLr=newLr; model.compile({optimizer:tf.train.adam(curLr), loss:'meanSquaredError'}); log('LR changed → '+curLr,'inf'); }
+        const T=parseInt($('df-steps').value)||50;
+        const BS=Math.min(N, parseInt($('df-bs').value)||64);
+        const prevN=parseInt($('df-prev').value)||5;
+        const ckptN=parseInt($('df-ckpt').value)||0;
+        const sc=sched(T);
+
         let epLoss=0, steps=0;
         const perm=Array.from({length:N},(_,i)=>i);
         for (let i=N-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[perm[i],perm[j]]=[perm[j],perm[i]];}
@@ -1708,17 +1533,16 @@ const DF = (() => {
           const saArr=new Float32Array(ts.map(t=>Math.sqrt(sc.aBar[t])));
           const snaArr=new Float32Array(ts.map(t=>Math.sqrt(1-sc.aBar[t])));
           const tNorm=new Float32Array(ts.map(t=>t/T));
-          const loss=opt.minimize(()=>{
+          const noisy=tf.tidy(()=>{
             const noise=tf.randomNormal([bn,sz,sz,ch]);
             const saT=tf.tensor(saArr,[bn,1,1,1]);
             const snaT=tf.tensor(snaArr,[bn,1,1,1]);
-            const noisy=bClean.mul(saT).add(noise.mul(snaT));
-            const tIn=tf.tensor2d(tNorm,[bn,1]);
-            const pred=model.apply([noisy,tIn,bTxt]);
-            return tf.losses.meanSquaredError(bClean,pred).mean();
-          },true);
-          epLoss+=loss.dataSync()[0]; loss.dispose(); steps++;
-          bClean.dispose(); bTxt.dispose();
+            return bClean.mul(saT).add(noise.mul(snaT));
+          });
+          const tIn=tf.tensor2d(tNorm,[bn,1]);
+          const lossVal=await model.trainOnBatch([noisy,tIn,bTxt],bClean);
+          epLoss+=(typeof lossVal==='number'?lossVal:Array.isArray(lossVal)?lossVal[0]:lossVal); steps++;
+          noisy.dispose(); tIn.dispose(); bClean.dispose(); bTxt.dispose();
         }
         const avg=epLoss/steps;
         $('df-prog').style.width=((ep+1)/epochs*100).toFixed(0)+'%';
@@ -1786,8 +1610,7 @@ const DF = (() => {
 })();
 
 // ── Boot ───────────────────────────────────────────────────────────────────
-buildPalette();
-applyTransform();
+initGraph();
 loadPreset('mnist-dense');
 </script>
 </body>
