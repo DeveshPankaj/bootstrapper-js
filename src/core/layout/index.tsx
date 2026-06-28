@@ -1,5 +1,7 @@
 import { BehaviorSubject, filter } from 'rxjs'
 import { Command, Platform } from '@shared/index'
+import { readJsonFile, writeJsonFile, ensureDir } from '@shared/fs-utils'
+import { LAYOUTS_PATH, LAYOUT_CONFIG_PATH, WM_CURRENT_PATH, WM_THEMES_DIR, WM_DEFAULT_THEME_PATH, WM_DIR, WIDGET_POSITIONS_PATH, WIDGETS_CONFIG_PATH } from '@shared/constants'
 import { createRoot } from 'react-dom/client'
 import React from 'react'
 import { Taskbar } from './commands'
@@ -8,6 +10,13 @@ import { DESKTOP_CONTAINER_CLASS, WINDOWS_CONTAINER_CLASS, WindowManager } from 
 import { FileType } from '../../shared/types'
 import { ListDirComponent } from '../../apps/file-explorer/desktop'
 import { Header } from './header'
+import { RESET_CSS, MATERIAL_SYMBOLS_CSS } from './styles/base'
+import { layoutCss } from './styles/layout'
+import { WINDOW_CSS } from './styles/window'
+import { TASKBAR_CSS } from './styles/taskbar'
+import { WIDGETS_CSS } from './styles/widgets'
+import { CONTEXTMENU_CSS } from './styles/contextmenu'
+import { DESKTOP_ENV_CSS } from './styles/desktop-env'
 
 const platform = Platform.getInstance()
 
@@ -17,11 +26,6 @@ const styles = platform.host.createCSSStyleSheet()
 // Layout presets are stored in the virtual filesystem (standard Linux config
 // location: /etc/wm) so they can be edited either through Settings or by
 // directly editing the JSON files.
-const LAYOUTS_PATH = '/etc/wm/layouts.json'
-const LAYOUT_CONFIG_PATH = '/etc/wm/config.json'
-const WM_CURRENT_PATH = '/etc/wm/current.json'
-const WM_THEMES_DIR = '/etc/wm/themes'
-const WM_DEFAULT_THEME_PATH = `${WM_THEMES_DIR}/dark.json`
 
 type LayoutDef = {
     id: string
@@ -117,13 +121,7 @@ const DEFAULT_WM_SETTINGS: WmSettings = {
     },
 }
 
-const readJsonFile = (path: string): any | null => {
-    const fs = platform.host.getFS()
-    try {
-        if (fs.existsSync(path)) return JSON.parse(fs.readFileSync(path, 'utf-8') as string)
-    } catch (err) { console.error(err) }
-    return null
-}
+const readJsonFileLocal = (path: string): any | null => readJsonFile(platform.host.getFS(), path)
 
 const mergeWmSettings = (raw: any): WmSettings => ({
     appearance: { ...DEFAULT_WM_SETTINGS.appearance, ...raw?.appearance },
@@ -131,25 +129,23 @@ const mergeWmSettings = (raw: any): WmSettings => ({
 })
 
 const writeWmCurrent = (raw: any) => {
-    const fs = platform.host.getFS()
-    if (!fs.existsSync('/etc/wm')) fs.mkdirSync('/etc/wm', { recursive: true })
-    fs.writeFileSync(WM_CURRENT_PATH, JSON.stringify(raw, null, 2))
+    writeJsonFile(platform.host.getFS(), WM_CURRENT_PATH, raw, true)
 }
 
 // Ensures /etc/wm/current.json exists, seeding it from themes/default.json,
 // or failing that, from any other theme file found in /etc/wm/themes.
 const ensureWmCurrent = (): any => {
     const fs = platform.host.getFS()
-    const current = readJsonFile(WM_CURRENT_PATH)
+    const current = readJsonFileLocal(WM_CURRENT_PATH)
     if (current) return current
 
-    let seed = readJsonFile(WM_DEFAULT_THEME_PATH)
+    let seed = readJsonFileLocal(WM_DEFAULT_THEME_PATH)
     if (!seed) {
         try {
             if (fs.existsSync(WM_THEMES_DIR)) {
                 const files = (fs.readdirSync(WM_THEMES_DIR) as string[]).filter(f => f.endsWith('.json'))
                 for (const file of files) {
-                    seed = readJsonFile(`${WM_THEMES_DIR}/${file}`)
+                    seed = readJsonFileLocal(`${WM_THEMES_DIR}/${file}`)
                     if (seed) break
                 }
             }
@@ -170,7 +166,7 @@ const readThemes = (): Array<{ id: string, name: string, appearance: WmSettings[
         const files = (fs.readdirSync(WM_THEMES_DIR) as string[]).filter(f => f.endsWith('.json'))
         return files.map(file => {
             const id = file.replace(/\.json$/, '')
-            const raw = readJsonFile(`${WM_THEMES_DIR}/${file}`)
+            const raw = readJsonFileLocal(`${WM_THEMES_DIR}/${file}`)
             const merged = mergeWmSettings(raw)
             return { id, name: raw?.name || id, appearance: merged.appearance }
         })
@@ -178,7 +174,7 @@ const readThemes = (): Array<{ id: string, name: string, appearance: WmSettings[
 }
 
 const applyTheme = (themeId: string): WmSettings => {
-    const raw = readJsonFile(`${WM_THEMES_DIR}/${themeId}.json`) || DEFAULT_WM_SETTINGS
+    const raw = readJsonFileLocal(`${WM_THEMES_DIR}/${themeId}.json`) || DEFAULT_WM_SETTINGS
     writeWmCurrent(raw)
     const settings = mergeWmSettings(raw)
     applyWmSettings(settings)
@@ -190,42 +186,61 @@ const applyTheme = (themeId: string): WmSettings => {
 const applyWmSettings = (settings: WmSettings) => {
     const root = platform.window.document.documentElement
     const { appearance } = settings
-    root.style.setProperty('--wm-header-bg', appearance.headerBackground)
-    root.style.setProperty('--wm-header-color', appearance.headerColor)
-    root.style.setProperty('--wm-window-bg', appearance.windowBackground)
-    root.style.setProperty('--wm-taskbar-bg', appearance.taskbarBackground)
-    root.style.setProperty('--wm-taskbar-size', `${appearance.taskbarSize}px`)
-    root.style.setProperty('--wm-accent', appearance.accentColor)
-    root.style.setProperty('--wm-radius', `${appearance.borderRadius}px`)
-    root.style.setProperty('--wm-blur', `${appearance.blur}px`)
-    root.style.setProperty('--wm-shadow', appearance.shadow ? '0 8px 32px rgba(31, 38, 135, 0.37)' : 'none')
+
+    const tokens: Record<string, string> = {
+        '--wm-header-bg': appearance.headerBackground,
+        '--wm-header-color': appearance.headerColor,
+        '--wm-window-bg': appearance.windowBackground,
+        '--wm-taskbar-bg': appearance.taskbarBackground,
+        '--wm-taskbar-size': `${appearance.taskbarSize}px`,
+        '--wm-accent': appearance.accentColor,
+        '--wm-radius': `${appearance.borderRadius}px`,
+        '--wm-blur': `${appearance.blur}px`,
+        '--wm-shadow': appearance.shadow ? '0 8px 32px rgba(31, 38, 135, 0.37)' : 'none',
+
+        '--wm-font-family': "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif",
+        '--wm-font-mono': "'SF Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace",
+        '--wm-font-size-xs': '0.7rem',
+        '--wm-font-size-sm': '0.8rem',
+        '--wm-font-size-base': '0.875rem',
+        '--wm-font-size-lg': '1rem',
+        '--wm-font-size-xl': '1.25rem',
+        '--wm-font-size-2xl': '1.75rem',
+
+        '--wm-space-1': '0.25rem',
+        '--wm-space-2': '0.5rem',
+        '--wm-space-3': '0.75rem',
+        '--wm-space-4': '1rem',
+        '--wm-space-5': '1.5rem',
+        '--wm-space-6': '2rem',
+
+        '--wm-surface-hover': 'rgba(127, 127, 127, 0.2)',
+        '--wm-surface-active': 'rgba(127, 127, 127, 0.3)',
+        '--wm-border': 'rgba(255, 255, 255, 0.18)',
+        '--wm-divider': 'rgba(127, 127, 127, 0.2)',
+
+        '--wm-transition-fast': '0.15s ease',
+        '--wm-transition-normal': '0.3s ease',
+    }
+
+    for (const [prop, value] of Object.entries(tokens)) {
+        root.style.setProperty(prop, value)
+    }
 }
 
 const readLayouts = (): Array<LayoutDef> => {
-    const fs = platform.host.getFS()
-    try {
-        if (fs.existsSync(LAYOUTS_PATH)) {
-            const parsed = JSON.parse(fs.readFileSync(LAYOUTS_PATH, 'utf-8') as string)
-            if (Array.isArray(parsed.layouts) && parsed.layouts.length) return parsed.layouts
-        }
-    } catch (err) { console.error(err) }
+    const parsed = readJsonFileLocal(LAYOUTS_PATH)
+    if (parsed && Array.isArray(parsed.layouts) && parsed.layouts.length) return parsed.layouts
     return DEFAULT_LAYOUTS
 }
 
 const readCurrentLayoutId = (): string => {
-    const fs = platform.host.getFS()
-    try {
-        if (fs.existsSync(LAYOUT_CONFIG_PATH)) {
-            return JSON.parse(fs.readFileSync(LAYOUT_CONFIG_PATH, 'utf-8') as string).layout || 'default'
-        }
-    } catch (err) { console.error(err) }
-    return 'default'
+    const parsed = readJsonFileLocal(LAYOUT_CONFIG_PATH)
+    return parsed?.layout || 'default'
 }
 
 const writeCurrentLayoutId = (layoutId: string) => {
-    const fs = platform.host.getFS()
-    if (!fs.existsSync('/etc/wm')) fs.mkdirSync('/etc/wm', { recursive: true })
-    fs.writeFileSync(LAYOUT_CONFIG_PATH, JSON.stringify({ layout: layoutId }, null, 2))
+    writeJsonFile(platform.host.getFS(), LAYOUT_CONFIG_PATH, { layout: layoutId }, true)
 }
 
 const layoutSubject = new BehaviorSubject<string>(readCurrentLayoutId())
@@ -272,512 +287,16 @@ const resolveWallpaperUrl = (wallpaper: string): string => {
 
 const applyCss = ({wallpaper, grid}: {wallpaper: string, grid: LayoutDef['grid']}) => {
     const wallpaperUrl = resolveWallpaperUrl(wallpaper)
-    styles.replace(`
-        html, body {
-            margin: 0;
-            padding:0;
-            font-family: monospace;
-            height: 100svh;
-            overflow: hidden;
-        }
-    
-        * {
-            box-sizing: border-box;
-        }
-    
-        @font-face {
-            font-family: 'Material Symbols Outlined';
-            font-style: normal;
-            font-weight: 100 700;
-            src: url(https://fonts.gstatic.com/s/materialsymbolsoutlined/v138/kJEhBvYX7BgnkSrUwT8OhrdQw4oELdPIeeII9v6oFsLjBuVY.woff2) format('woff2');
-        }
-        
-        .material-symbols-outlined {
-            font-family: 'Material Symbols Outlined';
-            font-weight: normal;
-            font-style: normal;
-            font-size: 24px;
-            line-height: 1;
-            letter-spacing: normal;
-            text-transform: none;
-            display: inline-block;
-            white-space: nowrap;
-            word-wrap: normal;
-            direction: ltr;
-            -webkit-font-feature-settings: 'liga';
-            -webkit-font-smoothing: antialiased;
-        }
-    
-        .layout-default {
-            // background: #292a2d;
-            // color: #919191;
-            // height: -webkit-fill-available;
-            height: 100%;
-
-            display: grid;
-            grid-template-columns: ${grid.columns};
-            grid-template-rows: ${grid.rows};
-            // gap: 5px;
-            grid-auto-flow: row;
-            grid-template-areas: ${grid.areas};
-
-            // background-image: url(/wp-8.jpeg);
-            background-image: url(${wallpaperUrl});
-            background-repeat: no-repeat;
-            background-size: cover;
-    
-        }
-        .header {
-            grid-area: header;
-        }
-        .left-nav {
-            grid-area: left-nav;
-        }
-        .content-area {
-            grid-area: content-area;
-            min-height: 0;
-            min-width: 0;
-            overflow: hidden;
-        }
-
-        .widgets-panel {
-            position: absolute;
-            top: 1rem;
-            right: 1rem;
-            bottom: 1rem;
-            left: 1rem;
-            z-index: 5;
-            pointer-events: none;
-        }
-
-        .widgets-panel .widget {
-            position: absolute;
-            min-width: 9rem;
-            pointer-events: auto;
-            padding: 0.75rem 1rem;
-            background: var(--wm-window-bg, rgba(255, 255, 255, 0.15));
-            backdrop-filter: blur(var(--wm-blur, 10px));
-            border-radius: var(--wm-radius, 8px);
-            box-shadow: var(--wm-shadow, 0 8px 32px rgba(31, 38, 135, 0.37));
-            color: var(--wm-header-color, #1d1d1f);
-            cursor: grab;
-            user-select: none;
-        }
-
-        .widgets-panel .widget.dragging {
-            cursor: grabbing;
-            opacity: 0.85;
-            z-index: 10;
-        }
-
-        .widget-clock-time {
-            font-size: 1.75rem;
-            font-weight: 600;
-            text-align: right;
-        }
-
-        .widget-clock-date {
-            font-size: 0.8rem;
-            opacity: 0.8;
-            text-align: right;
-        }
-
-        .widget-public-ip-label {
-            font-size: 0.7rem;
-            opacity: 0.8;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        .widget-public-ip-value {
-            font-size: 1rem;
-            font-weight: 600;
-            text-align: right;
-        }
-
-        .widget-memory-label {
-            font-size: 0.7rem;
-            opacity: 0.8;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        .widget-memory-value {
-            font-size: 1rem;
-            font-weight: 600;
-            text-align: right;
-        }
-
-        .widget-memory-bar {
-            margin-top: 0.4rem;
-            width: 100%;
-            height: 0.35rem;
-            border-radius: 0.2rem;
-            background: rgba(127, 127, 127, 0.3);
-            overflow: hidden;
-        }
-
-        .widget-memory-bar-fill {
-            height: 100%;
-            width: 0%;
-            background: var(--wm-accent, #0a84ff);
-            border-radius: 0.2rem;
-            transition: width 0.3s ease;
-        }
-
-        .widget-memory-sub {
-            margin-top: 0.2rem;
-            font-size: 0.7rem;
-            opacity: 0.7;
-            text-align: right;
-        }
-
-        .window > iframe {
-            border: 0;
-            flex-grow: 1;
-            width: 100%;
-            width: -webkit-fill-available;
-            height: -webkit-fill-available;
-        }
-    
-        .right-nav {
-            grid-area: right-nav;
-        }
-        .footer {
-            grid-area: footer;
-        }
-    
-    
-    
-        .window {
-            position: absolute;
-            z-index: 9;
-            background-color: #f1f1f1;
-            text-align: center;
-            display: flex;
-            flex-direction: column;
-            // border: 1px solid #d3d3d3;
-    
-            width: 50rem;
-            height: 30rem;
-            top: min(10%, 30rem);
-            left: min(10%, 30rem);
-    
-            resize: both;
-            overflow: hidden;
-            border-radius: var(--wm-radius, 6px);
-
-
-            // padding: 4px;
-            background: var(--wm-window-bg, rgba(255, 255, 255, 0.15));
-            backdrop-filter: blur(var(--wm-blur, 10px));
-            box-shadow: var(--wm-shadow, rgba(31, 38, 135, 0.37) 0px 8px 32px);
-            // border: 1px solid rgba(255, 255, 255, 0.18);
-        }
-        .window.hidden, .window.minimized {
-            display: none;
-        }
-
-        .window.top {
-            z-index: 10;
-            outline: 1px solid var(--wm-accent, transparent);
-        }
-    
-        .window::-webkit-resizer {
-            background-color: transparent;
-        }
-
-        .window-resize-handle {
-            position: absolute;
-            z-index: 50;
-        }
-        .window-resize-handle.n  { top: 0; left: 6px; right: 6px; height: 5px; cursor: n-resize; }
-        .window-resize-handle.s  { bottom: 0; left: 6px; right: 6px; height: 5px; cursor: s-resize; }
-        .window-resize-handle.e  { right: 0; top: 6px; bottom: 6px; width: 5px; cursor: e-resize; }
-        .window-resize-handle.w  { left: 0; top: 6px; bottom: 6px; width: 5px; cursor: w-resize; }
-        .window-resize-handle.nw { top: 0; left: 0; width: 12px; height: 12px; cursor: nw-resize; }
-        .window-resize-handle.ne { top: 0; right: 0; width: 12px; height: 12px; cursor: ne-resize; }
-        .window-resize-handle.sw { bottom: 0; left: 0; width: 12px; height: 12px; cursor: sw-resize; }
-        .window-resize-handle.se { bottom: 0; right: 0; width: 12px; height: 12px; cursor: se-resize; }
-    
-        .window.dragging {
-            outline: 1px solid #d3d3d3;
-            z-index: 200;
-            box-shadow: rgb(255 255 255) 0px 0px 4px;
-        }
-
-        .snap-preview {
-            position: fixed;
-            z-index: 99;
-            background: rgba(10, 132, 255, 0.12);
-            border: 2px solid rgba(10, 132, 255, 0.45);
-            border-radius: var(--wm-radius, 6px);
-            pointer-events: none;
-            transition: left 0.08s ease, top 0.08s ease, width 0.08s ease, height 0.08s ease;
-        }
-    
-        .window.on-top {
-            z-index: 100;
-        }
-    
-        .window-header {
-            padding: 7px;
-            cursor: move;
-            z-index: 9;
-            background-color: var(--wm-header-bg, rgb(0 0 0));
-            color: var(--wm-header-color, #fff);
-            
-            // position: absolute;
-            // bottom: 100%;
-            // width: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-        .window-header > .title {
-            display: inline-flex;
-            align-items: center;
-            gap: .5rem;
-        }
-    
-        iframe.dragging {
-            pointer-events: none;
-        }
-    
-        .contextmenu {
-            position: absolute;
-            // background: white;
-            display: none;
-            z-index: 300;
-    
-            // padding: 10px;
-            overflow: hidden;
-            background: rgba(255, 255, 255, 0.15);
-            backdrop-filter: blur(10px);
-            border-radius: 15px;
-            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
-            border: 1px solid rgba(255, 255, 255, 0.18);
-        }
-    
-    
-    
-        .toolbar {
-            position: absolute;
-            bottom: 1rem;
-            left: 50%;
-            transform: translateX(-50%);
-        }
-
-        /* Windows 11 style taskbar: translucent pill of blurred glass that hosts
-           pinned app launchers, running-window indicators and the settings icon. */
-        .taskbar {
-            display: flex;
-            align-items: center;
-            gap: 0.15rem;
-            box-sizing: border-box;
-            height: var(--wm-taskbar-size, 56px);
-            padding: 0.3rem 0.6rem;
-            background: var(--wm-taskbar-bg, rgba(255, 255, 255, 0.5));
-            backdrop-filter: blur(var(--wm-blur, 10px));
-            box-shadow: var(--wm-shadow, 0 8px 32px rgba(31, 38, 135, 0.37));
-            border-radius: var(--wm-radius, 12px);
-            color: var(--wm-header-color, #1d1d1f);
-        }
-
-        .header .taskbar, .footer .taskbar {
-            width: 100%;
-            border-radius: 0;
-        }
-
-        .left-nav .taskbar, .right-nav .taskbar {
-            flex-direction: column;
-            height: 100%;
-            width: var(--wm-taskbar-size, 56px);
-            border-radius: 0;
-        }
-
-        .taskbar-divider {
-            width: 1px;
-            height: 60%;
-            background: currentColor;
-            opacity: 0.2;
-            margin: 0 0.3rem;
-        }
-
-        .left-nav .taskbar-divider, .right-nav .taskbar-divider {
-            width: 60%;
-            height: 1px;
-            margin: 0.3rem 0;
-        }
-
-        .taskbar-spacer {
-            flex: 1;
-        }
-
-        .taskbar-icon-button {
-            position: relative;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 0.4rem;
-            border-radius: 8px;
-            cursor: pointer;
-            color: var(--wm-header-color, #1d1d1f);
-        }
-
-        .taskbar-icon-button:hover, .taskbar-window-icon.active {
-            background: rgba(127, 127, 127, 0.2);
-        }
-
-        .taskbar-window-icon.active::after {
-            content: '';
-            position: absolute;
-            bottom: 2px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 18px;
-            height: 3px;
-            border-radius: 2px;
-            background: var(--wm-accent, #0a84ff);
-        }
-
-        .taskbar-window-icon.minimized::after {
-            content: '';
-            position: absolute;
-            bottom: 2px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 6px;
-            height: 3px;
-            border-radius: 2px;
-            background: rgba(127, 127, 127, 0.6);
-        }
-
-        .taskbar-preview {
-            position: absolute;
-            bottom: calc(100% + 0.5rem);
-            left: 50%;
-            transform: translateX(-50%);
-            display: none;
-            flex-direction: column;
-            align-items: center;
-            background: var(--wm-window-bg, rgba(255, 255, 255, 0.85));
-            backdrop-filter: blur(var(--wm-blur, 10px));
-            border-radius: var(--wm-radius, 8px);
-            box-shadow: var(--wm-shadow, 0 8px 32px rgba(31, 38, 135, 0.37));
-            padding: 0.4rem;
-            z-index: 50;
-            pointer-events: none;
-        }
-
-        .taskbar-window-icon:hover .taskbar-preview {
-            display: flex;
-        }
-
-        .taskbar-preview span {
-            margin-top: 0.25rem;
-            font-size: 0.75rem;
-            white-space: nowrap;
-        }
-
-        .desktop-switcher {
-            display: flex;
-            align-items: center;
-            gap: 0.3rem;
-        }
-
-        .left-nav .desktop-switcher, .right-nav .desktop-switcher {
-            flex-direction: column;
-        }
-
-        .desktop-pill {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-width: 1.6rem;
-            height: 1.6rem;
-            padding: 0 0.3rem;
-            border-radius: 6px;
-            font-size: 0.8rem;
-            cursor: pointer;
-            color: var(--wm-header-color, #1d1d1f);
-        }
-
-        .desktop-pill:hover {
-            background: rgba(127, 127, 127, 0.2);
-        }
-
-        .desktop-pill.active {
-            background: var(--wm-accent, #0a84ff);
-            color: #fff;
-        }
-
-        .desktop-context-menu {
-            position: fixed;
-            z-index: 100;
-            background: var(--wm-window-bg, #fff);
-            backdrop-filter: blur(var(--wm-blur, 10px));
-            border-radius: var(--wm-radius, 8px);
-            box-shadow: var(--wm-shadow, 0 8px 32px rgba(31, 38, 135, 0.37));
-            color: var(--wm-header-color, #1d1d1f);
-            overflow: hidden;
-        }
-
-        .desktop-context-menu button {
-            display: block;
-            width: 100%;
-            padding: 0.5rem 1rem;
-            border: none;
-            background: transparent;
-            color: inherit;
-            font-size: 0.85rem;
-            text-align: left;
-            cursor: pointer;
-        }
-
-        .desktop-context-menu button:hover {
-            background: rgba(127, 127, 127, 0.2);
-        }
-
-        .desktop-context-menu button:disabled {
-            opacity: 0.4;
-            cursor: default;
-        }
-
-        .window.desktop-hidden {
-            display: none !important;
-        }
-
-        .overlay {
-            // display: none;
-            background: rgba(255, 255, 255, 0.30);
-            position: absolute;
-            top: 0;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            z-index: 100;
-            pointer-events: none;
-        }
-    
-        .overlay>div {
-            width: 10rem;
-            height: 10rem;
-            outline: 1px solid #00BCD4;
-        }
-    
-        // .overlay {
-        //     position:absolute;
-        //     top:0;
-        //     height: 100vh;
-        //     -webkit-mask: radial-gradient(50px, #0000 100%, #000);
-        //             mask: radial-gradient(50px, #0000 100%, #000);
-        //     width: 100%;
-        //     backdrop-filter: blur(10px);
-        //     background:rgba(255, 0, 0, 0.1);
-        //   }
-    
-    `)
+    styles.replace([
+        RESET_CSS,
+        MATERIAL_SYMBOLS_CSS,
+        layoutCss(grid, wallpaperUrl),
+        WIDGETS_CSS,
+        WINDOW_CSS,
+        TASKBAR_CSS,
+        CONTEXTMENU_CSS,
+        DESKTOP_ENV_CSS,
+    ].join('\n'))
 }
 
 const userPrefWallpaper = platform.userPref.getWallpaper()
@@ -799,7 +318,6 @@ platform.register('get-window-manager-themes', readThemes)
 platform.host.registerCommand('get-window-manager-themes', readThemes)
 
 platform.register('set-wallpaper', (wallpaperUrl: string) => {
-    // console.log(wallpaperUrl)
     applyCss({wallpaper: wallpaperUrl, grid: getCurrentLayout().grid});
     platform.userPref.setWallpaper(wallpaperUrl);
 })
@@ -844,30 +362,147 @@ const applyLayout = (layoutId: string) => {
 platform.register('set-layout', applyLayout)
 platform.host.registerCommand('set-layout', applyLayout)
 
+type DesktopEnvDef = {
+    id: string
+    name: string
+    layoutId: string
+    themeId: string
+    cssClass: string
+    description: string
+}
 
-// Per-widget pixel positions (keyed by widget name), persisted so dragged
-// widgets stay where the user left them.
-const WIDGET_POSITIONS_PATH = '/etc/widgets/positions.json'
-// Which registered widgets are shown (`null` = show all - default before the
-// user has touched Settings > Widgets).
-const WIDGETS_CONFIG_PATH = '/etc/widgets/config.json'
+const DESKTOP_ENVS: DesktopEnvDef[] = [
+    {
+        id: 'macos',
+        name: 'macOS',
+        layoutId: 'default',
+        themeId: 'ocean',
+        cssClass: 'de-macos',
+        description: 'Floating dock, traffic light buttons, glassmorphism',
+    },
+    {
+        id: 'windows',
+        name: 'Windows 11',
+        layoutId: 'windows-bottom-bar',
+        themeId: 'windows',
+        cssClass: 'de-windows',
+        description: 'Bottom taskbar, Fluent-style controls, Mica materials',
+    },
+    {
+        id: 'linux',
+        name: 'Linux (GNOME)',
+        layoutId: 'linux-top-header',
+        themeId: 'linux',
+        cssClass: 'de-linux',
+        description: 'Top header bar, GNOME-style controls, dark theme',
+    },
+]
 
-const readWidgetPositions = (): Record<string, { top: number, left: number }> => {
+const DE_PREF_KEY = 'desktop_env'
+
+const ensureDeThemes = () => {
+    const fs = platform.host.getFS()
+
+    const windowsTheme = {
+        name: 'Windows 11',
+        appearance: {
+            headerBackground: '#202020',
+            headerColor: '#ffffff',
+            windowBackground: 'rgba(32, 32, 32, 0.92)',
+            taskbarBackground: 'rgba(32, 32, 32, 0.85)',
+            taskbarSize: 48,
+            accentColor: '#0078d4',
+            borderRadius: 8,
+            blur: 12,
+            shadow: true,
+        },
+        behavior: { dblClickHeaderFullscreen: true, bringToFrontOnClick: true },
+    }
+
+    const linuxTheme = {
+        name: 'Linux GNOME',
+        appearance: {
+            headerBackground: '#303030',
+            headerColor: '#ffffff',
+            windowBackground: 'rgba(36, 36, 36, 0.95)',
+            taskbarBackground: 'rgba(36, 36, 36, 0.95)',
+            taskbarSize: 40,
+            accentColor: '#3584e4',
+            borderRadius: 12,
+            blur: 8,
+            shadow: true,
+        },
+        behavior: { dblClickHeaderFullscreen: true, bringToFrontOnClick: true },
+    }
+
     try {
-        const fs = platform.host.getFS()
-        return JSON.parse(fs.readFileSync(WIDGET_POSITIONS_PATH, 'utf-8'))
+        ensureDir(fs, WM_THEMES_DIR)
+        if (!fs.existsSync(`${WM_THEMES_DIR}/windows.json`)) {
+            writeJsonFile(fs, `${WM_THEMES_DIR}/windows.json`, windowsTheme)
+        }
+        if (!fs.existsSync(`${WM_THEMES_DIR}/linux.json`)) {
+            writeJsonFile(fs, `${WM_THEMES_DIR}/linux.json`, linuxTheme)
+        }
     } catch (err) {
-        return {}
+        console.error('Failed to write DE themes', err)
     }
 }
 
+const applyDesktopEnv = (envId: string) => {
+    const de = DESKTOP_ENVS.find(d => d.id === envId)
+    if (!de) return
+
+    ensureDeThemes()
+
+    const root = platform.window.document.documentElement
+    DESKTOP_ENVS.forEach(d => root.classList.remove(d.cssClass))
+    root.classList.add(de.cssClass)
+
+    applyTheme(de.themeId)
+    applyLayout(de.layoutId)
+
+    try {
+        const fs = platform.host.getFS()
+        const prefs = readJsonFileLocal('/user-preferences.json') || {}
+        prefs[DE_PREF_KEY] = envId
+        writeJsonFile(fs, '/user-preferences.json', prefs)
+    } catch (_) {}
+}
+
+const getDesktopEnvs = () => DESKTOP_ENVS
+
+const getCurrentDesktopEnv = (): string => {
+    const prefs = readJsonFileLocal('/user-preferences.json')
+    return prefs?.[DE_PREF_KEY] || 'macos'
+}
+
+const initDesktopEnv = () => {
+    const envId = getCurrentDesktopEnv()
+    const de = DESKTOP_ENVS.find(d => d.id === envId)
+    if (de) {
+        platform.window.document.documentElement.classList.add(de.cssClass)
+    }
+}
+initDesktopEnv()
+
+platform.register('set-desktop-env', applyDesktopEnv)
+platform.host.registerCommand('set-desktop-env', applyDesktopEnv)
+platform.register('get-desktop-envs', getDesktopEnvs)
+platform.host.registerCommand('get-desktop-envs', getDesktopEnvs)
+platform.register('get-current-desktop-env', getCurrentDesktopEnv)
+platform.host.registerCommand('get-current-desktop-env', getCurrentDesktopEnv)
+
+// Per-widget pixel positions (keyed by widget name), persisted so dragged
+// widgets stay where the user left them.
+const readWidgetPositions = (): Record<string, { top: number, left: number }> => {
+    return readJsonFileLocal(WIDGET_POSITIONS_PATH) || {}
+}
+
 const writeWidgetPosition = (name: string, top: number, left: number) => {
-    const fs = platform.host.getFS()
     const positions = readWidgetPositions()
     positions[name] = { top, left }
     try {
-        if (!fs.existsSync('/etc/widgets')) fs.mkdirSync('/etc/widgets', { recursive: true })
-        fs.writeFileSync(WIDGET_POSITIONS_PATH, JSON.stringify(positions, null, 2))
+        writeJsonFile(platform.host.getFS(), WIDGET_POSITIONS_PATH, positions, true)
     } catch (err) { /* best effort */ }
 }
 
@@ -877,21 +512,16 @@ const writeWidgetPosition = (name: string, top: number, left: number) => {
 const DEFAULT_HIDDEN_WIDGETS = ['toolbar', 'public-ip', 'sticky-notes', 'rss']
 
 const readEnabledWidgets = (): string[] | null => {
-    try {
-        const fs = platform.host.getFS()
-        const cfg = JSON.parse(fs.readFileSync(WIDGETS_CONFIG_PATH, 'utf-8'))
-        if (Array.isArray(cfg.enabled)) return cfg.enabled
-    } catch (err) { /* fall through to default */ }
+    const cfg = readJsonFileLocal(WIDGETS_CONFIG_PATH)
+    if (cfg && Array.isArray(cfg.enabled)) return cfg.enabled
     return null
 }
 
 const enabledWidgetsSubject = new BehaviorSubject<string[] | null>(readEnabledWidgets())
 
 const setEnabledWidgets = (enabled: string[]) => {
-    const fs = platform.host.getFS()
     try {
-        if (!fs.existsSync('/etc/widgets')) fs.mkdirSync('/etc/widgets', { recursive: true })
-        fs.writeFileSync(WIDGETS_CONFIG_PATH, JSON.stringify({ enabled }, null, 2))
+        writeJsonFile(platform.host.getFS(), WIDGETS_CONFIG_PATH, { enabled }, true)
     } catch (err) { /* best effort */ }
     enabledWidgetsSubject.next(enabled)
 }

@@ -1,0 +1,45 @@
+export const MATERIAL_SYMBOLS_CSS = `
+    @font-face {
+        font-family: 'Material Symbols Outlined';
+        font-style: normal;
+        font-weight: 100 700;
+        src: url(https://fonts.gstatic.com/s/materialsymbolsoutlined/v138/kJEhBvYX7BgnkSrUwT8OhrdQw4oELdPIeeII9v6oFsLjBuVY.woff2) format('woff2');
+    }
+
+    .material-symbols-outlined {
+        font-family: 'Material Symbols Outlined';
+        font-weight: normal;
+        font-style: normal;
+        font-size: 24px;
+        line-height: 1;
+        letter-spacing: normal;
+        text-transform: none;
+        display: inline-block;
+        white-space: nowrap;
+        word-wrap: normal;
+        direction: ltr;
+        -webkit-font-feature-settings: 'liga';
+        -webkit-font-smoothing: antialiased;
+    }
+`
+
+export const RESET_CSS = `
+    html, body {
+        margin: 0;
+        padding: 0;
+        font-family: var(--wm-font-family, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif);
+        font-size: var(--wm-font-size-base, 0.875rem);
+        height: 100svh;
+        overflow: hidden;
+    }
+
+    * {
+        box-sizing: border-box;
+    }
+
+    @media (max-width: 768px) {
+        :root {
+            --wm-taskbar-size: 44px;
+        }
+    }
+`

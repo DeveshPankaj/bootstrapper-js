@@ -1,5 +1,7 @@
 import { draggable } from "@shared/draggable";
 import { Command, Platform } from "@shared/index";
+import { removeRecursive, readJsonFile, writeJsonFile, ensureDir } from "@shared/fs-utils";
+import { DESKTOPS_CONFIG_PATH, PROC_DIR, WINDOW_MANAGER_MODULE_PATH, WM_DIR } from "@shared/constants";
 import { BehaviorSubject, Subject } from "rxjs";
 const platform = Platform.getInstance();
 
@@ -26,24 +28,19 @@ export const windowsSubject = new BehaviorSubject<TaskbarWindowInfo[]>([]);
 // shown. Persisted so the desktop layout survives a reload.
 export type DesktopInfo = { id: string; name: string };
 
-const DESKTOPS_CONFIG_PATH = "/etc/wm/desktops.json";
-
 const DEFAULT_DESKTOPS_CONFIG = { desktops: [{ id: "1", name: "Desktop 1" }], active: "1" };
 
 const readDesktopsConfig = (): { desktops: DesktopInfo[]; active: string } => {
   try {
-    const fs = platform.host.getFS();
-    const raw = JSON.parse(fs.readFileSync(DESKTOPS_CONFIG_PATH, "utf-8"));
-    if (Array.isArray(raw.desktops) && raw.desktops.length && raw.active) return raw;
-  } catch (err) { /* default */ }
+    const raw = readJsonFile<{ desktops: DesktopInfo[]; active: string }>(platform.host.getFS(), DESKTOPS_CONFIG_PATH);
+    if (raw && Array.isArray(raw.desktops) && raw.desktops.length && raw.active) return raw;
+  } catch (_) { /* platform not ready at module-eval time in remote.bundle */ }
   return DEFAULT_DESKTOPS_CONFIG;
 };
 
 const writeDesktopsConfig = (desktops: DesktopInfo[], active: string) => {
   try {
-    const fs = platform.host.getFS();
-    if (!fs.existsSync("/etc/wm")) fs.mkdirSync("/etc/wm", { recursive: true });
-    fs.writeFileSync(DESKTOPS_CONFIG_PATH, JSON.stringify({ desktops, active }, null, 2));
+    writeJsonFile(platform.host.getFS(), DESKTOPS_CONFIG_PATH, { desktops, active }, true);
   } catch (err) { /* best effort */ }
 };
 
@@ -88,7 +85,6 @@ export const removeDesktop = (id: string) => {
   writeDesktopsConfig(updated, newActive);
 };
 
-const PROC_DIR = "/proc";
 let nextPid = 1;
 
 // One entry per running window/process, keyed by pid. Backs the
@@ -104,23 +100,10 @@ type ProcessEntry = {
 };
 const processRegistry = new Map<number, ProcessEntry>();
 
-const removeRecursive = (path: string) => {
-  const fs = platform.host.getFS();
-  if (!fs.existsSync(path)) return;
-  for (const entry of fs.readdirSync(path) as string[]) {
-    const entryPath = `${path.endsWith("/") ? path : `${path}/`}${entry}`;
-    if (fs.statSync(entryPath).isDirectory()) removeRecursive(entryPath);
-    else fs.unlinkSync(entryPath);
-  }
-  fs.rmdirSync(path);
-};
 
 const writeProcMeta = (pid: number, meta: Record<string, unknown>) => {
   try {
-    const fs = platform.host.getFS();
-    const dir = `${PROC_DIR}/${pid}`;
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(`${dir}/meta.json`, JSON.stringify(meta, null, 2));
+    writeJsonFile(platform.host.getFS(), `${PROC_DIR}/${pid}/meta.json`, meta, true);
   } catch (err) {
     console.error("Failed to write /proc metadata", err);
   }
@@ -135,12 +118,10 @@ const appendProcInbox = (pid: number, message: unknown) => {
     const dir = `${PROC_DIR}/${pid}`;
     if (!fs.existsSync(dir)) return;
     const inboxPath = `${dir}/inbox.json`;
-    const inbox: Array<unknown> = fs.existsSync(inboxPath)
-      ? JSON.parse(fs.readFileSync(inboxPath, "utf-8") as string)
-      : [];
+    const inbox: Array<unknown> = readJsonFile<Array<unknown>>(fs, inboxPath, [])!;
     inbox.push({ message, receivedAt: Date.now() });
     while (inbox.length > 50) inbox.shift();
-    fs.writeFileSync(inboxPath, JSON.stringify(inbox, null, 2));
+    writeJsonFile(fs, inboxPath, inbox);
   } catch (err) {
     console.error("Failed to write /proc inbox", err);
   }
@@ -203,8 +184,6 @@ const registerProcessCommands = () => {
 // Behavior (event wiring, etc.) for new windows lives in the virtual
 // filesystem so it can be edited (via the file explorer) and takes effect
 // for the next window opened, without rebuilding the app.
-const WINDOW_MANAGER_MODULE_PATH = "/opt/window-manager.js";
-
 const FALLBACK_WM_SETTINGS = {
   behavior: {
     dblClickHeaderFullscreen: true,
@@ -255,7 +234,7 @@ export class WindowManager {
     const pid = nextPid++;
     const container = platform.window.document.createElement("div");
     const [head, closeButton, fullScreenButton, minimizeButton, setTitleRaw, appendActionButton, setHeaderStyles] =
-      createWindoeHeader(command);
+      createWindowHeader(command);
 
     const setTitle = (newTitle: string) => {
       setTitleRaw(newTitle);
@@ -265,15 +244,15 @@ export class WindowManager {
       );
     };
 
-    // this.closeWindow(command)
     const windowRef = { container, command, pid };
     this.windows[command.name] ??= [];
     this.windows[command.name].push(windowRef);
     Object.freeze(windowRef);
 
-    // container.style.top = '3rem'
     container.setAttribute("data-name", command.name);
     container.setAttribute("data-pid", `${pid}`);
+    container.setAttribute("role", "dialog");
+    container.setAttribute("aria-label", (command.meta.title as string) || command.name);
     container.classList.add("window");
     container.classList.add("hidden");
 
@@ -346,14 +325,14 @@ export class WindowManager {
       const iframeBody = iframe.contentWindow?.document?.body;
       if (!iframeBody) return;
       iframeBody.style.margin = "0";
-      const hostDimention = {
+      const hostDimension = {
         innerWidth: platform.window.innerWidth,
         innerHeight: platform.window.innerHeight,
       }
 
       platform.window.addEventListener('resize', () => {
-        hostDimention.innerHeight = platform.window.innerHeight
-        hostDimention.innerWidth = platform.window.innerWidth
+        hostDimension.innerHeight = platform.window.innerHeight
+        hostDimension.innerWidth = platform.window.innerWidth
       })
 
       command.exec(
@@ -401,7 +380,7 @@ export class WindowManager {
             );
             Object.assign(container.style, newCord);
           },
-          host: hostDimention
+          host: hostDimension
         },
         ...args
       );
@@ -425,7 +404,6 @@ export class WindowManager {
     };
 
     if (this.contentRef.current) {
-      // contentRef.current.innerText = ''
       container.appendChild(iframe);
       appendWindow(this.contentRef.current, container);
       closeButton.onclick = closeFunction;
@@ -449,7 +427,7 @@ export class WindowManager {
       windowRef.command.name
     ].filter((x) => x != windowRef);
 
-    removeRecursive(`${PROC_DIR}/${windowRef.pid}`);
+    removeRecursive(platform.host.getFS(), `${PROC_DIR}/${windowRef.pid}`);
     processRegistry.get(windowRef.pid)?.messages$.complete();
     processRegistry.delete(windowRef.pid);
     windowsSubject.next(windowsSubject.getValue().filter(w => w.pid !== windowRef.pid));
@@ -506,7 +484,7 @@ export class WindowManager {
   }
 }
 
-const createWindoeHeader = (command: Command) => {
+const createWindowHeader = (command: Command) => {
   const head = platform.window.document.createElement("div");
 
   const title = platform.window.document.createElement("span");
@@ -523,36 +501,43 @@ const createWindoeHeader = (command: Command) => {
   icon.innerHTML = `${command.meta?.icon}`;
 
   const gap = platform.window.document.createElement("span");
+  gap.classList.add("window-gap");
   gap.style.marginLeft = "auto";
+
+  const controls = platform.window.document.createElement("div");
+  controls.classList.add("window-controls");
+
   const minimize = platform.window.document.createElement("span");
-  minimize.classList.add("material-symbols-outlined", "window-action");
+  minimize.classList.add("material-symbols-outlined", "window-action", "wm-minimize");
   minimize.style.cursor = "pointer";
   minimize.innerHTML = "remove";
   minimize.title = "minimize window";
+  minimize.setAttribute("role", "button");
+  minimize.setAttribute("tabindex", "0");
 
   const fullScreen = platform.window.document.createElement("span");
-  fullScreen.classList.add("material-symbols-outlined", "window-action");
+  fullScreen.classList.add("material-symbols-outlined", "window-action", "wm-fullscreen");
   fullScreen.style.cursor = "pointer";
   fullScreen.innerHTML = "fullscreen";
   fullScreen.title = "toggle fullscreen";
-  fullScreen.onclick = () => {
-    console.log(command);
-  };
+  fullScreen.setAttribute("role", "button");
+  fullScreen.setAttribute("tabindex", "0");
 
   const close = platform.window.document.createElement("span");
-  close.classList.add("material-symbols-outlined", "window-action");
+  close.classList.add("material-symbols-outlined", "window-action", "wm-close");
   close.style.cursor = "pointer";
   close.innerHTML = "close";
   close.title = "close window";
-  close.onclick = () => {
-    console.log(command);
-  };
+  close.setAttribute("role", "button");
+  close.setAttribute("tabindex", "0");
+
+  controls.appendChild(minimize);
+  controls.appendChild(fullScreen);
+  controls.appendChild(close);
 
   head.appendChild(title);
   head.appendChild(gap);
-  head.appendChild(minimize);
-  head.appendChild(fullScreen);
-  head.appendChild(close);
+  head.appendChild(controls);
 
   head.classList.add("window-header");
 
@@ -647,7 +632,7 @@ const appendWindow = (
 };
 
 const toggleFullScreen = (contentArea: HTMLElement, win: HTMLElement) => {
-  const container = contentArea; // contentArea.querySelector(`:scope > .${WINDOWS_CONTAINER_CLASS}`)
+  const container = contentArea;
 
   const isFullScreen = (win.getAttribute("data-fullscreen") || "false") === "true";
   win.setAttribute("data-fullscreen", isFullScreen ? "false" : "true");
@@ -667,13 +652,4 @@ const toggleFullScreen = (contentArea: HTMLElement, win: HTMLElement) => {
       (attr) => (win.style[attr] = `${containerRect[attr]}px`)
     );
   }
-
-  // if (platform.window.document.fullscreenElement) {
-  //     platform.window.document
-  //     .exitFullscreen()
-  //     .then(() => console.log("Document Exited from Full screen mode"))
-  //     .catch((err) => console.error(err));
-  // } else {
-  //     win.requestFullscreen();
-  // }
 };

@@ -6,7 +6,7 @@ const public_path = __webpack_public_path__ as string
 
 export type Module = {
     url: string
-    metedata: {
+    metadata: {
         version: `${string}.${string}.${string}` | string
     }
     params: Array<any>,

@@ -13,14 +13,8 @@ export const Commands = ({ onCommandClick, vertical, align = 'start' }: { onComm
     const [expended, setExpended] = React.useState(localStorage.getItem('show_taskbar_title') === 'true')
     const defaultCommands = [
         'explorer',
-        // 'ui.file-explorer',
-        // 'ui.iframe',
         'ui.vs-code',
-        // 'ui.view-commands',
         'ui.notepad',
-        // 'ui.game',
-        // 'ui.game-of-life',
-        // 'ui.xml-parser',
         'webamp',
         'ui.task-manager',
     ]
@@ -31,9 +25,6 @@ export const Commands = ({ onCommandClick, vertical, align = 'start' }: { onComm
         const subscription = platform.host.commands$
             .pipe(map(commands => defaultCommands.map(cmd => commands.find(command => command.name === cmd)!).filter(x => x)))
             .subscribe(_commands => setCommands(_commands))
-
-        // platform.host.commands$.subscribe(_commands => console.log(_commands))
-
 
         const { remove: removeToggleCommand } = platform.host.registerCommand('core.toggle-navbar', () => {
             setExpended(state => !state)
@@ -169,7 +160,7 @@ export const Taskbar = ({ onCommandClick, vertical, align = 'start' }: { onComma
     const visibleWindows = windows.filter(win => win.desktopId === activeDesktop)
 
     return (
-        <div className="taskbar">
+        <div className="taskbar" role="toolbar" aria-label="Taskbar">
             <Commands onCommandClick={onCommandClick} vertical={vertical} align={align} />
             {visibleWindows.length ? <div className="taskbar-divider" /> : null}
             {visibleWindows.map(win => <TaskbarWindowIcon key={win.pid} win={win} />)}

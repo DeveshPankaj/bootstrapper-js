@@ -3,6 +3,12 @@ import { BehaviorSubject, Observable, Subject } from "rxjs"
 import type fs from 'fs'
 const Babel = require('./babel.js');
 
+const babelOpts = (filename: string, cwd: string) => ({
+    presets: [['env', { modules: 'commonjs' }], 'react', 'typescript'],
+    sourceMaps: true,
+    filename,
+    cwd,
+})
 
 declare global{
     interface Window {
@@ -232,15 +238,10 @@ export class Host {
   public callCommand(command_name: string, ...args: any) {
     const command = this.getCommand(command_name);
     if (!command) { console.log(`Command [${command_name}] not registered!`); return; }
-    command.exec(...args);
+    return command.exec(...args);
   }
 
   public execCommand(command: string, platform: Platform, ...args: string[]) {
-    // console.log(
-    //   `%c> ${command}`,
-    //   "color: green;background:black;font-size:12px"
-    // );
-
     const context = {
       window: null,
       document: null,
@@ -248,14 +249,7 @@ export class Host {
       globalThis: null,
       platform,
       service: (moduleName: string, serviceName: string) => {
-
-        // try {
-        //   const moduleResult = plarform.getService(moduleName)
-        //   if(moduleResult) return moduleResult;
-        // } catch (error) {}
-        
-        const hostResult = this.getService(moduleName, serviceName);
-        return hostResult
+        return this.getService(moduleName, serviceName);
       },
       command: (commandName: string) => {
         const allCommands = this.commands.getValue();
@@ -276,57 +270,15 @@ export class Host {
   }
 
   public execString(source: string, filenameAlias: string = '/tmp/dynamic.js', _platform?: Platform, _platformProps?: Record<string, unknown>) {
-    function startWorker(source: string) {
-      const blob = new Blob([source], { type: "application/javascript" });
-      const workerUrl = URL.createObjectURL(blob);
-      const worker = new Worker(workerUrl);
-      worker.onmessage = function (event) {
-        console.log(event.data);
-      };
-      return () => worker.terminate();
-    }
-
-    function runAsRoot(source: string) {
-      const factory = new Function(source);
-      factory.call(window);
-      return () => {};
-    }
-
     const runJS = (source: string) => {
-      const program = Babel.transform(source, { presets: [['env', { modules: 'commonjs' }], "react", 'typescript'],  sourceMaps: true, filename: filenameAlias, cwd: this.platform.cwd });
+      const program = Babel.transform(source, babelOpts(filenameAlias, this.platform.cwd));
       program.map.sources = ['babel://'+filenameAlias]
       const base64SourceMap = btoa(unescape(encodeURIComponent(JSON.stringify(program.map))));
       const codeWithSourceMap = `${program.code}\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,${base64SourceMap}`;
 
-
-
-      // const jsBlob = new Blob([codeWithSourceMap], { type: "application/javascript" });
-      // const url = URL.createObjectURL(jsBlob);
-      // const configPlacegholder = `{
-      //         "url": "${url}",
-      //         "metedata": {
-      //             "version": "0.0.1"
-      //         },
-      //         "params": [],
-      //         "preload": true
-      //     }`;
-      // const form = {
-      //   namespace: "dynamic",
-      //   config: configPlacegholder,
-      // };
-      // const config = JSON.parse(form.config);
-      // this.callCommand("core.add-module", form.namespace, config);
-
-
-      // const program = Babel.transform(code, { presets: [['env', { modules: false }], 'typescript', "react"],  sourceMaps: true, filename: 'dynamic.js' });
-      //     const base64SourceMap = btoa(unescape(encodeURIComponent(JSON.stringify(program.map))));
-      //     const codeWithSourceMap = `${program.code}\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,${base64SourceMap}`;
-
-      //     code = codeWithSourceMap
-      //   }
         const platformEventEmitter = new Subject<PlatformEvent>();
-        // TODO: fix other usage of lastIndexOf for case when char not found
-        const pwd = filenameAlias.slice(0, filenameAlias.lastIndexOf('/') > -1 ? filenameAlias.lastIndexOf('/'): undefined) || "/"
+        const lastSlash = filenameAlias.lastIndexOf('/')
+        const pwd = lastSlash > -1 ? filenameAlias.slice(0, lastSlash) || "/" : "/"
         let newPlatform = _platform ? _platform : new Platform(platformEventEmitter, filenameAlias, pwd);
         if(!_platform) {
           newPlatform.setHost(this);
@@ -341,25 +293,20 @@ export class Host {
         const _ctx: any = {
           exports: {}, 
           require: (req_filename: string) => newPlatform.require.bind(newPlatform)(req_filename, filenameAlias, newPlatform), 
-          window: {platform: newPlatform, document: this.window.document, top: this.window.top}, // FIXME: prevent passing root window object
+          window: {platform: newPlatform, document: this.window.document, top: this.window.top},
           platform: newPlatform,
-          // React: this.platform.getService('React')
         }
         _ctx.module = _ctx.exports
         const factory = new Function(...Object.keys(_ctx), codeWithSourceMap)
         factory.call(this, ...Object.values(_ctx))
 
         return _ctx.exports
-      // return () => {};
     };
 
-    // const worker = runAsRoot(source);
-    // const worker = startWorker(source);
-    const worker = runJS(source);
-    return worker;
+    return runJS(source);
   }
 
-  public exec(plarform: Platform, filepath: string, ...args: string[]) {
+  public exec(callerPlatform: Platform, filepath: string, ...args: string[]) {
     console.log(`$${filepath}`);
     const fs = this.getFS();
     const stat = fs.statSync(filepath);
@@ -369,16 +316,9 @@ export class Host {
       script = `service('001-core.layout', 'open-window') (command('explorer'), '${filepath}' ${
         args.length ? "," : ""
       } ${args.map((x) => `"${x}"`).join(", ")})`;
-      // console.log(script)
-      // this.execCommand(script)
-      // return
     }
 
     if (stat.isFile()) {
-      // if(filepath.endsWith('.html')) {
-      //     this.execCommand(`service('001-core.layout', 'open-window') (command('ui.iframe'), '/cache${filepath}')`)
-      //     return
-      // }
       const fileExt = filepath.split(".").at(-1);
 
       const appExtMap: Record<string, string> = {
@@ -405,14 +345,14 @@ export class Host {
       if (fileExt === 'js') {
         const fs = this.getFS()
         const source = fs.readFileSync(filepath)
-        const appDir = (plarform as any)?._appDir;
+        const appDir = (callerPlatform as any)?._appDir;
         return this.execString(source.toString(), '/(sw)' + filepath, undefined, appDir ? { _appDir: appDir } : undefined)
       }
 
       else if (fileExt === 'run') {
         const fs = this.getFS()
         const source = fs.readFileSync(filepath)
-        return this.execCommand(source.toString(), plarform, ...args)
+        return this.execCommand(source.toString(), callerPlatform, ...args)
       }
 
       else {
@@ -423,25 +363,16 @@ export class Host {
       }
 
 
-      // console.log(fileExt)
-      // this.execCommand(script)
     }
 
-    // console.log(`%c> ${script}`, 'color: green;background:black;font-size:12px')
-    return this.execCommand(script, plarform, ...args);
+    return this.execCommand(script, callerPlatform, ...args);
   }
 
   public getService(moduleName: string, serviceName: string): unknown {
-
-    // const callerPlatform = (this.getService as any).callerPlatform as Platform;
-    // const isMatch = (key: string, value: Platform) => moduleName ? key === moduleName && value.getServiceSync(serviceName) : value.getServiceSync(serviceName)
-    // const srv = Array.from(this.modulesMap).filter(([key, _]) => key !== callerPlatform?.name).find(([key, value]) => isMatch(key, value.platform))?.[1]?.platform?.getService(serviceName);
-
     if(!moduleName) return;
 
     const mod = this.modulesMap.get(moduleName)!;
     if (!mod) return;
-    // return mod.platform.getService(serviceName)
 
     const srv = mod.platform.getServiceSync(serviceName)!;
     if (!srv) console.warn(`Service: [${moduleName}/${serviceName}] not found`);
@@ -451,12 +382,8 @@ export class Host {
 
   public getFS() {
     this.platform.requestedServices.add('fs')
-
     // @ts-ignore
     return this.window.fs as typeof fs;
-
-    // @ts-ignore
-    // return this.window.fs as {readdir: Function, readdirSync: Function, statSync: (path: string) => {}}
   }
 
   public getServiceWorker() {
@@ -566,7 +493,7 @@ export class Platform {
         let code = fs.readFileSync(filepath).toString()
 
         if(filepath.endsWith('.js') || filepath.endsWith('.ts') || filepath.endsWith('.tsx')) {
-          const program = Babel.transform(code, { presets: [['env', { modules: 'commonjs' }], 'typescript', "react"],  sourceMaps: true, filename: filepath, cwd: this.cwd });
+          const program = Babel.transform(code, babelOpts(filepath, this.cwd));
           const base64SourceMap = btoa(unescape(encodeURIComponent(JSON.stringify(program.map))));
           program.map.sources = ['babel://'+filepath]
           const codeWithSourceMap = `${program.code}\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,${base64SourceMap}`;

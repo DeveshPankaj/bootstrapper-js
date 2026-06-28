@@ -312,13 +312,8 @@
     "force_reload": true
   },
   {
-    "path": "/etc/settings/05-layout.js",
-    "file": "/etc/settings/05-layout.js",
-    "force_reload": true
-  },
-  {
-    "path": "/etc/settings/06-window-manager.js",
-    "file": "/etc/settings/06-window-manager.js",
+    "path": "/etc/settings/04b-desktop-env.js",
+    "file": "/etc/settings/04b-desktop-env.js",
     "force_reload": true
   },
   {

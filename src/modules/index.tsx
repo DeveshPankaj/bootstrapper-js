@@ -36,7 +36,7 @@ platform.host.registerCommand('ui.view-commands', (body: HTMLBodyElement, props:
 
 
 const ModulesComponent = () => {
-    const [commans, setCommands] = React.useState<Array<Command>>([]);
+    const [commands, setCommands] = React.useState<Array<Command>>([]);
 
     React.useEffect(() => {
 
@@ -52,9 +52,9 @@ const ModulesComponent = () => {
     }, [])
 
 
-    const configPlacegholder = `{
+    const configPlaceholder = `{
         "url": "https://deveshpankaj.github.io/bootstrapper-js/docs/game-of-life.bundle.js",
-        "metedata": {
+        "metadata": {
             "version": "0.0.1"
         },
         "params": [],
@@ -62,7 +62,7 @@ const ModulesComponent = () => {
     }`
     const form = {
         namespace: 'new-app',
-        config: configPlacegholder
+        config: configPlaceholder
     }
 
     const loadModule = () => {
@@ -85,7 +85,7 @@ const ModulesComponent = () => {
         <div style={{padding: '1rem'}}>
           <h4>Commands</h4>
 
-          {commans.map((command, idx) => (
+          {commands.map((command, idx) => (
             <div key={`[${idx}]${command.name}`}>
                 <span style={{color: 'green'}}>[{command.servicePlatformName}]</span>
                 {(command.meta as any).callable ? <button onClick={_=> command.exec()}>{command.name}</button> : command.name}
@@ -110,7 +110,7 @@ const ModulesComponent = () => {
         >
           <h4>Load module</h4>
           <input placeholder="namespace" defaultValue={form.namespace} onChange={ev => form.namespace=ev.target.value}></input>
-          <textarea placeholder={configPlacegholder} style={{height: '10rem'}} defaultValue={configPlacegholder} onChange={ev => form.config=ev.target.value}></textarea>
+          <textarea placeholder={configPlaceholder} style={{height: '10rem'}} defaultValue={configPlaceholder} onChange={ev => form.config=ev.target.value}></textarea>
           <button onClick={_ => loadModule()}>Load Module</button>
         </div>
 

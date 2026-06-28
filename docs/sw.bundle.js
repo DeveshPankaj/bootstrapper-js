@@ -5,7 +5,7 @@ var __webpack_exports__ = {};
   !*** ./src/sw.ts ***!
   \*******************/
 
-const cacheName = 'MyFancyCacheName_v1';
+const cacheName = 'WebOS_v1';
 self.addEventListener('install', (event) => {
     event.waitUntil(caches.open(cacheName));
     // console.log(self.location.toString())
@@ -97,8 +97,8 @@ self.addEventListener('fetch', function (event) {
                         const request_id = getUUID();
                         const vfsPath = decodeURIComponent(_url.pathname.slice('/(sw)'.length));
                         clientRequests.set(request_id, (fileData, error) => {
+                            clientRequests.delete(request_id);
                             if (error) {
-                                // resolve(new Response(`<h1>Error: ${error}</h1>`, {headers: {'Content-Type': getMIMEtype(url)!}}))
                                 resolve(fetch(_url.pathname.slice('/(sw)'.length)));
                             }
                             else {
@@ -133,6 +133,7 @@ self.addEventListener('fetch', function (event) {
                     return new Promise((resolve, reject) => {
                         const request_id = getUUID();
                         clientRequests.set(request_id, (fileData) => {
+                            clientRequests.delete(request_id);
                             resolve(new Response(fileData, { headers: { 'Content-Type': getMIMEtype(url) } }));
                         });
                         clients.matchAll().then(clients => {
