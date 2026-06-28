@@ -894,6 +894,16 @@ export const render = (container: HTMLElement) => {
         contextMenuRef.current.style.top = `${y}px`
         contextMenuRef.current.style.left = `${x}px`
 
+        requestAnimationFrame(() => {
+            const menu = contextMenuRef.current
+            if (!menu) return
+            const rect = menu.getBoundingClientRect()
+            const vw = platform.window.innerWidth
+            const vh = platform.window.innerHeight
+            if (rect.right > vw) menu.style.left = `${Math.max(0, vw - rect.width - 4)}px`
+            if (rect.bottom > vh) menu.style.top = `${Math.max(0, vh - rect.height - 4)}px`
+        })
+
     }
 
     platform.register('show-context-menu', showContextMenuHandler)
