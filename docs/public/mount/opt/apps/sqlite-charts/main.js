@@ -132,6 +132,117 @@ const checkSqliteBrowserInstalled = () => {
   return !!platform.host.getCommand('ui.sqlite');
 };
 
+const renderSqliteChartWidget = (container, config, api) => {
+  const cfg = config;
+  const titleEl = document.createElement('div');
+  titleEl.style.cssText = 'font-size:0.7rem;opacity:0.8;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;display:flex;align-items:center;gap:4px;';
+  titleEl.textContent = cfg.title || 'SQLite Chart';
+  if (cfg.autoRefresh) {
+    const badge = document.createElement('span');
+    badge.style.cssText = 'font-size:8px;opacity:0.5;';
+    badge.textContent = `↻${cfg.autoRefresh}s`;
+    titleEl.appendChild(badge);
+  }
+  container.appendChild(titleEl);
+
+  const chartArea = document.createElement('div');
+  container.appendChild(chartArea);
+
+  const renderData = (data) => {
+    chartArea.innerHTML = '';
+    if (!data || !data.columns || data.columns.length < 2 || !data.values.length) {
+      chartArea.textContent = 'No data';
+      return;
+    }
+    const vals = data.values.slice(0, 12);
+    const lc = cfg.labelCol || 0, vc = cfg.valueCol || 1;
+    const colors = CHART_COLORS;
+
+    if (cfg.chartType === 'pie') {
+      const total = vals.reduce((s, r) => s + Math.abs(Number(r[vc]) || 0), 0) || 1;
+      let cum = 0;
+      const toRad = deg => (deg - 90) * Math.PI / 180;
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('width', '100'); svg.setAttribute('height', '100'); svg.setAttribute('viewBox', '0 0 100 100');
+      vals.forEach((r, i) => {
+        const v = Math.abs(Number(r[vc]) || 0), angle = (v / total) * 360;
+        if (angle < 0.1) return;
+        const s = cum; cum += angle;
+        const sx = 50 + 40 * Math.cos(toRad(s)), sy = 50 + 40 * Math.sin(toRad(s));
+        const ex = 50 + 40 * Math.cos(toRad(s + angle)), ey = 50 + 40 * Math.sin(toRad(s + angle));
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', `M 50 50 L ${sx} ${sy} A 40 40 0 ${angle > 180 ? 1 : 0} 1 ${ex} ${ey} Z`);
+        path.setAttribute('fill', colors[i % colors.length]);
+        svg.appendChild(path);
+      });
+      chartArea.appendChild(svg);
+      const legend = document.createElement('div'); legend.style.cssText = 'margin-top:4px;';
+      vals.slice(0, 6).forEach((r, i) => {
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:4px;font-size:9px;';
+        row.innerHTML = `<div style="width:7px;height:7px;border-radius:1px;background:${colors[i % colors.length]};flex-shrink:0"></div><span style="opacity:0.7">${String(r[lc])}</span>`;
+        legend.appendChild(row);
+      });
+      chartArea.appendChild(legend);
+    } else if (cfg.chartType === 'line') {
+      const numbers = vals.map(r => Number(r[vc]) || 0);
+      const minV = Math.min(...numbers), maxV = Math.max(...numbers), range = maxV - minV || 1;
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('width', '100%'); svg.setAttribute('viewBox', '0 0 200 60');
+      const pts = numbers.map((v, i) => ({ x: 10 + (i / (numbers.length - 1 || 1)) * 180, y: 5 + (1 - (v - minV) / range) * 50 }));
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', pts.map((p, i) => `${i ? 'L' : 'M'} ${p.x} ${p.y}`).join(' '));
+      path.setAttribute('fill', 'none'); path.setAttribute('stroke', '#6366f1'); path.setAttribute('stroke-width', '2');
+      svg.appendChild(path);
+      pts.forEach(p => {
+        const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        c.setAttribute('cx', p.x); c.setAttribute('cy', p.y); c.setAttribute('r', '2'); c.setAttribute('fill', '#6366f1');
+        svg.appendChild(c);
+      });
+      chartArea.appendChild(svg);
+    } else {
+      const maxVal = Math.max(...vals.map(r => Math.abs(Number(r[vc]) || 0)), 1);
+      vals.slice(0, 8).forEach((row, i) => {
+        const val = Number(row[vc]) || 0, pct = (Math.abs(val) / maxVal) * 100;
+        const rowEl = document.createElement('div');
+        rowEl.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:3px;';
+        const label = document.createElement('div');
+        label.style.cssText = 'width:60px;font-size:10px;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:0.8;';
+        label.textContent = String(row[lc]);
+        const bar = document.createElement('div');
+        bar.style.cssText = `height:12px;border-radius:3px;background:${colors[i % colors.length]};width:${pct}%;min-width:2px;transition:width 0.3s;`;
+        const valEl = document.createElement('div');
+        valEl.style.cssText = 'font-size:10px;opacity:0.6;';
+        valEl.textContent = val.toLocaleString();
+        rowEl.appendChild(label); rowEl.appendChild(bar); rowEl.appendChild(valEl);
+        chartArea.appendChild(rowEl);
+      });
+    }
+  };
+
+  const runWidgetQuery = () => {
+    try {
+      const data = fs.readFileSync(cfg.dbPath);
+      const uArr = new Uint8Array(data instanceof Buffer ? data : data);
+      loadSqlJs().then(SQL => {
+        const wdb = new SQL.Database(uArr);
+        const res = wdb.exec(cfg.query);
+        wdb.close();
+        if (res.length) renderData(res[0]);
+      }).catch(() => {});
+    } catch (_) {}
+  };
+
+  runWidgetQuery();
+  let interval = null;
+  if (cfg.autoRefresh > 0) {
+    interval = setInterval(runWidgetQuery, cfg.autoRefresh * 1000);
+  }
+  api.onDestroy(() => { if (interval) clearInterval(interval); });
+};
+
+platform.host.registerWidgetType('sqlite-chart', renderSqliteChartWidget);
+
 const BarChart = ({ columns, values, labelCol, valueCol }) => {
   const maxVal = Math.max(...values.map(r => Math.abs(Number(r[valueCol]) || 0)), 1);
   return <div className="sc-chart-container">
@@ -380,132 +491,11 @@ const App = ({ initialPath, props }) => {
 
   const addChartAsWidget = () => {
     if (!result || !result.columns || result.columns.length < 2) return;
-    const widgetConfig = {
-      dbPath,
-      query,
-      labelCol,
-      valueCol,
-      chartType,
-      autoRefresh,
-      title: dbPath ? dbPath.split('/').pop() : 'SQLite Chart',
-    };
-    const widgetId = `sqlchart-${Date.now()}`;
+    const title = dbPath ? dbPath.split('/').pop() : 'SQLite Chart';
+    const config = { dbPath, query, labelCol, valueCol, chartType, autoRefresh, title };
 
-    platform.host.registerWidget(widgetId, (container, api) => {
-      const cfg = widgetConfig;
-      const titleEl = document.createElement('div');
-      titleEl.style.cssText = 'font-size:0.7rem;opacity:0.8;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;display:flex;align-items:center;gap:4px;';
-      titleEl.textContent = cfg.title;
-      if (cfg.autoRefresh) {
-        const badge = document.createElement('span');
-        badge.style.cssText = 'font-size:8px;opacity:0.5;';
-        badge.textContent = `↻${cfg.autoRefresh}s`;
-        titleEl.appendChild(badge);
-      }
-      container.appendChild(titleEl);
-
-      const chartArea = document.createElement('div');
-      container.appendChild(chartArea);
-
-      const renderWidget = (data) => {
-        chartArea.innerHTML = '';
-        if (!data || !data.columns || data.columns.length < 2 || !data.values.length) {
-          chartArea.textContent = 'No data';
-          return;
-        }
-        const cols = data.columns, vals = data.values.slice(0, 12);
-        const lc = cfg.labelCol, vc = cfg.valueCol;
-
-        if (cfg.chartType === 'pie') {
-          const total = vals.reduce((s, r) => s + Math.abs(Number(r[vc]) || 0), 0) || 1;
-          const colors = ['#6366f1','#22c55e','#f59e0b','#ef4444','#06b6d4','#ec4899','#8b5cf6','#14b8a6','#f97316','#64748b'];
-          let cum = 0;
-          const toRad = deg => (deg - 90) * Math.PI / 180;
-          const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-          svg.setAttribute('width', '100'); svg.setAttribute('height', '100'); svg.setAttribute('viewBox', '0 0 100 100');
-          vals.forEach((r, i) => {
-            const v = Math.abs(Number(r[vc]) || 0);
-            const angle = (v / total) * 360;
-            if (angle < 0.1) return;
-            const s = cum; cum += angle;
-            const sx = 50 + 40 * Math.cos(toRad(s)), sy = 50 + 40 * Math.sin(toRad(s));
-            const ex = 50 + 40 * Math.cos(toRad(s + angle)), ey = 50 + 40 * Math.sin(toRad(s + angle));
-            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-            path.setAttribute('d', `M 50 50 L ${sx} ${sy} A 40 40 0 ${angle > 180 ? 1 : 0} 1 ${ex} ${ey} Z`);
-            path.setAttribute('fill', colors[i % colors.length]);
-            svg.appendChild(path);
-          });
-          chartArea.appendChild(svg);
-          const legend = document.createElement('div');
-          legend.style.cssText = 'margin-top:4px;';
-          vals.slice(0, 6).forEach((r, i) => {
-            const row = document.createElement('div');
-            row.style.cssText = 'display:flex;align-items:center;gap:4px;font-size:9px;';
-            row.innerHTML = `<div style="width:7px;height:7px;border-radius:1px;background:${colors[i % colors.length]};flex-shrink:0"></div><span style="opacity:0.7">${String(r[lc])}</span>`;
-            legend.appendChild(row);
-          });
-          chartArea.appendChild(legend);
-        } else if (cfg.chartType === 'line') {
-          const numbers = vals.map(r => Number(r[vc]) || 0);
-          const minV = Math.min(...numbers), maxV = Math.max(...numbers), range = maxV - minV || 1;
-          const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-          svg.setAttribute('width', '100%'); svg.setAttribute('viewBox', '0 0 200 60');
-          const pts = numbers.map((v, i) => ({ x: 10 + (i / (numbers.length - 1 || 1)) * 180, y: 5 + (1 - (v - minV) / range) * 50 }));
-          const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-          path.setAttribute('d', pts.map((p, i) => `${i ? 'L' : 'M'} ${p.x} ${p.y}`).join(' '));
-          path.setAttribute('fill', 'none'); path.setAttribute('stroke', '#6366f1'); path.setAttribute('stroke-width', '2');
-          svg.appendChild(path);
-          pts.forEach(p => {
-            const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-            c.setAttribute('cx', p.x); c.setAttribute('cy', p.y); c.setAttribute('r', '2'); c.setAttribute('fill', '#6366f1');
-            svg.appendChild(c);
-          });
-          chartArea.appendChild(svg);
-        } else {
-          const colors = ['#6366f1','#22c55e','#f59e0b','#ef4444','#06b6d4','#ec4899','#8b5cf6','#14b8a6','#f97316','#64748b'];
-          const maxVal = Math.max(...vals.map(r => Math.abs(Number(r[vc]) || 0)), 1);
-          vals.slice(0, 8).forEach((row, i) => {
-            const val = Number(row[vc]) || 0;
-            const pct = (Math.abs(val) / maxVal) * 100;
-            const rowEl = document.createElement('div');
-            rowEl.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:3px;';
-            const label = document.createElement('div');
-            label.style.cssText = 'width:60px;font-size:10px;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:0.8;';
-            label.textContent = String(row[lc]);
-            const bar = document.createElement('div');
-            bar.style.cssText = `height:12px;border-radius:3px;background:${colors[i % colors.length]};width:${pct}%;min-width:2px;transition:width 0.3s;`;
-            const valEl = document.createElement('div');
-            valEl.style.cssText = 'font-size:10px;opacity:0.6;';
-            valEl.textContent = val.toLocaleString();
-            rowEl.appendChild(label); rowEl.appendChild(bar); rowEl.appendChild(valEl);
-            chartArea.appendChild(rowEl);
-          });
-        }
-      };
-
-      const runWidgetQuery = () => {
-        try {
-          const data = fs.readFileSync(cfg.dbPath);
-          const uArr = new Uint8Array(data instanceof Buffer ? data : data);
-          loadSqlJs().then(SQL => {
-            const wdb = new SQL.Database(uArr);
-            const res = wdb.exec(cfg.query);
-            wdb.close();
-            if (res.length) renderWidget(res[0]);
-          }).catch(() => {});
-        } catch (_) {}
-      };
-
-      runWidgetQuery();
-
-      let interval = null;
-      if (cfg.autoRefresh > 0) {
-        interval = setInterval(runWidgetQuery, cfg.autoRefresh * 1000);
-      }
-      api.onDestroy(() => { if (interval) clearInterval(interval); });
-    }, { title: widgetConfig.title });
-
-    setStatus(`Widget "${widgetConfig.title}" added (${chartType}${autoRefresh ? `, refresh ${autoRefresh}s` : ''})`);
+    platform.host.callCommand('add-persistent-widget', 'sqlite-chart', config, { title });
+    setStatus(`Widget "${title}" added (${chartType}${autoRefresh ? `, ↻${autoRefresh}s` : ''})`);
   };
 
   const openInSqliteBrowser = () => {

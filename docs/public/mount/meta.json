@@ -217,6 +217,11 @@
     "force_reload": true
   },
   {
+    "path": "/usr/share/icons/db-icon.svg",
+    "file": "/usr/share/icons/db-icon.svg",
+    "force_reload": true
+  },
+  {
     "path": "/usr/share/icons/folder-icon.png",
     "file": "/usr/share/icons/folder-icon.png",
     "force_reload": true

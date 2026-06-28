@@ -529,6 +529,78 @@ const setEnabledWidgets = (enabled: string[]) => {
 platform.register('set-enabled-widgets', setEnabledWidgets)
 platform.host.registerCommand('set-enabled-widgets', setEnabledWidgets)
 
+const WIDGET_INSTANCES_PATH = '/etc/widgets/instances.json'
+
+type PersistedWidgetEntry = { id: string, typeId: string, config: Record<string, unknown>, title: string }
+
+const readWidgetInstances = (): PersistedWidgetEntry[] => {
+    return readJsonFileLocal(WIDGET_INSTANCES_PATH) || []
+}
+
+const writeWidgetInstances = (instances: PersistedWidgetEntry[]) => {
+    try {
+        writeJsonFile(platform.host.getFS(), WIDGET_INSTANCES_PATH, instances, true)
+    } catch (_) {}
+}
+
+const addPersistentWidget = (typeId: string, config: Record<string, unknown>, meta: Record<string, unknown> = {}): string => {
+    const id = `${typeId}-${Date.now()}`
+    const title = (meta.title as string) || typeId
+
+    const instances = readWidgetInstances()
+    instances.push({ id, typeId, config, title })
+    writeWidgetInstances(instances)
+
+    hydrateWidget({ id, typeId, config, title })
+
+    const enabled = enabledWidgetsSubject.getValue()
+    if (enabled && !enabled.includes(id)) {
+        setEnabledWidgets([...enabled, id])
+    }
+
+    return id
+}
+
+const removePersistentWidget = (widgetId: string) => {
+    const instances = readWidgetInstances().filter(w => w.id !== widgetId)
+    writeWidgetInstances(instances)
+
+    const current = platform.host.getRegisteredWidgetTypes()
+    const widget = (platform as any)._widgetRemovers?.get(widgetId)
+    if (widget) { widget(); (platform as any)._widgetRemovers.delete(widgetId) }
+}
+
+const hydrateWidget = (entry: PersistedWidgetEntry) => {
+    const renderer = platform.host.getWidgetTypeRenderer(entry.typeId)
+    if (!renderer) {
+        console.warn(`[widgets] No renderer for type "${entry.typeId}" — widget "${entry.id}" skipped`)
+        return
+    }
+
+    const { remove } = platform.host.registerWidget(entry.id, (container, api) => {
+        renderer(container, entry.config, api)
+    }, { title: entry.title, alwaysVisible: true })
+
+    if (!(platform as any)._widgetRemovers) (platform as any)._widgetRemovers = new Map()
+    ;(platform as any)._widgetRemovers.set(entry.id, remove)
+}
+
+const hydrateAllWidgets = () => {
+    const instances = readWidgetInstances()
+    for (const entry of instances) {
+        hydrateWidget(entry)
+    }
+}
+
+platform.register('add-persistent-widget', addPersistentWidget)
+platform.host.registerCommand('add-persistent-widget', addPersistentWidget)
+platform.register('remove-persistent-widget', removePersistentWidget)
+platform.host.registerCommand('remove-persistent-widget', removePersistentWidget)
+platform.register('get-persistent-widgets', readWidgetInstances)
+platform.host.registerCommand('get-persistent-widgets', readWidgetInstances)
+platform.register('hydrate-widgets', hydrateAllWidgets)
+platform.host.registerCommand('hydrate-widgets', hydrateAllWidgets)
+
 // Renders one container <div> per widget registered via
 // `platform.host.registerWidget(...)` (e.g. files in `/etc/widgets/`).
 // Each widget owns its container and is responsible for its own contents;

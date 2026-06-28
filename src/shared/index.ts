@@ -51,6 +51,15 @@ export type WidgetDef = {
   meta: Record<string, unknown>;
 };
 
+export type WidgetTypeRenderer = (container: HTMLElement, config: Record<string, unknown>, api: WidgetApi) => void;
+
+export type PersistedWidget = {
+  id: string;
+  typeId: string;
+  config: Record<string, unknown>;
+  title: string;
+};
+
 // A settings section is a dynamically-registered page in the Settings app
 // (see /home/user1/settings.html) - registered via
 // `platform.host.registerSettingsSection(...)` (or the 'settings' service's
@@ -88,6 +97,8 @@ export class Host {
   public readonly commands$: Observable<Array<Command>>;
   public readonly widgets$: Observable<Array<WidgetDef>>;
   public readonly settingsSections$: Observable<Array<SettingsSectionDef>>;
+  private widgetTypes = new Map<string, WidgetTypeRenderer>();
+
   constructor(
     private window: Window,
     private readonly platform: Platform,
@@ -187,6 +198,22 @@ export class Host {
         );
       },
     };
+  }
+
+  public registerWidgetType(
+    typeId: string,
+    renderer: WidgetTypeRenderer
+  ): { remove: () => void } {
+    this.widgetTypes.set(typeId, renderer);
+    return { remove: () => { this.widgetTypes.delete(typeId); } };
+  }
+
+  public getWidgetTypeRenderer(typeId: string): WidgetTypeRenderer | undefined {
+    return this.widgetTypes.get(typeId);
+  }
+
+  public getRegisteredWidgetTypes(): string[] {
+    return Array.from(this.widgetTypes.keys());
   }
 
   public registerSettingsSection(

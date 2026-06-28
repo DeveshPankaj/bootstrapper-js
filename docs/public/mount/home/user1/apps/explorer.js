@@ -927,6 +927,9 @@ const ListDirConponent = ({ dir, openFile, showFileActions, handleDragOver, hand
     ".run": "/usr/share/icons/bash.png",
     '.md': '/usr/share/icons/note-icon.webp',
     ".json": "/usr/share/icons/json.png",
+    ".db": "/usr/share/icons/db-icon.svg",
+    ".sqlite": "/usr/share/icons/db-icon.svg",
+    ".sqlite3": "/usr/share/icons/db-icon.svg",
     ".": "/usr/share/icons/folder-icon.png",
     "": "/usr/share/icons/invalid-file-icon.png",
   };

@@ -28,6 +28,9 @@ export const ListDirComponent = ({ dir, openFile, showFileActions, customClass }
         '.run': '/(sw)/usr/share/icons/bash.png',
         '.md': '/(sw)/usr/share/icons/note-icon.webp',
         '.json': '/(sw)/usr/share/icons/json.png',
+        '.db': '/(sw)/usr/share/icons/db-icon.svg',
+        '.sqlite': '/(sw)/usr/share/icons/db-icon.svg',
+        '.sqlite3': '/(sw)/usr/share/icons/db-icon.svg',
         '.': '/(sw)/usr/share/icons/folder-icon.png',
         '': '/(sw)/usr/share/icons/invalid-file-icon.png'
     }
