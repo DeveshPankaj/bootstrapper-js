@@ -54,3 +54,6 @@ try {
     loaded.add(pkg.mainFile);
   }
 } catch (_) {}
+
+// All apps loaded — hydrate persisted widgets now that renderers are registered
+try { platform.host.callCommand('hydrate-widgets'); } catch (_) {}

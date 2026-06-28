@@ -108,7 +108,6 @@ const runInitCommands = () => {
 
   loadWidgets();
   startCronScheduler();
-  setTimeout(() => platform.host.callCommand('hydrate-widgets'), 2000);
 }
 
 // Loads every `.js` file in `/etc/widgets/` and runs it via execString, so it
