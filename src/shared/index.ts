@@ -97,7 +97,6 @@ export class Host {
   public readonly commands$: Observable<Array<Command>>;
   public readonly widgets$: Observable<Array<WidgetDef>>;
   public readonly settingsSections$: Observable<Array<SettingsSectionDef>>;
-  private widgetTypes = new Map<string, WidgetTypeRenderer>();
 
   constructor(
     private window: Window,
@@ -113,7 +112,8 @@ export class Host {
         platform: Platform;
       }
     > = new Map(),
-    private settingsSections: BehaviorSubject<Array<SettingsSectionDef>> = new BehaviorSubject<Array<SettingsSectionDef>>([])
+    private settingsSections: BehaviorSubject<Array<SettingsSectionDef>> = new BehaviorSubject<Array<SettingsSectionDef>>([]),
+    private widgetTypes: Map<string, WidgetTypeRenderer> = new Map()
   ) {
     this.commands$ = this.commands.asObservable();
     this.widgets$ = this.widgets.asObservable();

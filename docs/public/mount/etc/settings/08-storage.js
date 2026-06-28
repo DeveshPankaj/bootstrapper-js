@@ -47,6 +47,7 @@ const StorageSettings = () => {
           console.error(`Failed to reload ${item.path}`, err)
         }
       }
+      try { fs.unlinkSync('/etc/pkg/uninstalled.json') } catch (_) {}
       setReloadStatus('Reloading page...')
       platform.window.top.location.reload()
     } catch (err) {

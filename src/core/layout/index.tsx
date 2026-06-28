@@ -565,9 +565,13 @@ const removePersistentWidget = (widgetId: string) => {
     const instances = readWidgetInstances().filter(w => w.id !== widgetId)
     writeWidgetInstances(instances)
 
-    const current = platform.host.getRegisteredWidgetTypes()
-    const widget = (platform as any)._widgetRemovers?.get(widgetId)
-    if (widget) { widget(); (platform as any)._widgetRemovers.delete(widgetId) }
+    const remover = (platform as any)._widgetRemovers?.get(widgetId)
+    if (remover) { remover(); (platform as any)._widgetRemovers.delete(widgetId) }
+
+    const enabled = enabledWidgetsSubject.getValue()
+    if (enabled) {
+        setEnabledWidgets(enabled.filter(id => id !== widgetId))
+    }
 }
 
 const hydrateWidget = (entry: PersistedWidgetEntry) => {
@@ -607,11 +611,12 @@ platform.host.registerCommand('hydrate-widgets', hydrateAllWidgets)
 // if `render` returns a cleanup function, it's called when the widget is
 // removed or this panel unmounts. The whole widget is draggable - its
 // position is persisted to WIDGET_POSITIONS_PATH on drop.
-const WidgetItem = ({ widget, savedPosition, defaultTop, panelRef }: {
+const WidgetItem = ({ widget, savedPosition, defaultTop, panelRef, onRemove }: {
     widget: import('@shared/index').WidgetDef
     savedPosition?: { top: number, left: number }
     defaultTop: number
     panelRef: React.RefObject<HTMLDivElement | null>
+    onRemove: (name: string) => void
 }) => {
     const ref = React.useRef<HTMLDivElement>(null)
 
@@ -703,7 +708,16 @@ const WidgetItem = ({ widget, savedPosition, defaultTop, panelRef }: {
         }
     }, [widget])
 
-    return <div className="widget" data-widget={widget.name} ref={ref}></div>
+    const onClose = (e: React.MouseEvent) => {
+        e.stopPropagation()
+        onRemove(widget.name)
+        const callbacks: Function[] = (ref.current as any)?._onDestroy ?? []
+        callbacks.forEach(cb => cb())
+    }
+
+    return <div className="widget" data-widget={widget.name} ref={ref}>
+        <div className="widget-close" onClick={onClose} title="Remove widget">×</div>
+    </div>
 }
 
 const WidgetsPanel = () => {
@@ -725,6 +739,19 @@ const WidgetsPanel = () => {
         ? widgetList.filter(w => enabled.includes(w.name) || w.meta?.['alwaysVisible'])
         : widgetList.filter(w => !DEFAULT_HIDDEN_WIDGETS.includes(w.name))
 
+    const handleRemove = (name: string) => {
+        const isPersistent = readWidgetInstances().some(w => w.id === name)
+        if (isPersistent) {
+            removePersistentWidget(name)
+        } else {
+            if (enabled) {
+                setEnabledWidgets(enabled.filter(id => id !== name))
+            } else {
+                setEnabledWidgets(visibleWidgets.map(w => w.name).filter(n => n !== name))
+            }
+        }
+    }
+
     if (!visibleWidgets.length) return null;
 
     return (
@@ -736,6 +763,7 @@ const WidgetsPanel = () => {
                     savedPosition={positions[widget.name]}
                     defaultTop={i * 100}
                     panelRef={panelRef}
+                    onRemove={handleRemove}
                 />
             ))}
         </div>

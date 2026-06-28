@@ -21,7 +21,7 @@ class WindowService {
         const newPlatform = new Platform(platformEventEmitter, uniqueName);
         iframe.contentWindow!.platform = newPlatform;
 
-        const host = new Host(this.window, newPlatform, commands, widgets, modulesMap, settingsSections);
+        const host = new Host(this.window, newPlatform, commands, widgets, modulesMap, settingsSections, widgetTypes);
         newPlatform.setHost(host);
 
         resolve([iframe.contentWindow!, platformEventEmitter]);
@@ -140,7 +140,8 @@ const platform = window.platform = hostPlatform;
 const commands = new BehaviorSubject<Array<Command>>([]);
 const widgets = new BehaviorSubject<Array<WidgetDef>>([]);
 const settingsSections = new BehaviorSubject<Array<SettingsSectionDef>>([]);
-const host = new Host(window, hostPlatform, commands, widgets, modulesMap, settingsSections);
+const widgetTypes = new Map<string, import('@shared/index').WidgetTypeRenderer>();
+const host = new Host(window, hostPlatform, commands, widgets, modulesMap, settingsSections, widgetTypes);
 hostPlatform.setHost(host);
 
 modulesMap.set('root', {platform} as any)

@@ -162,41 +162,54 @@ const renderSqliteChartWidget = (container, config, api) => {
       const total = vals.reduce((s, r) => s + Math.abs(Number(r[vc]) || 0), 0) || 1;
       let cum = 0;
       const toRad = deg => (deg - 90) * Math.PI / 180;
+      const wrapper = document.createElement('div');
+      wrapper.style.cssText = 'display:flex;align-items:center;gap:12px;';
       const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      svg.setAttribute('width', '100'); svg.setAttribute('height', '100'); svg.setAttribute('viewBox', '0 0 100 100');
+      svg.setAttribute('width', '120'); svg.setAttribute('height', '120'); svg.setAttribute('viewBox', '0 0 120 120');
+      svg.style.flexShrink = '0';
       vals.forEach((r, i) => {
         const v = Math.abs(Number(r[vc]) || 0), angle = (v / total) * 360;
         if (angle < 0.1) return;
         const s = cum; cum += angle;
-        const sx = 50 + 40 * Math.cos(toRad(s)), sy = 50 + 40 * Math.sin(toRad(s));
-        const ex = 50 + 40 * Math.cos(toRad(s + angle)), ey = 50 + 40 * Math.sin(toRad(s + angle));
+        const sx = 60 + 50 * Math.cos(toRad(s)), sy = 60 + 50 * Math.sin(toRad(s));
+        const ex = 60 + 50 * Math.cos(toRad(s + angle)), ey = 60 + 50 * Math.sin(toRad(s + angle));
         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        path.setAttribute('d', `M 50 50 L ${sx} ${sy} A 40 40 0 ${angle > 180 ? 1 : 0} 1 ${ex} ${ey} Z`);
+        path.setAttribute('d', `M 60 60 L ${sx} ${sy} A 50 50 0 ${angle > 180 ? 1 : 0} 1 ${ex} ${ey} Z`);
         path.setAttribute('fill', colors[i % colors.length]);
         svg.appendChild(path);
       });
-      chartArea.appendChild(svg);
-      const legend = document.createElement('div'); legend.style.cssText = 'margin-top:4px;';
-      vals.slice(0, 6).forEach((r, i) => {
+      wrapper.appendChild(svg);
+      const legend = document.createElement('div');
+      legend.style.cssText = 'display:flex;flex-direction:column;gap:3px;';
+      vals.slice(0, 8).forEach((r, i) => {
+        const v = Math.abs(Number(r[vc]) || 0);
+        const pct = ((v / total) * 100).toFixed(1);
         const row = document.createElement('div');
-        row.style.cssText = 'display:flex;align-items:center;gap:4px;font-size:9px;';
-        row.innerHTML = `<div style="width:7px;height:7px;border-radius:1px;background:${colors[i % colors.length]};flex-shrink:0"></div><span style="opacity:0.7">${String(r[lc])}</span>`;
+        row.style.cssText = 'display:flex;align-items:center;gap:5px;font-size:10px;';
+        row.innerHTML = `<div style="width:8px;height:8px;border-radius:2px;background:${colors[i % colors.length]};flex-shrink:0"></div><span style="opacity:0.8;max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${String(r[lc])}</span><span style="opacity:0.5;margin-left:auto">${pct}%</span>`;
         legend.appendChild(row);
       });
-      chartArea.appendChild(legend);
+      wrapper.appendChild(legend);
+      chartArea.appendChild(wrapper);
     } else if (cfg.chartType === 'line') {
       const numbers = vals.map(r => Number(r[vc]) || 0);
       const minV = Math.min(...numbers), maxV = Math.max(...numbers), range = maxV - minV || 1;
       const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      svg.setAttribute('width', '100%'); svg.setAttribute('viewBox', '0 0 200 60');
-      const pts = numbers.map((v, i) => ({ x: 10 + (i / (numbers.length - 1 || 1)) * 180, y: 5 + (1 - (v - minV) / range) * 50 }));
+      svg.setAttribute('width', '100%'); svg.setAttribute('viewBox', '0 0 240 80');
+      svg.style.cssText = 'overflow:visible;';
+      const px = 8, py = 8;
+      const pts = numbers.map((v, i) => ({ x: px + (i / (numbers.length - 1 || 1)) * (240 - 2 * px), y: py + (1 - (v - minV) / range) * (80 - 2 * py) }));
+      const area = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      area.setAttribute('d', pts.map((p, i) => `${i ? 'L' : 'M'} ${p.x} ${p.y}`).join(' ') + ` L ${pts[pts.length-1].x} ${80-py} L ${pts[0].x} ${80-py} Z`);
+      area.setAttribute('fill', 'rgba(99,102,241,0.15)');
+      svg.appendChild(area);
       const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
       path.setAttribute('d', pts.map((p, i) => `${i ? 'L' : 'M'} ${p.x} ${p.y}`).join(' '));
       path.setAttribute('fill', 'none'); path.setAttribute('stroke', '#6366f1'); path.setAttribute('stroke-width', '2');
       svg.appendChild(path);
       pts.forEach(p => {
         const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        c.setAttribute('cx', p.x); c.setAttribute('cy', p.y); c.setAttribute('r', '2'); c.setAttribute('fill', '#6366f1');
+        c.setAttribute('cx', p.x); c.setAttribute('cy', p.y); c.setAttribute('r', '2.5'); c.setAttribute('fill', '#6366f1');
         svg.appendChild(c);
       });
       chartArea.appendChild(svg);

@@ -56,6 +56,18 @@ const writeInstalled = (list) => {
   fs.writeFileSync(INSTALLED_PATH, JSON.stringify(list, null, 2));
 };
 
+const UNINSTALLED_PATH = '/etc/pkg/uninstalled.json';
+
+const readUninstalled = () => {
+  try { return JSON.parse(fs.readFileSync(UNINSTALLED_PATH, 'utf8') || '[]'); }
+  catch (_) { return []; }
+};
+
+const writeUninstalled = (list) => {
+  ensureDirs();
+  fs.writeFileSync(UNINSTALLED_PATH, JSON.stringify(list, null, 2));
+};
+
 const readRegistries = () => {
   try { return JSON.parse(fs.readFileSync(REGISTRIES_PATH, 'utf8') || '[]'); }
   catch (_) { return []; }
@@ -133,6 +145,11 @@ const installApp = async (appMeta, registryUrl) => {
     }
   }
 
+  const blocked = readUninstalled();
+  if (blocked.includes(appMeta.id)) {
+    writeUninstalled(blocked.filter(id => id !== appMeta.id));
+  }
+
   const installed = readInstalled();
   const existing = installed.findIndex(p => p.id === appMeta.id);
   const record = {
@@ -163,6 +180,12 @@ const uninstallApp = async (pkg) => {
 
   const installed = readInstalled().filter(p => p.id !== pkg.id);
   writeInstalled(installed);
+
+  const blocked = readUninstalled();
+  if (!blocked.includes(pkg.id)) {
+    blocked.push(pkg.id);
+    writeUninstalled(blocked);
+  }
 };
 
 // ── CSS ───────────────────────────────────────────────────────────────────────
@@ -545,8 +568,7 @@ const Icon = ({ name, style }) => (
 
 // Discover view ───────────────────────────────────────────────────────────────
 
-const DiscoverView = ({ registryApps, installed, loading, fetchError, onInstall, installingId }) => {
-  const [search, setSearch] = useState('');
+const DiscoverView = ({ registryApps, installed, loading, fetchError, onInstall, onUninstall, installingId, uninstallingId, search, setSearch }) => {
 
   const installedIds = new Set(installed.map(p => p.id));
 
@@ -617,10 +639,14 @@ const DiscoverView = ({ registryApps, installed, loading, fetchError, onInstall,
                     <span className="pkg-version">v{app.version}</span>
                     <div style={{ flex: 1 }} />
                     {isInstalled ? (
-                      <span className="pkg-installed-badge">
-                        <Icon name="check_circle" />
-                        Installed
-                      </span>
+                      <button
+                        className="pkg-btn danger"
+                        disabled={uninstallingId === app.id}
+                        onClick={() => onUninstall(installed.find(p => p.id === app.id))}
+                        style={{ display: 'flex', alignItems: 'center', gap: 5 }}
+                      >
+                        {uninstallingId === app.id ? <><Spinner /> Removing…</> : <><Icon name="delete" /> Uninstall</>}
+                      </button>
                     ) : (
                       <button
                         className="pkg-btn primary"
@@ -644,9 +670,8 @@ const DiscoverView = ({ registryApps, installed, loading, fetchError, onInstall,
 
 // Installed view ──────────────────────────────────────────────────────────────
 
-const InstalledView = ({ installed, onUninstall, uninstallingId }) => {
+const InstalledView = ({ installed, onUninstall, uninstallingId, search, setSearch }) => {
   const [confirmId, setConfirmId] = useState(null);
-  const [search, setSearch] = useState('');
 
   const filtered = search
     ? installed.filter(p => p.name?.toLowerCase().includes(search.toLowerCase()) || p.id?.toLowerCase().includes(search.toLowerCase()) || p.category?.toLowerCase().includes(search.toLowerCase()))
@@ -838,7 +863,7 @@ const RegistriesView = ({ registries, onAdd, onRemove, onRefresh, loading }) => 
 
 // ── Main App ──────────────────────────────────────────────────────────────────
 
-const App = () => {
+const App = ({ initialSearch = '' }) => {
   const [activeTab, setActiveTab] = useState('discover');
   const [registryApps, setRegistryApps] = useState([]);
   const [installed, setInstalled] = useState(() => readInstalled());
@@ -848,6 +873,7 @@ const App = () => {
   const [installingId, setInstallingId] = useState(null);
   const [uninstallingId, setUninstallingId] = useState(null);
   const [installError, setInstallError] = useState('');
+  const [search, setSearch] = useState(initialSearch);
 
   const fetchRegistries = useCallback(async (regs) => {
     const userRegs = regs !== undefined ? regs : registries;
@@ -960,7 +986,11 @@ const App = () => {
             loading={loading}
             fetchError={fetchError}
             onInstall={handleInstall}
+            onUninstall={handleUninstall}
             installingId={installingId}
+            uninstallingId={uninstallingId}
+            search={search}
+            setSearch={setSearch}
           />
         )}
         {activeTab === 'installed' && (
@@ -968,6 +998,8 @@ const App = () => {
             installed={installed}
             onUninstall={handleUninstall}
             uninstallingId={uninstallingId}
+            search={search}
+            setSearch={setSearch}
           />
         )}
         {activeTab === 'registries' && (
@@ -987,7 +1019,7 @@ const App = () => {
 // ── Window command ────────────────────────────────────────────────────────────
 
 const run = (...args) => {
-  const [body, props] = args;
+  const [body, props, initialSearch] = args;
   if (!body) {
     platform.host.execCommand("service('001-core.layout','open-window')(command('ui.pkg-manager'))", platform);
     return;
@@ -1000,7 +1032,7 @@ const run = (...args) => {
   const styles = new win.CSSStyleSheet();
   styles.replace(CSS);
   body.ownerDocument.adoptedStyleSheets = [...(body.ownerDocument.adoptedStyleSheets || []), styles];
-  root.render(<App />);
+  root.render(<App initialSearch={typeof initialSearch === 'string' ? initialSearch : ''} />);
   props.setHeaderStyles({ background: '#ffffff', color: '#555555', boxShadow: 'none', borderBottom: '1px solid #f0ede9' });
   props.setWindowView(true);
   props.onDestroy(() => setTimeout(() => root.unmount(), 0));

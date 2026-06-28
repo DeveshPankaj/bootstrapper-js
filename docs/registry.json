@@ -654,6 +654,23 @@
       "author": "bootstrapper-js",
       "files": [{ "dest": "main.html", "src": "/public/mount/opt/apps/speed-test/main.html" }],
       "main": "main.html"
+    },
+    {
+      "id": "sqlite-charts",
+      "name": "SQLite Charts",
+      "description": "Query SQLite databases and visualize data with bar, pie, and line charts. Add chart widgets to the desktop.",
+      "version": "1.0.0",
+      "icon": "bar_chart",
+      "category": "Data",
+      "author": "bootstrapper-js",
+      "commandName": "ui.sqlite-charts",
+      "files": [
+        {
+          "dest": "main.js",
+          "src": "/public/mount/opt/apps/sqlite-charts/main.js"
+        }
+      ],
+      "main": "main.js"
     }
   ]
 }

@@ -52,10 +52,43 @@ const buildIndex = () => {
       })
     }
   } catch (_) {}
+  // Not-installed registry apps (fetched async, cached)
+  if (_registryCache) {
+    const installedIds = new Set(items.filter(i => i.type === 'command' || i.type === 'installed-app').map(i => i.type === 'installed-app' ? i.pkg?.id : null).filter(Boolean))
+    try {
+      const pkgInstalled = JSON.parse(fs.readFileSync('/etc/pkg/installed.json', 'utf8') || '[]')
+      pkgInstalled.forEach(p => installedIds.add(p.id))
+    } catch (_) {}
+    for (const app of _registryCache) {
+      if (installedIds.has(app.id)) continue
+      if (seen.has(app.id)) continue
+      seen.add(app.id)
+      items.push({
+        label: app.name || app.id,
+        subtitle: `Not installed · ${app.category || 'App'}`,
+        type: 'not-installed',
+        app,
+        icon: app.icon,
+      })
+    }
+  }
   // VFS files
   for (const dir of SEARCH_DIRS) items.push(...collectFiles(dir))
   return items
 }
+
+let _registryCache = null
+const fetchRegistryForSpotlight = async () => {
+  try {
+    const origin = platform.window.top?.location?.origin || ''
+    const resp = await fetch(origin + '/registry.json')
+    if (resp.ok) {
+      const data = await resp.json()
+      _registryCache = data.apps || []
+    }
+  } catch (_) {}
+}
+setTimeout(fetchRegistryForSpotlight, 1000)
 
 let overlayRoot = null
 let overlayContainer = null
@@ -97,6 +130,11 @@ const Spotlight = ({ onClose }) => {
           } else {
             platform.host.exec(platform, pkg.mainFile)
           }
+        } else if (item.type === 'not-installed') {
+          platform.host.execCommand(
+            `service('001-core.layout','open-window')(command('ui.pkg-manager'),'${item.app.name}')`,
+            platform
+          )
         } else {
           platform.host.exec(platform, item.path)
         }
@@ -147,8 +185,16 @@ const Spotlight = ({ onClose }) => {
           <div style={{ borderTop: '1px solid rgba(0,0,0,0.1)', maxHeight: 340, overflow: 'auto' }}>
             {results.map((item, i) => (
               <div key={i} style={itemStyle(i === selected)} onMouseEnter={() => setSelected(i)} onClick={() => run(item)}>
-                <span style={{ fontSize: 14, fontWeight: 500 }}>{item.label}</span>
-                <span style={{ fontSize: 11, opacity: 0.65, marginTop: 1 }}>{item.subtitle}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {item.icon && <span className="material-symbols-outlined" style={{ fontSize: 18, opacity: 0.7 }}>{item.icon}</span>}
+                  <span style={{ fontSize: 14, fontWeight: 500 }}>{item.label}</span>
+                  {item.type === 'not-installed' && (
+                    <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: i === selected ? 'rgba(255,255,255,0.25)' : 'rgba(10,132,255,0.12)', color: i === selected ? '#fff' : '#0a84ff', fontWeight: 600 }}>
+                      INSTALL
+                    </span>
+                  )}
+                </div>
+                <span style={{ fontSize: 11, opacity: 0.65, marginTop: 1, marginLeft: item.icon ? 26 : 0 }}>{item.subtitle}</span>
               </div>
             ))}
           </div>

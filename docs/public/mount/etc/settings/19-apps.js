@@ -17,6 +17,17 @@ const EXPLORER_OPTIONS = [
   { value: 'explorer-sifi', label: 'Minimal',          desc: 'Clean light theme with warm-beige accents.' },
 ]
 
+const isAppInstalled = (commandName) => {
+  return !!platform.host.getCommand(commandName)
+}
+
+const openAppManager = (searchTerm) => {
+  platform.host.execCommand(
+    `service('001-core.layout','open-window')(command('ui.pkg-manager'),'${searchTerm}')`,
+    platform
+  )
+}
+
 const AppsSettings = () => {
   const prefs = readPrefs()
   const [selected, setSelected] = React.useState(prefs.default_explorer || 'explorer')
@@ -41,25 +52,38 @@ const AppsSettings = () => {
         </p>
 
         <div style={{display:'flex',flexDirection:'column',gap:'.5rem'}}>
-          {EXPLORER_OPTIONS.map(opt => (
-            <label key={opt.value}
-              style={{
-                display:'flex',alignItems:'flex-start',gap:'.75rem',
-                padding:'.65rem .85rem',borderRadius:6,cursor:'pointer',
-                border:`1.5px solid ${selected===opt.value?'#b09070':'#e8e8e8'}`,
-                background:selected===opt.value?'#faf6f1':'#fff',
-                transition:'border-color .15s,background .15s',
-              }}>
-              <input type="radio" name="default_explorer" value={opt.value}
-                checked={selected===opt.value}
-                onChange={()=>save(opt.value)}
-                style={{marginTop:2,accentColor:'#b09070'}} />
-              <div>
-                <div style={{fontWeight:500,fontSize:13.5,color:'#1c1c1e'}}>{opt.label}</div>
-                <div style={{fontSize:12,color:'#888',marginTop:2}}>{opt.desc}</div>
-              </div>
-            </label>
-          ))}
+          {EXPLORER_OPTIONS.map(opt => {
+            const installed = isAppInstalled(opt.value)
+            return (
+              <label key={opt.value}
+                style={{
+                  display:'flex',alignItems:'flex-start',gap:'.75rem',
+                  padding:'.65rem .85rem',borderRadius:6,
+                  cursor: installed ? 'pointer' : 'default',
+                  border:`1.5px solid ${!installed ? '#e8e8e8' : selected===opt.value ? '#b09070' : '#e8e8e8'}`,
+                  background: !installed ? '#f8f8f8' : selected===opt.value ? '#faf6f1' : '#fff',
+                  opacity: installed ? 1 : 0.55,
+                  transition:'border-color .15s,background .15s',
+                }}>
+                <input type="radio" name="default_explorer" value={opt.value}
+                  checked={selected===opt.value}
+                  disabled={!installed}
+                  onChange={()=> installed && save(opt.value)}
+                  style={{marginTop:2,accentColor:'#b09070'}} />
+                <div style={{flex:1}}>
+                  <div style={{fontWeight:500,fontSize:13.5,color: installed ? '#1c1c1e' : '#999'}}>{opt.label}</div>
+                  <div style={{fontSize:12,color:'#888',marginTop:2}}>{opt.desc}</div>
+                  {!installed && (
+                    <div style={{fontSize:11.5,color:'#0a84ff',marginTop:4,cursor:'pointer',display:'inline-flex',alignItems:'center',gap:4}}
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); openAppManager(opt.label) }}>
+                      <span className="material-symbols-outlined" style={{fontSize:14}}>download</span>
+                      Install from App Manager
+                    </div>
+                  )}
+                </div>
+              </label>
+            )
+          })}
         </div>
 
         {saved && (

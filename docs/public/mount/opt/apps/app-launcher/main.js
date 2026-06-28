@@ -1,7 +1,64 @@
-// All Apps Listing — searchable grid of all registered commands
-// Accessible via command('ui.app-launcher') or desktop right-click
 const React = platform.getService('React')
 const ReactDOM = platform.getService('ReactDOM')
+const fs = platform.host.getFS()
+
+const FONT_CSS = `
+@font-face {
+  font-family: 'Material Symbols Outlined';
+  font-style: normal;
+  font-weight: 100 700;
+  src: url(https://fonts.gstatic.com/s/materialsymbolsoutlined/v138/kJEhBvYX7BgnkSrUwT8OhrdQw4oELdPIeeII9v6oFsLjBuVY.woff2) format('woff2');
+}
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal; font-style: normal; font-size: 24px;
+  line-height: 1; letter-spacing: normal; text-transform: none;
+  display: inline-block; white-space: nowrap; word-wrap: normal;
+  direction: ltr; -webkit-font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+}
+`
+
+const CSS = `
+* { box-sizing: border-box; margin: 0; padding: 0; }
+.al-root {
+  display: flex; flex-direction: column; height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  color: #e4e4e7; background: #18181b; overflow: hidden;
+}
+.al-search {
+  display: flex; align-items: center; gap: 10px; padding: 14px 16px;
+  border-bottom: 1px solid #27272a;
+}
+.al-search input {
+  flex: 1; background: transparent; border: none; outline: none;
+  font-size: 17px; color: #e4e4e7;
+}
+.al-search input::placeholder { color: #52525b; }
+.al-grid {
+  flex: 1; overflow-y: auto; padding: 12px;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 6px;
+  align-content: start;
+}
+.al-card {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 5px; padding: 12px 6px; border-radius: 10px; cursor: pointer;
+  transition: background 0.12s; text-align: center;
+}
+.al-card:hover { background: rgba(99,102,241,0.12); }
+.al-card .material-symbols-outlined { font-size: 28px; opacity: 0.85; }
+.al-card-label {
+  font-size: 10.5px; font-weight: 500; line-height: 1.3; max-width: 78px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.8;
+}
+.al-empty {
+  text-align: center; opacity: 0.35; margin-top: 48px;
+}
+.al-status {
+  font-size: 10.5px; opacity: 0.35; text-align: center; padding: 8px;
+  border-top: 1px solid #27272a;
+}
+`
 
 const AppLauncher = () => {
   const [commands, setCommands] = React.useState([])
@@ -9,28 +66,26 @@ const AppLauncher = () => {
   const inputRef = React.useRef(null)
 
   React.useEffect(() => {
-    // Collect all registered commands from host internals
-    const cmds = []
-    const seen = new Set()
-    try {
-      const hostCmds = platform.host._commands || []
+    const collect = (hostCmds) => {
+      const seen = new Set()
+      const cmds = []
       for (const cmd of hostCmds) {
         if (cmd.meta?.callable === false) continue
         if (seen.has(cmd.name)) continue
         seen.add(cmd.name)
-        // Skip system/internal commands without titles
-        if (!cmd.meta?.title && cmd.name.startsWith('_')) continue
+        if (!cmd.meta?.title) continue
         cmds.push({
           name: cmd.name,
-          title: cmd.meta?.title || cmd.name,
-          icon: cmd.meta?.icon || 'apps',
-          description: cmd.meta?.description || '',
+          title: cmd.meta.title || cmd.name,
+          icon: cmd.meta.icon || 'apps',
         })
       }
-    } catch (_) {}
-    setCommands(cmds.sort((a, b) => a.title.localeCompare(b.title)))
-    // Focus search input
-    setTimeout(() => inputRef.current?.focus(), 50)
+      return cmds.sort((a, b) => a.title.localeCompare(b.title))
+    }
+
+    const sub = platform.host.commands$.subscribe(all => setCommands(collect(all)))
+    setTimeout(() => inputRef.current?.focus(), 100)
+    return () => sub.unsubscribe()
   }, [])
 
   const visible = filter
@@ -39,72 +94,57 @@ const AppLauncher = () => {
 
   const launch = (name) => {
     try { platform.host.callCommand(name) }
-    catch (e) { platform.host.callCommand('notify', { title: 'Error launching ' + name, body: e.message || String(e), duration: 3000 }) }
-  }
-
-  const cardStyle = {
-    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-    gap: 6, padding: '14px 10px', borderRadius: 12,
-    background: 'rgba(127,127,127,0.08)', cursor: 'pointer', transition: 'background 0.15s',
-    textAlign: 'center', minWidth: 80,
+    catch (e) { console.error('launch error', name, e) }
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: 16, boxSizing: 'border-box', gap: 12 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span className="material-symbols-outlined" style={{ opacity: 0.5 }}>search</span>
-        <input
-          ref={inputRef}
-          style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: 18, color: 'inherit' }}
-          placeholder="Search apps…"
-          value={filter}
-          onChange={e => setFilter(e.target.value)}
+    <div className="al-root">
+      <div className="al-search">
+        <span className="material-symbols-outlined" style={{ fontSize: 20, opacity: 0.4 }}>search</span>
+        <input ref={inputRef} placeholder="Search apps…" value={filter} onChange={e => setFilter(e.target.value)}
           onKeyDown={e => {
-            if (e.key === 'Enter' && visible.length === 1) launch(visible[0].name)
+            if (e.key === 'Enter' && visible.length >= 1) launch(visible[0].name)
             if (e.key === 'Escape') setFilter('')
-          }}
-        />
-        {filter && <button style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.5, fontSize: 18 }} onClick={() => setFilter('')}>✕</button>}
+          }} />
+        {filter && <span className="material-symbols-outlined" style={{ fontSize: 18, opacity: 0.4, cursor: 'pointer' }}
+          onClick={() => setFilter('')}>close</span>}
       </div>
-
-      <div style={{ flex: 1, overflowY: 'auto' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))', gap: 8 }}>
-          {visible.map(cmd => (
-            <div
-              key={cmd.name}
-              style={cardStyle}
-              onClick={() => launch(cmd.name)}
-              onMouseOver={e => e.currentTarget.style.background = 'rgba(127,127,127,0.18)'}
-              onMouseOut={e => e.currentTarget.style.background = 'rgba(127,127,127,0.08)'}
-              title={cmd.name}
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: 28, opacity: 0.85 }}>{cmd.icon}</span>
-              <span style={{ fontSize: 11, fontWeight: 500, lineHeight: 1.3, maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cmd.title}</span>
-            </div>
-          ))}
-        </div>
+      <div className="al-grid">
+        {visible.map(cmd => (
+          <div key={cmd.name} className="al-card" onClick={() => launch(cmd.name)} title={cmd.name}>
+            <span className="material-symbols-outlined">{cmd.icon}</span>
+            <span className="al-card-label">{cmd.title}</span>
+          </div>
+        ))}
         {visible.length === 0 && (
-          <div style={{ textAlign: 'center', opacity: 0.4, marginTop: 40 }}>
-            <span className="material-symbols-outlined" style={{ fontSize: 48 }}>search_off</span>
-            <p>No apps matching "{filter}"</p>
+          <div className="al-empty" style={{ gridColumn: '1 / -1' }}>
+            <span className="material-symbols-outlined" style={{ fontSize: 48, display: 'block', marginBottom: 8 }}>search_off</span>
+            No apps matching "{filter}"
           </div>
         )}
       </div>
-      <div style={{ fontSize: 11, opacity: 0.4, textAlign: 'center' }}>{visible.length} app{visible.length !== 1 ? 's' : ''}</div>
+      <div className="al-status">{visible.length} app{visible.length !== 1 ? 's' : ''}</div>
     </div>
   )
 }
 
-const run = (body, props) => {
+const run = (body, props, ...rest) => {
   if (!body) {
-    platform.host.execCommand("service('001-core.layout', 'open-window') (command('ui.app-launcher'))", platform)
+    platform.host.execCommand("service('001-core.layout','open-window')(command('ui.app-launcher'))", platform)
     return
   }
+  const doc = body.ownerDocument
+  const win = doc.defaultView
+  const styles = new win.CSSStyleSheet()
+  styles.replaceSync(FONT_CSS + CSS)
+  doc.adoptedStyleSheets = [...(doc.adoptedStyleSheets || []), styles]
+
   props.setTitle('All Apps')
+  props.setWindowView(true)
   body.style.cssText = 'margin:0;height:100%;overflow:hidden;'
   const root = ReactDOM.createRoot(body)
   root.render(React.createElement(AppLauncher))
   props.onDestroy(() => setTimeout(() => root.unmount(), 0))
 }
 
-platform.host.registerCommand('ui.app-launcher', run, { title: 'All Apps', icon: 'apps' })
+platform.host.registerCommand('ui.app-launcher', run, { title: 'All Apps', icon: 'apps', category: 'System' })

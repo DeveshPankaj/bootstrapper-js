@@ -29,6 +29,33 @@ export const WIDGETS_CSS = `
         z-index: 10;
     }
 
+    .widget-close {
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: rgba(255, 59, 48, 0.8);
+        color: #fff;
+        font-size: 12px;
+        line-height: 18px;
+        text-align: center;
+        cursor: pointer;
+        opacity: 0;
+        transition: opacity 0.15s;
+        pointer-events: auto;
+        z-index: 1;
+    }
+
+    .widgets-panel .widget:hover .widget-close {
+        opacity: 1;
+    }
+
+    .widget-close:hover {
+        background: #ff3b30;
+    }
+
     .widget-clock-time {
         font-size: 1.75rem;
         font-weight: 600;
