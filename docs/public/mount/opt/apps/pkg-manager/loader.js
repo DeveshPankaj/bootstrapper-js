@@ -19,6 +19,7 @@ const CORE_APPS = [
   { appDir: '/opt/apps/spotlight',      mainFile: '/opt/apps/spotlight/main.js' },
   { appDir: '/opt/apps/image-viewer',   mainFile: '/opt/apps/image-viewer/main.js' },
   { appDir: '/opt/apps/pkg-manager',    mainFile: '/opt/apps/pkg-manager/main.js' },
+  { appDir: '/opt/apps/sqlite-charts',  mainFile: '/opt/apps/sqlite-charts/main.js' },
 ];
 
 const loadApp = (appDir, mainFile) => {

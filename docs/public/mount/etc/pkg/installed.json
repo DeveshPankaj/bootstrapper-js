@@ -138,5 +138,19 @@
     "commandName": "webamp",
     "installedAt": 1750636800000,
     "registryUrl": "/registry.json"
+  },
+  {
+    "id": "sqlite-charts",
+    "name": "SQLite Charts",
+    "version": "1.0.0",
+    "description": "Query SQLite databases and visualize data with bar, pie, and line charts. Add chart widgets to the desktop.",
+    "icon": "bar_chart",
+    "category": "Data",
+    "author": "bootstrapper-js",
+    "appDir": "/opt/apps/sqlite-charts",
+    "mainFile": "/opt/apps/sqlite-charts/main.js",
+    "commandName": "ui.sqlite-charts",
+    "installedAt": 1750636800000,
+    "registryUrl": "/registry.json"
   }
 ]

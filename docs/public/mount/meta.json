@@ -522,6 +522,11 @@
     "force_reload": true
   },
   {
+    "path": "/opt/apps/sqlite-charts/main.js",
+    "file": "/opt/apps/sqlite-charts/main.js",
+    "force_reload": true
+  },
+  {
     "path": "/opt/apps/mermaid-viewer/main.js",
     "file": "/opt/apps/mermaid-viewer/main.js",
     "force_reload": true
