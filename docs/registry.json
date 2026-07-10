@@ -678,6 +678,27 @@
       "main": "main.js"
     },
     {
+      "id": "notebook",
+      "name": "Notebook",
+      "description": "Jupyter-style Python notebook. Run code cells with Pyodide, render markdown, open/save .ipynb files from the VFS.",
+      "version": "1.0.0",
+      "icon": "menu_book",
+      "category": "Development",
+      "author": "bootstrapper-js",
+      "commandName": "ui.notebook",
+      "files": [
+        {
+          "dest": "main.js",
+          "src": "/public/mount/opt/apps/notebook/main.js"
+        },
+        {
+          "dest": "notebook.html",
+          "src": "/public/mount/opt/apps/notebook/notebook.html"
+        }
+      ],
+      "main": "main.js"
+    },
+    {
       "id": "python-demo",
       "name": "Python Demo",
       "description": "Interactive Python (Pyodide) playground: open windows, render buttons, attach CSS and click listeners \u2014 all from Python.",

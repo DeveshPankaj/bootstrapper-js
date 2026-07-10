@@ -1,0 +1,736 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Notebook</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@13/marked.min.js"></script>
+<style>
+/* ── Reset ─────────────────────────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+/* ── CodeMirror py-dark theme ──────────────────────────────────────── */
+.cm-s-py-dark.CodeMirror{background:#0d0d14;color:#e2e8f0;
+  font-family:'JetBrains Mono',Consolas,monospace;font-size:13px;line-height:1.6}
+.cm-s-py-dark .CodeMirror-gutters{background:#0d0d14;border-right:1px solid #1e1e2e;color:#4b5563}
+.cm-s-py-dark .CodeMirror-linenumber{color:#374151}
+.cm-s-py-dark .CodeMirror-cursor{border-left:2px solid #a78bfa}
+.cm-s-py-dark .CodeMirror-selected{background:rgba(109,40,217,.3)}
+.cm-s-py-dark .CodeMirror-activeline-background{background:#1a1a24}
+.cm-s-py-dark .cm-keyword{color:#c4b5fd;font-weight:600}
+.cm-s-py-dark .cm-builtin{color:#86efac}
+.cm-s-py-dark .cm-string,.cm-s-py-dark .cm-string-2{color:#fde68a}
+.cm-s-py-dark .cm-comment{color:#6b7280;font-style:italic}
+.cm-s-py-dark .cm-number{color:#f9a8d4}
+.cm-s-py-dark .cm-def{color:#93c5fd}
+.cm-s-py-dark .cm-operator{color:#a78bfa}
+.cm-s-py-dark .cm-atom{color:#fb923c}
+.cm-s-py-dark .cm-meta{color:#94a3b8}
+.cm-s-py-dark .CodeMirror-matchingbracket{outline:1px solid #a78bfa;color:#e2e8f0!important}
+
+/* ── App shell ─────────────────────────────────────────────────────── */
+:root{
+  --bg:#0d0d12;--surface:#111118;--border:#1e1e2e;
+  --accent:#6d28d9;--accent-lt:#a78bfa;
+  --text:#e2e8f0;--muted:#6b7280;--dim:#374151;
+  --error:#f87171;--success:#4ade80;
+}
+body{
+  font-family:system-ui,-apple-system,sans-serif;
+  background:var(--bg);color:var(--text);
+  height:100vh;display:flex;flex-direction:column;overflow:hidden;
+}
+
+/* toolbar */
+#toolbar{
+  flex-shrink:0;height:40px;display:flex;align-items:center;gap:4px;
+  padding:0 10px;background:#090910;border-bottom:1px solid var(--border);
+}
+.tb-sep{width:1px;height:18px;background:var(--border);margin:0 4px;flex-shrink:0}
+.tb-btn{
+  display:inline-flex;align-items:center;gap:4px;padding:3px 10px;
+  border:1px solid var(--border);border-radius:6px;font-size:12px;
+  font-weight:600;cursor:pointer;background:var(--surface);color:var(--text);
+  transition:background .12s,border-color .12s;white-space:nowrap;
+}
+.tb-btn:hover{background:var(--dim);border-color:#2a2a3a}
+.tb-btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.tb-btn.primary:hover{background:#7c3aed;border-color:#7c3aed}
+#kernel-status{
+  margin-left:auto;font-size:11px;color:var(--muted);
+  display:flex;align-items:center;gap:5px;flex-shrink:0;
+}
+#k-dot{width:7px;height:7px;border-radius:50%;background:var(--dim);transition:background .3s}
+#k-dot.ready{background:var(--success)}
+#k-dot.busy{background:#fb923c}
+#k-dot.error{background:var(--error)}
+
+/* cells scroll area */
+#cells{
+  flex:1;overflow-y:auto;padding:16px 12vw 100px;
+  display:flex;flex-direction:column;gap:10px;
+}
+@media(max-width:800px){#cells{padding:14px 8px 100px}}
+
+#add-bar{display:flex;gap:8px;justify-content:center;padding-top:4px;flex-shrink:0}
+.add-btn{
+  padding:4px 16px;border:1px dashed var(--border);border-radius:6px;
+  background:transparent;color:var(--muted);font-size:12px;cursor:pointer;
+  transition:border-color .12s,color .12s;
+}
+.add-btn:hover{border-color:var(--accent-lt);color:var(--accent-lt)}
+
+/* cell */
+.cell{
+  border:1px solid var(--border);border-radius:8px;overflow:hidden;
+  background:var(--surface);transition:border-color .15s;
+}
+.cell.selected{border-color:var(--accent)}
+.cell-header{
+  display:flex;align-items:center;gap:6px;padding:3px 8px 3px 12px;
+  background:#0d0d14;border-bottom:1px solid var(--border);min-height:28px;
+}
+.cell-badge{
+  font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--muted);min-width:50px;
+}
+.cell-badge.code{color:#7dd3fc}
+.cell-badge.md{color:#fde68a}
+.exec-count{
+  font-size:10px;color:var(--dim);font-family:monospace;min-width:36px;
+}
+.cell-actions{margin-left:auto;display:flex;gap:2px}
+.act-btn{
+  padding:2px 6px;border:none;border-radius:4px;
+  background:transparent;color:var(--muted);font-size:12px;cursor:pointer;
+  transition:background .1s,color .1s;line-height:1;
+}
+.act-btn:hover{background:var(--dim);color:var(--text)}
+.act-btn.run{color:var(--accent-lt)}
+.act-btn.run:hover{background:rgba(109,40,217,.2);color:var(--accent-lt)}
+.act-btn.del:hover{background:rgba(248,113,113,.15);color:var(--error)}
+
+/* CodeMirror host */
+.cm-wrap .CodeMirror{height:auto;min-height:36px}
+
+/* markdown rendered */
+.md-view{padding:12px 16px;font-size:13.5px;line-height:1.7;display:none;cursor:pointer}
+.cell.md-rendered .cm-wrap{display:none}
+.cell.md-rendered .md-view{display:block}
+.md-view h1,.md-view h2,.md-view h3{color:var(--accent-lt);margin:12px 0 6px;font-weight:700}
+.md-view h1{font-size:20px}.md-view h2{font-size:16px}.md-view h3{font-size:14px}
+.md-view p{margin-bottom:8px;color:#c4c9d4}
+.md-view code{background:#1a1a2e;padding:1px 5px;border-radius:4px;
+  font-family:monospace;font-size:12px;color:var(--accent-lt)}
+.md-view pre{background:#1a1a2e;padding:12px;border-radius:6px;
+  overflow-x:auto;margin:8px 0;font-size:12px}
+.md-view pre code{background:transparent;padding:0}
+.md-view a{color:var(--accent-lt);text-decoration:underline}
+.md-view ul,.md-view ol{padding-left:22px;margin-bottom:8px;color:#c4c9d4}
+.md-view blockquote{border-left:3px solid var(--accent);padding:4px 12px;
+  margin:8px 0;color:var(--muted);font-style:italic}
+.md-view table{border-collapse:collapse;width:100%;margin:8px 0;font-size:12.5px}
+.md-view th,.md-view td{border:1px solid var(--border);padding:5px 10px;text-align:left}
+.md-view th{background:#0d0d14;color:var(--accent-lt)}
+
+/* cell output */
+.cell-output{
+  border-top:1px solid var(--border);padding:8px 12px;
+  font-family:'JetBrains Mono',Consolas,monospace;font-size:12.5px;
+  line-height:1.6;color:#b4c2d4;white-space:pre-wrap;word-break:break-word;
+  display:none;
+}
+.cell-output.has-output{display:block}
+.cell-output .out-error{color:var(--error)}
+.cell-output img{max-width:100%;border-radius:4px;margin-top:4px;display:block}
+
+/* path dialog */
+#dialog{
+  display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);
+  z-index:200;align-items:center;justify-content:center;
+}
+#dialog.open{display:flex}
+.dlg-box{
+  background:#0f0f18;border:1px solid var(--border);border-radius:12px;
+  padding:22px;width:420px;display:flex;flex-direction:column;gap:12px;
+}
+.dlg-title{font-size:14px;font-weight:700}
+.dlg-input{
+  background:#0a0a10;border:1px solid var(--border);border-radius:6px;
+  padding:8px 12px;color:var(--text);font-size:13px;
+  font-family:monospace;outline:none;transition:border-color .12s;
+}
+.dlg-input:focus{border-color:var(--accent)}
+.dlg-btns{display:flex;gap:8px;justify-content:flex-end}
+.dlg-cancel{padding:6px 16px;background:var(--surface);border:1px solid var(--border);
+  border-radius:6px;color:var(--text);font-size:12px;cursor:pointer}
+.dlg-ok{padding:6px 16px;background:var(--accent);border:none;
+  border-radius:6px;color:#fff;font-size:12px;font-weight:600;cursor:pointer}
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <button class="tb-btn" id="btn-new">New</button>
+  <button class="tb-btn" id="btn-open">Open</button>
+  <button class="tb-btn" id="btn-save">Save</button>
+  <button class="tb-btn" id="btn-save-as">Save As</button>
+  <div class="tb-sep"></div>
+  <button class="tb-btn primary" id="btn-run-all">▶ Run All</button>
+  <button class="tb-btn" id="btn-clear">Clear</button>
+  <button class="tb-btn" id="btn-restart">⟳ Restart</button>
+  <div id="kernel-status">
+    <div id="k-dot"></div>
+    <span id="k-label">idle</span>
+  </div>
+</div>
+
+<div id="cells">
+  <div id="add-bar">
+    <button class="add-btn" id="btn-add-code">+ Code</button>
+    <button class="add-btn" id="btn-add-md">+ Markdown</button>
+  </div>
+</div>
+
+<div id="dialog">
+  <div class="dlg-box">
+    <div class="dlg-title" id="dlg-title">Open</div>
+    <input class="dlg-input" id="dlg-input" type="text">
+    <div class="dlg-btns">
+      <button class="dlg-cancel" id="dlg-cancel">Cancel</button>
+      <button class="dlg-ok" id="dlg-ok">OK</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ── bridge placeholder — replaced when main.js calls __nbInit() ──────────────
+let bridge = {
+  readFile: () => null, writeFile: () => false, existsFile: () => false,
+  setTitle: () => {}, initialFile: null,
+};
+
+// ── state ─────────────────────────────────────────────────────────────────────
+let pyodide = null;
+let pyReady = false;
+let pyLoading = false;
+let cells = [];           // [{id, type, cm, outputEl, execEl, badgeEl, el, mdEl}]
+let currentFile = null;
+let dirty = false;
+let execCount = 0;
+let cellIdSeq = 0;
+
+// ── kernel UI ─────────────────────────────────────────────────────────────────
+const kDot   = document.getElementById('k-dot');
+const kLabel = document.getElementById('k-label');
+function setKernel(state, msg) { kDot.className = state; kLabel.textContent = msg; }
+
+// ── Pyodide ───────────────────────────────────────────────────────────────────
+async function ensurePy() {
+  if (pyReady) return;
+  if (pyLoading) {
+    return new Promise(res => {
+      const t = setInterval(() => { if (pyReady || !pyLoading) { clearInterval(t); res(); } }, 80);
+    });
+  }
+  pyLoading = true;
+  setKernel('', 'loading kernel…');
+  try {
+    await new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js';
+      s.onload = res; s.onerror = rej;
+      document.head.appendChild(s);
+    });
+    pyodide = await loadPyodide({ indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/' });
+    // boot: capture helper + matplotlib patch
+    await pyodide.runPythonAsync(`
+import sys, io as _io, traceback as _tb
+
+class _Cap:
+    def __init__(self): self.v = []
+    def write(self, s): self.v.append(str(s))
+    def flush(self): pass
+    def getvalue(self): return ''.join(self.v)
+    def clear(self): self.v = []
+
+__nb_cap = _Cap()
+
+def __nb_exec(code):
+    __nb_cap.clear()
+    _so, _se = sys.stdout, sys.stderr
+    sys.stdout = sys.stderr = __nb_cap
+    err = None
+    try:
+        exec(compile(code, '<cell>', 'exec'), globals())
+    except BaseException:
+        err = _tb.format_exc()
+    finally:
+        sys.stdout = _so
+        sys.stderr = _se
+    return (__nb_cap.getvalue(), err)
+
+try:
+    import matplotlib as _mpl
+    _mpl.use('Agg')
+    import matplotlib.pyplot as _plt
+    import base64 as _b64
+    def _nb_show(*a, **k):
+        _buf = _io.BytesIO()
+        _plt.savefig(_buf, format='png', bbox_inches='tight', dpi=100)
+        _buf.seek(0)
+        print('<nb-img>' + _b64.b64encode(_buf.read()).decode() + '</nb-img>')
+        _plt.close('all')
+    _plt.show = _nb_show
+except Exception:
+    pass
+`);
+    pyReady = true; setKernel('ready', 'Python 3 (Pyodide)');
+  } catch (e) {
+    pyLoading = false; setKernel('error', 'kernel error'); throw e;
+  }
+  pyLoading = false;
+}
+
+async function execPython(source) {
+  await ensurePy();
+  pyodide.globals.set('__nb_code', source);
+  const pair = await pyodide.runPythonAsync('__nb_exec(__nb_code)');
+  const [stdout, err] = pair.toJs();
+  return { stdout: stdout || '', error: err };
+}
+
+function parseOutputs(stdout, error) {
+  const parts = [];
+  if (error) { parts.push({ kind: 'error', text: error }); return parts; }
+  if (!stdout) return parts;
+  const re = /<nb-img>([\s\S]*?)<\/nb-img>/g;
+  let last = 0, m;
+  while ((m = re.exec(stdout)) !== null) {
+    const pre = stdout.slice(last, m.index);
+    if (pre.trimEnd()) parts.push({ kind: 'text', text: pre });
+    parts.push({ kind: 'image', data: m[1] });
+    last = m.index + m[0].length;
+  }
+  const tail = stdout.slice(last);
+  if (tail.trimEnd()) parts.push({ kind: 'text', text: tail });
+  return parts;
+}
+
+function renderOutputs(outputEl, parts) {
+  outputEl.innerHTML = '';
+  if (!parts.length) { outputEl.classList.remove('has-output'); return; }
+  outputEl.classList.add('has-output');
+  parts.forEach(p => {
+    if (p.kind === 'image') {
+      const img = document.createElement('img');
+      img.src = 'data:image/png;base64,' + p.data;
+      outputEl.appendChild(img);
+    } else {
+      const span = document.createElement('span');
+      span.textContent = p.text;
+      if (p.kind === 'error') span.className = 'out-error';
+      outputEl.appendChild(span);
+    }
+  });
+}
+
+// ── cell creation ─────────────────────────────────────────────────────────────
+function makeCell(type, source, savedParts) {
+  const id = 'nb' + (++cellIdSeq);
+
+  const el = document.createElement('div');
+  el.className = 'cell'; el.dataset.id = id;
+
+  // header
+  const header = document.createElement('div');
+  header.className = 'cell-header';
+
+  const badge = document.createElement('span');
+  badge.className = 'cell-badge ' + (type === 'markdown' ? 'md' : 'code');
+  badge.textContent = type === 'markdown' ? '▤ md' : '⬡ code';
+
+  const execEl = document.createElement('span');
+  execEl.className = 'exec-count';
+
+  const actions = document.createElement('div');
+  actions.className = 'cell-actions';
+
+  function actBtn(label, cls, title) {
+    const b = document.createElement('button');
+    b.className = 'act-btn ' + (cls || '');
+    b.textContent = label; b.title = title || '';
+    actions.appendChild(b); return b;
+  }
+  const runBtn  = actBtn('▶', 'run', 'Run (Shift+Enter)');
+  const upBtn   = actBtn('↑', '',    'Move up');
+  const downBtn = actBtn('↓', '',    'Move down');
+  const delBtn  = actBtn('✕', 'del', 'Delete cell');
+
+  header.append(badge, execEl, actions);
+
+  // editor
+  const cmWrap = document.createElement('div');
+  cmWrap.className = 'cm-wrap';
+
+  // markdown rendered view
+  const mdView = document.createElement('div');
+  mdView.className = 'md-view';
+
+  // output
+  const outputEl = document.createElement('div');
+  outputEl.className = 'cell-output';
+
+  el.append(header, cmWrap, mdView, outputEl);
+
+  const cm = CodeMirror(cmWrap, {
+    value: source || '',
+    mode: type === 'code' ? 'python' : null,
+    theme: 'py-dark',
+    lineNumbers: type === 'code',
+    tabSize: 4, indentUnit: 4, indentWithTabs: false,
+    viewportMargin: Infinity,
+    extraKeys: {
+      'Shift-Enter': () => runCell(cell),
+      'Ctrl-Enter':  () => runCell(cell, true),
+      Tab:           c => c.execCommand('indentMore'),
+      'Shift-Tab':   c => c.execCommand('indentLess'),
+    },
+  });
+  cm.on('change', markDirty);
+
+  const cell = { id, type, cm, outputEl, execEl, badgeEl: badge, el, mdView };
+
+  if (savedParts && savedParts.length) renderOutputs(outputEl, savedParts);
+
+  runBtn.addEventListener('click',  () => runCell(cell));
+  upBtn.addEventListener('click',   () => moveCellUp(cell));
+  downBtn.addEventListener('click', () => moveCellDown(cell));
+  delBtn.addEventListener('click',  () => deleteCell(cell));
+  el.addEventListener('mousedown',  () => selectCell(cell, false));
+  mdView.addEventListener('dblclick', () => {
+    el.classList.remove('md-rendered');
+    cm.focus();
+  });
+
+  return cell;
+}
+
+function addCell(type, source, savedParts, noSelect) {
+  const cell = makeCell(type, source, savedParts);
+  const bar  = document.getElementById('add-bar');
+  document.getElementById('cells').insertBefore(cell.el, bar);
+  cells.push(cell);
+  if (!noSelect) selectCell(cell);
+  return cell;
+}
+
+function insertAfter(afterCell, type) {
+  const cell = makeCell(type, '', []);
+  const bar  = document.getElementById('add-bar');
+  const ref  = afterCell ? afterCell.el.nextSibling || bar : bar;
+  document.getElementById('cells').insertBefore(cell.el, ref);
+  const idx = afterCell ? cells.indexOf(afterCell) + 1 : cells.length;
+  cells.splice(idx, 0, cell);
+  selectCell(cell);
+  markDirty();
+  return cell;
+}
+
+function deleteCell(cell) {
+  if (cells.length <= 1) return;
+  const idx = cells.indexOf(cell);
+  cell.el.remove();
+  cells.splice(idx, 1);
+  selectCell(cells[Math.min(idx, cells.length - 1)], false);
+  markDirty();
+}
+
+function moveCellUp(cell) {
+  const i = cells.indexOf(cell);
+  if (i === 0) return;
+  const prev = cells[i - 1];
+  cell.el.parentNode.insertBefore(cell.el, prev.el);
+  cells.splice(i, 1); cells.splice(i - 1, 0, cell);
+  markDirty();
+}
+
+function moveCellDown(cell) {
+  const i = cells.indexOf(cell);
+  if (i === cells.length - 1) return;
+  const next = cells[i + 1];
+  cell.el.parentNode.insertBefore(next.el, cell.el);
+  cells.splice(i, 1); cells.splice(i + 1, 0, cell);
+  markDirty();
+}
+
+function selectCell(cell, focus) {
+  cells.forEach(c => c.el.classList.remove('selected'));
+  cell.el.classList.add('selected');
+  if (focus !== false && !cell.el.classList.contains('md-rendered')) {
+    setTimeout(() => cell.cm.focus(), 0);
+  }
+}
+
+// ── execution ─────────────────────────────────────────────────────────────────
+async function runCell(cell, stayInPlace) {
+  if (cell.type === 'markdown') {
+    const src = cell.cm.getValue();
+    cell.mdView.innerHTML = marked.parse(src);
+    cell.el.classList.add('md-rendered');
+    markDirty(); return;
+  }
+
+  const src = cell.cm.getValue().trim();
+  if (!src) return;
+
+  const runBtn = cell.el.querySelector('.act-btn.run');
+  runBtn.textContent = '⟳'; runBtn.style.animation = 'spin .8s linear infinite';
+  setKernel('busy', 'running…');
+
+  try {
+    const { stdout, error } = await execPython(src);
+    execCount++;
+    cell.execEl.textContent = '[' + execCount + ']';
+    renderOutputs(cell.outputEl, parseOutputs(stdout, error));
+    markDirty();
+  } catch (e) {
+    renderOutputs(cell.outputEl, [{ kind: 'error', text: String(e) }]);
+  } finally {
+    runBtn.textContent = '▶'; runBtn.style.animation = '';
+    setKernel('ready', 'Python 3 (Pyodide)');
+  }
+
+  if (!stayInPlace) {
+    const i = cells.indexOf(cell);
+    if (i < cells.length - 1) selectCell(cells[i + 1]);
+    else insertAfter(cell, 'code');
+  }
+}
+
+async function runAll() {
+  for (const c of [...cells]) await runCell(c, true);
+}
+
+function clearOutputs() {
+  cells.forEach(c => {
+    c.outputEl.innerHTML = ''; c.outputEl.classList.remove('has-output');
+    c.execEl.textContent = '';
+  });
+}
+
+async function restartKernel() {
+  pyodide = null; pyReady = false; pyLoading = false; execCount = 0;
+  clearOutputs(); setKernel('', 'restarting…');
+  await ensurePy();
+}
+
+// ── .ipynb serialization ──────────────────────────────────────────────────────
+function toLines(src) {
+  if (!src) return [];
+  const lines = src.split('\n');
+  return lines.map((l, i) => i < lines.length - 1 ? l + '\n' : l)
+              .filter((l, i, a) => !(i === a.length - 1 && l === ''));
+}
+function fromLines(lines) {
+  return Array.isArray(lines) ? lines.join('') : String(lines || '');
+}
+
+function cellOutputsToNb(cell) {
+  const el = cell.outputEl;
+  if (!el.classList.contains('has-output')) return [];
+  const out = [];
+  for (const ch of el.childNodes) {
+    if (ch.nodeName === 'IMG') {
+      const b64 = (ch.src || '').replace(/^data:image\/png;base64,/, '');
+      if (b64) out.push({ output_type: 'display_data', metadata: {},
+        data: { 'image/png': b64, 'text/plain': ['<Figure>'] } });
+    } else if (ch.className === 'out-error') {
+      out.push({ output_type: 'error', ename: 'Error', evalue: '',
+        traceback: [ch.textContent || ''] });
+    } else {
+      const t = ch.textContent || '';
+      if (t) out.push({ output_type: 'stream', name: 'stdout', text: toLines(t) });
+    }
+  }
+  return out;
+}
+
+function serializeNotebook() {
+  return JSON.stringify({
+    nbformat: 4, nbformat_minor: 5,
+    metadata: { kernelspec: {
+      display_name: 'Python 3 (Pyodide)', language: 'python', name: 'python3'
+    }},
+    cells: cells.map(c => {
+      const base = { id: c.id, cell_type: c.type, source: toLines(c.cm.getValue()), metadata: {} };
+      return c.type === 'code'
+        ? { ...base, outputs: cellOutputsToNb(c), execution_count: null }
+        : base;
+    }),
+  }, null, 2);
+}
+
+function nbOutputsToParts(outputs) {
+  const parts = [];
+  for (const o of (outputs || [])) {
+    if (o.output_type === 'stream') {
+      parts.push({ kind: 'text', text: fromLines(o.text) });
+    } else if (o.output_type === 'display_data' || o.output_type === 'execute_result') {
+      const png = o.data && o.data['image/png'];
+      if (png) parts.push({ kind: 'image', data: Array.isArray(png) ? png.join('') : png });
+    } else if (o.output_type === 'error') {
+      parts.push({ kind: 'error', text: (o.traceback || []).join('\n') });
+    }
+  }
+  return parts;
+}
+
+function loadNotebook(json) {
+  let nb;
+  try { nb = JSON.parse(json); } catch { alert('Invalid .ipynb file'); return; }
+  cells.forEach(c => c.el.remove());
+  cells = [];
+
+  const nbCells = nb.cells || [];
+  if (!nbCells.length) { addCell('code'); return; }
+
+  for (const nc of nbCells) {
+    const type = nc.cell_type === 'markdown' ? 'markdown' : 'code';
+    const src  = fromLines(nc.source);
+    const cell = addCell(type, src, type === 'code' ? nbOutputsToParts(nc.outputs) : [], true);
+    if (type === 'markdown' && src.trim()) {
+      cell.mdView.innerHTML = marked.parse(src);
+      cell.el.classList.add('md-rendered');
+    }
+  }
+  cells[0] && selectCell(cells[0], false);
+}
+
+// ── file I/O ──────────────────────────────────────────────────────────────────
+function markDirty() {
+  dirty = true; updateTitle();
+}
+function updateTitle() {
+  const name = currentFile ? currentFile.split('/').pop() : 'Untitled.ipynb';
+  bridge.setTitle((dirty ? '● ' : '') + name);
+}
+
+function saveFile(path) {
+  if (!bridge.writeFile(path, serializeNotebook())) { alert('Save failed'); return; }
+  currentFile = path; dirty = false; updateTitle();
+}
+
+// ── path dialog ───────────────────────────────────────────────────────────────
+let dlgCb = null;
+const dialog   = document.getElementById('dialog');
+const dlgTitle = document.getElementById('dlg-title');
+const dlgInput = document.getElementById('dlg-input');
+
+function showDialog(title, def, cb) {
+  dlgTitle.textContent = title; dlgInput.value = def || ''; dlgCb = cb;
+  dialog.classList.add('open');
+  setTimeout(() => { dlgInput.focus(); dlgInput.select(); }, 40);
+}
+document.getElementById('dlg-cancel').addEventListener('click', () => dialog.classList.remove('open'));
+document.getElementById('dlg-ok').addEventListener('click', () => {
+  const v = dlgInput.value.trim(); dialog.classList.remove('open');
+  if (v && dlgCb) dlgCb(v);
+});
+dlgInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter')  document.getElementById('dlg-ok').click();
+  if (e.key === 'Escape') document.getElementById('dlg-cancel').click();
+});
+dialog.addEventListener('click', e => { if (e.target === dialog) dialog.classList.remove('open'); });
+
+// ── toolbar wiring ────────────────────────────────────────────────────────────
+document.getElementById('btn-new').addEventListener('click', () => {
+  cells.forEach(c => c.el.remove()); cells = [];
+  currentFile = null; dirty = false; execCount = 0;
+  addCell('markdown', '# Untitled Notebook');
+  addCell('code', 'print("Hello!")');
+  dirty = false; updateTitle();
+  cells[0] && selectCell(cells[0], false);
+});
+
+document.getElementById('btn-open').addEventListener('click', () => {
+  showDialog('Open .ipynb file', currentFile || '/home/user1/', path => {
+    const content = bridge.readFile(path);
+    if (!content) { alert('File not found:\n' + path); return; }
+    loadNotebook(content);
+    currentFile = path; dirty = false; updateTitle();
+  });
+});
+
+document.getElementById('btn-save').addEventListener('click', () => {
+  if (currentFile) saveFile(currentFile);
+  else document.getElementById('btn-save-as').click();
+});
+
+document.getElementById('btn-save-as').addEventListener('click', () => {
+  showDialog('Save As', currentFile || '/home/user1/notebook.ipynb', path => {
+    if (!path.endsWith('.ipynb')) path += '.ipynb';
+    saveFile(path);
+  });
+});
+
+document.getElementById('btn-run-all').addEventListener('click', runAll);
+document.getElementById('btn-clear').addEventListener('click', clearOutputs);
+document.getElementById('btn-restart').addEventListener('click', restartKernel);
+document.getElementById('btn-add-code').addEventListener('click', () => {
+  const sel = cells.find(c => c.el.classList.contains('selected'));
+  insertAfter(sel || cells[cells.length - 1] || null, 'code');
+});
+document.getElementById('btn-add-md').addEventListener('click', () => {
+  const sel = cells.find(c => c.el.classList.contains('selected'));
+  insertAfter(sel || cells[cells.length - 1] || null, 'markdown');
+});
+
+// global Ctrl+S
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+    e.preventDefault(); document.getElementById('btn-save').click();
+  }
+});
+
+// spin keyframe for running button
+const spinStyle = document.createElement('style');
+spinStyle.textContent = '@keyframes spin{to{transform:rotate(360deg)}}';
+document.head.appendChild(spinStyle);
+
+// ── boot ──────────────────────────────────────────────────────────────────────
+function initApp(b) {
+  if (b) bridge = b;
+
+  // start kernel load in background
+  ensurePy().catch(() => {});
+
+  if (bridge.initialFile) {
+    const content = bridge.readFile(bridge.initialFile);
+    if (content) {
+      loadNotebook(content);
+      currentFile = bridge.initialFile;
+      dirty = false; updateTitle();
+    } else {
+      addCell('code', '# File not found: ' + bridge.initialFile);
+      updateTitle();
+    }
+  } else {
+    addCell('markdown', '# New Notebook\nWelcome! Write Python in code cells and run with **Shift+Enter**.\nDouble-click rendered markdown to edit it.', [], true);
+    addCell('code', 'print("Hello from the Notebook!")', [], false);
+    dirty = false; updateTitle();
+  }
+}
+
+// Called by main.js once the bridge is injected
+window.__nbInit = initApp;
+
+// Fallback: if opened standalone without a main.js bridge, start after a tick
+setTimeout(() => { if (!pyReady && cells.length === 0) initApp(null); }, 150);
+</script>
+</body>
+</html>
