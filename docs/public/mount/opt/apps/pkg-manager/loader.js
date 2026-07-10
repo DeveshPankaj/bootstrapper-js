@@ -24,6 +24,7 @@ const CORE_APPS = [
   { id: 'pkg-manager',    appDir: '/opt/apps/pkg-manager',    mainFile: '/opt/apps/pkg-manager/main.js' },
   { id: 'sqlite-charts',  appDir: '/opt/apps/sqlite-charts',  mainFile: '/opt/apps/sqlite-charts/main.js' },
   { id: 'app-launcher',   appDir: '/opt/apps/app-launcher',   mainFile: '/opt/apps/app-launcher/main.js' },
+  { id: 'python-demo',   appDir: '/opt/apps/python-demo',    mainFile: '/opt/apps/python-demo/main.js' },
 ];
 
 const loadApp = (appDir, mainFile) => {

@@ -705,5 +705,15 @@
     "path": "/home/user1/projects/diffusion-dataset/dataset.json",
     "file": "/home/user1/projects/diffusion-dataset/dataset.json",
     "force_reload": false
+  },
+  {
+    "path": "/opt/apps/python-demo/main.js",
+    "file": "/opt/apps/python-demo/main.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/python-demo/demo.html",
+    "file": "/opt/apps/python-demo/demo.html",
+    "force_reload": true
   }
 ]

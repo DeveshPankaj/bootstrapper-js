@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Python Demo</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: #0f0f14;
+      color: #e2e2e9;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Header ── */
+    #header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      background: #1a1a24;
+      border-bottom: 1px solid #2a2a3a;
+      flex-shrink: 0;
+    }
+    #header .logo {
+      font-size: 18px;
+      font-weight: 700;
+      color: #a78bfa;
+      letter-spacing: -0.5px;
+    }
+    #header .subtitle {
+      font-size: 12px;
+      color: #6b7280;
+    }
+    #header .status {
+      margin-left: auto;
+      font-size: 11px;
+      padding: 3px 9px;
+      border-radius: 20px;
+      font-weight: 500;
+    }
+    #header .status.loading { background: #1e293b; color: #94a3b8; }
+    #header .status.ready   { background: #14532d; color: #86efac; }
+    #header .status.running { background: #1e1b4b; color: #c4b5fd; }
+    #header .status.error   { background: #450a0a; color: #fca5a5; }
+
+    /* ── Two-column layout ── */
+    #main {
+      flex: 1;
+      display: flex;
+      min-height: 0;
+    }
+
+    /* ── Left: examples list ── */
+    #sidebar {
+      width: 180px;
+      background: #13131c;
+      border-right: 1px solid #2a2a3a;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      overflow-y: auto;
+    }
+    #sidebar h3 {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #6b7280;
+      padding: 12px 12px 6px;
+    }
+    .example-btn {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 9px 12px;
+      cursor: pointer;
+      border-left: 3px solid transparent;
+      transition: background 0.1s;
+    }
+    .example-btn:hover { background: #1e1e2e; }
+    .example-btn.active {
+      background: #1e1e2e;
+      border-left-color: #a78bfa;
+    }
+    .example-btn .ex-title {
+      font-size: 12.5px;
+      font-weight: 500;
+      color: #d1d5db;
+    }
+    .example-btn .ex-desc {
+      font-size: 10.5px;
+      color: #6b7280;
+      line-height: 1.3;
+    }
+
+    /* ── Right: editor + output ── */
+    #workspace {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    /* ── Code editor area ── */
+    #editor-wrap {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      border-bottom: 1px solid #2a2a3a;
+    }
+    #editor-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      background: #1a1a24;
+      border-bottom: 1px solid #2a2a3a;
+      flex-shrink: 0;
+    }
+    #editor-toolbar span {
+      font-size: 11px;
+      color: #6b7280;
+    }
+    #run-btn {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 14px;
+      background: #6d28d9;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.12s;
+    }
+    #run-btn:hover:not(:disabled) { background: #7c3aed; }
+    #run-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    #clear-btn {
+      padding: 5px 10px;
+      background: transparent;
+      color: #6b7280;
+      border: 1px solid #2a2a3a;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    #clear-btn:hover { color: #d1d5db; border-color: #4b5563; }
+    #code {
+      flex: 1;
+      width: 100%;
+      resize: none;
+      background: #0d0d14;
+      color: #e2e8f0;
+      border: none;
+      outline: none;
+      padding: 14px 16px;
+      font-family: 'JetBrains Mono', 'Fira Code', 'Menlo', 'Courier New', monospace;
+      font-size: 12.5px;
+      line-height: 1.7;
+      tab-size: 4;
+    }
+
+    /* ── Output panel ── */
+    #output-panel {
+      height: 200px;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+    #output-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 10px;
+      background: #1a1a24;
+      border-bottom: 1px solid #2a2a3a;
+      flex-shrink: 0;
+      font-size: 11px;
+      color: #6b7280;
+    }
+    #output-tabs {
+      display: flex;
+      gap: 4px;
+      margin-left: auto;
+    }
+    .out-tab {
+      padding: 3px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      cursor: pointer;
+      color: #6b7280;
+      border: 1px solid transparent;
+    }
+    .out-tab.active {
+      background: #2a2a3a;
+      color: #d1d5db;
+      border-color: #3a3a4a;
+    }
+    #output-body {
+      flex: 1;
+      display: flex;
+      min-height: 0;
+    }
+    /* Live preview pane */
+    #preview {
+      flex: 1;
+      padding: 16px;
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      background: #16161f;
+    }
+    #preview.hidden { display: none; }
+    /* Console pane */
+    #console {
+      flex: 1;
+      padding: 10px 14px;
+      overflow-y: auto;
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+      font-size: 11.5px;
+      line-height: 1.7;
+      background: #0d0d14;
+    }
+    #console.hidden { display: none; }
+    .log-line { white-space: pre-wrap; word-break: break-all; }
+    .log-line.stdout  { color: #d1fae5; }
+    .log-line.stderr  { color: #fca5a5; }
+    .log-line.info    { color: #6b7280; font-style: italic; }
+    .log-line.success { color: #86efac; }
+
+    /* ── Loading overlay ── */
+    #loading-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(10,10,20,0.88);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      z-index: 100;
+      backdrop-filter: blur(4px);
+    }
+    #loading-overlay.hidden { display: none; }
+    .spinner {
+      width: 28px; height: 28px;
+      border: 3px solid #2a2a3a;
+      border-top-color: #a78bfa;
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #loading-overlay p { font-size: 13px; color: #9ca3af; }
+    #loading-overlay small { font-size: 11px; color: #4b5563; }
+  </style>
+</head>
+<body>
+
+  <div id="header">
+    <span class="logo">py</span>
+    <div>
+      <div style="font-size:13px;font-weight:600;color:#e2e2e9;">Python Demo</div>
+      <div class="subtitle">Pyodide · DOM manipulation from Python</div>
+    </div>
+    <span id="status" class="status loading">Loading Pyodide…</span>
+  </div>
+
+  <div id="main">
+    <!-- Example picker -->
+    <div id="sidebar">
+      <h3>Examples</h3>
+      <!-- filled by JS -->
+    </div>
+
+    <div id="workspace">
+      <div id="editor-wrap">
+        <div id="editor-toolbar">
+          <span>editor.py</span>
+          <button id="clear-btn">Clear output</button>
+          <button id="run-btn" disabled>▶ Run</button>
+        </div>
+        <textarea id="code" spellcheck="false"></textarea>
+      </div>
+
+      <div id="output-panel">
+        <div id="output-toolbar">
+          Output
+          <div id="output-tabs">
+            <div class="out-tab active" data-tab="preview">Preview</div>
+            <div class="out-tab" data-tab="console">Console</div>
+          </div>
+        </div>
+        <div id="output-body">
+          <div id="preview"></div>
+          <div id="console" class="hidden"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading overlay -->
+  <div id="loading-overlay">
+    <div class="spinner"></div>
+    <p>Loading Pyodide runtime…</p>
+    <small>First load may take ~5 seconds</small>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
+  <script>
+    // ── Examples ────────────────────────────────────────────────────────────
+    const EXAMPLES = [
+      {
+        id: 'button',
+        title: '1. Create a button',
+        desc: 'Render a DOM button from Python',
+        code: `# Python can create HTML elements using the js module.
+# Pyodide bridges Python ↔ JavaScript seamlessly.
+
+from js import document
+
+# 1. Create the element
+btn = document.createElement('button')
+btn.textContent = 'Hello from Python! 👋'
+
+# 2. Add it to the preview area
+output = document.getElementById('preview')
+output.appendChild(btn)
+
+print('Button created and added to the DOM.')
+`,
+      },
+      {
+        id: 'css',
+        title: '2. Attach CSS',
+        desc: 'Style elements with Python',
+        code: `# Apply styles via element.style (inline) or a <style> tag.
+
+from js import document
+
+# ── Inline styles ──────────────────────────────────────
+btn = document.createElement('button')
+btn.textContent = 'Styled with Python 🎨'
+
+btn.style.backgroundColor = '#6d28d9'
+btn.style.color           = '#ffffff'
+btn.style.padding         = '10px 22px'
+btn.style.border          = 'none'
+btn.style.borderRadius    = '8px'
+btn.style.fontSize        = '14px'
+btn.style.fontWeight      = '600'
+btn.style.cursor          = 'pointer'
+btn.style.letterSpacing   = '0.02em'
+
+# ── Inject a <style> tag (class-based CSS) ─────────────
+style = document.createElement('style')
+style.textContent = """
+  .py-card {
+    background: #1e1b4b;
+    border: 1px solid #4c1d95;
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin-top: 10px;
+    font-size: 13px;
+    color: #c4b5fd;
+    max-width: 320px;
+  }
+"""
+document.head.appendChild(style)
+
+card = document.createElement('div')
+card.className = 'py-card'
+card.textContent = 'This card is styled via a <style> tag injected from Python.'
+
+output = document.getElementById('preview')
+output.appendChild(btn)
+output.appendChild(card)
+
+print('Styles applied — inline + <style> tag both work!')
+`,
+      },
+      {
+        id: 'click',
+        title: '3. Click listener',
+        desc: 'Handle button clicks in Python',
+        code: `# Use pyodide.ffi.create_proxy to wrap Python functions
+# as JavaScript callbacks.
+
+from js import document
+from pyodide.ffi import create_proxy
+
+output = document.getElementById('preview')
+
+# ── State ──────────────────────────────────────────────
+count = [0]   # list so the closure can mutate it
+
+# ── Create counter display ─────────────────────────────
+display = document.createElement('div')
+display.textContent = 'Clicks: 0'
+display.style.cssText = '''
+  font-size: 28px; font-weight: 700; color: #a78bfa;
+  margin-bottom: 10px; font-variant-numeric: tabular-nums;
+'''
+
+# ── Create button ──────────────────────────────────────
+btn = document.createElement('button')
+btn.textContent = 'Click me!'
+btn.style.cssText = '''
+  background: #7c3aed; color: #fff; border: none;
+  padding: 10px 24px; border-radius: 8px;
+  font-size: 14px; font-weight: 600; cursor: pointer;
+  transition: background 0.15s;
+'''
+
+# ── Python click handler ───────────────────────────────
+def on_click(event):
+    count[0] += 1
+    display.textContent = f'Clicks: {count[0]}'
+    btn.style.backgroundColor = f'hsl({(count[0] * 37) % 360}, 70%, 50%)'
+
+proxy = create_proxy(on_click)
+btn.addEventListener('click', proxy)
+
+output.appendChild(display)
+output.appendChild(btn)
+
+print('Click listener attached. Try clicking the button!')
+`,
+      },
+      {
+        id: 'full',
+        title: '4. Full example',
+        desc: 'Window · CSS · listeners combined',
+        code: `# Full demo: a mini interactive widget built entirely in Python.
+# Shows window creation, CSS injection, and event handling.
+
+from js import document, window
+from pyodide.ffi import create_proxy
+
+output = document.getElementById('preview')
+
+# ── Inject component styles ────────────────────────────
+style = document.createElement('style')
+style.textContent = """
+  .py-todo-wrap  { font-family: system-ui, sans-serif; max-width: 340px; }
+  .py-todo-title { font-size: 15px; font-weight: 700; color: #e2e8f0;
+                   margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+  .py-todo-row   { display: flex; gap: 6px; margin-bottom: 10px; }
+  .py-todo-input {
+    flex: 1; background: #1e1e2e; border: 1px solid #3a3a4a;
+    border-radius: 6px; padding: 7px 10px; color: #e2e8f0;
+    font-size: 12.5px; outline: none;
+  }
+  .py-todo-add   {
+    background: #6d28d9; color: #fff; border: none; border-radius: 6px;
+    padding: 7px 12px; font-size: 12px; font-weight: 600; cursor: pointer;
+  }
+  .py-todo-add:hover { background: #7c3aed; }
+  .py-todo-list  { list-style: none; display: flex; flex-direction: column; gap: 5px; }
+  .py-todo-item  {
+    display: flex; align-items: center; gap: 8px;
+    background: #1a1a24; border-radius: 7px; padding: 7px 10px;
+    font-size: 12.5px; color: #d1d5db; cursor: pointer;
+    transition: background 0.1s;
+  }
+  .py-todo-item:hover { background: #222236; }
+  .py-todo-item.done  { text-decoration: line-through; color: #4b5563; }
+  .py-todo-item .dot  { width: 10px; height: 10px; border-radius: 50%;
+                         border: 2px solid #6d28d9; flex-shrink: 0; }
+  .py-todo-item.done .dot { background: #6d28d9; }
+  .py-todo-empty { font-size: 12px; color: #4b5563; padding: 6px 0; }
+"""
+document.head.appendChild(style)
+
+# ── Build the widget ───────────────────────────────────
+wrap = document.createElement('div')
+wrap.className = 'py-todo-wrap'
+
+title = document.createElement('div')
+title.className = 'py-todo-title'
+title.innerHTML = '✅ Python Todo'
+wrap.appendChild(title)
+
+row = document.createElement('div')
+row.className = 'py-todo-row'
+
+inp = document.createElement('input')
+inp.className  = 'py-todo-input'
+inp.placeholder = 'Add a task…'
+row.appendChild(inp)
+
+add_btn = document.createElement('button')
+add_btn.className = 'py-todo-add'
+add_btn.textContent = 'Add'
+row.appendChild(add_btn)
+wrap.appendChild(row)
+
+ul = document.createElement('ul')
+ul.className = 'py-todo-list'
+wrap.appendChild(ul)
+
+output.appendChild(wrap)
+
+# ── Python logic ───────────────────────────────────────
+items = []
+
+def render():
+    ul.innerHTML = ''
+    if not items:
+        li = document.createElement('li')
+        li.className = 'py-todo-empty'
+        li.textContent = 'No tasks yet.'
+        ul.appendChild(li)
+        return
+    for i, (text, done) in enumerate(items):
+        li     = document.createElement('li')
+        li.className = f'py-todo-item{"  done" if done else ""}'
+        dot    = document.createElement('span')
+        dot.className = 'dot'
+        label  = document.createElement('span')
+        label.textContent = text
+        li.appendChild(dot)
+        li.appendChild(label)
+
+        def make_toggle(idx):
+            def toggle(e):
+                items[idx] = (items[idx][0], not items[idx][1])
+                render()
+            return create_proxy(toggle)
+
+        li.addEventListener('click', make_toggle(i))
+        ul.appendChild(li)
+
+def add_item(e=None):
+    text = inp.value.strip() if hasattr(inp.value, 'strip') else str(inp.value).strip()
+    if not text:
+        return
+    items.append((text, False))
+    inp.value = ''
+    render()
+
+add_btn.addEventListener('click', create_proxy(add_item))
+inp.addEventListener('keydown', create_proxy(lambda e: add_item() if e.key == 'Enter' else None))
+
+# ── Seed with sample tasks ─────────────────────────────
+for task in ['Open a window', 'Render a button', 'Attach CSS', 'Add click listener']:
+    items.append((task, False))
+render()
+
+print('Todo widget ready — click items to toggle, add your own tasks.')
+`,
+      },
+      {
+        id: 'window',
+        title: '5. Open a window',
+        desc: 'Spawn a detached OS window from Python',
+        code: `# How Python opens a detached window in this web OS:
+#
+#   1. Wrap the render function with create_proxy() so JS can call it back.
+#   2. Convert meta dict with to_js() — plain Python dicts become *borrowed*
+#      Pyodide proxies when passed to JS, meaning they are destroyed after
+#      the call returns. A stored borrowed proxy crashes on first read.
+#      to_js(..., dict_converter=Object.fromEntries) produces a real JS object.
+#   3. Call bridge.registerCommand() — stores fn+meta in platform.host.commands.
+#   4. Call bridge.openWindow() — the window manager creates an iframe; on load
+#      it calls command.exec(body, props), firing the Python render function.
+#
+# bridge = window.__pyBridge, injected by main.js (which has platform access).
+
+from js import window, document, Object
+from pyodide.ffi import create_proxy, to_js
+
+bridge = window.__pyBridge
+
+# ── 1. Define the render function for the new window ───
+_OPEN_COUNT = [0]
+
+def render_my_window(body, props, *_args):
+    # body  = HTMLBodyElement of the new window's iframe (borrowed proxy — use
+    #         it only within this synchronous call, not in async callbacks)
+    # props = {setTitle, setWindowView, onDestroy, close, ...} (also borrowed)
+    _OPEN_COUNT[0] += 1
+    n = _OPEN_COUNT[0]
+
+    doc = body.ownerDocument  # new window's document
+
+    props.setTitle(f'Python Window #{n}')
+    props.setWindowView(True)  # required — window starts hidden, this makes it visible
+
+    # Inject a <style> tag into the new window's <head>
+    style = doc.createElement('style')
+    style.textContent = """
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { font-family: system-ui, sans-serif; background: #0f0f14;
+             color: #e2e8f0; padding: 24px; }
+      h2   { font-size: 16px; font-weight: 700; color: #a78bfa;
+             margin-bottom: 16px; }
+      p    { font-size: 13px; color: #9ca3af; line-height: 1.6;
+             margin-bottom: 16px; }
+      .counter { font-size: 48px; font-weight: 800; color: #6d28d9;
+                 text-align: center; padding: 20px 0; }
+      .btn-row { display: flex; gap: 10px; }
+      .btn { padding: 9px 20px; border: none; border-radius: 8px;
+             font-size: 13px; font-weight: 600; cursor: pointer; color: #fff; }
+      .btn-inc { background: #6d28d9; } .btn-inc:hover { background: #7c3aed; }
+      .btn-dec { background: #374151; } .btn-dec:hover { background: #4b5563; }
+    """
+    doc.head.appendChild(style)
+
+    h2 = doc.createElement('h2')
+    h2.textContent = f'Python Window #{n}'
+    body.appendChild(h2)
+
+    p = doc.createElement('p')
+    p.textContent = 'Registered and opened from Python. CSS, DOM, and click listeners all wired via Pyodide.'
+    body.appendChild(p)
+
+    # Mutable state shared across click handlers via a list (closure workaround)
+    count = [0]
+    counter = doc.createElement('div')
+    counter.className = 'counter'
+    counter.textContent = '0'
+    body.appendChild(counter)
+
+    row = doc.createElement('div')
+    row.className = 'btn-row'
+
+    inc = doc.createElement('button')
+    inc.className = 'btn btn-inc'
+    inc.textContent = '+ Increment'
+
+    dec = doc.createElement('button')
+    dec.className = 'btn btn-dec'
+    dec.textContent = '− Decrement'
+
+    # create_proxy() is required for any Python function stored by JS
+    # (event listeners, setTimeout callbacks, etc.). Without it, Pyodide
+    # creates a borrowed proxy that is destroyed when the call returns.
+    def on_inc(e):
+        count[0] += 1
+        counter.textContent = str(count[0])
+
+    def on_dec(e):
+        count[0] -= 1
+        counter.textContent = str(count[0])
+
+    inc.addEventListener('click', create_proxy(on_inc))
+    dec.addEventListener('click', create_proxy(on_dec))
+    row.appendChild(inc)
+    row.appendChild(dec)
+    body.appendChild(row)
+
+# ── 2. Register the render function as a platform command ──
+# create_proxy() makes a persistent JS-callable Pyodide proxy.
+# to_js() converts the Python dict to a real JS object — passing a raw dict
+# produces a borrowed proxy (destroyed after the call) which crashes later.
+_render_proxy = create_proxy(render_my_window)
+_meta = to_js(
+    {'title': 'My Python Window', 'icon': 'code', 'callable': True},
+    dict_converter=Object.fromEntries,
+)
+bridge.registerCommand('ui.py-demo-window', _render_proxy, _meta)
+
+# ── 3. Show a launch button in the preview panel ───────
+output = document.getElementById('preview')
+
+info = document.createElement('p')
+info.style.cssText = 'font-size:12.5px;color:#6b7280;margin-bottom:12px;line-height:1.6;'
+info.textContent = ('Command ui.py-demo-window registered. '
+                    'Each click opens a new independent window.')
+output.appendChild(info)
+
+open_btn = document.createElement('button')
+open_btn.textContent = '⊞  Open Python Window'
+open_btn.style.cssText = '''
+    background: #6d28d9; color: #fff; border: none;
+    padding: 10px 22px; border-radius: 8px; font-size: 14px;
+    font-weight: 600; cursor: pointer; margin-bottom: 10px; display: block;
+'''
+
+def on_open(e):
+    bridge.openWindow('ui.py-demo-window')
+
+open_btn.addEventListener('click', create_proxy(on_open))
+output.appendChild(open_btn)
+
+note = document.createElement('p')
+note.style.cssText = 'font-size:11.5px;color:#4b5563;'
+note.textContent = 'You can also call it from Spotlight or App Launcher — search "My Python Window".'
+output.appendChild(note)
+
+print('Ready. Click the button above — each click opens a fresh window.')
+print('The render function receives (body, props) from the window manager.')
+`,
+      },
+    ]
+
+    // ── DOM refs ──────────────────────────────────────────────────────────────
+    const statusEl   = document.getElementById('status')
+    const runBtn     = document.getElementById('run-btn')
+    const clearBtn   = document.getElementById('clear-btn')
+    const codeEl     = document.getElementById('code')
+    const previewEl  = document.getElementById('preview')
+    const consoleEl  = document.getElementById('console')
+    const sidebar    = document.getElementById('sidebar')
+    const overlay    = document.getElementById('loading-overlay')
+    const tabs       = document.querySelectorAll('.out-tab')
+
+    // ── Tab switching ─────────────────────────────────────────────────────────
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        tabs.forEach(t => t.classList.remove('active'))
+        tab.classList.add('active')
+        const which = tab.dataset.tab
+        previewEl.classList.toggle('hidden', which !== 'preview')
+        consoleEl.classList.toggle('hidden', which !== 'console')
+      })
+    })
+
+    // ── Console logging ───────────────────────────────────────────────────────
+    const log = (text, cls = 'stdout') => {
+      const lines = String(text).split('\n')
+      lines.forEach((line, i) => {
+        if (i === lines.length - 1 && line === '') return
+        const d = document.createElement('div')
+        d.className = `log-line ${cls}`
+        d.textContent = line
+        consoleEl.appendChild(d)
+      })
+      consoleEl.scrollTop = consoleEl.scrollHeight
+    }
+
+    // ── Build sidebar ─────────────────────────────────────────────────────────
+    const loadExample = (ex, scrollIntoView) => {
+      codeEl.value = ex.code
+      previewEl.innerHTML = ''
+      consoleEl.innerHTML = ''
+      document.querySelectorAll('.example-btn').forEach(b => b.classList.toggle('active', b.dataset.id === ex.id))
+      if (scrollIntoView) codeEl.scrollTop = 0
+    }
+
+    EXAMPLES.forEach(ex => {
+      const btn = document.createElement('div')
+      btn.className = 'example-btn'
+      btn.dataset.id = ex.id
+      btn.innerHTML = `<span class="ex-title">${ex.title}</span><span class="ex-desc">${ex.desc}</span>`
+      btn.addEventListener('click', () => loadExample(ex, true))
+      sidebar.appendChild(btn)
+    })
+    loadExample(EXAMPLES[0])
+
+    // ── Pyodide setup ─────────────────────────────────────────────────────────
+    let pyodide = null
+
+    const setStatus = (text, cls) => {
+      statusEl.textContent = text
+      statusEl.className = `status ${cls}`
+    }
+
+    async function initPyodide() {
+      try {
+        pyodide = await loadPyodide({
+          indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/',
+        })
+        pyodide.setStdout({ batched: t => log(t, 'stdout') })
+        pyodide.setStderr({ batched: t => log(t, 'stderr') })
+
+        overlay.classList.add('hidden')
+        runBtn.disabled = false
+        setStatus('Pyodide ready', 'ready')
+        log('Pyodide loaded. Click ▶ Run to execute the selected example.', 'info')
+      } catch (e) {
+        setStatus('Load failed', 'error')
+        overlay.classList.add('hidden')
+        log('Failed to load Pyodide: ' + (e.message || e), 'stderr')
+      }
+    }
+
+    // ── Run code ──────────────────────────────────────────────────────────────
+    async function runCode() {
+      if (!pyodide || runBtn.disabled) return
+      runBtn.disabled = true
+      setStatus('Running…', 'running')
+      previewEl.innerHTML = ''
+      consoleEl.innerHTML = ''
+
+      // Switch to preview tab automatically
+      tabs.forEach(t => t.classList.remove('active'))
+      document.querySelector('[data-tab="preview"]').classList.add('active')
+      previewEl.classList.remove('hidden')
+      consoleEl.classList.add('hidden')
+
+      const code = codeEl.value
+      try {
+        await pyodide.runPythonAsync(code)
+        setStatus('Done', 'ready')
+      } catch (e) {
+        log(e.message || String(e), 'stderr')
+        setStatus('Error', 'error')
+        // Switch to console to show the error
+        tabs.forEach(t => t.classList.remove('active'))
+        document.querySelector('[data-tab="console"]').classList.add('active')
+        previewEl.classList.add('hidden')
+        consoleEl.classList.remove('hidden')
+      }
+      runBtn.disabled = false
+    }
+
+    runBtn.addEventListener('click', runCode)
+    clearBtn.addEventListener('click', () => {
+      previewEl.innerHTML = ''
+      consoleEl.innerHTML = ''
+    })
+    codeEl.addEventListener('keydown', e => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault()
+        runCode()
+      }
+      // Tab key inserts spaces
+      if (e.key === 'Tab') {
+        e.preventDefault()
+        const s = codeEl.selectionStart
+        codeEl.value = codeEl.value.slice(0, s) + '    ' + codeEl.value.slice(codeEl.selectionEnd)
+        codeEl.selectionStart = codeEl.selectionEnd = s + 4
+      }
+    })
+
+    initPyodide()
+  </script>
+</body>
+</html>

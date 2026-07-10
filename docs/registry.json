@@ -74,7 +74,7 @@
     {
       "id": "settings",
       "name": "Settings",
-      "description": "System settings and preferences — wallpaper, layout, window manager, widgets, keybindings, and storage.",
+      "description": "System settings and preferences \u2014 wallpaper, layout, window manager, widgets, keybindings, and storage.",
       "version": "1.0.0",
       "icon": "settings",
       "category": "System",
@@ -647,12 +647,17 @@
     {
       "id": "speed-test",
       "name": "Speed Test",
-      "description": "Network speed test — measure download and upload throughput directly in the browser.",
+      "description": "Network speed test \u2014 measure download and upload throughput directly in the browser.",
       "version": "1.0.0",
       "icon": "speed",
       "category": "Tools",
       "author": "bootstrapper-js",
-      "files": [{ "dest": "main.html", "src": "/public/mount/opt/apps/speed-test/main.html" }],
+      "files": [
+        {
+          "dest": "main.html",
+          "src": "/public/mount/opt/apps/speed-test/main.html"
+        }
+      ],
       "main": "main.html"
     },
     {
@@ -668,6 +673,27 @@
         {
           "dest": "main.js",
           "src": "/public/mount/opt/apps/sqlite-charts/main.js"
+        }
+      ],
+      "main": "main.js"
+    },
+    {
+      "id": "python-demo",
+      "name": "Python Demo",
+      "description": "Interactive Python (Pyodide) playground: open windows, render buttons, attach CSS and click listeners \u2014 all from Python.",
+      "version": "1.0.0",
+      "icon": "code",
+      "category": "Development",
+      "author": "bootstrapper-js",
+      "commandName": "ui.python-demo",
+      "files": [
+        {
+          "dest": "main.js",
+          "src": "/public/mount/opt/apps/python-demo/main.js"
+        },
+        {
+          "dest": "demo.html",
+          "src": "/public/mount/opt/apps/python-demo/demo.html"
         }
       ],
       "main": "main.js"
