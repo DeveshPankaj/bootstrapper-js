@@ -247,9 +247,10 @@ async function ensurePy() {
       document.head.appendChild(s);
     });
     pyodide = await loadPyodide({ indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/' });
-    // boot: capture helper + matplotlib patch
+    // boot: capture helper + async exec (supports top-level await for micropip, etc.)
     await pyodide.runPythonAsync(`
 import sys, io as _io, traceback as _tb
+from pyodide.code import eval_code_async as _eval_async
 
 class _Cap:
     def __init__(self): self.v = []
@@ -260,34 +261,55 @@ class _Cap:
 
 __nb_cap = _Cap()
 
-def __nb_exec(code):
+def _patch_mpl():
+    if 'matplotlib.pyplot' not in sys.modules: return
+    _plt = sys.modules['matplotlib.pyplot']
+    if getattr(_plt, '_nb_patched', False): return
+    try:
+        import io as _io2, base64 as _b64
+        def _nb_show(*a, **k):
+            figs = [_plt.figure(i) for i in _plt.get_fignums()]
+            for fig in figs:
+                _buf = _io2.BytesIO()
+                fig.savefig(_buf, format='png', bbox_inches='tight', dpi=100)
+                _buf.seek(0)
+                __nb_cap.v.append('<nb-img>' + _b64.b64encode(_buf.read()).decode() + '</nb-img>')
+            _plt.close('all')
+        _plt.show = _nb_show
+        _plt._nb_patched = True
+    except Exception:
+        pass
+
+async def __nb_exec(code):
     __nb_cap.clear()
     _so, _se = sys.stdout, sys.stderr
     sys.stdout = sys.stderr = __nb_cap
     err = None
+    _patch_mpl()   # patch if matplotlib was imported in a previous cell
     try:
-        exec(compile(code, '<cell>', 'exec'), globals())
+        await _eval_async(code, globals=globals())
     except BaseException:
         err = _tb.format_exc()
     finally:
         sys.stdout = _so
         sys.stderr = _se
+    # post-patch (matplotlib may have just been imported) + auto-render open figures
+    _patch_mpl()
+    try:
+        if 'matplotlib.pyplot' in sys.modules:
+            import io as _io2, base64 as _b64
+            _plt2 = sys.modules['matplotlib.pyplot']
+            figs = [_plt2.figure(i) for i in _plt2.get_fignums()]
+            if figs:
+                for fig in figs:
+                    _buf = _io2.BytesIO()
+                    fig.savefig(_buf, format='png', bbox_inches='tight', dpi=100)
+                    _buf.seek(0)
+                    __nb_cap.v.append('<nb-img>' + _b64.b64encode(_buf.read()).decode() + '</nb-img>')
+                _plt2.close('all')
+    except Exception:
+        pass
     return (__nb_cap.getvalue(), err)
-
-try:
-    import matplotlib as _mpl
-    _mpl.use('Agg')
-    import matplotlib.pyplot as _plt
-    import base64 as _b64
-    def _nb_show(*a, **k):
-        _buf = _io.BytesIO()
-        _plt.savefig(_buf, format='png', bbox_inches='tight', dpi=100)
-        _buf.seek(0)
-        print('<nb-img>' + _b64.b64encode(_buf.read()).decode() + '</nb-img>')
-        _plt.close('all')
-    _plt.show = _nb_show
-except Exception:
-    pass
 `);
     pyReady = true; setKernel('ready', 'Python 3 (Pyodide)');
   } catch (e) {
@@ -299,7 +321,7 @@ except Exception:
 async function execPython(source) {
   await ensurePy();
   pyodide.globals.set('__nb_code', source);
-  const pair = await pyodide.runPythonAsync('__nb_exec(__nb_code)');
+  const pair = await pyodide.runPythonAsync('await __nb_exec(__nb_code)');
   const [stdout, err] = pair.toJs();
   return { stdout: stdout || '', error: err };
 }
