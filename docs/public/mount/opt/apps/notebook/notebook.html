@@ -774,7 +774,77 @@ plt.ylabel('y')
 plt.legend()
 plt.grid(True, alpha=0.3)
 plt.tight_layout()
-plt.show()   # optional — open figures auto-render after each cell`, [], false);
+plt.show()   # optional — open figures auto-render after each cell`, [], true);
+
+    addCell('markdown', '## Images', [], true);
+
+    addCell('code', `# 3. Image from URL — fetch with the browser's JS fetch API
+from js import fetch
+import base64
+
+url = 'https://picsum.photos/seed/notebook/600/280'
+response = await fetch(url)
+buffer   = await response.arrayBuffer()
+b64      = base64.b64encode(bytes(buffer.to_py())).decode()
+
+# <nb-img> tags in stdout are rendered as inline images
+print(f'<nb-img>{b64}</nb-img>')
+print(f'Fetched from {url}')`, [], true);
+
+    addCell('code', `# 4. Image from VFS — download, save to VFS, then load back
+from js import fetch, window
+import base64
+
+bridge   = window.__nbBridge
+VFS_PATH = '/home/user1/sample-image.b64'
+
+# Download and save (base64-encoded) to VFS
+url      = 'https://picsum.photos/seed/vfs/600/280'
+response = await fetch(url)
+buffer   = await response.arrayBuffer()
+b64      = base64.b64encode(bytes(buffer.to_py())).decode()
+bridge.writeFile(VFS_PATH, b64)
+print(f'Saved {len(b64)//1024} KB to {VFS_PATH}')
+
+# Load back from VFS and display
+stored = str(bridge.readFile(VFS_PATH))
+print(f'<nb-img>{stored}</nb-img>')
+print(f'Loaded and displayed from VFS')`, [], true);
+
+    addCell('markdown', '## Pandas / CSV', [], true);
+
+    addCell('code', `# 5. Load and save CSV in VFS using pandas
+import micropip
+await micropip.install('pandas')
+
+import pandas as pd
+import io
+from js import window
+
+bridge   = window.__nbBridge
+CSV_PATH = '/home/user1/cities.csv'
+
+# Create a sample DataFrame
+df = pd.DataFrame({
+    'city':         ['New York', 'London', 'Tokyo', 'Paris',  'Sydney'],
+    'temp_c':       [22,         18,       29,      20,       17],
+    'humidity_pct': [65,         72,       80,      68,       60],
+    'rainy_days':   [121,        164,      107,     111,      140],
+})
+
+# Save to VFS
+bridge.writeFile(CSV_PATH, df.to_csv(index=False))
+print(f'Saved {len(df)} rows to {CSV_PATH}\\n')
+
+# Load back from VFS
+raw = str(bridge.readFile(CSV_PATH))
+df2 = pd.read_csv(io.StringIO(raw))
+
+print('Loaded from VFS:')
+print(df2.to_string(index=False))
+print()
+print('Statistics:')
+print(df2.describe().round(1).to_string())`, [], false);
 
     dirty = false; updateTitle();
   }
