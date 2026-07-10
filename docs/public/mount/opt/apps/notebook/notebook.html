@@ -247,6 +247,7 @@ async function ensurePy() {
       document.head.appendChild(s);
     });
     pyodide = await loadPyodide({ indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/' });
+    await pyodide.loadPackage('micropip');   // needed before `import micropip` in cells
     // boot: capture helper + async exec (supports top-level await for micropip, etc.)
     await pyodide.runPythonAsync(`
 import sys, io as _io, traceback as _tb
