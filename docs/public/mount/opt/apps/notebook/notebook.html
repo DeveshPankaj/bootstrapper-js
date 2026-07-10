@@ -744,8 +744,38 @@ function initApp(b) {
       updateTitle();
     }
   } else {
-    addCell('markdown', '# New Notebook\nWelcome! Write Python in code cells and run with **Shift+Enter**.\nDouble-click rendered markdown to edit it.', [], true);
-    addCell('code', 'print("Hello from the Notebook!")', [], false);
+    addCell('markdown', `# New Notebook
+
+Run a cell with **Shift+Enter** (moves to next) or **Ctrl+Enter** (stays).
+Double-click rendered markdown to edit it. Save with **Ctrl+S**.`, [], true);
+
+    addCell('code', `# 1. Basic Python
+print("Hello from the Notebook!")
+
+nums = [1, 2, 3, 4, 5]
+print("Sum:", sum(nums))
+print("Squares:", [x**2 for x in nums])`, [], true);
+
+    addCell('markdown', '## Matplotlib', [], true);
+
+    addCell('code', `# 2. Matplotlib — install once per session, then import freely
+import micropip
+await micropip.install('matplotlib')   # top-level await works in any cell
+
+import matplotlib.pyplot as plt
+
+x = [0, 1, 2, 3, 4]
+y = [0, 1, 4, 9, 16]
+plt.figure(figsize=(6, 3))
+plt.plot(x, y, 'b-o', linewidth=2, label='y = x²')
+plt.title('matplotlib in Notebook')
+plt.xlabel('x')
+plt.ylabel('y')
+plt.legend()
+plt.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.show()   # optional — open figures auto-render after each cell`, [], false);
+
     dirty = false; updateTitle();
   }
 }
