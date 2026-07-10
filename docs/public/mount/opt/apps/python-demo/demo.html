@@ -4,9 +4,8 @@
   <meta charset="UTF-8">
   <title>Python Demo</title>
 
-  <!-- CodeMirror 5 — simple CDN, Python mode + one-dark theme + line numbers -->
+  <!-- CodeMirror 5 — Python mode + line numbers -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/one-dark.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
 
@@ -17,6 +16,38 @@
       background: #0f0f14; color: #e2e2e9;
       height: 100vh; display: flex; flex-direction: column; overflow: hidden;
     }
+
+    /* ── Inline CodeMirror theme "py-dark" ──────────────────────────────────
+       CM themes are just CSS classes: .cm-s-{name}. Inlining avoids CDN
+       availability issues (one-dark is not on cdnjs). Token classes come from
+       CodeMirror's Python mode — keywords, strings, comments, etc.          */
+    .cm-s-py-dark.CodeMirror {
+      background: #0d0d14; color: #e2e8f0;
+      font-family: 'JetBrains Mono', 'Fira Code', 'Menlo', monospace;
+    }
+    .cm-s-py-dark .CodeMirror-gutters {
+      background: #0d0d14; border-right: 1px solid #1e1e2e; color: #4b5563;
+    }
+    .cm-s-py-dark .CodeMirror-linenumber { color: #4b5563; }
+    .cm-s-py-dark .CodeMirror-cursor { border-left: 2px solid #a78bfa; }
+    .cm-s-py-dark .CodeMirror-selected,
+    .cm-s-py-dark .CodeMirror-focused .CodeMirror-selected { background: rgba(109,40,217,0.30); }
+    .cm-s-py-dark .CodeMirror-activeline-background { background: #1a1a24; }
+    .cm-s-py-dark .CodeMirror-matchingbracket { color: #a78bfa !important; outline: 1px solid #a78bfa; }
+    /* Python token colours */
+    .cm-s-py-dark .cm-keyword   { color: #c4b5fd; font-weight: 600; }  /* def if for import … */
+    .cm-s-py-dark .cm-builtin   { color: #86efac; }                     /* print len range …  */
+    .cm-s-py-dark .cm-string    { color: #fde68a; }                     /* "strings"          */
+    .cm-s-py-dark .cm-string-2  { color: #fde68a; }                     /* """triple"""       */
+    .cm-s-py-dark .cm-comment   { color: #6b7280; font-style: italic; } /* # comments         */
+    .cm-s-py-dark .cm-number    { color: #f9a8d4; }                     /* 42 3.14            */
+    .cm-s-py-dark .cm-def       { color: #93c5fd; }                     /* function / class name */
+    .cm-s-py-dark .cm-variable  { color: #e2e8f0; }                     /* identifiers        */
+    .cm-s-py-dark .cm-variable-2 { color: #e2e8f0; }
+    .cm-s-py-dark .cm-operator  { color: #a78bfa; }                     /* + - * / = …        */
+    .cm-s-py-dark .cm-punctuation { color: #9ca3af; }                   /* ( ) [ ] , :        */
+    .cm-s-py-dark .cm-atom      { color: #fb923c; }                     /* True False None    */
+    .cm-s-py-dark .cm-meta      { color: #94a3b8; }                     /* decorators @       */
 
     /* CodeMirror overrides — fill the container */
     .CodeMirror {
@@ -375,98 +406,84 @@ print('Todo widget ready — click to toggle, add your own tasks.')`,
       {
         id: 'window',
         title: '5. Open a window',
-        desc: 'Spawn a detached OS window from Python',
-        code: `# Opening a detached window from Python:
+        desc: 'Detached OS window with a live clock driven by Python asyncio',
+        code: `# Opening a detached window with a live clock — no JS setInterval.
+# The clock ticks via Python's asyncio: asyncio.sleep(1) yields control
+# back to the browser event loop for 1 second, then Python resumes and
+# updates the DOM. task.cancel() stops the loop cleanly on window close.
 #
 #   bridge = window.__pyBridge   (injected by main.js, which has platform access)
-#
-#   1. create_proxy(fn)  → persistent JS-callable Pyodide proxy
-#   2. to_js(dict, ...)  → real JS object (raw Python dicts become *borrowed*
-#      proxies, destroyed after the call, crashing command.meta reads later)
-#   3. bridge.registerCommand(name, proxy, meta)
-#      → stored in platform.host.commands
-#   4. bridge.openWindow(name)
-#      → window manager creates iframe; on load calls command.exec(body, props)
-#      → proxy fires — Python receives body + props and builds the UI
 
 from js import window, document, Object
 from pyodide.ffi import create_proxy, to_js
+import asyncio, datetime
 
 bridge = window.__pyBridge
 _N = [0]
 
 def render_my_window(body, props, *_):
-    # body / props are borrowed — use only within this synchronous call
     _N[0] += 1; n = _N[0]
     doc = body.ownerDocument
 
-    props.setTitle(f'Python Window #{n}')
+    props.setTitle(f'Python Clock #{n}')
     props.setWindowView(True)   # required — window starts hidden
 
     style = doc.createElement('style')
     style.textContent = """
       * { box-sizing:border-box; margin:0; padding:0; }
-      body { font-family:system-ui,sans-serif; background:#0f0f14;
-             color:#e2e8f0; padding:24px; }
-      h2   { font-size:16px; font-weight:700; color:#a78bfa; margin-bottom:16px; }
-      p    { font-size:13px; color:#9ca3af; line-height:1.6; margin-bottom:16px; }
-      .counter { font-size:48px; font-weight:800; color:#6d28d9;
-                 text-align:center; padding:20px 0; }
-      .btn-row { display:flex; gap:10px; }
-      .btn { padding:9px 20px; border:none; border-radius:8px;
-             font-size:13px; font-weight:600; cursor:pointer; color:#fff; }
-      .inc { background:#6d28d9; } .inc:hover { background:#7c3aed; }
-      .dec { background:#374151; } .dec:hover { background:#4b5563; }
+      body { font-family:system-ui,sans-serif; background:#0f0f14; color:#e2e8f0;
+             display:flex; flex-direction:column; align-items:center;
+             justify-content:center; height:100%; gap:4px; }
+      .cl-day  { font-size:12px; font-weight:600; text-transform:uppercase;
+                 letter-spacing:.1em; color:#4b5563; }
+      .cl-date { font-size:14px; color:#6b7280; }
+      .cl-time { font-size:64px; font-weight:800; color:#a78bfa;
+                 font-variant-numeric:tabular-nums; letter-spacing:-3px; margin-top:4px; }
     """
     doc.head.appendChild(style)
 
-    h2 = doc.createElement('h2')
-    h2.textContent = f'Python Window #{n}'
-    body.appendChild(h2)
+    day_el  = doc.createElement('div'); day_el.className  = 'cl-day'
+    date_el = doc.createElement('div'); date_el.className = 'cl-date'
+    time_el = doc.createElement('div'); time_el.className = 'cl-time'
+    for el in [day_el, date_el, time_el]:
+        body.appendChild(el)
 
-    p = doc.createElement('p')
-    p.textContent = 'Built entirely from Python — CSS, DOM, and click listeners via Pyodide.'
-    body.appendChild(p)
+    async def clock_loop():
+        while True:
+            now = datetime.datetime.now()
+            day_el.textContent  = now.strftime('%A')
+            date_el.textContent = now.strftime('%B %d, %Y')
+            time_el.textContent = now.strftime('%H:%M:%S')
+            await asyncio.sleep(1)
 
-    count = [0]
-    counter = doc.createElement('div')
-    counter.className = 'counter'; counter.textContent = '0'
-    body.appendChild(counter)
+    task = asyncio.ensure_future(clock_loop())
 
-    row = doc.createElement('div'); row.className = 'btn-row'
-    inc = doc.createElement('button'); inc.className = 'btn inc'; inc.textContent = '+ Increment'
-    dec = doc.createElement('button'); dec.className = 'btn dec'; dec.textContent = '− Decrement'
-
-    def on_inc(e): count[0] += 1; counter.textContent = str(count[0])
-    def on_dec(e): count[0] -= 1; counter.textContent = str(count[0])
-
-    inc.addEventListener('click', create_proxy(on_inc))
-    dec.addEventListener('click', create_proxy(on_dec))
-    row.appendChild(inc); row.appendChild(dec); body.appendChild(row)
+    def on_destroy(): task.cancel()
+    props.onDestroy(create_proxy(on_destroy))
 
 # Register + open
 _proxy = create_proxy(render_my_window)
-_meta  = to_js({'title':'My Python Window','icon':'code','callable':True},
+_meta  = to_js({'title':'Python Clock','icon':'schedule','callable':True},
                 dict_converter=Object.fromEntries)
-bridge.registerCommand('ui.py-demo-window', _proxy, _meta)
+bridge.registerCommand('ui.py-clock', _proxy, _meta)
 
 output = document.getElementById('preview')
 info = document.createElement('p')
 info.style.cssText = 'font-size:12.5px;color:#6b7280;margin-bottom:12px;line-height:1.6;'
-info.textContent = 'Command registered. Each click opens a new independent detached window.'
+info.textContent = 'Click to open. The clock ticks via asyncio.sleep(1) — pure Python, no JS timer.'
 output.appendChild(info)
 
 btn = document.createElement('button')
-btn.textContent = '⊞  Open Python Window'
+btn.textContent = '⊞  Open Python Clock'
 btn.style.cssText = ('background:#6d28d9;color:#fff;border:none;'
     'padding:10px 22px;border-radius:8px;font-size:14px;'
     'font-weight:600;cursor:pointer;display:block;margin-bottom:10px;')
 
-def on_open(e): bridge.openWindow('ui.py-demo-window')
+def on_open(e): bridge.openWindow('ui.py-clock')
 btn.addEventListener('click', create_proxy(on_open))
 output.appendChild(btn)
 
-print('Ready — each click opens a fresh detached window.')`,
+print('Ready — asyncio.sleep(1) drives the clock. task.cancel() stops it on window close.')`,
       },
     ]
 
@@ -488,7 +505,7 @@ print('Ready — each click opens a fresh detached window.')`,
     const editor = CodeMirror(cmHost, {
       value: EXAMPLES[0].code,
       mode: 'python',
-      theme: 'one-dark',
+      theme: 'py-dark',
       lineNumbers: true,
       tabSize: 4,
       indentUnit: 4,
