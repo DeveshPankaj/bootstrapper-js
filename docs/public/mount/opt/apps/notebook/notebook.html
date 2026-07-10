@@ -84,13 +84,14 @@ body{
 
 /* cell */
 .cell{
-  border:1px solid var(--border);border-radius:8px;overflow:hidden;
+  border:1px solid var(--border);border-radius:8px;overflow:visible;
   background:var(--surface);transition:border-color .15s;
 }
 .cell.selected{border-color:var(--accent)}
 .cell-header{
   display:flex;align-items:center;gap:6px;padding:3px 8px 3px 12px;
   background:#0d0d14;border-bottom:1px solid var(--border);min-height:28px;
+  border-radius:7px 7px 0 0;  /* clip header bg to match cell's rounded top corners */
 }
 .cell-badge{
   font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
