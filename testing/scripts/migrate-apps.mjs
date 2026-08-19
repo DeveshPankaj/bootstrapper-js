@@ -3,8 +3,9 @@
 
 import { readFileSync, writeFileSync, mkdirSync, cpSync, existsSync } from 'fs';
 import { join, dirname, basename } from 'path';
+import { fileURLToPath } from 'url';
 
-const ROOT = '/Users/pankajdevesh/Desktop/Gitea-Workspaces/bootstrapper-js';
+const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const MOUNT = join(ROOT, 'docs/public/mount');
 
 // Read registry

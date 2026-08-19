@@ -4,8 +4,9 @@
 import { createCanvas } from 'canvas'
 import { writeFileSync, mkdirSync, existsSync } from 'fs'
 import { join } from 'path'
+import { fileURLToPath } from 'url'
 
-const ROOT = '/Users/pankajdevesh/Desktop/Gitea-Workspaces/bootstrapper-js'
+const ROOT = fileURLToPath(new URL('../../', import.meta.url))
 const OUT = join(ROOT, 'docs/public/mount/home/user1/projects/diffusion-dataset')
 const SIZE = 32
 

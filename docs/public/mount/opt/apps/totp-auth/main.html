@@ -1,241 +1,248 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>TOTP Generator App</title>
-  <!-- <base href="/(sw)/"> -->
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f5f5f5;
-      margin: 0;
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
+<meta charset="UTF-8">
+<title>TOTP Auth</title>
+<style>
+  :root {
+    --bg: #f7f7f9;
+    --surface: #ffffff;
+    --border: #e0e0e8;
+    --text: #1c1c1e;
+    --muted: #8a8a9a;
+    --accent: #0a84ff;
+    --danger: #ff453a;
+    --radius: 12px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141416;
+      --surface: #1e1e22;
+      --border: #2e2e36;
+      --text: #e8e8ec;
+      --muted: #888899;
+      --accent: #0a84ff;
+      --danger: #ff453a;
     }
-    h1 {
-      margin-bottom: 20px;
-    }
-    .input-section {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      margin-bottom: 30px;
-    }
-    input {
-      padding: 8px;
-      font-size: 16px;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-    }
-    button {
-      padding: 8px 16px;
-      font-size: 16px;
-      background: #4CAF50;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-    button:hover {
-      background: #45a049;
-    }
-    .cards-container {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 15px;
-      justify-content: center;
-    }
-    .card {
-      background: white;
-      padding: 15px;
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-      width: 200px;
-      text-align: center;
-      position: relative;
-    }
-    .card h3 {
-      margin: 0;
-      margin-bottom: 10px;
-      font-size: 18px;
-    }
-    .code {
-      font-size: 28px;
-      font-weight: bold;
-      letter-spacing: 3px;
-      margin-bottom: 5px;
-    }
-    .timer {
-      font-size: 13px;
-      color: #666;
-    }
-    .delete-btn, .copy-btn {
-      position: absolute;
-      top: 8px;
-      background: #e74c3c;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      padding: 2px 6px;
-      cursor: pointer;
-      font-size: 14px;
-    }
-    .delete-btn:hover {
-      background: #c0392b;
-    }
-    .copy-btn {
-      right: 35px;
-      background: #3498db;
-    }
-    .copy-btn:hover {
-      background: #2980b9;
-    }
-    .delete-btn {
-      right: 8px;
-    }
-  </style>
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  .header { padding: .9rem 1.25rem .6rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: var(--surface); }
+  .header h1 { font-size: 16px; font-weight: 600; }
+
+  .add-bar { display: flex; gap: .5rem; padding: .85rem 1.25rem; border-bottom: 1px solid var(--border); background: var(--surface); }
+  .add-bar input { flex: 1; padding: .45rem .7rem; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); font-size: 13px; outline: none; }
+  .add-bar input:focus { border-color: var(--accent); }
+  .add-bar button { padding: .45rem .9rem; background: var(--accent); color: #fff; border: none; border-radius: 8px; font-size: 13px; cursor: pointer; white-space: nowrap; }
+  .add-bar button:hover { opacity: .85; }
+
+  .cards { display: flex; flex-wrap: wrap; gap: 1rem; padding: 1.25rem; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.1rem 1.1rem 1rem;
+    width: 180px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: .45rem;
+    position: relative;
+  }
+  .card-name { font-size: 12.5px; font-weight: 600; color: var(--muted); text-align: center; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .card-code { font-size: 30px; font-weight: 700; letter-spacing: 4px; cursor: pointer; user-select: none; transition: color .15s; font-variant-numeric: tabular-nums; }
+  .card-code:hover { color: var(--accent); }
+  .card-code.copied { color: #30d158; }
+
+  /* Radial countdown ring */
+  .ring-wrap { position: relative; width: 44px; height: 44px; }
+  .ring-svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+  .ring-track { fill: none; stroke: var(--border); stroke-width: 3; }
+  .ring-fill  { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; transition: stroke .5s, stroke-dashoffset 1s linear; }
+  .ring-label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: var(--muted); }
+  .ring-fill.urgent { stroke: var(--danger); }
+
+  .card-actions { display: flex; gap: .4rem; margin-top: .2rem; }
+  .icon-btn { background: none; border: none; padding: 3px 5px; border-radius: 5px; cursor: pointer; font-size: 13px; color: var(--muted); transition: color .12s, background .12s; }
+  .icon-btn:hover { background: var(--border); color: var(--text); }
+  .icon-btn.del:hover { color: var(--danger); }
+
+  .empty { text-align: center; color: var(--muted); padding: 3rem 1.5rem; width: 100%; font-size: 14px; line-height: 1.7; }
+</style>
 </head>
 <body>
-  <h1>🔐 TOTP Generator</h1>
 
-  <div class="input-section">
-    <input type="text" id="nameInput" placeholder="Account Name">
-    <input type="text" id="secretInput" placeholder="Base32 Secret">
-    <button id="addBtn">Add</button>
-  </div>
+<script src="/(sw)/usr/lib/ipc.js"></script>
 
-  <div class="cards-container" id="cardsContainer"></div>
+<div class="header">
+  <h1>🔐 TOTP Auth</h1>
+</div>
 
-  <script type="module">
-    // Prefix absolute paths with '/(sw)' to get them resolved by service worker.
-    import {base32ToBytes} from '/(sw)/lib/utils.js'
-    
-    // ---- TOTP Generator ----
-    async function generateTOTP(secret, time = Math.floor(Date.now() / 1000), digits = 6, step = 30) {
-      const secretBytes = base32ToBytes(secret);
-      const counter = Math.floor(time / step);
+<div class="add-bar">
+  <input type="text" id="nameInput" placeholder="Account name" autocomplete="off">
+  <input type="text" id="secretInput" placeholder="Base32 secret" autocomplete="off">
+  <button id="addBtn">Add</button>
+</div>
 
-      const counterBuffer = new ArrayBuffer(8);
-      const view = new DataView(counterBuffer);
-      view.setUint32(4, counter, false);
+<div class="cards" id="cards">
+  <div class="empty" id="emptyState">No accounts yet. Enter a name and base32 secret above.</div>
+</div>
 
-      const key = await crypto.subtle.importKey(
-        'raw',
-        secretBytes,
-        { name: 'HMAC', hash: 'SHA-1' },
-        false,
-        ['sign']
-      );
-
-      const hmac = new Uint8Array(await crypto.subtle.sign('HMAC', key, counterBuffer));
-      const offset = hmac[hmac.length - 1] & 0xf;
-      const binary =
-        ((hmac[offset] & 0x7f) << 24) |
-        ((hmac[offset + 1] & 0xff) << 16) |
-        ((hmac[offset + 2] & 0xff) << 8) |
-        (hmac[offset + 3] & 0xff);
-
-      return (binary % 10 ** digits).toString().padStart(digits, '0');
+<script>
+  // Inlined base32 decoder — avoids a static ES module import that can silently
+  // fail when the SW has no client ready yet, breaking the entire script.
+  function base32ToBytes(base32) {
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+    const s = base32.replace(/=+$/, '').toUpperCase();
+    let bits = '';
+    for (const c of s) {
+      const idx = alphabet.indexOf(c);
+      if (idx === -1) throw new Error('Invalid base32 char: ' + c);
+      bits += idx.toString(2).padStart(5, '0');
     }
+    const bytes = new Uint8Array(Math.floor(bits.length / 8));
+    for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(bits.slice(i * 8, i * 8 + 8), 2);
+    return bytes;
+  }
 
-    const addBtn = document.getElementById('addBtn');
-    const nameInput = document.getElementById('nameInput');
-    const secretInput = document.getElementById('secretInput');
-    const cardsContainer = document.getElementById('cardsContainer');
+  const VFS_PATH = '/home/user1/.totp-accounts.json';
+  const LS_KEY = 'totp_entries';
+  const STEP = 30;
+  const CIRC = 2 * Math.PI * 19; // circumference for r=19
 
-    // ---- Load stored entries ----
-    let entries = JSON.parse(localStorage.getItem('totp_entries') || '[]');
+  let entries = [];
 
-    function saveEntries() {
-      localStorage.setItem('totp_entries', JSON.stringify(entries));
+  async function load() {
+    try {
+      const text = await window.ipc.fs.readText(VFS_PATH);
+      entries = JSON.parse(text) || [];
+    } catch (_) {
+      try { entries = JSON.parse(localStorage.getItem(LS_KEY) || '[]'); } catch (_) { entries = []; }
     }
+  }
 
-    function deleteEntry(index) {
-      entries.splice(index, 1);
-      saveEntries();
-      renderCards();
+  async function save() {
+    const json = JSON.stringify(entries);
+    localStorage.setItem(LS_KEY, json);
+    try { await window.ipc.fs.write(VFS_PATH, json); } catch (_) {}
+  }
+
+  async function genTOTP(secret) {
+    const secretBytes = base32ToBytes(secret.replace(/\s+/g, '').toUpperCase());
+    const now = Math.floor(Date.now() / 1000);
+    const counter = Math.floor(now / STEP);
+    const buf = new ArrayBuffer(8);
+    new DataView(buf).setUint32(4, counter, false);
+    const key = await crypto.subtle.importKey('raw', secretBytes, { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']);
+    const hmac = new Uint8Array(await crypto.subtle.sign('HMAC', key, buf));
+    const offset = hmac[hmac.length - 1] & 0xf;
+    const bin = ((hmac[offset] & 0x7f) << 24) | ((hmac[offset+1] & 0xff) << 16) | ((hmac[offset+2] & 0xff) << 8) | (hmac[offset+3] & 0xff);
+    return (bin % 1000000).toString().padStart(6, '0');
+  }
+
+  function timeLeft() {
+    return STEP - (Math.floor(Date.now() / 1000) % STEP);
+  }
+
+  const cardsEl = document.getElementById('cards');
+  const emptyEl = document.getElementById('emptyState');
+
+  async function renderCards() {
+    // remove old cards
+    document.querySelectorAll('.card').forEach(c => c.remove());
+    emptyEl.style.display = entries.length ? 'none' : '';
+
+    for (let i = 0; i < entries.length; i++) {
+      const e = entries[i];
+      let code = '------';
+      try { code = await genTOTP(e.secret); } catch (_) {}
+
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.dataset.idx = i;
+
+      const tl = timeLeft();
+      const frac = tl / STEP;
+      const offset = CIRC * (1 - frac);
+      const urgent = tl <= 5;
+
+      card.innerHTML = `
+        <div class="card-name" title="${e.name}">${e.name}</div>
+        <div class="card-code" title="Click to copy">${code}</div>
+        <div class="ring-wrap">
+          <svg class="ring-svg" viewBox="0 0 44 44" width="44" height="44">
+            <circle class="ring-track" cx="22" cy="22" r="19"/>
+            <circle class="ring-fill${urgent ? ' urgent' : ''}" cx="22" cy="22" r="19"
+              stroke-dasharray="${CIRC}"
+              stroke-dashoffset="${offset}"/>
+          </svg>
+          <div class="ring-label">${tl}s</div>
+        </div>
+        <div class="card-actions">
+          <button class="icon-btn copy-btn" title="Copy code">📋</button>
+          <button class="icon-btn del" title="Delete">✕</button>
+        </div>
+      `;
+
+      card.querySelector('.card-code').addEventListener('click', () => copyCode(card.querySelector('.card-code'), code));
+      card.querySelector('.copy-btn').addEventListener('click', () => copyCode(card.querySelector('.card-code'), code));
+      card.querySelector('.del').addEventListener('click', () => { entries.splice(i, 1); save(); renderCards(); });
+
+      cardsEl.insertBefore(card, emptyEl);
     }
+  }
 
-    async function copySecret(secret) {
-      try {
-        await navigator.clipboard.writeText(secret);
-        // alert('✅ Secret copied to clipboard');
-      } catch (e) {
-        alert('❌ Failed to copy');
+  async function copyCode(el, code) {
+    try { await navigator.clipboard.writeText(code); } catch (_) {}
+    const old = el.textContent;
+    el.textContent = 'Copied!';
+    el.classList.add('copied');
+    setTimeout(() => { el.textContent = old; el.classList.remove('copied'); }, 1500);
+  }
+
+  async function updateCodes() {
+    const now = Math.floor(Date.now() / 1000);
+    const tl = STEP - (now % STEP);
+    const frac = tl / STEP;
+    const offset = CIRC * (1 - frac);
+    const urgent = tl <= 5;
+    const cards = document.querySelectorAll('.card');
+
+    for (let i = 0; i < entries.length; i++) {
+      const card = cards[i];
+      if (!card) continue;
+      let code = '------';
+      try { code = await genTOTP(entries[i].secret); } catch (_) {}
+      const codeEl = card.querySelector('.card-code');
+      if (codeEl && !codeEl.classList.contains('copied')) codeEl.textContent = code;
+      const ring = card.querySelector('.ring-fill');
+      if (ring) {
+        ring.setAttribute('stroke-dashoffset', offset);
+        ring.classList.toggle('urgent', urgent);
       }
+      const lbl = card.querySelector('.ring-label');
+      if (lbl) lbl.textContent = tl + 's';
     }
+  }
 
-    addBtn.addEventListener('click', () => {
-      const name = nameInput.value.trim();
-      const secret = secretInput.value.trim();
-      if (!name || !secret) {
-        alert('Please enter both name and secret.');
-        return;
-      }
-
-      entries.push({ name, secret });
-      saveEntries();
-      nameInput.value = '';
-      secretInput.value = '';
-      renderCards();
-    });
-
-    async function updateCodes() {
-      const now = Math.floor(Date.now() / 1000);
-      const step = 30;
-      const timeRemaining = step - (now % step);
-
-      const cards = document.querySelectorAll('.card');
-      entries.forEach(async (entry, i) => {
-        const code = await generateTOTP(entry.secret, now);
-        cards[i].querySelector('.code').textContent = code;
-        cards[i].querySelector('.timer').textContent = `Next update in ${timeRemaining}s`;
-      });
-    }
-
-    function renderCards() {
-      cardsContainer.innerHTML = '';
-      entries.forEach((entry, index) => {
-        const card = document.createElement('div');
-        card.className = 'card';
-
-        const title = document.createElement('h3');
-        title.textContent = entry.name;
-
-        const codeElem = document.createElement('div');
-        codeElem.className = 'code';
-        codeElem.textContent = '------';
-
-        const timerElem = document.createElement('div');
-        timerElem.className = 'timer';
-
-        // FIXME: it is not a good idea to copy secret as user might past it on third party console.
-        const copyBtn = document.createElement('button');
-        copyBtn.className = 'copy-btn';
-        copyBtn.textContent = '📋';
-        copyBtn.title = 'Copy secret';
-        copyBtn.onclick = () => copySecret(entry.secret);
-
-        const delBtn = document.createElement('button');
-        delBtn.className = 'delete-btn';
-        delBtn.textContent = '✕';
-        delBtn.title = 'Delete';
-        delBtn.onclick = () => deleteEntry(index);
-
-        card.appendChild(copyBtn);
-        card.appendChild(delBtn);
-        card.appendChild(title);
-        card.appendChild(codeElem);
-        card.appendChild(timerElem);
-        cardsContainer.appendChild(card);
-      });
-      updateCodes();
-    }
-
-    setInterval(updateCodes, 1000);
+  document.getElementById('addBtn').addEventListener('click', () => {
+    const name = document.getElementById('nameInput').value.trim();
+    const secret = document.getElementById('secretInput').value.trim();
+    if (!name || !secret) { alert('Please enter both name and secret.'); return; }
+    entries.push({ name, secret });
+    save();
+    document.getElementById('nameInput').value = '';
+    document.getElementById('secretInput').value = '';
     renderCards();
-  </script>
+  });
+
+  (async () => {
+    await load();
+    await renderCards();
+    setInterval(updateCodes, 1000);
+  })();
+</script>
 </body>
 </html>

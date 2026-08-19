@@ -7,7 +7,7 @@
  * Usage:  pnpm start   (in another terminal)
  *         node testing/scripts/test-sqlite-charts-widget.mjs
  */
-import { chromium } from '/Users/pankajdevesh/.npm/_npx/e41f203b7505f1fb/node_modules/playwright/index.mjs';
+import { chromium } from 'playwright';
 
 const URL = 'http://localhost:8080';
 const SCREENSHOT_DIR = 'testing/screenshots';

@@ -3,15 +3,11 @@ const cacheName = 'WebOS_v1';
 
 self.addEventListener('install', (event: Event | any) => {
     event.waitUntil(caches.open(cacheName));
-    // console.log(self.location.toString())
-    // caches.open(cacheName).then((cache) => {
-    //     cache.put('/123.js', 
-    //         new Response("<h1>Hello!</h1>", {
-    //             headers: {'Content-Type': 'text/html'}
-    //         })
-    //     )
-    // })
+    (self as any).skipWaiting();
+});
 
+self.addEventListener('activate', (event: Event | any) => {
+    event.waitUntil((self as any).clients.claim());
 });
   
 
@@ -116,7 +112,7 @@ self.addEventListener('fetch', function(event: Event | any) {
                                 });
 
                                 if(clients.length === 0) {
-                                    resolve(new Response("<h1>ERROR: no client available to serve the request. (if it's first time you are seeing this error, then try reloding app after saving your changes)</h1>", {headers: {'Content-Type': 'text/html'}}))
+                                    resolve(fetch('/public/mount' + vfsPath))
                                 }
                             });
 

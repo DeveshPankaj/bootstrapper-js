@@ -13,6 +13,7 @@
 		"@types/serviceworker": "^0.0.79",
 		"copy-webpack-plugin": "^12.0.2",
 		"html-webpack-plugin": "^5.5.3",
+		"playwright": "^1.62.1",
 		"react": "^19.0.0",
 		"react-dom": "^19.0.0",
 		"ts-loader": "^9.4.4",

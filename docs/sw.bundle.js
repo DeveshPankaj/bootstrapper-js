@@ -8,14 +8,10 @@ var __webpack_exports__ = {};
 const cacheName = 'WebOS_v1';
 self.addEventListener('install', (event) => {
     event.waitUntil(caches.open(cacheName));
-    // console.log(self.location.toString())
-    // caches.open(cacheName).then((cache) => {
-    //     cache.put('/123.js', 
-    //         new Response("<h1>Hello!</h1>", {
-    //             headers: {'Content-Type': 'text/html'}
-    //         })
-    //     )
-    // })
+    self.skipWaiting();
+});
+self.addEventListener('activate', (event) => {
+    event.waitUntil(self.clients.claim());
 });
 let uid = 0;
 const getUUID = () => {
@@ -110,7 +106,7 @@ self.addEventListener('fetch', function (event) {
                                 client.postMessage({ type: 'fs/file-request', payload: { path: vfsPath, request_id } });
                             });
                             if (clients.length === 0) {
-                                resolve(new Response("<h1>ERROR: no client available to serve the request. (if it's first time you are seeing this error, then try reloding app after saving your changes)</h1>", { headers: { 'Content-Type': 'text/html' } }));
+                                resolve(fetch('/public/mount' + vfsPath));
                             }
                         });
                         // resolve(new Response("<h1>400</h1>", {headers: {'Content-Type': 'text/html'}}))

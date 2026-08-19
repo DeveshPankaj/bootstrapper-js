@@ -141,6 +141,10 @@ const registerProcessCommands = () => {
   platform.register('add-desktop', addDesktop);
   platform.host.registerCommand('add-desktop', addDesktop, { callable: true });
 
+  platform.host.registerCommand('remove-active-desktop', () => {
+    removeDesktop(activeDesktopSubject.getValue());
+  }, { callable: true });
+
   // `process.kill(pid)` - sends SIGTERM: runs onDestroy callbacks then closes.
   platform.host.registerCommand("process.kill", (pid: number | string) => {
     processRegistry.get(Number(pid))?.close();

@@ -4,7 +4,7 @@
  * Loads the notebook main.js via platform, opens a window, runs a matplotlib
  * plot cell, and verifies an <img> appears in the cell output.
  */
-import { chromium } from '/Users/pankajdevesh/.npm/_npx/e41f203b7505f1fb/node_modules/playwright/index.mjs';
+import { chromium } from 'playwright';
 import { mkdirSync } from 'fs';
 
 mkdirSync('./testing/screenshots', { recursive: true });

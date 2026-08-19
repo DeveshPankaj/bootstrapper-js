@@ -309,6 +309,16 @@ const render = (container: HTMLElement, props: UICallbackProps & { file: FileTyp
 
 
 
+const copyEntry = (fs: any, src: string, dest: string) => {
+    const stat = fs.statSync(src)
+    if (stat.isDirectory()) {
+        if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true })
+        for (const name of fs.readdirSync(src)) copyEntry(fs, `${src}/${name}`, `${dest}/${name}`)
+    } else {
+        fs.writeFileSync(dest, fs.readFileSync(src))
+    }
+}
+
 const App = (props: UICallbackProps & { file: FileType }) => {
     const fs = platform.host.getFS()
     const dirRef = React.useRef(props.file.path || '/')
@@ -324,6 +334,67 @@ const App = (props: UICallbackProps & { file: FileType }) => {
         setDirList(fs.readdirSync(dirRef.current))
         forceUpdate(n => n + 1)
     }
+    const refreshRef = React.useRef(refresh)
+    refreshRef.current = refresh
+
+    const [propsFile, setPropsFile] = React.useState<string | null>(null)
+    const setPropsFileRef = React.useRef(setPropsFile)
+    setPropsFileRef.current = setPropsFile
+
+    const cmdPrefix = React.useRef(`__e${Date.now().toString(36)}`)
+
+    React.useEffect(() => {
+        const k = cmdPrefix.current
+        const regs = [
+            platform.host.registerCommand(`${k}.show-properties`, (path: string) => { setPropsFileRef.current(path) }),
+            platform.host.registerCommand(`${k}.copy-file`, (paths: string | string[]) => {
+                (window.top as any).__vfsClipboard = { op: 'copy', paths: Array.isArray(paths) ? paths : [paths] }
+                refreshRef.current()
+            }),
+            platform.host.registerCommand(`${k}.cut-file`, (paths: string | string[]) => {
+                (window.top as any).__vfsClipboard = { op: 'cut', paths: Array.isArray(paths) ? paths : [paths] }
+                refreshRef.current()
+            }),
+            platform.host.registerCommand(`${k}.paste-files`, () => {
+                const cb = (window.top as any).__vfsClipboard
+                if (!cb || !cb.paths.length) return
+                const dir = dirRef.current
+                for (const src of cb.paths) {
+                    const name = src.split('/').filter(Boolean).pop()!
+                    const dest = normalizePath(`${dir}/${name}`)
+                    try {
+                        if (cb.op === 'cut') { fs.renameSync(src, dest) }
+                        else { copyEntry(fs, src, dest) }
+                    } catch (e: any) { platform.host.callCommand('notify', { title: 'Paste failed', body: e.message, duration: 4000 }) }
+                }
+                if (cb.op === 'cut') (window.top as any).__vfsClipboard = null
+                refreshRef.current()
+            }),
+            platform.host.registerCommand(`${k}.make-dir`, () => {
+                const n = prompt('Folder name?'); if (!n) return
+                try { fs.mkdirSync(`${dirRef.current}/${n}`, { recursive: true }); refreshRef.current() } catch (e: any) { alert(e.message) }
+            }),
+            platform.host.registerCommand(`${k}.make-file`, () => {
+                const n = prompt('File name?'); if (!n) return
+                try { fs.writeFileSync(`${dirRef.current}/${n}`, ''); refreshRef.current() } catch (e: any) { alert(e.message) }
+            }),
+            platform.host.registerCommand(`${k}.rename`, (path: string) => {
+                const oldName = path.split('/').pop()!
+                const dir     = path.split('/').slice(0, -1).join('/') || '/'
+                const newName = prompt('New name:', oldName)
+                if (!newName || newName.trim() === oldName) return
+                const trimmed = newName.trim()
+                if (/[/\\]/.test(trimmed)) { alert('Name cannot contain "/" or "\\".'); return }
+                const newPath = normalizePath(`${dir}/${trimmed}`)
+                if (fs.existsSync(newPath)) {
+                    if (!confirm(`"${trimmed}" already exists. Overwrite?`)) return
+                }
+                try { fs.renameSync(path, newPath); refreshRef.current() }
+                catch (e: any) { alert(`Rename failed: ${e.message}`) }
+            }),
+        ]
+        return () => regs.forEach(r => r.remove())
+    }, [])
 
     const goTo = (path: string, { pushHistory = true }: { pushHistory?: boolean } = {}) => {
         const normalized = normalizePath(path)
@@ -340,17 +411,24 @@ const App = (props: UICallbackProps & { file: FileType }) => {
         refresh()
     }
 
+    const AUDIO_EXTS = new Set(['.mp3', '.wav', '.ogg', '.flac', '.m4a', '.aac', '.opus'])
+
     const open = (file: string) => {
         const selectedFilePath = normalizePath(dirRef.current.endsWith('/') ? `${dirRef.current}${file}` : `${dirRef.current}/${file}`);
         const stat = fs.statSync(selectedFilePath);
 
         if (stat.isDirectory()) {
             goTo(selectedFilePath)
+            return
         }
 
-        else {
-            platform.host.exec(platform, selectedFilePath)
+        const ext = getFileExtension(selectedFilePath)
+        if (AUDIO_EXTS.has(ext)) {
+            platform.host.execCommand(`service('001-core.layout', 'open-window') (command('ui.audioplayer'), '${selectedFilePath}')`, platform)
+            return
         }
+
+        platform.host.exec(platform, selectedFilePath)
     }
 
     const navigateTo = (path: string) => goTo(path)
@@ -413,7 +491,7 @@ const App = (props: UICallbackProps & { file: FileType }) => {
         const openContextMenu = platform.host.getService('001-core.layout', 'show-context-menu') as Function;
         if (!openContextMenu) return;
         const rect = props.getBoundingClientRect()
-
+        const k = cmdPrefix.current
 
         const actions = [];
         file.path = file.path.replace(/\/\//g, '/')
@@ -422,11 +500,19 @@ const App = (props: UICallbackProps & { file: FileType }) => {
             actions.push({ id: 'edit_file', type: 'action', title: 'Edit', cmd: `service('001-core.layout', 'open-window') (command('ui.notepad'), '${file.path}')` })
             actions.push({ id: 'open_file', type: 'action', title: 'Open', cmd: `service('001-core.layout', 'open-window') (command('ui.iframe'), '${file.path}')` })
             actions.push({ id: 'delete_file', type: 'action', title: 'Delete', cmd: `service('root', 'fs')('rm', '${file.path}')` })
+            actions.push({ id: 'rename_file', type: 'action', title: 'Rename', cmd: `platform.host.callCommand('${k}.rename', '${file.path}')` })
+            actions.push({ id: 'copy_file', type: 'action', title: 'Copy', cmd: `platform.host.callCommand('${k}.copy-file', '${file.path}')` })
+            actions.push({ id: 'cut_file', type: 'action', title: 'Cut', cmd: `platform.host.callCommand('${k}.cut-file', '${file.path}')` })
+            actions.push({ id: 'props_file', type: 'action', title: 'Properties', cmd: `platform.host.callCommand('${k}.show-properties', '${file.path}')` })
         }
 
         else {
             actions.push({ id: 'open_file', type: 'action', title: 'Open in explorer', cmd: `service('001-core.layout', 'open-window') (command('ui.file-explorer'), '${file.path}')` })
             actions.push({ id: 'delete_file', type: 'action', title: 'Delete', cmd: `service('root', 'fs')('rmdir', '${file.path}')` })
+            actions.push({ id: 'rename_dir', type: 'action', title: 'Rename', cmd: `platform.host.callCommand('${k}.rename', '${file.path}')` })
+            actions.push({ id: 'copy_dir', type: 'action', title: 'Copy', cmd: `platform.host.callCommand('${k}.copy-file', '${file.path}')` })
+            actions.push({ id: 'cut_dir', type: 'action', title: 'Cut', cmd: `platform.host.callCommand('${k}.cut-file', '${file.path}')` })
+            actions.push({ id: 'props_dir', type: 'action', title: 'Properties', cmd: `platform.host.callCommand('${k}.show-properties', '${file.path}')` })
         }
 
         openContextMenu(event.clientX + rect.x, event.clientY + rect.y, actions)
@@ -551,10 +637,23 @@ const App = (props: UICallbackProps & { file: FileType }) => {
             .catch(err => console.error('Failed to import dropped files', err))
     }
 
+    const showDirActionsHandler = (event: React.MouseEvent) => {
+        const openContextMenu = platform.host.getService('001-core.layout', 'show-context-menu') as Function
+        if (!openContextMenu) return
+        const rect = props.getBoundingClientRect()
+        const k = cmdPrefix.current
+        const actions = [
+            { id: 'paste',    type: 'action', title: 'Paste',      cmd: `platform.host.callCommand('${k}.paste-files')` },
+            { id: 'new_dir',  type: 'action', title: 'New Folder',  cmd: `platform.host.callCommand('${k}.make-dir')` },
+            { id: 'new_file', type: 'action', title: 'New File',    cmd: `platform.host.callCommand('${k}.make-file')` },
+        ]
+        openContextMenu(event.clientX + rect.x, event.clientY + rect.y, actions)
+    }
+
     const breadcrumbs = getBreadcrumbs(dirRef.current)
 
     return (
-        <div style={{ display: 'flex', height: '100%', flexDirection: 'column' }} className="file-explorer">
+        <div style={{ display: 'flex', height: '100%', flexDirection: 'column', position: 'relative' }} className="file-explorer">
             <header>
                 <div className="toolbar-nav-buttons">
                     <span
@@ -615,15 +714,43 @@ const App = (props: UICallbackProps & { file: FileType }) => {
                     ))}
                 </nav>
                 <section className="dir-list">
-                    <ListDirComponent key={dirRef.current} dir={dirRef.current} openFile={openFile} showFileActions={showFileActionsHandler} handleDragOver={handleDragOver} handleDrop={handleDrop} />
+                    <ListDirComponent key={dirRef.current} dir={dirRef.current} openFile={openFile} showFileActions={showFileActionsHandler} showDirActions={showDirActionsHandler} handleDragOver={handleDragOver} handleDrop={handleDrop} />
                     <div className="file-explorer-status">{dirList.length} item{dirList.length === 1 ? '' : 's'}</div>
                 </section>
             </div>
+            {propsFile && (() => {
+                let stat: any = null; try { stat = fs.statSync(propsFile) } catch (_) {}
+                const name = propsFile.split('/').filter(Boolean).pop() || propsFile
+                const location = propsFile.split('/').slice(0, -1).join('/') || '/'
+                const ext = getFileExtension(propsFile)
+                const isDir = stat && stat.isDirectory()
+                const typeLabel = isDir ? 'Folder' : (ext ? ext.slice(1).toUpperCase() + ' File' : 'File')
+                let sizeLabel = '—'
+                if (stat) {
+                    if (isDir) { try { sizeLabel = fs.readdirSync(propsFile).length + ' items' } catch (_) {} }
+                    else { const b = stat.size; sizeLabel = b < 1024 ? `${b} B` : b < 1048576 ? `${(b / 1024).toFixed(1)} KB` : `${(b / 1048576).toFixed(2)} MB` }
+                }
+                const mtime = stat && stat.mtime ? new Date(stat.mtime).toLocaleString() : '—'
+                return (
+                    <div onClick={() => setPropsFile(null)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 10, padding: '1.4rem 1.6rem', minWidth: 280, maxWidth: 360, boxShadow: '0 8px 32px rgba(0,0,0,.18)', fontFamily: 'system-ui,sans-serif', fontSize: 13 }}>
+                            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: '1rem', wordBreak: 'break-all' }}>{name}</div>
+                            {[['Name', name], ['Location', location], ['Type', typeLabel], isDir ? ['Contents', sizeLabel] : ['Size', sizeLabel], ['Modified', mtime]].map(([k, v]) => (
+                                <div key={k} style={{ display: 'flex', gap: '.5rem', marginBottom: '.45rem' }}>
+                                    <span style={{ color: '#888', width: 80, flexShrink: 0 }}>{k}</span>
+                                    <span style={{ wordBreak: 'break-all' }}>{v}</span>
+                                </div>
+                            ))}
+                            <button onClick={() => setPropsFile(null)} style={{ marginTop: '1rem', width: '100%', padding: '.45rem', borderRadius: 7, border: 'none', background: '#f0f0f0', cursor: 'pointer', fontWeight: 600 }}>Close</button>
+                        </div>
+                    </div>
+                )
+            })()}
         </div>
     )
 }
 
-const ListDirComponent = ({ dir, openFile, showFileActions, handleDragOver, handleDrop }: { dir?: string, openFile: (file: FileType) => void, showFileActions: (file: FileType, event: React.MouseEvent<HTMLDivElement, MouseEvent>) => void, handleDragOver: (event: React.DragEvent) => void, handleDrop: (event: React.DragEvent, targetDir: string) => void }) => {
+const ListDirComponent = ({ dir, openFile, showFileActions, showDirActions, handleDragOver, handleDrop }: { dir?: string, openFile: (file: FileType) => void, showFileActions: (file: FileType, event: React.MouseEvent<HTMLDivElement, MouseEvent>) => void, showDirActions?: (event: React.MouseEvent) => void, handleDragOver: (event: React.DragEvent) => void, handleDrop: (event: React.DragEvent, targetDir: string) => void }) => {
     dir ??= DESKTOP_PATH;
 
     const extIconMap: Record<string, string> = {
@@ -646,6 +773,17 @@ const ListDirComponent = ({ dir, openFile, showFileActions, handleDragOver, hand
         '.db': '/usr/share/icons/db-icon.svg',
         '.sqlite': '/usr/share/icons/db-icon.svg',
         '.sqlite3': '/usr/share/icons/db-icon.svg',
+        '.ipynb': '/usr/share/icons/ipynb-icon.png',
+        '.mp3': '/usr/share/icons/audio-icon.png',
+        '.wav': '/usr/share/icons/audio-icon.png',
+        '.ogg': '/usr/share/icons/audio-icon.png',
+        '.flac': '/usr/share/icons/audio-icon.png',
+        '.m4a': '/usr/share/icons/audio-icon.png',
+        '.aac': '/usr/share/icons/audio-icon.png',
+        '.opus': '/usr/share/icons/audio-icon.png',
+        '.mp4': '/usr/share/icons/video-icon.svg',
+        '.mkv': '/usr/share/icons/video-icon.svg',
+        '.webm': '/usr/share/icons/video-icon.svg',
         '.': '/usr/share/icons/folder-icon.png',
         '': '/usr/share/icons/invalid-file-icon.png'
     }
@@ -715,7 +853,7 @@ const ListDirComponent = ({ dir, openFile, showFileActions, handleDragOver, hand
         Object.entries(extIconMap).forEach(([ext, path]) => {
             try {
                 const data = fs.readFileSync(path)
-                const blob = new Blob([data], { type: path.endsWith('.webp') ? 'image/webp' : 'image/png' })
+                const blob = new Blob([data], { type: path.endsWith('.webp') ? 'image/webp' : path.endsWith('.svg') ? 'image/svg+xml' : 'image/png' })
                 const url = URL.createObjectURL(blob)
                 next[ext] = url
                 urls.push(url)
@@ -802,6 +940,10 @@ const ListDirComponent = ({ dir, openFile, showFileActions, handleDragOver, hand
             border-radius: 4px;
         }
 
+        .${DESKTOP_CONTAINER_CLASS}-files .file-item.cut {
+            opacity: 0.45;
+        }
+
         `);
 
         appendStyleSheet(doc, styles)
@@ -810,6 +952,7 @@ const ListDirComponent = ({ dir, openFile, showFileActions, handleDragOver, hand
 
     const rightClickHandler = (file: FileType, event: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
         event.preventDefault();
+        event.stopPropagation();
         setSelected(file.path)
         const customEvent = new CustomEvent('showmenu', { detail: {} });
         event.target.dispatchEvent(customEvent);
@@ -822,12 +965,17 @@ const ListDirComponent = ({ dir, openFile, showFileActions, handleDragOver, hand
     const dragStartHandler = (file: FileType, event: React.DragEvent) => {
         event.dataTransfer.setData('application/x-vfs-path', file.path)
         event.dataTransfer.effectAllowed = 'move'
+        if (window.top) (window.top as any).__vfsDragPath = file.path
     }
+
+    const clipboard = (window.top as any)?.__vfsClipboard
+    const cutPaths = clipboard?.op === 'cut' ? new Set<string>(clipboard.paths) : new Set<string>()
 
     return (
         <main
             className={`${DESKTOP_CONTAINER_CLASS}-files ${mainDragOver ? 'drag-over' : ''}`}
             ref={containerRef}
+            onContextMenu={ev => { ev.preventDefault(); showDirActions && showDirActions(ev) }}
             onDragOver={ev => { handleDragOver(ev); setMainDragOver(true) }}
             onDragLeave={() => setMainDragOver(false)}
             onDrop={ev => { setMainDragOver(false); handleDrop(ev, dir!) }}
@@ -836,7 +984,7 @@ const ListDirComponent = ({ dir, openFile, showFileActions, handleDragOver, hand
                 files.map(file => (
                     <div
                         key={file.path}
-                        className={`file-item ${selected === file.path ? 'selected' : ''} ${dragOverPath === file.path ? 'drag-over' : ''}`}
+                        className={`file-item ${selected === file.path ? 'selected' : ''} ${cutPaths.has(file.path) ? 'cut' : ''} ${dragOverPath === file.path ? 'drag-over' : ''}`}
                         draggable
                         onDragStart={ev => dragStartHandler(file, ev)}
                         onDragOver={file.type === 'dir' ? (ev => { handleDragOver(ev); setDragOverPath(file.path) }) : undefined}

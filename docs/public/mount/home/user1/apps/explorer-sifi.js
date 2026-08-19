@@ -83,6 +83,15 @@ const compressToZip = (vfsPath, outputPath) => {
   addToZip(zipFiles, vfsPath, vfsPath.split('/').pop());
   fs.writeFileSync(outputPath, Buffer.from(fflate.zipSync(zipFiles)));
 };
+const copyEntry = (src, dest) => {
+  const stat = fs.statSync(src);
+  if (stat.isDirectory()) {
+    fs.mkdirSync(dest, { recursive: true });
+    fs.readdirSync(src).forEach(name => copyEntry(`${src}/${name}`, `${dest}/${name}`));
+  } else {
+    fs.writeFileSync(dest, fs.readFileSync(src));
+  }
+};
 // ─────────────────────────────────────────────────────────────────────────
 
 const SIFI_CSS = `
@@ -239,6 +248,7 @@ const TILE_CSS = (cls) => `
   }
   .${cls}-files .file-item:hover .file-name{color:#1c1c1e;}
   .${cls}-files .file-item.selected .file-name{color:#1c1c1e;font-weight:500;}
+  .${cls}-files .file-item.cut{opacity:0.45;}
 `;
 
 const run = (...args) => {
@@ -284,6 +294,10 @@ const App = (props) => {
   const [dirList, setDirList] = React.useState(fs.readdirSync(dirRef.current || '/'));
   const [, forceUpdate] = React.useState(0);
   const [searchActive, setSearchActive] = React.useState(false);
+  const [propsFile, setPropsFile] = React.useState(null);
+  const setPropsFileRef = React.useRef(setPropsFile);
+  setPropsFileRef.current = setPropsFile;
+  const cmdPrefix = React.useRef(`__e${Date.now().toString(36)}`);
   const [searchQuery, setSearchQuery] = React.useState('');
   const [searchResults, setSearchResults] = React.useState([]);
   const [navWidth, setNavWidth] = React.useState(152);
@@ -314,14 +328,63 @@ const App = (props) => {
   refreshRef.current = refresh;
 
   React.useEffect(() => {
-    platform.register('zip-extract-sifi', (zipPath) => {
-      try { const n = extractZip(zipPath, zipPath.split('/').slice(0,-1).join('/')); platform.host.callCommand('notify', { title:'Extracted', body:`${n} file${n!==1?'s':''} extracted`, duration:3000 }); refreshRef.current(); }
-      catch (e) { platform.host.callCommand('notify', { title:'Extract failed', body:e.message||String(e), duration:4000 }); }
-    });
-    platform.register('zip-compress-sifi', (vfsPath) => {
-      try { const name=vfsPath.split('/').pop(); compressToZip(vfsPath,`${vfsPath.split('/').slice(0,-1).join('/')}/${name}.zip`); platform.host.callCommand('notify', { title:'Compressed', body:`Created ${name}.zip`, duration:3000 }); refreshRef.current(); }
-      catch (e) { platform.host.callCommand('notify', { title:'Compress failed', body:e.message||String(e), duration:4000 }); }
-    });
+    const k = cmdPrefix.current;
+    const regs = [
+      platform.host.registerCommand(`${k}.zip-extract`, (zipPath) => {
+        try { const n = extractZip(zipPath, zipPath.split('/').slice(0,-1).join('/')); platform.host.callCommand('notify', { title:'Extracted', body:`${n} file${n!==1?'s':''} extracted`, duration:3000 }); refreshRef.current(); }
+        catch (e) { platform.host.callCommand('notify', { title:'Extract failed', body:e.message||String(e), duration:4000 }); }
+      }),
+      platform.host.registerCommand(`${k}.zip-compress`, (vfsPath) => {
+        try { const name=vfsPath.split('/').pop(); compressToZip(vfsPath,`${vfsPath.split('/').slice(0,-1).join('/')}/${name}.zip`); platform.host.callCommand('notify', { title:'Compressed', body:`Created ${name}.zip`, duration:3000 }); refreshRef.current(); }
+        catch (e) { platform.host.callCommand('notify', { title:'Compress failed', body:e.message||String(e), duration:4000 }); }
+      }),
+      platform.host.registerCommand(`${k}.rename`, (path) => {
+        const oldName=path.split('/').pop(); const dir=path.split('/').slice(0,-1).join('/')||'/';
+        const newName=prompt('New name:',oldName);
+        if(!newName||newName.trim()===oldName)return;
+        const trimmed=newName.trim();
+        if(/[/\\]/.test(trimmed)){alert('Name cannot contain "/" or "\\".'); return;}
+        const newPath=normalizePath(`${dir}/${trimmed}`);
+        if(fs.existsSync(newPath)){if(!confirm(`"${trimmed}" already exists. Overwrite?`))return;}
+        try{fs.renameSync(path,newPath);refreshRef.current();}
+        catch(e){alert(`Rename failed: ${e.message}`);}
+      }),
+      platform.host.registerCommand(`${k}.show-properties`, (path) => { setPropsFileRef.current(path); }),
+      platform.host.registerCommand(`${k}.copy-file`, (path) => {
+        window.top.__vfsClipboard = { op:'copy', paths:[path] };
+        platform.host.callCommand('notify',{title:'Copied',body:path.split('/').pop(),duration:2000});
+        refreshRef.current();
+      }),
+      platform.host.registerCommand(`${k}.cut-file`, (path) => {
+        window.top.__vfsClipboard = { op:'cut', paths:[path] };
+        platform.host.callCommand('notify',{title:'Ready to move',body:path.split('/').pop(),duration:2000});
+        refreshRef.current();
+      }),
+      platform.host.registerCommand(`${k}.paste-files`, (destDir) => {
+        const cb=window.top?.__vfsClipboard;
+        if(!cb||!cb.paths.length){platform.host.callCommand('notify',{title:'Nothing to paste',body:'',duration:2000});return;}
+        let errors=0;
+        cb.paths.forEach(srcPath=>{
+          const destPath=normalizePath(`${destDir}/${srcPath.split('/').pop()}`);
+          try{if(cb.op==='cut')fs.renameSync(srcPath,destPath);else copyEntry(srcPath,destPath);}
+          catch(e){errors++;console.error('Paste failed:',srcPath,e);}
+        });
+        if(cb.op==='cut')window.top.__vfsClipboard=null;
+        platform.host.callCommand('notify',errors
+          ?{title:'Paste error',body:`${errors} item(s) failed`,duration:4000}
+          :{title:'Pasted',body:`${cb.paths.length} item${cb.paths.length!==1?'s':''}`,duration:2000});
+        refreshRef.current();
+      }),
+      platform.host.registerCommand(`${k}.make-dir`, (dir) => {
+        const name=prompt('Folder name?'); if(!name||!name.trim())return;
+        try{fs.mkdirSync(normalizePath(`${dir}/${name.trim()}`));refreshRef.current();}catch(e){alert(`Failed: ${e.message}`);}
+      }),
+      platform.host.registerCommand(`${k}.make-file`, (dir) => {
+        const name=prompt('File name?'); if(!name||!name.trim())return;
+        try{fs.writeFileSync(normalizePath(`${dir}/${name.trim()}`),'');refreshRef.current();}catch(e){alert(`Failed: ${e.message}`);}
+      }),
+    ];
+    return () => regs.forEach(r => r.remove());
   }, []);
 
   const onSearchChange   = (q) => { setSearchQuery(q); if (q.trim()) setSearchResults(searchVfs(fs, dirRef.current, q.trim().toLowerCase())); else setSearchResults([]); };
@@ -330,6 +393,7 @@ const App = (props) => {
   const openSearchResult = (r) => { deactivateSearch(); r.isDir ? goTo(r.path) : platform.host.exec(platform, r.path); };
 
   const IMAGE_EXTS = new Set(['.png','.jpg','.jpeg','.gif','.webp','.svg','.bmp','.ico','.avif']);
+  const AUDIO_EXTS = new Set(['.mp3','.wav','.ogg','.flac','.m4a','.aac','.opus']);
 
   const open = (file) => {
     const p = normalizePath(`${dirRef.current.endsWith('/')?dirRef.current:dirRef.current+'/'}${file}`);
@@ -339,6 +403,7 @@ const App = (props) => {
     if (IMAGE_EXTS.has(ext)) { const cmd=platform.host.getCommand('ui.imageviewer'); if(cmd){cmd.exec(null,null,p);return;} }
     if (ext==='.csv') { const cmd=platform.host.getCommand('ui.csv-viewer'); if(cmd){cmd.exec(null,null,p);return;} }
     if (ext==='.py')  { const cmd=platform.host.getCommand('ui.python');     if(cmd){cmd.exec(null,null,p);return;} }
+    if (AUDIO_EXTS.has(ext)) { platform.host.execCommand(`service('001-core.layout', 'open-window') (command('ui.audioplayer'), '${p}')`, platform); return; }
     if (ext==='.zip') {
       if (confirm(`Extract "${p.split('/').pop()}" here?`)) {
         try { const n=extractZip(p,dirRef.current); platform.host.callCommand('notify',{title:'Extracted',body:`${n} files`,duration:3000}); refresh(); }
@@ -376,6 +441,7 @@ const App = (props) => {
     const openCtx = platform.host.getService('001-core.layout','show-context-menu');
     if (!openCtx) return;
     const rect = props.getBoundingClientRect();
+    const k = cmdPrefix.current;
     const actions = [];
     file.path = file.path.replace(/\/\//g,'/');
     const stats = fs.statSync(file.path);
@@ -385,9 +451,14 @@ const App = (props) => {
       if (ctxExt==='py') actions.push({id:'run_py',type:'action',title:'Run in Python',cmd:`service('001-core.layout','open-window')(command('ui.python'),'${file.path}')`});
       actions.push({id:'open_file',  type:'action',title:'Open',   cmd:`service('001-core.layout','open-window')(command('ui.iframe'),'${file.path}')`});
       actions.push({id:'delete_file',type:'action',title:'Delete', cmd:`service('root','fs')('rm','${file.path}')`});
+      actions.push({id:'rename_file',type:'action',title:'Rename',cmd:`platform.host.callCommand('${k}.rename','${file.path}')`});
       actions.push({id:'diff_file',  type:'action',title:'Compare with…',cmd:`service('001-core.layout','open-window')(command('ui.diff'),'${file.path}','')`});
-      if (ctxExt==='zip') actions.push({id:'zip_extract',type:'action',title:'Extract here',cmd:`service('/home/user1/apps/explorer-sifi.js','zip-extract-sifi')('${file.path}')`});
-      actions.push({id:'zip_compress',type:'action',title:'Compress to ZIP',cmd:`service('/home/user1/apps/explorer-sifi.js','zip-compress-sifi')('${file.path}')`});
+      if (ctxExt==='zip') actions.push({id:'zip_extract',type:'action',title:'Extract here',cmd:`platform.host.callCommand('${k}.zip-extract','${file.path}')`});
+      actions.push({id:'zip_compress',type:'action',title:'Compress to ZIP',cmd:`platform.host.callCommand('${k}.zip-compress','${file.path}')`});
+      actions.push({id:'div_clip',type:'divider',title:''});
+      actions.push({id:'copy_file',type:'action',title:'Copy',cmd:`platform.host.callCommand('${k}.copy-file','${file.path}')`});
+      actions.push({id:'cut_file', type:'action',title:'Cut', cmd:`platform.host.callCommand('${k}.cut-file','${file.path}')`});
+      actions.push({id:'props_file',type:'action',title:'Properties',cmd:`platform.host.callCommand('${k}.show-properties','${file.path}')`});
       actions.push({id:'div_ow',type:'divider',title:''});
       actions.push({id:'open_with',type:'group',title:'Open with',children:[
         {id:'ow_notepad',type:'action',title:'Text Editor', cmd:`service('001-core.layout','open-window')(command('ui.notepad'),'${file.path}')`},
@@ -400,9 +471,24 @@ const App = (props) => {
     } else {
       actions.push({id:'open_dir',        type:'action',title:'Open',            cmd:`service('001-core.layout','open-window')(command('explorer-sifi'),'${file.path}')`});
       actions.push({id:'delete_dir',      type:'action',title:'Delete',          cmd:`service('root','fs')('rmdir','${file.path}')`});
-      actions.push({id:'zip_compress_dir',type:'action',title:'Compress to ZIP', cmd:`service('/home/user1/apps/explorer-sifi.js','zip-compress-sifi')('${file.path}')`});
+      actions.push({id:'rename_dir',      type:'action',title:'Rename',          cmd:`platform.host.callCommand('${k}.rename','${file.path}')`});
+      actions.push({id:'zip_compress_dir',type:'action',title:'Compress to ZIP', cmd:`platform.host.callCommand('${k}.zip-compress','${file.path}')`});
+      actions.push({id:'div_clip_dir',type:'divider',title:''});
+      actions.push({id:'copy_dir', type:'action',title:'Copy',       cmd:`platform.host.callCommand('${k}.copy-file','${file.path}')`});
+      actions.push({id:'cut_dir',  type:'action',title:'Cut',        cmd:`platform.host.callCommand('${k}.cut-file','${file.path}')`});
+      actions.push({id:'props_dir',type:'action',title:'Properties', cmd:`platform.host.callCommand('${k}.show-properties','${file.path}')`});
     }
     openCtx(event.clientX+rect.x, event.clientY+rect.y, actions);
+  };
+
+  const showDirActionsHandler = (event) => {
+    const openCtx=platform.host.getService('001-core.layout','show-context-menu'); if(!openCtx)return;
+    const rect=props.getBoundingClientRect(); const dir=dirRef.current;
+    const k=cmdPrefix.current; const cb=window.top?.__vfsClipboard; const actions=[];
+    if(cb&&cb.paths.length){actions.push({id:'paste',type:'action',title:`Paste "${cb.paths[0].split('/').pop()}"`,cmd:`platform.host.callCommand('${k}.paste-files','${dir}')`});actions.push({id:'div_paste',type:'divider',title:''});}
+    actions.push({id:'mk_folder',type:'action',title:'New Folder',cmd:`platform.host.callCommand('${k}.make-dir','${dir}')`});
+    actions.push({id:'mk_file_bg',type:'action',title:'New File',cmd:`platform.host.callCommand('${k}.make-file','${dir}')`});
+    openCtx(event.clientX+rect.x,event.clientY+rect.y,actions);
   };
 
   // ── Drag & drop ──────────────────────────────────────────────────────────
@@ -446,6 +532,36 @@ const App = (props) => {
 
   return (
     <div className={SIFI_CLASS} style={{position:'relative'}}>
+      {propsFile && (
+        <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,.35)',zIndex:50,display:'flex',alignItems:'center',justifyContent:'center'}}
+          onClick={()=>setPropsFile(null)}>
+          <div style={{background:'#fff',borderRadius:12,padding:'1.5rem',minWidth:280,maxWidth:400,boxShadow:'0 20px 60px rgba(0,0,0,.3)',fontFamily:'inherit'}}
+            onClick={e=>e.stopPropagation()}>
+            <h3 style={{margin:'0 0 1rem',fontSize:15,borderBottom:'1px solid #e2e2e2',paddingBottom:'.75rem'}}>Properties</h3>
+            {(() => {
+              try {
+                const stat=fs.statSync(propsFile); const name=propsFile.split('/').pop(); const dir=propsFile.split('/').slice(0,-1).join('/')||'/';
+                const ext=getFileExtension(name); const isDir=stat.isDirectory();
+                const fmtSize=n=>n<1024?`${n} B`:n<1048576?`${(n/1024).toFixed(1)} KB`:n<1073741824?`${(n/1048576).toFixed(1)} MB`:`${(n/1073741824).toFixed(2)} GB`;
+                let childCount=null; if(isDir){try{childCount=fs.readdirSync(propsFile).length;}catch(_){}}
+                const rows=[['Name',name],['Location',dir],['Type',isDir?'Folder':(ext?`${ext.slice(1).toUpperCase()} file`:'File')]];
+                if(isDir&&childCount!==null)rows.push(['Contents',`${childCount} item${childCount!==1?'s':''}`]);
+                else if(!isDir)rows.push(['Size',fmtSize(stat.size||0)]);
+                if(stat.mtime)rows.push(['Modified',new Date(stat.mtime).toLocaleString()]);
+                return(<table style={{fontSize:13,borderCollapse:'collapse',width:'100%'}}><tbody>{rows.map(([k,v])=>(
+                  <tr key={k} style={{borderBottom:'1px solid #f0f0f0'}}>
+                    <td style={{padding:'.4rem .5rem',color:'#888',fontWeight:500,whiteSpace:'nowrap',verticalAlign:'top'}}>{k}</td>
+                    <td style={{padding:'.4rem .5rem',wordBreak:'break-all'}}>{v}</td>
+                  </tr>
+                ))}</tbody></table>);
+              } catch(e){return <div style={{color:'#e74c3c',fontSize:13}}>Error: {e.message}</div>;}
+            })()}
+            <div style={{textAlign:'right',marginTop:'1rem'}}>
+              <button onClick={()=>setPropsFile(null)} style={{padding:'.35rem .9rem',border:'none',borderRadius:6,background:'#0a84ff',color:'#fff',cursor:'pointer',fontSize:13,fontFamily:'inherit'}}>OK</button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="sifi-hud">
         {searchActive ? (
           <div style={{flex:1,display:'flex',alignItems:'center',gap:'.4rem'}}>
@@ -517,6 +633,7 @@ const App = (props) => {
             key={dirRef.current} dir={dirRef.current}
             openFile={f=>open(f.name)}
             showFileActions={showFileActionsHandler}
+            showDirActions={showDirActionsHandler}
             handleDragOver={handleDragOver}
             handleDrop={handleDrop}
           />
@@ -529,7 +646,7 @@ const App = (props) => {
   );
 };
 
-const ListDirConponent = ({ dir, openFile, showFileActions, handleDragOver, handleDrop }) => {
+const ListDirConponent = ({ dir, openFile, showFileActions, showDirActions, handleDragOver, handleDrop }) => {
   dir ??= DESKTOP_PATH;
   const fs = platform.host.getFS();
 
@@ -542,6 +659,13 @@ const ListDirConponent = ({ dir, openFile, showFileActions, handleDragOver, hand
     '.bmp':  '/usr/share/icons/png-icon.png',  '.ico':  '/usr/share/icons/png-icon.png',
     '.avif': '/usr/share/icons/png-icon.png',  '.run':  '/usr/share/icons/bash.png',
     '.md':   '/usr/share/icons/note-icon.webp','.json': '/usr/share/icons/json.png',
+    '.ipynb':'/usr/share/icons/ipynb-icon.png',
+    '.mp3':  '/usr/share/icons/audio-icon.png','.wav':  '/usr/share/icons/audio-icon.png',
+    '.ogg':  '/usr/share/icons/audio-icon.png','.flac': '/usr/share/icons/audio-icon.png',
+    '.m4a':  '/usr/share/icons/audio-icon.png','.aac':  '/usr/share/icons/audio-icon.png',
+    '.opus': '/usr/share/icons/audio-icon.png',
+    '.mp4':  '/usr/share/icons/video-icon.svg','.mkv':  '/usr/share/icons/video-icon.svg',
+    '.webm': '/usr/share/icons/video-icon.svg',
     '.':     '/usr/share/icons/folder-icon.png','':     '/usr/share/icons/invalid-file-icon.png',
   };
   const imageExts = new Set(['.png','.jpg','.jpeg','.gif','.webp','.svg','.bmp','.ico','.avif']);
@@ -573,7 +697,7 @@ const ListDirConponent = ({ dir, openFile, showFileActions, handleDragOver, hand
   React.useEffect(()=>{
     const urls=[]; const next={};
     Object.entries(extIconMap).forEach(([ext,path])=>{
-      try{const d=fs.readFileSync(path);const b=new Blob([d],{type:path.endsWith('.webp')?'image/webp':'image/png'});const u=URL.createObjectURL(b);next[ext]=u;urls.push(u);}catch(_){}
+      try{const d=fs.readFileSync(path);const b=new Blob([d],{type:path.endsWith('.webp')?'image/webp':path.endsWith('.svg')?'image/svg+xml':'image/png'});const u=URL.createObjectURL(b);next[ext]=u;urls.push(u);}catch(_){}
     });
     setIconUrls(next);
     return()=>urls.forEach(u=>URL.revokeObjectURL(u));
@@ -588,6 +712,9 @@ const ListDirConponent = ({ dir, openFile, showFileActions, handleDragOver, hand
     appendStyleSheet(doc,s);
   },[]);
 
+  const clipboard = window.top?.__vfsClipboard;
+  const cutPaths = clipboard?.op === 'cut' ? new Set(clipboard.paths) : new Set();
+
   return (
     <main
       ref={containerRef}
@@ -595,19 +722,20 @@ const ListDirConponent = ({ dir, openFile, showFileActions, handleDragOver, hand
       onDragOver={ev=>{handleDragOver(ev);setMainDragOver(true);}}
       onDragLeave={()=>setMainDragOver(false)}
       onDrop={ev=>{setMainDragOver(false);handleDrop(ev,dir);}}
+      onContextMenu={ev=>{ev.preventDefault();showDirActions&&showDirActions(ev);}}
     >
       {ls.map(file=>(
         <div
           key={file.path}
-          className={`file-item${selected===file.path?' selected':''}${dragOverPath===file.path?' drag-over':''}`}
+          className={`file-item${selected===file.path?' selected':''}${cutPaths.has(file.path)?' cut':''}${dragOverPath===file.path?' drag-over':''}`}
           draggable
-          onDragStart={ev=>{ev.dataTransfer.setData('application/x-vfs-path',file.path);ev.dataTransfer.effectAllowed='move';}}
+          onDragStart={ev=>{ev.dataTransfer.setData('application/x-vfs-path',file.path);ev.dataTransfer.effectAllowed='move';if(window.top)window.top.__vfsDragPath=file.path;}}
           onDragOver={file.type==='dir'?ev=>{handleDragOver(ev);setDragOverPath(file.path);}:undefined}
           onDragLeave={file.type==='dir'?()=>setDragOverPath(null):undefined}
           onDrop={file.type==='dir'?ev=>{setDragOverPath(null);handleDrop(ev,file.path);}:undefined}
           onClick={()=>setSelected(file.path)}
           onDoubleClick={()=>openFile(file)}
-          onContextMenu={ev=>{ev.preventDefault();setSelected(file.path);showFileActions(file,ev);}}
+          onContextMenu={ev=>{ev.preventDefault();ev.stopPropagation();setSelected(file.path);showFileActions(file,ev);}}
         >
           <div className="file" data-ext={file.meta.ext} style={{
             backgroundImage:`url('${file.type==='file'&&imageExts.has(file.meta.ext)&&thumbnails[file.path]?thumbnails[file.path]:iconUrls[file.meta.ext]??iconUrls['']??''}')`,

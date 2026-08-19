@@ -1,4 +1,4 @@
-import { chromium } from '/Users/pankajdevesh/.npm/_npx/e41f203b7505f1fb/node_modules/playwright/index.mjs'
+import { chromium } from 'playwright';
 
 const browser = await chromium.launch()
 const page = await browser.newPage()

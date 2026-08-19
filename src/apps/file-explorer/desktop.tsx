@@ -31,6 +31,17 @@ export const ListDirComponent = ({ dir, openFile, showFileActions, customClass }
         '.db': '/(sw)/usr/share/icons/db-icon.svg',
         '.sqlite': '/(sw)/usr/share/icons/db-icon.svg',
         '.sqlite3': '/(sw)/usr/share/icons/db-icon.svg',
+        '.ipynb': '/(sw)/usr/share/icons/ipynb-icon.png',
+        '.mp3': '/(sw)/usr/share/icons/audio-icon.png',
+        '.wav': '/(sw)/usr/share/icons/audio-icon.png',
+        '.ogg': '/(sw)/usr/share/icons/audio-icon.png',
+        '.flac': '/(sw)/usr/share/icons/audio-icon.png',
+        '.m4a': '/(sw)/usr/share/icons/audio-icon.png',
+        '.aac': '/(sw)/usr/share/icons/audio-icon.png',
+        '.opus': '/(sw)/usr/share/icons/audio-icon.png',
+        '.mp4': '/(sw)/usr/share/icons/video-icon.svg',
+        '.mkv': '/(sw)/usr/share/icons/video-icon.svg',
+        '.webm': '/(sw)/usr/share/icons/video-icon.svg',
         '.': '/(sw)/usr/share/icons/folder-icon.png',
         '': '/(sw)/usr/share/icons/invalid-file-icon.png'
     }

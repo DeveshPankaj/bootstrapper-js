@@ -6,7 +6,7 @@ import { createRoot } from 'react-dom/client'
 import React from 'react'
 import { Taskbar } from './commands'
 import { ContextMenu, ContextMenuItem } from './contextmenu'
-import { DESKTOP_CONTAINER_CLASS, WINDOWS_CONTAINER_CLASS, WindowManager } from '../window-manager'
+import { DESKTOP_CONTAINER_CLASS, WINDOWS_CONTAINER_CLASS, WindowManager, desktopsSubject } from '../window-manager'
 import { FileType } from '../../shared/types'
 import { ListDirComponent } from '../../apps/file-explorer/desktop'
 import { Header } from './header'
@@ -918,19 +918,23 @@ export const render = (container: HTMLElement) => {
             }
         });
 
+        contextMenuRef.current.style.visibility = 'hidden';
         contextMenuRef.current.style.display = 'block';
-        contextMenuRef.current.style.top = `${y}px`
-        contextMenuRef.current.style.left = `${x}px`
+        contextMenuRef.current.style.top = `${y}px`;
+        contextMenuRef.current.style.left = `${x}px`;
 
-        requestAnimationFrame(() => {
+        // setTimeout(0) fires after React flushes the setItems re-render, so
+        // getBoundingClientRect() sees the fully populated menu dimensions.
+        setTimeout(() => {
             const menu = contextMenuRef.current
             if (!menu) return
             const rect = menu.getBoundingClientRect()
             const vw = platform.window.innerWidth
             const vh = platform.window.innerHeight
-            if (rect.right > vw) menu.style.left = `${Math.max(0, vw - rect.width - 4)}px`
-            if (rect.bottom > vh) menu.style.top = `${Math.max(0, vh - rect.height - 4)}px`
-        })
+            if (rect.right > vw) menu.style.left = `${Math.max(0, x - rect.width)}px`
+            if (rect.bottom > vh) menu.style.top = `${Math.max(0, y - rect.height)}px`
+            menu.style.visibility = ''
+        }, 0)
 
     }
 
@@ -956,13 +960,13 @@ export const render = (container: HTMLElement) => {
                 type: 'action',
                 id: '4',
                 title: 'Settings',
-                cmd: `command('ui.settings')`
+                cmd: `service('001-core.layout', 'open-window') (command('ui.settings'))`
             },
             {
                 type: 'action',
                 id: '0',
                 title: 'XTerm',
-               cmd: `command('ui.terminal')`
+                cmd: `service('001-core.layout', 'open-window') (command('ui.terminal'))`
             },
             {
                 type: 'action',
@@ -994,6 +998,12 @@ export const render = (container: HTMLElement) => {
                 title: 'Add Desktop',
                 cmd: `platform.host.callCommand('add-desktop')`
             },
+            ...(desktopsSubject.getValue().length > 1 ? [{
+                type: 'action' as const,
+                id: '8',
+                title: 'Remove Desktop',
+                cmd: `platform.host.callCommand('remove-active-desktop')`
+            }] : []),
         ])
     }
     root.render(

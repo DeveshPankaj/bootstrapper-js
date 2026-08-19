@@ -1,9 +1,132 @@
 /******/ (() => { // webpackBootstrap
 /******/ 	"use strict";
-/******/ 	// The require scope
-/******/ 	var __webpack_require__ = {};
+/******/ 	var __webpack_modules__ = ({
+
+/***/ "./src/core/ipc.ts":
+/*!*************************!*\
+  !*** ./src/core/ipc.ts ***!
+  \*************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   broadcastIpcEvent: () => (/* binding */ broadcastIpcEvent),
+/* harmony export */   initIpc: () => (/* binding */ initIpc),
+/* harmony export */   registerIpcHandler: () => (/* binding */ registerIpcHandler)
+/* harmony export */ });
+// Host-side IPC router — handles postMessage calls from sandboxed iframes.
+// Pairs with /usr/lib/ipc.js (VFS client library).
+var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+const handlers = new Map();
+function registerIpcHandler(event, handler) {
+    handlers.set(event, handler);
+}
+function broadcastIpcEvent(event, data) {
+    document.querySelectorAll('iframe').forEach(f => {
+        var _a;
+        try {
+            (_a = f.contentWindow) === null || _a === void 0 ? void 0 : _a.postMessage({ type: 'wos-ipc-event', event, data }, '*');
+        }
+        catch (_) { }
+    });
+}
+function initIpc(fs) {
+    window.addEventListener('message', (e) => __awaiter(this, void 0, void 0, function* () {
+        if (!e.data || e.data.type !== 'wos-ipc')
+            return;
+        const { id, event, data } = e.data;
+        const source = e.source;
+        if (!source)
+            return;
+        const handler = handlers.get(event);
+        if (!handler) {
+            source.postMessage({ type: 'wos-ipc-response', id, error: `Unknown IPC event: ${event}` }, '*');
+            return;
+        }
+        try {
+            const result = yield handler(data, source);
+            source.postMessage({ type: 'wos-ipc-response', id, result: result !== null && result !== void 0 ? result : null }, '*');
+        }
+        catch (err) {
+            source.postMessage({ type: 'wos-ipc-response', id, error: String(err) }, '*');
+        }
+    }));
+    registerIpcHandler('fs.read', (d) => Array.from(fs.readFileSync(d.path)));
+    registerIpcHandler('fs.readText', (d) => fs.readFileSync(d.path, 'utf8'));
+    registerIpcHandler('fs.write', (d) => {
+        const content = d.content;
+        if (typeof content === 'string')
+            fs.writeFileSync(d.path, content);
+        else
+            fs.writeFileSync(d.path, Buffer.from(content));
+        return true;
+    });
+    registerIpcHandler('fs.list', (d) => fs.readdirSync(d.path));
+    registerIpcHandler('fs.exists', (d) => fs.existsSync(d.path));
+    registerIpcHandler('fs.mkdir', (d) => { fs.mkdirSync(d.path, { recursive: true }); return true; });
+    registerIpcHandler('fs.rm', (d) => { fs.unlinkSync(d.path); return true; });
+    registerIpcHandler('fs.stat', (d) => {
+        var _a;
+        const s = fs.statSync(d.path);
+        return { isDirectory: s.isDirectory(), size: (_a = s.size) !== null && _a !== void 0 ? _a : 0 };
+    });
+}
+
+
+/***/ })
+
+/******/ 	});
+/************************************************************************/
+/******/ 	// The module cache
+/******/ 	var __webpack_module_cache__ = {};
+/******/ 	
+/******/ 	// The require function
+/******/ 	function __webpack_require__(moduleId) {
+/******/ 		// Check if module is in cache
+/******/ 		var cachedModule = __webpack_module_cache__[moduleId];
+/******/ 		if (cachedModule !== undefined) {
+/******/ 			return cachedModule.exports;
+/******/ 		}
+/******/ 		// Create a new module (and put it into the cache)
+/******/ 		var module = __webpack_module_cache__[moduleId] = {
+/******/ 			// no module.id needed
+/******/ 			// no module.loaded needed
+/******/ 			exports: {}
+/******/ 		};
+/******/ 	
+/******/ 		// Execute the module function
+/******/ 		__webpack_modules__[moduleId](module, module.exports, __webpack_require__);
+/******/ 	
+/******/ 		// Return the exports of the module
+/******/ 		return module.exports;
+/******/ 	}
 /******/ 	
 /************************************************************************/
+/******/ 	/* webpack/runtime/define property getters */
+/******/ 	(() => {
+/******/ 		// define getter functions for harmony exports
+/******/ 		__webpack_require__.d = (exports, definition) => {
+/******/ 			for(var key in definition) {
+/******/ 				if(__webpack_require__.o(definition, key) && !__webpack_require__.o(exports, key)) {
+/******/ 					Object.defineProperty(exports, key, { enumerable: true, get: definition[key] });
+/******/ 				}
+/******/ 			}
+/******/ 		};
+/******/ 	})();
+/******/ 	
+/******/ 	/* webpack/runtime/hasOwnProperty shorthand */
+/******/ 	(() => {
+/******/ 		__webpack_require__.o = (obj, prop) => (Object.prototype.hasOwnProperty.call(obj, prop))
+/******/ 	})();
+/******/ 	
 /******/ 	/* webpack/runtime/make namespace object */
 /******/ 	(() => {
 /******/ 		// define __esModule on exports
@@ -17,10 +140,13 @@
 /******/ 	
 /************************************************************************/
 var __webpack_exports__ = {};
+// This entry need to be wrapped in an IIFE because it need to be isolated against other modules in the chunk.
+(() => {
 /*!**********************!*\
   !*** ./src/index.ts ***!
   \**********************/
 __webpack_require__.r(__webpack_exports__);
+/* harmony import */ var _core_ipc__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./core/ipc */ "./src/core/ipc.ts");
 var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -30,6 +156,7 @@ var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _argume
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
+
 const __BOOTSTRAP_SCRIPT_PATH_KEY__ = '__BOOTSTRAP_SCRIPT_PATH__';
 // Which storage backend the virtual filesystem persists to: 'indexeddb' (default,
 // GB-scale) or 'localstorage' (~5-10MB, used by older versions of this app). The
@@ -141,6 +268,7 @@ const initWindow = () => {
             const fs = window.require('fs');
             // @ts-ignore
             window.fs = fs;
+            (0,_core_ipc__WEBPACK_IMPORTED_MODULE_0__.initIpc)(fs);
             defaultDirs.forEach(dir => {
                 if (!fs.existsSync(dir)) {
                     fs.mkdirSync(dir);
@@ -229,6 +357,7 @@ window.addEventListener('load', () => __awaiter(void 0, void 0, void 0, function
     loadBootstrapScript(localStorage);
 }));
 
+})();
 
 /******/ })()
 ;

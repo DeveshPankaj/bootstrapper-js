@@ -8,6 +8,7 @@ import { createRoot } from "react-dom/client";
 import * as utils from '@shared/utils'
 import { DESKTOP_CONTAINER_CLASS, WINDOWS_CONTAINER_CLASS } from './core/window-manager'
 import { startCronScheduler } from './core/cron'
+import { initIpc } from './core/ipc'
 
 class WindowService {
   constructor(private window: Window, private container: HTMLElement) {}
@@ -101,6 +102,8 @@ const loadModules = async (modules: { [name: string]: Module }) => {
 };
 
 const runInitCommands = () => {
+  initIpc(host.getFS());
+
   const initd: Array<Array<string>> = [
     ['/home/user1/initd.run']
   ];

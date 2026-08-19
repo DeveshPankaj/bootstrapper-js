@@ -100,6 +100,16 @@ const compressToZip = (vfsPath, outputPath) => {
 };
 // ──────────────────────────────────────────────────────────────────────────
 
+const copyEntry = (src, dest) => {
+  const stat = fs.statSync(src);
+  if (stat.isDirectory()) {
+    fs.mkdirSync(dest, { recursive: true });
+    fs.readdirSync(src).forEach(name => copyEntry(`${src}/${name}`, `${dest}/${name}`));
+  } else {
+    fs.writeFileSync(dest, fs.readFileSync(src));
+  }
+};
+
 const run = (...args) => {
   const [body, props, dir = DESKTOP_PATH] = args;
 
@@ -375,6 +385,11 @@ const App = (props) => {
   const [searchActive, setSearchActive] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
   const [searchResults, setSearchResults] = React.useState([]);
+  const [propsFile, setPropsFile] = React.useState(null);
+  const setPropsFileRef = React.useRef(setPropsFile);
+  setPropsFileRef.current = setPropsFile;
+
+  const cmdPrefix = React.useRef(`__e${Date.now().toString(36)}`);
 
   const refresh = () => {
     setDirList(fs.readdirSync(dirRef.current));
@@ -383,31 +398,89 @@ const App = (props) => {
   const refreshRef = React.useRef(refresh);
   refreshRef.current = refresh;
 
-  // Register zip service functions so context menu DSL can invoke them
+  // Register per-instance host commands so DSL can invoke them via platform.host.callCommand.
+  // platform.register() stores on the VFS-script platform which is NOT in host.modulesMap,
+  // so service() DSL calls can't reach it — registerCommand goes into the shared commands list.
   React.useEffect(() => {
-    const MODULE = '/home/user1/apps/explorer.js';
-    platform.register('zip-extract', (zipPath) => {
-      try {
-        const destDir = zipPath.split('/').slice(0, -1).join('/');
-        const n = extractZip(zipPath, destDir);
-        platform.host.callCommand('notify', { title: 'Extracted', body: `${n} file${n !== 1 ? 's' : ''} extracted`, duration: 3000 });
+    const k = cmdPrefix.current;
+    const regs = [
+      platform.host.registerCommand(`${k}.zip-extract`, (zipPath) => {
+        try {
+          const destDir = zipPath.split('/').slice(0, -1).join('/');
+          const n = extractZip(zipPath, destDir);
+          platform.host.callCommand('notify', { title: 'Extracted', body: `${n} file${n !== 1 ? 's' : ''} extracted`, duration: 3000 });
+          refreshRef.current();
+        } catch (e) {
+          platform.host.callCommand('notify', { title: 'Extract failed', body: e.message || String(e), duration: 4000 });
+        }
+      }),
+      platform.host.registerCommand(`${k}.zip-compress`, (vfsPath) => {
+        try {
+          const dir = vfsPath.split('/').slice(0, -1).join('/');
+          const name = vfsPath.split('/').pop();
+          const outPath = `${dir}/${name}.zip`;
+          compressToZip(vfsPath, outPath);
+          platform.host.callCommand('notify', { title: 'Compressed', body: `Created ${name}.zip`, duration: 3000 });
+          refreshRef.current();
+        } catch (e) {
+          platform.host.callCommand('notify', { title: 'Compress failed', body: e.message || String(e), duration: 4000 });
+        }
+      }),
+      platform.host.registerCommand(`${k}.rename`, (path) => {
+        const oldName = path.split('/').pop();
+        const dir     = path.split('/').slice(0, -1).join('/') || '/';
+        const newName = prompt('New name:', oldName);
+        if (!newName || newName.trim() === oldName) return;
+        const trimmed = newName.trim();
+        if (/[/\\]/.test(trimmed)) { alert('Name cannot contain "/" or "\\".'); return; }
+        const newPath = normalizePath(`${dir}/${trimmed}`);
+        if (fs.existsSync(newPath)) {
+          if (!confirm(`"${trimmed}" already exists. Overwrite?`)) return;
+        }
+        try { fs.renameSync(path, newPath); refreshRef.current(); }
+        catch (e) { alert(`Rename failed: ${e.message}`); }
+      }),
+      platform.host.registerCommand(`${k}.show-properties`, (path) => { setPropsFileRef.current(path); }),
+      platform.host.registerCommand(`${k}.copy-file`, (path) => {
+        window.top.__vfsClipboard = { op: 'copy', paths: [path] };
+        platform.host.callCommand('notify', { title: 'Copied', body: path.split('/').pop(), duration: 2000 });
         refreshRef.current();
-      } catch (e) {
-        platform.host.callCommand('notify', { title: 'Extract failed', body: e.message || String(e), duration: 4000 });
-      }
-    });
-    platform.register('zip-compress', (vfsPath) => {
-      try {
-        const dir = vfsPath.split('/').slice(0, -1).join('/');
-        const name = vfsPath.split('/').pop();
-        const outPath = `${dir}/${name}.zip`;
-        compressToZip(vfsPath, outPath);
-        platform.host.callCommand('notify', { title: 'Compressed', body: `Created ${name}.zip`, duration: 3000 });
+      }),
+      platform.host.registerCommand(`${k}.cut-file`, (path) => {
+        window.top.__vfsClipboard = { op: 'cut', paths: [path] };
+        platform.host.callCommand('notify', { title: 'Ready to move', body: path.split('/').pop(), duration: 2000 });
         refreshRef.current();
-      } catch (e) {
-        platform.host.callCommand('notify', { title: 'Compress failed', body: e.message || String(e), duration: 4000 });
-      }
-    });
+      }),
+      platform.host.registerCommand(`${k}.paste-files`, (destDir) => {
+        const cb = window.top?.__vfsClipboard;
+        if (!cb || !cb.paths.length) { platform.host.callCommand('notify', { title: 'Nothing to paste', body: '', duration: 2000 }); return; }
+        let errors = 0;
+        cb.paths.forEach(srcPath => {
+          const name = srcPath.split('/').pop();
+          const destPath = normalizePath(`${destDir}/${name}`);
+          try {
+            if (cb.op === 'cut') fs.renameSync(srcPath, destPath);
+            else copyEntry(srcPath, destPath);
+          } catch (e) { errors++; console.error('Paste failed:', srcPath, e); }
+        });
+        if (cb.op === 'cut') window.top.__vfsClipboard = null;
+        platform.host.callCommand('notify', errors
+          ? { title: 'Paste error', body: `${errors} item(s) failed`, duration: 4000 }
+          : { title: 'Pasted', body: `${cb.paths.length} item${cb.paths.length !== 1 ? 's' : ''}`, duration: 2000 });
+        refreshRef.current();
+      }),
+      platform.host.registerCommand(`${k}.make-dir`, (dir) => {
+        const name = prompt('Folder name?');
+        if (!name || !name.trim()) return;
+        try { fs.mkdirSync(normalizePath(`${dir}/${name.trim()}`)); refreshRef.current(); } catch (e) { alert(`Failed: ${e.message}`); }
+      }),
+      platform.host.registerCommand(`${k}.make-file`, (dir) => {
+        const name = prompt('File name?');
+        if (!name || !name.trim()) return;
+        try { fs.writeFileSync(normalizePath(`${dir}/${name.trim()}`), ''); refreshRef.current(); } catch (e) { alert(`Failed: ${e.message}`); }
+      }),
+    ];
+    return () => regs.forEach(r => r.remove());
   }, []);
 
   const onSearchChange = (q) => {
@@ -441,6 +514,7 @@ const App = (props) => {
   };
 
   const IMAGE_EXTS = new Set(['.png','.jpg','.jpeg','.gif','.webp','.svg','.bmp','.ico','.avif']);
+  const AUDIO_EXTS = new Set(['.mp3','.wav','.ogg','.flac','.m4a','.aac','.opus']);
 
   const open = (file) => {
     const selectedFilePath = normalizePath(
@@ -465,6 +539,10 @@ const App = (props) => {
       if (ext === 'py') {
         const cmd = platform.host.getCommand('ui.python');
         if (cmd) { cmd.exec(null, null, selectedFilePath); return; }
+      }
+      if (AUDIO_EXTS.has(ext)) {
+        platform.host.execCommand(`service('001-core.layout', 'open-window') (command('ui.audioplayer'), '${selectedFilePath}')`, platform);
+        return;
       }
       if (ext === 'zip') {
         if (confirm(`Extract "${selectedFilePath.split('/').pop()}" into current folder?`)) {
@@ -549,6 +627,7 @@ const App = (props) => {
     );
     if (!openContextMenu) return;
     const rect = props.getBoundingClientRect();
+    const k = cmdPrefix.current;
 
     const actions = [];
     file.path = file.path.replace(/\/\//g, '/')
@@ -582,6 +661,12 @@ const App = (props) => {
         cmd: `service('root', 'fs')('rm', '${file.path}')`,
       });
       actions.push({
+        id: 'rename_file',
+        type: 'action',
+        title: 'Rename',
+        cmd: `platform.host.callCommand('${k}.rename', '${file.path}')`,
+      });
+      actions.push({
         id: "diff_file",
         type: "action",
         title: "Compare with…",
@@ -593,15 +678,19 @@ const App = (props) => {
           id: "zip_extract",
           type: "action",
           title: "Extract here",
-          cmd: `service('/home/user1/apps/explorer.js', 'zip-extract')('${file.path}')`,
+          cmd: `platform.host.callCommand('${k}.zip-extract', '${file.path}')`,
         });
       }
       actions.push({
         id: "zip_compress_file",
         type: "action",
         title: "Compress to ZIP",
-        cmd: `service('/home/user1/apps/explorer.js', 'zip-compress')('${file.path}')`,
+        cmd: `platform.host.callCommand('${k}.zip-compress', '${file.path}')`,
       });
+      actions.push({ id: 'div_clip', type: 'divider', title: '' });
+      actions.push({ id: 'copy_file', type: 'action', title: 'Copy', cmd: `platform.host.callCommand('${k}.copy-file', '${file.path}')` });
+      actions.push({ id: 'cut_file',  type: 'action', title: 'Cut',  cmd: `platform.host.callCommand('${k}.cut-file', '${file.path}')` });
+      actions.push({ id: 'props_file', type: 'action', title: 'Properties', cmd: `platform.host.callCommand('${k}.show-properties', '${file.path}')` });
       actions.push({ id: 'divider_open_with', type: 'divider', title: '' });
       actions.push({
         id: 'open_with',
@@ -624,14 +713,36 @@ const App = (props) => {
         cmd: `service('001-core.layout', 'open-window') (command('explorer'), '${file.path}')`,
       });
       actions.push({ id: 'delete_file', type: 'action', title: 'Delete', cmd: `service('root', 'fs')('rmdir', '${file.path}')` });
+      actions.push({ id: 'rename_dir', type: 'action', title: 'Rename', cmd: `platform.host.callCommand('${k}.rename', '${file.path}')` });
       actions.push({
         id: "zip_compress_dir",
         type: "action",
         title: "Compress to ZIP",
-        cmd: `service('/home/user1/apps/explorer.js', 'zip-compress')('${file.path}')`,
+        cmd: `platform.host.callCommand('${k}.zip-compress', '${file.path}')`,
       });
+      actions.push({ id: 'div_clip_dir', type: 'divider', title: '' });
+      actions.push({ id: 'copy_dir',  type: 'action', title: 'Copy',       cmd: `platform.host.callCommand('${k}.copy-file', '${file.path}')` });
+      actions.push({ id: 'cut_dir',   type: 'action', title: 'Cut',        cmd: `platform.host.callCommand('${k}.cut-file', '${file.path}')` });
+      actions.push({ id: 'props_dir', type: 'action', title: 'Properties', cmd: `platform.host.callCommand('${k}.show-properties', '${file.path}')` });
     }
 
+    openContextMenu(event.clientX + rect.x, event.clientY + rect.y, actions);
+  };
+
+  const showDirActionsHandler = (event) => {
+    const openContextMenu = platform.host.getService('001-core.layout', 'show-context-menu');
+    if (!openContextMenu) return;
+    const rect = props.getBoundingClientRect();
+    const dir = dirRef.current;
+    const cb = window.top?.__vfsClipboard;
+    const k = cmdPrefix.current;
+    const actions = [];
+    if (cb && cb.paths.length) {
+      actions.push({ id: 'paste', type: 'action', title: `Paste "${cb.paths[0].split('/').pop()}"`, cmd: `platform.host.callCommand('${k}.paste-files', '${dir}')` });
+      actions.push({ id: 'div_paste', type: 'divider', title: '' });
+    }
+    actions.push({ id: 'mk_folder', type: 'action', title: 'New Folder', cmd: `platform.host.callCommand('${k}.make-dir', '${dir}')` });
+    actions.push({ id: 'mk_file_bg', type: 'action', title: 'New File',  cmd: `platform.host.callCommand('${k}.make-file', '${dir}')` });
     openContextMenu(event.clientX + rect.x, event.clientY + rect.y, actions);
   };
 
@@ -761,9 +872,51 @@ const App = (props) => {
 
   return (
     <div
-      style={{ display: "flex", height: "100%", flexDirection: "column" }}
+      style={{ display: "flex", height: "100%", flexDirection: "column", position: "relative" }}
       className="file-explorer"
     >
+      {propsFile && (
+        <div style={{ position:'absolute',inset:0,background:'rgba(0,0,0,.35)',zIndex:50,display:'flex',alignItems:'center',justifyContent:'center' }}
+          onClick={() => setPropsFile(null)}>
+          <div style={{ background:'#fff',borderRadius:12,padding:'1.5rem',minWidth:280,maxWidth:400,boxShadow:'0 20px 60px rgba(0,0,0,.3)',fontFamily:'inherit' }}
+            onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin:'0 0 1rem',fontSize:15,borderBottom:'1px solid #e2e2e2',paddingBottom:'.75rem',display:'flex',alignItems:'center',gap:'.5rem' }}>
+              <span className="material-symbols-outlined" style={{fontSize:18}}>info</span> Properties
+            </h3>
+            {(() => {
+              try {
+                const stat = fs.statSync(propsFile);
+                const name = propsFile.split('/').pop();
+                const dir = propsFile.split('/').slice(0,-1).join('/') || '/';
+                const ext = getFileExtension(name);
+                const isDir = stat.isDirectory();
+                const fmtSize = n => n < 1024 ? `${n} B` : n < 1048576 ? `${(n/1024).toFixed(1)} KB` : n < 1073741824 ? `${(n/1048576).toFixed(1)} MB` : `${(n/1073741824).toFixed(2)} GB`;
+                let childCount = null;
+                if (isDir) { try { childCount = fs.readdirSync(propsFile).length; } catch(_) {} }
+                const rows = [['Name',name],['Location',dir],['Type',isDir?'Folder':(ext?`${ext.slice(1).toUpperCase()} file`:'File')]];
+                if (isDir && childCount !== null) rows.push(['Contents',`${childCount} item${childCount!==1?'s':''}`]);
+                else if (!isDir) rows.push(['Size',fmtSize(stat.size||0)]);
+                if (stat.mtime) rows.push(['Modified',new Date(stat.mtime).toLocaleString()]);
+                return (
+                  <table style={{fontSize:13,borderCollapse:'collapse',width:'100%'}}>
+                    <tbody>
+                      {rows.map(([k,v]) => (
+                        <tr key={k} style={{borderBottom:'1px solid #f0f0f0'}}>
+                          <td style={{padding:'.4rem .5rem',color:'#888',fontWeight:500,whiteSpace:'nowrap',verticalAlign:'top'}}>{k}</td>
+                          <td style={{padding:'.4rem .5rem',wordBreak:'break-all'}}>{v}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                );
+              } catch(e) { return <div style={{color:'#e74c3c',fontSize:13}}>Error: {e.message}</div>; }
+            })()}
+            <div style={{textAlign:'right',marginTop:'1rem'}}>
+              <button onClick={() => setPropsFile(null)} style={{padding:'.35rem .9rem',border:'none',borderRadius:6,background:'#0a84ff',color:'#fff',cursor:'pointer',fontSize:13,fontFamily:'inherit'}}>OK</button>
+            </div>
+          </div>
+        </div>
+      )}
       <header>
         <div className="toolbar-nav-buttons">
           <span
@@ -895,6 +1048,7 @@ const App = (props) => {
             dir={dirRef.current}
             openFile={openFile}
             showFileActions={showFileActionsHandler}
+            showDirActions={showDirActionsHandler}
             handleDragOver={handleDragOver}
             handleDrop={handleDrop}
           />
@@ -907,7 +1061,7 @@ const App = (props) => {
   );
 };
 
-const ListDirConponent = ({ dir, openFile, showFileActions, handleDragOver, handleDrop }) => {
+const ListDirConponent = ({ dir, openFile, showFileActions, showDirActions, handleDragOver, handleDrop }) => {
   dir ??= DESKTOP_PATH;
 
   const extIconMap = {
@@ -930,6 +1084,17 @@ const ListDirConponent = ({ dir, openFile, showFileActions, handleDragOver, hand
     ".db": "/usr/share/icons/db-icon.svg",
     ".sqlite": "/usr/share/icons/db-icon.svg",
     ".sqlite3": "/usr/share/icons/db-icon.svg",
+    ".ipynb": "/usr/share/icons/ipynb-icon.png",
+    ".mp3":  "/usr/share/icons/audio-icon.png",
+    ".wav":  "/usr/share/icons/audio-icon.png",
+    ".ogg":  "/usr/share/icons/audio-icon.png",
+    ".flac": "/usr/share/icons/audio-icon.png",
+    ".m4a":  "/usr/share/icons/audio-icon.png",
+    ".aac":  "/usr/share/icons/audio-icon.png",
+    ".opus": "/usr/share/icons/audio-icon.png",
+    ".mp4":  "/usr/share/icons/video-icon.svg",
+    ".mkv":  "/usr/share/icons/video-icon.svg",
+    ".webm": "/usr/share/icons/video-icon.svg",
     ".": "/usr/share/icons/folder-icon.png",
     "": "/usr/share/icons/invalid-file-icon.png",
   };
@@ -999,7 +1164,7 @@ const ListDirConponent = ({ dir, openFile, showFileActions, handleDragOver, hand
     Object.entries(extIconMap).forEach(([ext, path]) => {
       try {
         const data = fs.readFileSync(path);
-        const blob = new Blob([data], { type: path.endsWith(".webp") ? "image/webp" : "image/png" });
+        const blob = new Blob([data], { type: path.endsWith(".webp") ? "image/webp" : path.endsWith(".svg") ? "image/svg+xml" : "image/png" });
         const url = URL.createObjectURL(blob);
         next[ext] = url;
         urls.push(url);
@@ -1089,6 +1254,10 @@ const ListDirConponent = ({ dir, openFile, showFileActions, handleDragOver, hand
           border-radius: 4px;
       }
 
+      .${DESKTOP_CONTAINER_CLASS}-files .file-item.cut {
+          opacity: 0.45;
+      }
+
       `);
 
     appendStyleSheet(doc, styles);
@@ -1097,6 +1266,7 @@ const ListDirConponent = ({ dir, openFile, showFileActions, handleDragOver, hand
 
   const rightClickHandler = (file, event) => {
     event.preventDefault();
+    event.stopPropagation();
     setSelected(file.path);
     const customEvent = new CustomEvent("showmenu", { detail: {} });
     event.target.dispatchEvent(customEvent);
@@ -1109,7 +1279,11 @@ const ListDirConponent = ({ dir, openFile, showFileActions, handleDragOver, hand
   const dragStartHandler = (file, event) => {
     event.dataTransfer.setData("application/x-vfs-path", file.path);
     event.dataTransfer.effectAllowed = "move";
+    if (window.top) window.top.__vfsDragPath = file.path;
   };
+
+  const clipboard = window.top?.__vfsClipboard;
+  const cutPaths = clipboard?.op === 'cut' ? new Set(clipboard.paths) : new Set();
 
   return (
     <main
@@ -1124,11 +1298,12 @@ const ListDirConponent = ({ dir, openFile, showFileActions, handleDragOver, hand
         setMainDragOver(false);
         handleDrop(ev, dir);
       }}
+      onContextMenu={(ev) => { ev.preventDefault(); showDirActions && showDirActions(ev); }}
     >
       {files.map((file) => (
         <div
           key={file.path}
-          className={`file-item ${selected === file.path ? "selected" : ""} ${dragOverPath === file.path ? "drag-over" : ""}`}
+          className={`file-item ${selected === file.path ? "selected" : ""} ${cutPaths.has(file.path) ? "cut" : ""} ${dragOverPath === file.path ? "drag-over" : ""}`}
           draggable
           onDragStart={(ev) => dragStartHandler(file, ev)}
           onDragOver={

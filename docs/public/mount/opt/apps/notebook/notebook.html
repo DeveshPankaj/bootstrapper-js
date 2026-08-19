@@ -67,6 +67,24 @@ body{
 #k-dot.busy{background:#fb923c}
 #k-dot.error{background:var(--error)}
 
+/* execution progress bar */
+#progress-bar{height:2px;flex-shrink:0;overflow:hidden;position:relative}
+#progress-bar.busy::before{
+  content:'';position:absolute;top:0;bottom:0;left:-35%;width:35%;
+  background:linear-gradient(90deg,transparent,var(--accent) 50%,transparent);
+  animation:nb-progress 1.4s ease-in-out infinite;
+}
+@keyframes nb-progress{0%{left:-35%}100%{left:100%}}
+
+/* html output iframe (Plotly etc.) */
+.cell-output iframe{width:100%;height:430px;border:none;border-radius:4px;margin-top:6px;display:block}
+
+/* Python-controlled progress bar */
+.nb-progress-wrap{margin:4px 0 6px}
+.nb-prog-label{font-size:11.5px;color:var(--muted);margin-bottom:5px;font-family:inherit;white-space:pre}
+.nb-prog-bar{height:6px;background:var(--border);border-radius:3px;overflow:hidden}
+.nb-prog-fill{height:100%;background:var(--accent);border-radius:3px;transition:width .15s}
+
 /* cells scroll area */
 #cells{
   flex:1;overflow-y:auto;padding:16px 12vw 100px;
@@ -187,6 +205,7 @@ body{
     <span id="k-label">idle</span>
   </div>
 </div>
+<div id="progress-bar"></div>
 
 <div id="cells">
   <div id="add-bar">
@@ -226,9 +245,14 @@ let execCount = 0;
 let cellIdSeq = 0;
 
 // ── kernel UI ─────────────────────────────────────────────────────────────────
-const kDot   = document.getElementById('k-dot');
-const kLabel = document.getElementById('k-label');
-function setKernel(state, msg) { kDot.className = state; kLabel.textContent = msg; }
+const kDot       = document.getElementById('k-dot');
+const kLabel     = document.getElementById('k-label');
+const kProgBar   = document.getElementById('progress-bar');
+function setKernel(state, msg) {
+  kDot.className = state;
+  kLabel.textContent = msg;
+  kProgBar.className = state === 'busy' ? 'busy' : '';
+}
 
 // ── Pyodide ───────────────────────────────────────────────────────────────────
 async function ensurePy() {
@@ -332,12 +356,13 @@ function parseOutputs(stdout, error) {
   const parts = [];
   if (error) { parts.push({ kind: 'error', text: error }); return parts; }
   if (!stdout) return parts;
-  const re = /<nb-img>([\s\S]*?)<\/nb-img>/g;
+  const re = /<nb-img>([\s\S]*?)<\/nb-img>|<nb-html>([\s\S]*?)<\/nb-html>/g;
   let last = 0, m;
   while ((m = re.exec(stdout)) !== null) {
     const pre = stdout.slice(last, m.index);
     if (pre.trimEnd()) parts.push({ kind: 'text', text: pre });
-    parts.push({ kind: 'image', data: m[1] });
+    if (m[1] !== undefined) parts.push({ kind: 'image', data: m[1] });
+    else                    parts.push({ kind: 'html',  data: m[2] });
     last = m.index + m[0].length;
   }
   const tail = stdout.slice(last);
@@ -354,6 +379,11 @@ function renderOutputs(outputEl, parts) {
       const img = document.createElement('img');
       img.src = 'data:image/png;base64,' + p.data;
       outputEl.appendChild(img);
+    } else if (p.kind === 'html') {
+      const iframe = document.createElement('iframe');
+      iframe.sandbox = 'allow-scripts';
+      iframe.srcdoc = p.data;
+      outputEl.appendChild(iframe);
     } else {
       const span = document.createElement('span');
       span.textContent = p.text;
@@ -516,15 +546,38 @@ async function runCell(cell, stayInPlace) {
   runBtn.textContent = '⟳'; runBtn.style.animation = 'spin .8s linear infinite';
   setKernel('busy', 'running…');
 
+  // Give Python code a live progress-bar API:
+  //   from js import window
+  //   window.__nb_progress.update(done, total, "Epoch 3/10")
+  //   await asyncio.sleep(0)   # yield so browser can repaint
+  let _progEl = null;
+  window.__nb_progress = {
+    update(value, total, label) {
+      if (!_progEl) {
+        _progEl = document.createElement('div');
+        _progEl.className = 'nb-progress-wrap';
+        cell.outputEl.classList.add('has-output');
+        cell.outputEl.prepend(_progEl);
+      }
+      const pct = total > 0 ? Math.min(100, value / total * 100) : 0;
+      _progEl.innerHTML =
+        `<div class="nb-prog-label">${label ? label + '  ' : ''}${value} / ${total}  (${pct.toFixed(0)}%)</div>` +
+        `<div class="nb-prog-bar"><div class="nb-prog-fill" style="width:${pct}%"></div></div>`;
+    }
+  };
+
   try {
     const { stdout, error } = await execPython(src);
     execCount++;
     cell.execEl.textContent = '[' + execCount + ']';
     renderOutputs(cell.outputEl, parseOutputs(stdout, error));
+    // keep progress bar in output if it was used
+    if (_progEl && cell.outputEl.contains(_progEl)) cell.outputEl.prepend(_progEl);
     markDirty();
   } catch (e) {
     renderOutputs(cell.outputEl, [{ kind: 'error', text: String(e) }]);
   } finally {
+    window.__nb_progress = null;
     runBtn.textContent = '▶'; runBtn.style.animation = '';
     setKernel('ready', 'Python 3 (Pyodide)');
   }
@@ -845,6 +898,47 @@ print(df2.to_string(index=False))
 print()
 print('Statistics:')
 print(df2.describe().round(1).to_string())`, [], false);
+
+    addCell('markdown', '## 3D Interactive Plot', [], true);
+
+    addCell('code', `# 6. Interactive 3D surface with Plotly — drag to rotate, scroll to zoom
+import micropip
+await micropip.install('plotly')
+
+import plotly.graph_objects as go
+import numpy as np
+
+x = np.linspace(-6, 6, 60)
+y = np.linspace(-6, 6, 60)
+X, Y = np.meshgrid(x, y)
+Z = np.sin(np.sqrt(X**2 + Y**2))
+
+fig = go.Figure(data=[go.Surface(z=Z, x=X, y=Y, colorscale='Viridis')])
+fig.update_layout(
+    title='3D Surface — sin(√(x²+y²))',
+    scene=dict(xaxis_title='X', yaxis_title='Y', zaxis_title='Z'),
+    margin=dict(l=0, r=0, t=40, b=0),
+    height=420,
+)
+
+# <nb-html> renders as a sandboxed iframe — full Plotly interactivity
+html = fig.to_html(full_html=False, include_plotlyjs='cdn')
+print(f'<nb-html>{html}</nb-html>')`, [], false);
+
+    addCell('markdown', '## Progress Bar', [], true);
+
+    addCell('code', `# 7. Python-controlled progress bar
+# Call window.__nb_progress.update(done, total, label) from Python.
+# Use "await asyncio.sleep(0)" between iterations to let the browser repaint.
+import asyncio
+from js import window
+
+steps = 20
+for i in range(steps):
+    await asyncio.sleep(0.08)   # simulate work + yield to browser
+    window.__nb_progress.update(i + 1, steps, f'Processing step {i+1}/{steps}')
+
+print('Done!')`, [], false);
 
     dirty = false; updateTitle();
   }

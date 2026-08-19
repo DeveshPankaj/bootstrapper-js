@@ -699,6 +699,21 @@
       "main": "main.js"
     },
     {
+      "id": "trainboard",
+      "name": "TrainBoard",
+      "description": "TensorBoard-style metrics dashboard. Log loss, accuracy and any scalar from Python; line charts update live with smoothing and multi-run support.",
+      "version": "1.0.0",
+      "icon": "monitoring",
+      "category": "Development",
+      "author": "bootstrapper-js",
+      "commandName": "ui.trainboard",
+      "files": [
+        { "dest": "main.js",     "src": "/public/mount/opt/apps/trainboard/main.js" },
+        { "dest": "board.html",  "src": "/public/mount/opt/apps/trainboard/board.html" }
+      ],
+      "main": "main.js"
+    },
+    {
       "id": "python-demo",
       "name": "Python Demo",
       "description": "Interactive Python (Pyodide) playground: open windows, render buttons, attach CSS and click listeners \u2014 all from Python.",
@@ -716,6 +731,42 @@
           "dest": "demo.html",
           "src": "/public/mount/opt/apps/python-demo/demo.html"
         }
+      ],
+      "main": "main.js"
+    },
+    {
+      "id": "audio-player",
+      "name": "Audio Player",
+      "description": "Music player for audio files stored in the VFS. Supports MP3, WAV, OGG, FLAC, M4A, AAC, and Opus. Playlist, shuffle, repeat, and seek controls.",
+      "version": "1.0.0",
+      "icon": "music_note",
+      "category": "Media",
+      "author": "bootstrapper-js",
+      "commandName": "ui.audioplayer",
+      "files": [
+        {
+          "dest": "main.js",
+          "src": "/public/mount/opt/apps/audio-player/main.js"
+        },
+        {
+          "dest": "player.html",
+          "src": "/public/mount/opt/apps/audio-player/player.html"
+        }
+      ],
+      "main": "main.js"
+    },
+    {
+      "id": "colleps",
+      "name": "Colleps",
+      "description": "Wave Function Collapse generator. Define tile/block adjacency rules with a live editor and generate procedural 2D grids or 3D voxel structures.",
+      "version": "1.0.0",
+      "icon": "grid_view",
+      "category": "Tools",
+      "author": "bootstrapper-js",
+      "commandName": "ui.colleps",
+      "files": [
+        { "dest": "main.js",     "src": "/public/mount/opt/apps/colleps/main.js" },
+        { "dest": "colleps.html", "src": "/public/mount/opt/apps/colleps/colleps.html" }
       ],
       "main": "main.js"
     }

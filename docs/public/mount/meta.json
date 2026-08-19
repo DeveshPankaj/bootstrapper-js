@@ -222,6 +222,11 @@
     "force_reload": true
   },
   {
+    "path": "/usr/share/icons/ipynb-icon.png",
+    "file": "/usr/share/icons/ipynb-icon.png",
+    "force_reload": true
+  },
+  {
     "path": "/usr/share/icons/folder-icon.png",
     "file": "/usr/share/icons/folder-icon.png",
     "force_reload": true
@@ -724,6 +729,31 @@
   {
     "path": "/opt/apps/notebook/notebook.html",
     "file": "/opt/apps/notebook/notebook.html",
+    "force_reload": true
+  },
+  {
+    "path": "/usr/lib/ipc.js",
+    "file": "/usr/lib/ipc.js",
+    "force_reload": true
+  },
+  {
+    "path": "/usr/share/icons/audio-icon.png",
+    "file": "/usr/share/icons/audio-icon.png",
+    "force_reload": true
+  },
+  {
+    "path": "/usr/share/icons/video-icon.svg",
+    "file": "/usr/share/icons/video-icon.svg",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/audio-player/main.js",
+    "file": "/opt/apps/audio-player/main.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/audio-player/player.html",
+    "file": "/opt/apps/audio-player/player.html",
     "force_reload": true
   }
 ]

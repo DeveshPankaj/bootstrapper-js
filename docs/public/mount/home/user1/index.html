@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Pankaj Devesh — Senior Software Engineer</title>
-  <meta name="description" content="Senior Software Engineer with 6+ years experience in NodeJS, TypeScript, React, Angular, Python. Open-source contributor." />
+  <meta name="description" content="Senior Software Engineer with 6+ years experience in TypeScript, Python, React, Angular. Open-source contributor." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <style>
@@ -134,6 +134,8 @@
     .tag.cyan{background:rgba(6,182,212,.12);color:var(--accent2);border-color:rgba(6,182,212,.2)}
     .tag.purple{background:rgba(139,92,246,.12);color:var(--accent3);border-color:rgba(139,92,246,.2)}
     .tag.green{background:rgba(16,185,129,.12);color:var(--green);border-color:rgba(16,185,129,.2)}
+    a.tag{cursor:pointer;transition:opacity .15s,transform .15s}
+    a.tag:hover{opacity:.75;transform:translateY(-1px)}
     /* ── Timeline ── */
     .timeline{position:relative;padding-left:2rem}
     .timeline::before{
@@ -295,52 +297,48 @@
 
   <!-- SKILLS -->
   <section id="skills" class="reveal">
-    <div class="section-label">// 01 — Expertise</div>
     <div class="section-title">Skills &amp; Technologies</div>
     <div class="skills-grid">
       <div class="skill-card">
         <div class="skill-card-icon">⚡</div>
         <h4>Languages</h4>
         <div class="tag-list">
-          <span class="tag">NodeJS</span>
-          <span class="tag">JavaScript</span>
-          <span class="tag">TypeScript</span>
-          <span class="tag">Python</span>
-          <span class="tag">Go</span>
-          <span class="tag">C++</span>
+          <a href="https://www.typescriptlang.org/" target="_blank" class="tag">TypeScript</a>
+          <a href="https://www.python.org/" target="_blank" class="tag">Python</a>
+          <a href="https://isocpp.org/" target="_blank" class="tag">C++</a>
         </div>
       </div>
       <div class="skill-card">
         <div class="skill-card-icon">🗄️</div>
         <h4>Databases</h4>
         <div class="tag-list">
-          <span class="tag cyan">PostgreSQL</span>
-          <span class="tag cyan">MongoDB</span>
-          <span class="tag cyan">MySQL</span>
-          <span class="tag cyan">Redis</span>
+          <a href="https://www.postgresql.org/" target="_blank" class="tag cyan">PostgreSQL</a>
+          <a href="https://www.mongodb.com/" target="_blank" class="tag cyan">MongoDB</a>
+          <a href="https://www.mysql.com/" target="_blank" class="tag cyan">MySQL</a>
+          <a href="https://redis.io/" target="_blank" class="tag cyan">Redis</a>
         </div>
       </div>
       <div class="skill-card">
         <div class="skill-card-icon">🧩</div>
-        <h4>Frameworks &amp; Libraries</h4>
+        <h4>Frameworks</h4>
         <div class="tag-list">
-          <span class="tag purple">React</span>
-          <span class="tag purple">Angular</span>
-          <span class="tag purple">Express</span>
-          <span class="tag purple">Django</span>
-          <span class="tag purple">Flask</span>
-          <span class="tag purple">ElectronJS</span>
+          <a href="https://angular.dev/" target="_blank" class="tag purple">Angular</a>
+          <a href="https://expressjs.com/" target="_blank" class="tag purple">Express</a>
+          <a href="https://www.djangoproject.com/" target="_blank" class="tag purple">Django</a>
+          <a href="https://flask.palletsprojects.com/" target="_blank" class="tag purple">Flask</a>
+          <a href="https://www.electronjs.org/" target="_blank" class="tag purple">ElectronJS</a>
         </div>
       </div>
       <div class="skill-card">
         <div class="skill-card-icon">☁️</div>
         <h4>Infra &amp; Tools</h4>
         <div class="tag-list">
-          <span class="tag green">Docker</span>
-          <span class="tag green">Nginx</span>
-          <span class="tag green">LXC</span>
-          <span class="tag green">Proxmox</span>
-          <span class="tag green">RabbitMQ</span>
+          <a href="https://react.dev/" target="_blank" class="tag green">React</a>
+          <a href="https://www.docker.com/" target="_blank" class="tag green">Docker</a>
+          <a href="https://nginx.org/" target="_blank" class="tag green">Nginx</a>
+          <a href="https://linuxcontainers.org/" target="_blank" class="tag green">LXC</a>
+          <a href="https://www.proxmox.com/" target="_blank" class="tag green">Proxmox</a>
+          <a href="https://www.rabbitmq.com/" target="_blank" class="tag green">RabbitMQ</a>
           <span class="tag green">Microservices</span>
           <span class="tag green">Design Patterns</span>
         </div>
@@ -349,9 +347,10 @@
         <div class="skill-card-icon">🤖</div>
         <h4>AI &amp; ML</h4>
         <div class="tag-list">
-          <span class="tag purple">LangChain</span>
+          <a href="https://www.langchain.com/" target="_blank" class="tag purple">LangChain</a>
           <span class="tag purple">LLMs</span>
-          <span class="tag cyan">PyTorch</span>
+          <a href="https://pytorch.org/" target="_blank" class="tag cyan">PyTorch</a>
+          <a href="https://www.ray.io/" target="_blank" class="tag cyan">Ray</a>
         </div>
       </div>
     </div>
@@ -361,7 +360,6 @@
 
   <!-- EXPERIENCE -->
   <section id="experience" class="reveal">
-    <div class="section-label">// 02 — Career</div>
     <div class="section-title">Work Experience</div>
     <div class="timeline">
 
@@ -468,7 +466,6 @@
 
   <!-- PROJECTS -->
   <section id="projects" class="reveal">
-    <div class="section-label">// 03 — Open Source</div>
     <div class="section-title">Personal Projects</div>
     <div class="projects-grid">
 
@@ -480,12 +477,12 @@
         <div class="project-name">Android JS</div>
         <div class="project-desc">Open-source framework for building Android apps with web technologies. Provides a full NodeJS runtime on Android devices — supports Angular, Vue, React out of the box. NPM packages work natively.</div>
         <div class="tag-list" style="margin-top:.5rem">
-          <span class="tag">NodeJS</span><span class="tag cyan">Android</span><span class="tag purple">React</span><span class="tag purple">Angular</span>
+          <span class="tag cyan">Android</span><span class="tag purple">React</span><span class="tag purple">Angular</span><span class="tag">TypeScript</span>
         </div>
         <div class="project-links">
-          <a href="https://github.com/DeveshPankaj" target="_blank" class="project-link">
+          <a href="https://github.com/DeveshPankaj/android-js" target="_blank" class="project-link">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0020 4.77 5.07 5.07 0 0019.91 1S18.73.65 16 2.48a13.38 13.38 0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 005 4.77a5.44 5.44 0 00-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 009 18.13V22"/></svg>
-            View on GitHub
+            GitHub
           </a>
         </div>
       </div>
@@ -497,12 +494,12 @@
         <div class="project-name">CRON Scheduler</div>
         <div class="project-desc">Standalone solution for setting up cron jobs with event subscription and webhook registration via cron expressions. Overcomes crontab limitations — no max job cap, built-in persistence.</div>
         <div class="tag-list" style="margin-top:.5rem">
-          <span class="tag">NodeJS</span><span class="tag cyan">Webhooks</span><span class="tag green">Cron</span>
+          <span class="tag">TypeScript</span><span class="tag cyan">Webhooks</span><span class="tag green">Cron</span>
         </div>
         <div class="project-links">
-          <a href="https://github.com/DeveshPankaj" target="_blank" class="project-link">
+          <a href="https://github.com/DeveshPankaj/cron-scheduler" target="_blank" class="project-link">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0020 4.77 5.07 5.07 0 0019.91 1S18.73.65 16 2.48a13.38 13.38 0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 005 4.77a5.44 5.44 0 00-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 009 18.13V22"/></svg>
-            View on GitHub
+            GitHub
           </a>
         </div>
       </div>
@@ -514,12 +511,12 @@
         <div class="project-name">Codi — Code Editor</div>
         <div class="project-desc">Minimal, configurable code editor with code execution support, custom themes, and custom execution commands. Built on CodeMirror for a fast, embeddable editing experience.</div>
         <div class="tag-list" style="margin-top:.5rem">
-          <span class="tag purple">CodeMirror</span><span class="tag">JavaScript</span><span class="tag cyan">Editor</span>
+          <a href="https://codemirror.net/" target="_blank" class="tag purple">CodeMirror</a><span class="tag">TypeScript</span><span class="tag cyan">Editor</span>
         </div>
         <div class="project-links">
-          <a href="https://github.com/DeveshPankaj" target="_blank" class="project-link">
+          <a href="https://github.com/DeveshPankaj/codi" target="_blank" class="project-link">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0020 4.77 5.07 5.07 0 0019.91 1S18.73.65 16 2.48a13.38 13.38 0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 005 4.77a5.44 5.44 0 00-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 009 18.13V22"/></svg>
-            View on GitHub
+            GitHub
           </a>
         </div>
       </div>
@@ -531,7 +528,6 @@
 
   <!-- EDUCATION + ACHIEVEMENTS -->
   <section class="reveal">
-    <div class="section-label">// 04 — Background</div>
     <div class="section-title">Education &amp; Achievements</div>
     <div class="two-col" style="margin-bottom:1.5rem">
       <div class="info-card">
@@ -626,7 +622,6 @@
 
   <!-- CONTACT -->
   <section id="contact" class="reveal">
-    <div class="section-label">// 05 — Get in touch</div>
     <div class="section-title">Contact</div>
     <p style="color:var(--muted);margin-bottom:2rem;max-width:480px;line-height:1.7">
       Open to new opportunities, interesting side projects, or just a good conversation about software.

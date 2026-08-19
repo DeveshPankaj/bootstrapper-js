@@ -1,0 +1,620 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Colleps</title>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js" } }
+</script>
+<style>
+:root{--bg:#0d0d14;--surface:#13131f;--border:#1e1e2e;--text:#e2e8f0;--muted:#6b7280;--accent:#8b5cf6}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif;height:100vh;overflow:hidden;display:flex;flex-direction:column}
+
+/* ── toolbar ─────────────────────────────────────────────────────────────── */
+#toolbar{
+  flex-shrink:0;min-height:42px;display:flex;flex-wrap:wrap;align-items:center;gap:6px;row-gap:6px;
+  padding:6px 12px;background:var(--surface);border-bottom:1px solid var(--border);
+}
+.app-name{font-size:13px;font-weight:600;display:flex;align-items:center;gap:5px;margin-right:2px;white-space:nowrap}
+.tb-sep{width:1px;height:18px;background:var(--border);margin:0 3px;flex-shrink:0}
+.tb-btn{
+  display:flex;align-items:center;gap:3px;padding:4px 10px;
+  border:1px solid var(--border);border-radius:5px;font-size:12px;font-weight:500;
+  background:var(--surface);color:var(--text);cursor:pointer;white-space:nowrap;
+  transition:background .1s;
+}
+.tb-btn:hover{background:var(--border)}
+.tb-btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.tb-btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.tb-btn.primary:hover{filter:brightness(1.1)}
+.seg{display:flex;border:1px solid var(--border);border-radius:5px;overflow:hidden}
+.seg .tb-btn{border:none;border-radius:0}
+.field{display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--muted);white-space:nowrap}
+.field input[type=number]{width:48px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12px;padding:3px 5px}
+.field input[type=text]{width:82px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12px;padding:3px 5px}
+
+/* ── main layout ─────────────────────────────────────────────────────────── */
+#main{flex:1;display:flex;overflow:hidden;min-height:0}
+
+/* ── sidebar ─────────────────────────────────────────────────────────────── */
+#sidebar{
+  width:250px;flex-shrink:0;background:var(--surface);
+  border-right:1px solid var(--border);display:flex;flex-direction:column;
+  overflow-y:auto;padding:10px;gap:10px;
+}
+.sidebar-hd{font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--muted);padding:2px 0 4px;text-transform:uppercase}
+#tile-list{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.tile-chip{
+  display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:6px;
+  border:1px solid var(--border);cursor:pointer;font-size:11.5px;background:var(--bg);
+  max-width:110px;
+}
+.tile-chip.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.tile-swatch{width:12px;height:12px;border-radius:3px;flex-shrink:0;border:1px solid rgba(255,255,255,.15)}
+.tile-chip-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.new-tile-btn{width:100%;padding:6px;border:1px dashed var(--border);border-radius:6px;background:transparent;color:var(--muted);font-size:12px;cursor:pointer}
+.new-tile-btn:hover{color:var(--text);border-color:var(--accent)}
+
+.editor{border-top:1px solid var(--border);padding-top:10px;display:flex;flex-direction:column;gap:8px}
+.row{display:flex;align-items:center;gap:6px}
+.row label{font-size:11px;color:var(--muted);width:56px;flex-shrink:0}
+.row input[type=text],.row input[type=number]{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12px;padding:4px 6px;min-width:0}
+.row input[type=color]{width:34px;height:26px;padding:0;border:1px solid var(--border);border-radius:4px;background:var(--bg)}
+.row.chk{gap:5px}
+.row.chk label{width:auto;font-size:11.5px;color:var(--text)}
+
+.compass{display:grid;grid-template-areas:". n ." "w c e" ". s .";grid-template-columns:1fr 1fr 1fr;gap:4px;margin-top:2px}
+.compass .n{grid-area:n} .compass .w{grid-area:w} .compass .e{grid-area:e} .compass .s{grid-area:s}
+.compass .c{grid-area:c;display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--muted);text-transform:uppercase}
+.compass input{width:100%;font-size:10.5px;text-align:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:4px 2px}
+.compass-lbl{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:6px 0 -2px}
+.vert-row{display:flex;gap:6px}
+.vert-row>div{flex:1;display:flex;flex-direction:column;gap:2px;align-items:center}
+.vert-row span{font-size:9px;color:var(--muted);text-transform:uppercase}
+.vert-row input{width:100%;font-size:10.5px;text-align:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:4px 2px}
+
+.editor-actions{display:flex;gap:6px;margin-top:2px}
+.editor-actions .tb-btn{flex:1;justify-content:center}
+.hint{font-size:10.5px;color:var(--muted);line-height:1.5}
+
+.tileset-actions{display:flex;flex-direction:column;gap:6px}
+.tileset-actions .tb-btn{justify-content:center}
+
+/* ── viewport ─────────────────────────────────────────────────────────────── */
+#viewport{flex:1;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 40%,#171725,#0d0d14)}
+#canvas2d{display:block;border-radius:6px;box-shadow:0 4px 24px rgba(0,0,0,.4)}
+#canvas3d-container{position:absolute;inset:0}
+#canvas3d-container canvas{width:100%!important;height:100%!important;display:block}
+.placeholder{color:var(--muted);font-size:13px;text-align:center;line-height:1.7}
+.placeholder .big{font-size:32px;margin-bottom:8px}
+
+/* ── status bar ───────────────────────────────────────────────────────────── */
+#statusbar{
+  flex-shrink:0;height:26px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 12px;background:var(--surface);border-top:1px solid var(--border);
+  font-size:11px;color:var(--muted);
+}
+#statusbar.error{color:#f87171}
+</style>
+</head>
+<body>
+<div id="toolbar">
+  <span class="app-name">🧩 Colleps</span>
+  <div class="tb-sep"></div>
+  <div class="seg">
+    <button class="tb-btn active" id="mode-2d">2D</button>
+    <button class="tb-btn" id="mode-3d">3D</button>
+  </div>
+  <div class="tb-sep"></div>
+  <div class="field">W <input type="number" id="in-width" value="20" min="2" max="60"></div>
+  <div class="field">H <input type="number" id="in-depth" value="14" min="2" max="60"></div>
+  <div class="field" id="layers-field" style="display:none">Layers <input type="number" id="in-layers" value="4" min="1" max="16"></div>
+  <div class="tb-sep"></div>
+  <div class="field">Seed <input type="text" id="in-seed" value="12345"></div>
+  <button class="tb-btn" id="btn-randseed" title="Randomize seed">🎲</button>
+  <div class="tb-sep"></div>
+  <button class="tb-btn primary" id="btn-generate">▶ Generate</button>
+</div>
+<div id="main">
+  <div id="sidebar">
+    <div>
+      <div class="sidebar-hd">Tiles / Blocks</div>
+      <div id="tile-list"></div>
+      <button class="new-tile-btn" id="btn-new-tile">+ New Tile</button>
+    </div>
+    <div id="editor-slot"></div>
+    <div>
+      <div class="sidebar-hd">Tile Set</div>
+      <div class="tileset-actions">
+        <button class="tb-btn" id="btn-save-set">⬇ Save Tile Set</button>
+        <button class="tb-btn" id="btn-load-set">⬆ Load Tile Set</button>
+        <button class="tb-btn" id="btn-reset-set">↺ Reset to Default</button>
+      </div>
+      <p class="hint" style="margin-top:8px">Each tile has 6 sockets (N/E/S/W + Up/Down). Two tiles can sit next to each other only if the touching sockets share a tag. Use <code>*</code> to match anything, or comma-separate multiple tags. Enable "Rotatable" to auto-generate 4 rotated variants — handy for edges/borders like coastlines.</p>
+    </div>
+  </div>
+  <div id="viewport">
+    <canvas id="canvas2d" style="display:none"></canvas>
+    <div id="canvas3d-container" style="display:none"></div>
+    <div class="placeholder" id="placeholder"><div class="big">🧩</div>Click <strong>Generate</strong> to run Wave Function Collapse</div>
+  </div>
+</div>
+<div id="statusbar">
+  <span id="status-left">No grid generated yet</span>
+  <span id="status-right"></span>
+</div>
+<script>
+'use strict';
+
+// ── constants ────────────────────────────────────────────────────────────────
+const DIRS3D   = ['N','E','S','W','U','D'];
+const OPPOSITE = { N:'S', S:'N', E:'W', W:'E', U:'D', D:'U' };
+const OFFSET   = { N:[0,0,-1], S:[0,0,1], E:[1,0,0], W:[-1,0,0], U:[0,1,0], D:[0,-1,0] };
+const TILESET_DIR = '/home/user1/colleps/tilesets';
+const PALETTE = ['#e07a5f','#81b29a','#f2cc8f','#3d5a80','#ee6c4d','#98c1d9','#c9ada7','#6d597a','#a3c9a8','#f4a261'];
+
+const DEFAULT_TILES = [
+  { id:'empty', name:'Empty',  color:'#2a2a3a', weight:4, rotate:false, solid:false,
+    sockets:{ N:'air', E:'air', S:'air', W:'air', U:'*', D:'*' } },
+  { id:'grass', name:'Grass',  color:'#5f9a4b', weight:6, rotate:false, solid:true,
+    sockets:{ N:'grass', E:'grass', S:'grass', W:'grass', U:'*', D:'*' } },
+  { id:'water', name:'Water',  color:'#3c7bb0', weight:3, rotate:false, solid:true,
+    sockets:{ N:'water', E:'water', S:'water', W:'water', U:'*', D:'*' } },
+  { id:'shore', name:'Shore',  color:'#d8c27a', weight:2, rotate:true,  solid:true,
+    sockets:{ N:'grass', E:'shoreV,grass,water', S:'water', W:'shoreV,grass,water', U:'*', D:'*' } },
+];
+
+// ── state ────────────────────────────────────────────────────────────────────
+let bridge = null;
+let tiles = [];
+let selectedTileId = null;
+let mode = '2d';
+let seed = 12345;
+let lastResult = null; // { dims:{w,h,d}, cells:[variant,...] }
+
+// ── prng / wfc solver ────────────────────────────────────────────────────────
+function mulberry32(seedNum) {
+  let a = seedNum >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function hashSeed(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (Math.imul(h, 31) + str.charCodeAt(i)) | 0;
+  return h >>> 0;
+}
+
+function socketsCompatible(a, b) {
+  if (a === '*' || b === '*') return true;
+  const as = a.split(',').map(s => s.trim()).filter(Boolean);
+  const bs = b.split(',').map(s => s.trim()).filter(Boolean);
+  return as.some(x => bs.includes(x));
+}
+
+function rotateSockets(s, r) {
+  let cur = { N: s.N, E: s.E, S: s.S, W: s.W, U: s.U, D: s.D };
+  for (let i = 0; i < r; i++) cur = { N: cur.W, E: cur.N, S: cur.E, W: cur.S, U: cur.U, D: cur.D };
+  return cur;
+}
+
+function buildVariants(tileList) {
+  const variants = [];
+  for (const t of tileList) {
+    const n = t.rotate ? 4 : 1;
+    for (let r = 0; r < n; r++) {
+      variants.push({
+        baseId: t.id, rot: r, color: t.color, weight: t.weight / n,
+        sockets: rotateSockets(t.sockets, r),
+      });
+    }
+  }
+  return variants;
+}
+
+function precomputeAllowed(variants) {
+  const allowed = {};
+  for (const dir of DIRS3D) allowed[dir] = variants.map(() => new Set());
+  for (let a = 0; a < variants.length; a++) {
+    for (const dir of DIRS3D) {
+      const opp = OPPOSITE[dir];
+      for (let b = 0; b < variants.length; b++) {
+        if (socketsCompatible(variants[a].sockets[dir], variants[b].sockets[opp])) allowed[dir][a].add(b);
+      }
+    }
+  }
+  return allowed;
+}
+
+function weightedPick(options, weights, rng) {
+  const sum = weights.reduce((s, w) => s + w, 0);
+  let r = rng() * sum;
+  for (let i = 0; i < options.length; i++) { r -= weights[i]; if (r <= 0) return options[i]; }
+  return options[options.length - 1];
+}
+
+function solveWFC({ dims, variants, allowed, seedNum, maxRetries }) {
+  const { w, h, d } = dims;
+  const total = w * h * d;
+  const idx = (x, y, z) => x + y * w + z * w * h;
+
+  function neighborsOf(i) {
+    const z = Math.floor(i / (w * h));
+    const rem = i % (w * h);
+    const y = Math.floor(rem / w);
+    const x = rem % w;
+    const res = [];
+    for (const dir of DIRS3D) {
+      const [dx, dy, dz] = OFFSET[dir];
+      const nx = x + dx, ny = y + dy, nz = z + dz;
+      if (nx < 0 || nx >= w || ny < 0 || ny >= h || nz < 0 || nz >= d) continue;
+      res.push({ dir, ni: idx(nx, ny, nz) });
+    }
+    return res;
+  }
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const rng = mulberry32(seedNum + attempt * 7919);
+    const wave = new Array(total);
+    for (let i = 0; i < total; i++) wave[i] = new Set(variants.map((_, vi) => vi));
+    let contradiction = false;
+
+    function propagate(startIdx) {
+      const stack = [startIdx];
+      while (stack.length) {
+        const i = stack.pop();
+        for (const { dir, ni } of neighborsOf(i)) {
+          const allowedSet = new Set();
+          for (const vi of wave[i]) for (const nb of allowed[dir][vi]) allowedSet.add(nb);
+          let changed = false;
+          for (const nb of Array.from(wave[ni])) {
+            if (!allowedSet.has(nb)) { wave[ni].delete(nb); changed = true; }
+          }
+          if (wave[ni].size === 0) { contradiction = true; return; }
+          if (changed) stack.push(ni);
+        }
+        if (contradiction) return;
+      }
+    }
+
+    while (!contradiction) {
+      let best = -1, bestCount = Infinity;
+      for (let i = 0; i < total; i++) {
+        const c = wave[i].size;
+        if (c === 0) { contradiction = true; break; }
+        if (c > 1 && c < bestCount) { bestCount = c; best = i; }
+      }
+      if (contradiction || best === -1) break;
+      const options = Array.from(wave[best]);
+      const weights = options.map(vi => variants[vi].weight || 0.001);
+      const chosen = weightedPick(options, weights, rng);
+      wave[best] = new Set([chosen]);
+      propagate(best);
+    }
+
+    if (!contradiction) return { success: true, wave, attempt };
+  }
+  return { success: false };
+}
+
+// ── tile set persistence ─────────────────────────────────────────────────────
+function cloneDefaults() { return JSON.parse(JSON.stringify(DEFAULT_TILES)); }
+
+function ensureTilesetDir() { if (bridge && !bridge.existsDir(TILESET_DIR)) bridge.mkDir(TILESET_DIR); }
+
+function loadInitialTiles() {
+  if (bridge) {
+    const raw = bridge.readFile(TILESET_DIR + '/default.json');
+    if (raw) { try { const parsed = JSON.parse(raw); if (parsed.tiles?.length) return parsed.tiles; } catch {} }
+  }
+  return cloneDefaults();
+}
+
+// ── ui: tile list + editor ───────────────────────────────────────────────────
+function genTileId() { return 'tile_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+
+function selectTile(id) { selectedTileId = id; renderTileList(); renderEditor(); }
+
+function renderTileList() {
+  const list = document.getElementById('tile-list');
+  list.innerHTML = tiles.map(t => `
+    <div class="tile-chip${t.id === selectedTileId ? ' sel' : ''}" data-id="${t.id}">
+      <span class="tile-swatch" style="background:${t.color}"></span>
+      <span class="tile-chip-name" title="${t.name}">${t.name}</span>
+    </div>`).join('');
+  list.querySelectorAll('.tile-chip').forEach(el => el.addEventListener('click', () => selectTile(el.dataset.id)));
+}
+
+function updateTile(id, patch) {
+  const t = tiles.find(x => x.id === id);
+  if (!t) return;
+  Object.assign(t, patch);
+  renderTileList();
+}
+function updateSocket(id, dir, value) {
+  const t = tiles.find(x => x.id === id);
+  if (!t) return;
+  t.sockets[dir] = value.trim() || '*';
+}
+
+function renderEditor() {
+  const slot = document.getElementById('editor-slot');
+  const t = tiles.find(x => x.id === selectedTileId);
+  if (!t) { slot.innerHTML = ''; return; }
+  slot.innerHTML = `
+    <div class="editor">
+      <div class="sidebar-hd">Edit Tile</div>
+      <div class="row"><label>Name</label><input type="text" id="ed-name" value="${t.name.replace(/"/g,'&quot;')}"></div>
+      <div class="row"><label>Color</label><input type="color" id="ed-color" value="${t.color}"><label style="width:auto;margin-left:8px">Weight</label><input type="number" id="ed-weight" min="0.1" step="0.5" value="${t.weight}"></div>
+      <div class="row chk"><input type="checkbox" id="ed-rotate" ${t.rotate ? 'checked' : ''}><label for="ed-rotate">Rotatable (4-way, 2D/3D horizontal)</label></div>
+      <div class="row chk"><input type="checkbox" id="ed-solid" ${t.solid !== false ? 'checked' : ''}><label for="ed-solid">Solid block in 3D view</label></div>
+      <div class="compass-lbl">Horizontal sockets</div>
+      <div class="compass">
+        <input class="n" id="ed-N" value="${t.sockets.N}">
+        <input class="w" id="ed-W" value="${t.sockets.W}">
+        <div class="c">tile</div>
+        <input class="e" id="ed-E" value="${t.sockets.E}">
+        <input class="s" id="ed-S" value="${t.sockets.S}">
+      </div>
+      <div class="compass-lbl">Vertical sockets</div>
+      <div class="vert-row">
+        <div><span>Up</span><input id="ed-U" value="${t.sockets.U}"></div>
+        <div><span>Down</span><input id="ed-D" value="${t.sockets.D}"></div>
+      </div>
+      <div class="editor-actions">
+        <button class="tb-btn" id="ed-delete">🗑 Delete</button>
+      </div>
+    </div>`;
+
+  document.getElementById('ed-name').addEventListener('input', e => updateTile(t.id, { name: e.target.value || 'Untitled' }));
+  document.getElementById('ed-color').addEventListener('input', e => updateTile(t.id, { color: e.target.value }));
+  document.getElementById('ed-weight').addEventListener('input', e => updateTile(t.id, { weight: Math.max(0.1, parseFloat(e.target.value) || 1) }));
+  document.getElementById('ed-rotate').addEventListener('change', e => updateTile(t.id, { rotate: e.target.checked }));
+  document.getElementById('ed-solid').addEventListener('change', e => updateTile(t.id, { solid: e.target.checked }));
+  ['N','E','S','W','U','D'].forEach(dir => {
+    document.getElementById('ed-' + dir).addEventListener('input', e => updateSocket(t.id, dir, e.target.value));
+  });
+  document.getElementById('ed-delete').addEventListener('click', () => {
+    if (tiles.length <= 1) { alert('At least one tile is required.'); return; }
+    if (!confirm(`Delete tile "${t.name}"?`)) return;
+    tiles = tiles.filter(x => x.id !== t.id);
+    selectedTileId = tiles[0]?.id || null;
+    renderTileList(); renderEditor();
+  });
+}
+
+document.getElementById('btn-new-tile').addEventListener('click', () => {
+  const color = PALETTE[Math.floor(Math.random() * PALETTE.length)];
+  const t = {
+    id: genTileId(), name: 'New Tile', color, weight: 3, rotate: false, solid: true,
+    sockets: { N: '*', E: '*', S: '*', W: '*', U: '*', D: '*' },
+  };
+  tiles.push(t);
+  selectTile(t.id);
+});
+
+document.getElementById('btn-save-set').addEventListener('click', () => {
+  if (!bridge) { alert('Not connected to the filesystem.'); return; }
+  const name = prompt('Save tile set as:', 'default');
+  if (!name) return;
+  ensureTilesetDir();
+  bridge.writeFile(`${TILESET_DIR}/${name.trim()}.json`, JSON.stringify({ tiles }, null, 2));
+  setStatus(`Saved tile set "${name.trim()}"`, false);
+});
+
+document.getElementById('btn-load-set').addEventListener('click', () => {
+  if (!bridge) { alert('Not connected to the filesystem.'); return; }
+  ensureTilesetDir();
+  const names = bridge.listDir(TILESET_DIR).filter(f => f.endsWith('.json')).map(f => f.slice(0, -5));
+  if (!names.length) { alert('No saved tile sets yet.'); return; }
+  const name = prompt(`Load which tile set?\nAvailable: ${names.join(', ')}`, names[0]);
+  if (!name) return;
+  const raw = bridge.readFile(`${TILESET_DIR}/${name.trim()}.json`);
+  if (!raw) { alert('Not found.'); return; }
+  try {
+    const parsed = JSON.parse(raw);
+    tiles = parsed.tiles || [];
+    selectedTileId = tiles[0]?.id || null;
+    renderTileList(); renderEditor();
+    setStatus(`Loaded tile set "${name.trim()}"`, false);
+  } catch { alert('Could not parse that tile set.'); }
+});
+
+document.getElementById('btn-reset-set').addEventListener('click', () => {
+  if (!confirm('Reset to the default tile set? Unsaved edits will be lost.')) return;
+  tiles = cloneDefaults();
+  selectedTileId = tiles[0]?.id || null;
+  renderTileList(); renderEditor();
+});
+
+// ── generate ─────────────────────────────────────────────────────────────────
+function clampInt(v, lo, hi) { return Math.max(lo, Math.min(hi, Math.round(v) || lo)); }
+
+function setStatus(msg, isError) {
+  document.getElementById('status-left').textContent = msg;
+  document.getElementById('statusbar').classList.toggle('error', !!isError);
+}
+
+function generate() {
+  const w = clampInt(parseInt(document.getElementById('in-width').value, 10), 2, 60);
+  const d = clampInt(parseInt(document.getElementById('in-depth').value, 10), 2, 60);
+  const h = mode === '3d' ? clampInt(parseInt(document.getElementById('in-layers').value, 10), 1, 16) : 1;
+
+  if (w * h * d > 4200) { setStatus('Grid too large — reduce dimensions (max 4200 cells).', true); return; }
+  if (!tiles.length) { setStatus('Add at least one tile first.', true); return; }
+
+  const seedVal = document.getElementById('in-seed').value.trim();
+  seed = /^-?\d+$/.test(seedVal) ? parseInt(seedVal, 10) : hashSeed(seedVal || 'colleps');
+
+  const variants = buildVariants(tiles);
+  const allowed = precomputeAllowed(variants);
+  const dims = { w, h, d };
+  const t0 = performance.now();
+  const result = solveWFC({ dims, variants, allowed, seedNum: seed >>> 0, maxRetries: 30 });
+  const elapsed = performance.now() - t0;
+
+  if (!result.success) {
+    setStatus('Contradiction after 30 attempts — loosen socket rules and try again.', true);
+    return;
+  }
+
+  const cells = result.wave.map(s => variants[[...s][0]]);
+  lastResult = { dims, cells };
+  document.getElementById('placeholder').style.display = 'none';
+  setStatus(`Generated ${w}×${h === 1 ? d : h + '×' + d} — ${w * h * d} cells in ${elapsed.toFixed(0)}ms (attempt ${result.attempt + 1}/30)`, false);
+  if (mode === '2d') render2D(); else render3D();
+}
+
+document.getElementById('btn-generate').addEventListener('click', generate);
+document.getElementById('btn-randseed').addEventListener('click', () => {
+  document.getElementById('in-seed').value = Math.floor(Math.random() * 1e9);
+});
+
+// ── mode switching ───────────────────────────────────────────────────────────
+function setMode(m) {
+  mode = m;
+  document.getElementById('mode-2d').classList.toggle('active', m === '2d');
+  document.getElementById('mode-3d').classList.toggle('active', m === '3d');
+  document.getElementById('layers-field').style.display = m === '3d' ? 'flex' : 'none';
+  document.getElementById('canvas2d').style.display = m === '2d' && lastResult ? 'block' : 'none';
+  document.getElementById('canvas3d-container').style.display = m === '3d' && lastResult ? 'block' : 'none';
+  if (lastResult) { if (m === '2d') render2D(); else render3D(); }
+}
+document.getElementById('mode-2d').addEventListener('click', () => setMode('2d'));
+document.getElementById('mode-3d').addEventListener('click', () => setMode('3d'));
+
+// ── 2D rendering ─────────────────────────────────────────────────────────────
+function tileFor(variant) { return tiles.find(t => t.id === variant.baseId); }
+
+function render2D() {
+  document.getElementById('canvas2d').style.display = 'block';
+  document.getElementById('canvas3d-container').style.display = 'none';
+  const { dims, cells } = lastResult;
+  const vp = document.getElementById('viewport');
+  const cell = Math.max(4, Math.min(30, Math.floor(Math.min((vp.clientWidth - 24) / dims.w, (vp.clientHeight - 24) / dims.d))));
+  const canvas = document.getElementById('canvas2d');
+  canvas.width = dims.w * cell;
+  canvas.height = dims.d * cell;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (let z = 0; z < dims.d; z++) {
+    for (let x = 0; x < dims.w; x++) {
+      const i = x + z * dims.w * dims.h; // h === 1 in 2D mode
+      const tile = tileFor(cells[i]);
+      const px = x * cell, py = z * cell;
+      if (!tile) { ctx.fillStyle = '#1e1e2e'; ctx.fillRect(px, py, cell, cell); continue; }
+      if (tile.solid === false) {
+        ctx.globalAlpha = 0.35;
+        ctx.fillStyle = tile.color;
+        ctx.fillRect(px, py, cell, cell);
+        ctx.globalAlpha = 1;
+      } else {
+        ctx.fillStyle = tile.color;
+        ctx.fillRect(px, py, cell, cell);
+      }
+      ctx.strokeStyle = 'rgba(0,0,0,.18)';
+      ctx.strokeRect(px + 0.5, py + 0.5, cell - 1, cell - 1);
+    }
+  }
+}
+
+// ── 3D rendering (three.js, lazy-loaded) ─────────────────────────────────────
+let THREE = null, OrbitControls = null, renderer3, scene3, camera3, controls3, meshGroup3, sharedGeo3;
+const matCache3 = new Map();
+
+async function ensureThree() {
+  if (THREE) return;
+  THREE = await import('three');
+  ({ OrbitControls } = await import('https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/controls/OrbitControls.js'));
+
+  const container = document.getElementById('canvas3d-container');
+  scene3 = new THREE.Scene();
+  scene3.background = new THREE.Color(0x0d0d14);
+  camera3 = new THREE.PerspectiveCamera(50, 1, 0.1, 2000);
+  renderer3 = new THREE.WebGLRenderer({ antialias: true });
+  renderer3.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  container.appendChild(renderer3.domElement);
+  controls3 = new OrbitControls(camera3, renderer3.domElement);
+  controls3.enableDamping = true;
+
+  scene3.add(new THREE.AmbientLight(0xffffff, 0.6));
+  const dl = new THREE.DirectionalLight(0xffffff, 0.85);
+  dl.position.set(8, 14, 8);
+  scene3.add(dl);
+
+  sharedGeo3 = new THREE.BoxGeometry(0.94, 0.94, 0.94);
+  meshGroup3 = new THREE.Group();
+  scene3.add(meshGroup3);
+
+  (function animate() {
+    requestAnimationFrame(animate);
+    if (mode === '3d' && renderer3) { controls3.update(); renderer3.render(scene3, camera3); }
+  })();
+}
+
+function resize3D() {
+  if (!renderer3 || mode !== '3d') return;
+  const container = document.getElementById('canvas3d-container');
+  const w = container.clientWidth, h = container.clientHeight;
+  if (!w || !h) return;
+  renderer3.setSize(w, h);
+  camera3.aspect = w / h;
+  camera3.updateProjectionMatrix();
+}
+
+async function render3D() {
+  document.getElementById('canvas2d').style.display = 'none';
+  document.getElementById('canvas3d-container').style.display = 'block';
+  await ensureThree();
+
+  while (meshGroup3.children.length) meshGroup3.remove(meshGroup3.children[0]);
+
+  const { dims, cells } = lastResult;
+  for (let y = 0; y < dims.h; y++) {
+    for (let z = 0; z < dims.d; z++) {
+      for (let x = 0; x < dims.w; x++) {
+        const i = x + y * dims.w + z * dims.w * dims.h;
+        const tile = tileFor(cells[i]);
+        if (!tile || tile.solid === false) continue;
+        let mat = matCache3.get(tile.color);
+        if (!mat) { mat = new THREE.MeshStandardMaterial({ color: tile.color }); matCache3.set(tile.color, mat); }
+        const mesh = new THREE.Mesh(sharedGeo3, mat);
+        mesh.position.set(x - dims.w / 2, y - dims.h / 2, z - dims.d / 2);
+        meshGroup3.add(mesh);
+      }
+    }
+  }
+
+  const maxDim = Math.max(dims.w, dims.h, dims.d);
+  camera3.position.set(maxDim * 0.9, maxDim * 0.85, maxDim * 1.2);
+  controls3.target.set(0, 0, 0);
+  camera3.lookAt(0, 0, 0);
+  resize3D();
+}
+
+new ResizeObserver(() => {
+  if (mode === '2d' && lastResult) render2D();
+  if (mode === '3d') resize3D();
+}).observe(document.getElementById('viewport'));
+
+// ── bridge / boot ─────────────────────────────────────────────────────────────
+function boot() {
+  tiles = loadInitialTiles();
+  selectedTileId = tiles[0]?.id || null;
+  renderTileList();
+  renderEditor();
+  generate();
+}
+
+window.__collepsInit = (b) => {
+  bridge = b;
+  ensureTilesetDir();
+  if (!bridge.readFile(TILESET_DIR + '/default.json')) {
+    bridge.writeFile(TILESET_DIR + '/default.json', JSON.stringify({ tiles: cloneDefaults() }, null, 2));
+  }
+  boot();
+};
+setTimeout(() => { if (!bridge) boot(); }, 400);
+</script>
+</body></html>

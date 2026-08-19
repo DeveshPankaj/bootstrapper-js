@@ -1,5 +1,6 @@
 //@ts-nocheck
 import type _fs from 'fs'
+import { initIpc } from './core/ipc'
 const __BOOTSTRAP_SCRIPT_PATH_KEY__ = '__BOOTSTRAP_SCRIPT_PATH__';
 
 // Which storage backend the virtual filesystem persists to: 'indexeddb' (default,
@@ -129,6 +130,7 @@ const initWindow = () => {
             const fs = window.require('fs') as typeof _fs
             // @ts-ignore
             window.fs = fs
+            initIpc(fs)
 
             defaultDirs.forEach(dir => {
                 if(!fs.existsSync(dir)) {

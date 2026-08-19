@@ -294,9 +294,8 @@ When changing one explorer file's structure/behavior, mirror the change in the o
 - **Never run ad-hoc test scripts from `/tmp`** — create them in the repo (now under
   `testing/scripts/`), run them, and keep them (don't delete) unless told otherwise.
   Screenshots go in `testing/screenshots/`.
-- Playwright: import via the local npx cache path, e.g.
-  `import { chromium } from '/Users/pankajdevesh/.npm/_npx/e41f203b7505f1fb/node_modules/playwright/index.mjs'`
-  (bare `'playwright'` import fails with `ERR_MODULE_NOT_FOUND`).
+- Playwright: `import { chromium } from 'playwright'` — it is a devDependency, so
+  `pnpm install` makes the bare import work.
 - First page load commonly shows a "no client available to serve the request" service
   worker error — reload (`page.reload({ waitUntil: 'networkidle' })`) **twice** after
   the initial `goto()` before interacting.
