@@ -1,7 +1,9 @@
 const React = platform.getService('React')
 const ReactDOM = platform.getService('ReactDOM')
 
-const INITD_PATH = '/home/user1/initd.run'
+// /.initd.run is the user-editable custom startup script called by /home/user1/initd.run.
+// Writing here persists across refreshes (force_reload: false in meta.json).
+const INITD_PATH = '/.initd.run'
 
 // Known apps that can be auto-launched on boot
 const KNOWN_APPS = [
@@ -63,7 +65,7 @@ const StartupApps = () => {
   return (
     <div className="settings-page">
       <h1 className="settings-page-title">Startup Apps</h1>
-      <p className="settings-page-subtitle">Choose which apps open automatically on boot. Changes write to <code>/home/user1/initd.run</code>.</p>
+      <p className="settings-page-subtitle">Choose which apps open automatically on boot. Changes write to <code>/.initd.run</code>.</p>
 
       <div className="settings-group">
         <div className="settings-group-body">

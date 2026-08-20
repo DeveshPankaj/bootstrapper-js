@@ -66,9 +66,53 @@ const SNAP_ZONES = [
     { test: (x, y, W, H) => y < 40,                     rect: (W, H) => ({ left: 0,      top: 0,     width: W,     height: H }) }, // top = fullscreen
 ];
 
-// Called once per window, right after its header/iframe are created, so
-// behavior changes here apply to every new window immediately.
-export const setupWindow = ({ container, head, settings, toggleFullScreen, moveOnTop }) => {
+// ---------------------------------------------------------------------------
+// VFS hooks — override these exports to customise window creation.
+// Re-read on every createWindow(), so edits apply to the next window opened.
+// ---------------------------------------------------------------------------
+
+// createContainer({ command, settings }) → HTMLElement | null
+// Return a custom container element to replace the default <div class="window">.
+// The compiled code still adds required attributes (data-name, data-pid, role,
+// class "window hidden") to whatever element you return, so leave those out.
+// Return null/undefined to keep the default behaviour.
+//
+// export const createContainer = ({ command, settings }) => {
+//   const div = top.document.createElement('div')
+//   div.style.borderRadius = '12px'           // custom shape
+//   div.style.boxShadow = '0 8px 32px #000a'
+//   return div
+// }
+
+// createHeader({ command, settings, close, minimize, fullscreen }) → HTMLElement | null
+// Return a custom header element. The close/minimize/fullscreen callbacks are
+// provided so you can wire your own control buttons. The compiled default header
+// (with .wm-close / .wm-minimize / .wm-fullscreen action buttons) is skipped
+// entirely when you return an element here.
+// Return null/undefined to keep the default compiled header.
+//
+// export const createHeader = ({ command, settings, close, minimize, fullscreen }) => {
+//   const head = top.document.createElement('div')
+//   head.className = 'window-header'
+//   head.style.cssText = 'display:flex;align-items:center;padding:0 8px;gap:6px;'
+//   const title = top.document.createElement('span')
+//   title.style.flex = '1'
+//   title.textContent = command.meta?.title || command.name
+//   const btn = (label, fn) => {
+//     const b = top.document.createElement('button')
+//     b.textContent = label
+//     b.onclick = fn
+//     return b
+//   }
+//   head.append(title, btn('−', minimize), btn('⤢', fullscreen), btn('✕', close))
+//   return head
+// }
+
+// setupWindow is called once per window, right after its DOM is built.
+// It receives close/minimize/setTitle in addition to the existing params so
+// that VFS-custom headers (returned from createHeader above) can wire their
+// controls here if they prefer deferred wiring.
+export const setupWindow = ({ container, head, settings, toggleFullScreen, moveOnTop, close, minimize, setTitle }) => {
     if (settings.behavior.dblClickHeaderFullscreen) {
         head.addEventListener('dblclick', (event) => {
             // Ignore double-clicks on header action buttons (close, fullscreen,

@@ -236,9 +236,92 @@ export class WindowManager {
     }
 
     const pid = nextPid++;
-    const container = platform.window.document.createElement("div");
-    const [head, closeButton, fullScreenButton, minimizeButton, setTitleRaw, appendActionButton, setHeaderStyles] =
-      createWindowHeader(command);
+
+    // Load the VFS window-manager module once at the top so its hooks
+    // (createContainer, createHeader, setupWindow) are all available.
+    const wmModule = loadWindowManagerModule();
+    const wmSettings = wmModule.readSettings?.() ?? FALLBACK_WM_SETTINGS;
+
+    // --- VFS hook: createContainer({ command, settings }) ---
+    // Return an HTMLElement to replace the default <div class="window">.
+    // Mandatory attributes/classes are still applied by compiled code below.
+    const customContainer = wmModule.createContainer?.({ command, settings: wmSettings });
+    const container = (customContainer instanceof HTMLElement
+      ? customContainer
+      : platform.window.document.createElement("div")) as HTMLDivElement;
+
+    container.setAttribute("data-name", command.name);
+    container.setAttribute("data-pid", `${pid}`);
+    container.setAttribute("role", "dialog");
+    container.setAttribute("aria-label", (command.meta.title as string) || command.name);
+    container.classList.add("window");
+    container.classList.add("hidden");
+
+    // windowRef must exist before closeFunction since closeFunction calls closeWindow(windowRef).
+    const windowRef = { container, command, pid };
+    this.windows[command.name] ??= [];
+    this.windows[command.name].push(windowRef);
+    Object.freeze(windowRef);
+
+    // Declare iframe early so emitSignal can close over it before its assignment below.
+    let iframe!: HTMLIFrameElement;
+
+    let onCloseCallbacks: Array<Function> = [];
+    const signalCallbacks = new Map<string, Array<Function>>();
+    const emitSignal = (name: string) => {
+      (signalCallbacks.get(name) ?? []).forEach(cb => { try { cb() } catch (_) {} });
+      try { iframe.contentWindow?.postMessage({ type: 'signal', name }, '*') } catch (_) {}
+    };
+    // SIGTERM — notifies the app then closes.
+    const closeFunction = () => {
+      emitSignal('SIGTERM');
+      onCloseCallbacks.forEach(cb => { try { cb() } catch (_) {} });
+      onCloseCallbacks = [];
+      signalCallbacks.clear();
+      this.closeWindow(windowRef);
+    };
+    // SIGKILL — immediate removal, no callbacks or signals.
+    const killFunction = () => {
+      onCloseCallbacks = [];
+      signalCallbacks.clear();
+      this.closeWindow(windowRef);
+    };
+    // Shared minimize/fullscreen callbacks — passed to createHeader and setupWindow.
+    const minimizeCallback = () => this.toggleMinimize(windowRef);
+    const fullscreenCallback = () => toggleFullScreen(this.contentRef.current!, container);
+
+    // --- VFS hook: createHeader({ command, settings, close, minimize, fullscreen }) ---
+    // Return an HTMLElement to replace the default header.
+    // The callbacks are provided so custom headers can wire their own controls.
+    // If null/undefined is returned, the default compiled header is used instead.
+    const customHead = wmModule.createHeader?.({
+      command,
+      settings: wmSettings,
+      close: closeFunction,
+      minimize: minimizeCallback,
+      fullscreen: fullscreenCallback,
+    });
+    let head: HTMLElement,
+        closeButton: HTMLElement | null,
+        fullScreenButton: HTMLElement | null,
+        minimizeButton: HTMLElement | null,
+        setTitleRaw: (t: string) => void,
+        appendActionButton: (props: { icon: string; title: string; onClick: () => void }) => { remove: () => void },
+        setHeaderStyles: (styles: Record<string, string>) => void;
+
+    if (customHead instanceof HTMLElement) {
+      head = customHead;
+      // VFS-provided header has already received the callbacks — don't wire compiled buttons.
+      closeButton = null;
+      fullScreenButton = null;
+      minimizeButton = null;
+      setTitleRaw = () => {};
+      appendActionButton = () => ({ remove: () => {} });
+      setHeaderStyles = () => {};
+    } else {
+      [head, closeButton, fullScreenButton, minimizeButton, setTitleRaw, appendActionButton, setHeaderStyles] =
+        createWindowHeader(command);
+    }
 
     const setTitle = (newTitle: string) => {
       setTitleRaw(newTitle);
@@ -247,18 +330,6 @@ export class WindowManager {
         windowsSubject.getValue().map(w => w.pid === pid ? { ...w, title: newTitle } : w)
       );
     };
-
-    const windowRef = { container, command, pid };
-    this.windows[command.name] ??= [];
-    this.windows[command.name].push(windowRef);
-    Object.freeze(windowRef);
-
-    container.setAttribute("data-name", command.name);
-    container.setAttribute("data-pid", `${pid}`);
-    container.setAttribute("role", "dialog");
-    container.setAttribute("aria-label", (command.meta.title as string) || command.name);
-    container.classList.add("window");
-    container.classList.add("hidden");
 
     const title = (command.meta.title as string) || command.name;
     const icon = (command.meta?.icon as string) || "";
@@ -279,42 +350,17 @@ export class WindowManager {
 
     container.appendChild(head);
     if (command.meta.fullScreen) {
-      head.style.display = 'none'
+      head.style.display = 'none';
     }
-    const toggleHeader = (flag?:boolean) => {
-      if(flag === undefined) head.style.display = head.style.display === 'none' ? '' : 'none'
-      if(flag === true)head.style.display = ''
-      if(flag === false)head.style.display = 'none'
-    }
+    const toggleHeader = (flag?: boolean) => {
+      if (flag === undefined) head.style.display = head.style.display === 'none' ? '' : 'none';
+      if (flag === true) head.style.display = '';
+      if (flag === false) head.style.display = 'none';
+    };
 
-    const iframe = platform.window.document.createElement("iframe");
+    iframe = platform.window.document.createElement("iframe");
     iframe.classList.add("draggable");
-
     iframe.setAttribute("allowfullscreen", "");
-
-    let onCloseCallbacks: Array<Function> = []
-    const signalCallbacks = new Map<string, Array<Function>>()
-
-    const emitSignal = (name: string) => {
-      (signalCallbacks.get(name) ?? []).forEach(cb => { try { cb() } catch (_) {} })
-      try { iframe.contentWindow?.postMessage({ type: 'signal', name }, '*') } catch (_) {}
-    }
-
-    // SIGTERM — notifies the app then closes.
-    const closeFunction = () => {
-      emitSignal('SIGTERM')
-      onCloseCallbacks.forEach(cb => { try { cb() } catch (_) {} })
-      onCloseCallbacks = []
-      signalCallbacks.clear()
-      this.closeWindow(windowRef);
-    }
-
-    // SIGKILL — immediate removal, no callbacks or signals.
-    const killFunction = () => {
-      onCloseCallbacks = []
-      signalCallbacks.clear()
-      this.closeWindow(windowRef);
-    }
 
     const messages$ = new Subject<unknown>();
     processRegistry.set(pid, {
@@ -332,12 +378,12 @@ export class WindowManager {
       const hostDimension = {
         innerWidth: platform.window.innerWidth,
         innerHeight: platform.window.innerHeight,
-      }
+      };
 
       platform.window.addEventListener('resize', () => {
-        hostDimension.innerHeight = platform.window.innerHeight
-        hostDimension.innerWidth = platform.window.innerWidth
-      })
+        hostDimension.innerHeight = platform.window.innerHeight;
+        hostDimension.innerWidth = platform.window.innerWidth;
+      });
 
       command.exec(
         iframeBody,
@@ -355,15 +401,15 @@ export class WindowManager {
             onCloseCallbacks.push(cb);
             return () => {
               onCloseCallbacks = onCloseCallbacks.filter(x => x !== cb);
-            }
+            };
           },
           onSignal: (name: string, cb: Function) => {
-            if (!signalCallbacks.has(name)) signalCallbacks.set(name, [])
-            signalCallbacks.get(name)!.push(cb)
+            if (!signalCallbacks.has(name)) signalCallbacks.set(name, []);
+            signalCallbacks.get(name)!.push(cb);
             return () => {
-              const arr = signalCallbacks.get(name)
-              if (arr) signalCallbacks.set(name, arr.filter(x => x !== cb))
-            }
+              const arr = signalCallbacks.get(name);
+              if (arr) signalCallbacks.set(name, arr.filter(x => x !== cb));
+            };
           },
           kill: killFunction,
           setTitle,
@@ -374,46 +420,48 @@ export class WindowManager {
             show
               ? container.classList.remove("hidden")
               : container.classList.add("hidden"),
-          toggleFullScreen: () =>
-            toggleFullScreen(this.contentRef.current!, container),
+          toggleFullScreen: fullscreenCallback,
           getBoundingClientRect: () => container.getBoundingClientRect(),
           setBoundingClientRect: (rect: Record<string, number>) => {
-            const newCord: Record<string, string> = {}
+            const newCord: Record<string, string> = {};
             Object.keys(rect).forEach(
-              (attr: any) =>(newCord[attr] = `${rect[attr]}${typeof rect[attr] === "number" ? "px" : ""}`)
+              (attr: any) => (newCord[attr] = `${rect[attr]}${typeof rect[attr] === "number" ? "px" : ""}`)
             );
             Object.assign(container.style, newCord);
           },
-          host: hostDimension
+          host: hostDimension,
         },
         ...args
       );
 
-      draggable(container, head);
+      draggable(container, head as HTMLDivElement);
       addResizeHandles(container);
       this.moveOnTop(windowRef);
       head.addEventListener("mousedown", () => this.moveOnTop(windowRef));
 
-      const wmModule = loadWindowManagerModule();
-      const settings = wmModule.readSettings?.() ?? FALLBACK_WM_SETTINGS;
+      // setupWindow receives close/minimize/setTitle so VFS-custom headers can
+      // wire their controls here rather than in createHeader.
       wmModule.setupWindow?.({
         container,
         head,
         iframe,
         command,
-        settings,
-        toggleFullScreen: () => toggleFullScreen(this.contentRef.current!, container),
+        settings: wmSettings,
+        toggleFullScreen: fullscreenCallback,
         moveOnTop: () => this.moveOnTop(windowRef),
+        close: closeFunction,
+        minimize: minimizeCallback,
+        setTitle,
       });
     };
 
     if (this.contentRef.current) {
       container.appendChild(iframe);
       appendWindow(this.contentRef.current, container);
-      closeButton.onclick = closeFunction;
-      fullScreenButton.onclick = () =>
-        toggleFullScreen(this.contentRef.current!, container);
-      minimizeButton.onclick = () => this.toggleMinimize(windowRef);
+      // Wire compiled default-header controls only when VFS didn't supply a custom header.
+      if (closeButton) closeButton.onclick = closeFunction;
+      if (fullScreenButton) fullScreenButton.onclick = fullscreenCallback;
+      if (minimizeButton) minimizeButton.onclick = minimizeCallback;
     }
   }
 

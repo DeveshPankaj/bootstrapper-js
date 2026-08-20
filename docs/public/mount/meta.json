@@ -284,7 +284,7 @@
   {
     "path": "/.initd.run",
     "file": "/initd.run",
-    "force_reload": true
+    "force_reload": false
   },
   {
     "path": "/etc/widgets/clock.js",
