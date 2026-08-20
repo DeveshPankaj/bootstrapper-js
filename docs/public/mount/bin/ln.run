@@ -1,0 +1,17 @@
+const terminal = platform.getService('terminal');
+const fs = platform.host.getFS();
+const [pwd, ...args] = $args;
+const write = terminal ? terminal.write.bind(terminal) : console.log;
+
+const symbolic = args.includes('-s');
+const paths = args.filter(a => !a.startsWith('-'));
+
+if (paths.length < 2) { write('usage: ln [-s] <target> <link>'); return; }
+
+const [src, dest] = paths.map(p => p.startsWith('/') ? p : `${pwd}/${p}`);
+
+if (!fs.existsSync(src)) { write(`ln: '${paths[0]}': No such file or directory`); return; }
+
+try {
+  fs.symlinkSync(src, dest);
+} catch(e) { write(`ln: ${e.message}`); }

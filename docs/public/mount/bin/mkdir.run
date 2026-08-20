@@ -1,0 +1,25 @@
+const terminal = platform.getService('terminal');
+const fs = platform.host.getFS();
+const [pwd, ...args] = $args;
+const write = terminal ? terminal.write.bind(terminal) : console.log;
+
+const recursive = args.includes('-p');
+const paths = args.filter(a => !a.startsWith('-'));
+
+if (!paths.length) { write('usage: mkdir [-p] <dir> [<dir>...]'); return; }
+
+for (const p of paths) {
+  const target = p.startsWith('/') ? p : `${pwd}/${p}`;
+  try {
+    if (recursive) {
+      const parts = target.split('/').filter(Boolean);
+      let cur = '';
+      for (const part of parts) {
+        cur += '/' + part;
+        try { fs.mkdirSync(cur); } catch(e) { if (e.code !== 'EEXIST') throw e; }
+      }
+    } else {
+      fs.mkdirSync(target);
+    }
+  } catch(e) { write(`mkdir: ${p}: ${e.message}`); }
+}

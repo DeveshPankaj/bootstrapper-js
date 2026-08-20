@@ -1,0 +1,4 @@
+const terminal = platform.getService('terminal');
+const [pwd, ...args] = $args;
+const write = terminal ? terminal.write.bind(terminal) : console.log;
+write('chmod: permissions are not enforced in this virtual filesystem (no-op)');

@@ -1,0 +1,36 @@
+const terminal = platform.getService('terminal');
+const fs = platform.host.getFS();
+const [pwd, ...args] = $args;
+const write = terminal ? terminal.write.bind(terminal) : console.log;
+
+let searchDir = pwd;
+let namePattern = null;
+let typeFilter = null;
+
+for (let i = 0; i < args.length; i++) {
+  if (args[i] === '-name' && args[i+1]) { namePattern = args[++i]; }
+  else if (args[i] === '-type' && args[i+1]) { typeFilter = args[++i]; }
+  else if (!args[i].startsWith('-')) { searchDir = args[i].startsWith('/') ? args[i] : `${pwd}/${args[i]}`; }
+}
+
+const nameRe = namePattern
+  ? new RegExp('^' + namePattern.replace(/\./g, '\\.').replace(/\*/g, '.*').replace(/\?/g, '.') + '$')
+  : null;
+
+function walk(dir) {
+  try {
+    fs.readdirSync(dir).forEach(name => {
+      const full = `${dir}/${name}`.replace(/\/\//g, '/');
+      let stat;
+      try { stat = fs.statSync(full); } catch(_) { return; }
+      const isDir = stat.isDirectory();
+      const matchType = !typeFilter || (typeFilter === 'd' ? isDir : typeFilter === 'f' ? !isDir : true);
+      const matchName = !nameRe || nameRe.test(name);
+      if (matchType && matchName) write(full);
+      if (isDir) walk(full);
+    });
+  } catch(_) {}
+}
+
+if (!fs.existsSync(searchDir)) { write(`find: '${searchDir}': No such file or directory`); return; }
+walk(searchDir);

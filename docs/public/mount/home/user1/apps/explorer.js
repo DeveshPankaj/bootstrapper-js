@@ -640,12 +640,29 @@ const App = (props) => {
         cmd: `service('001-core.layout', 'open-window') (command('ui.notepad'), '${file.path}')`,
       });
       const ctxExt = file.name.split('.').pop().toLowerCase();
+      const AUDIO_EXTS = new Set(['mp3','wav','ogg','flac','m4a','aac','opus','mp4','mkv','webm']);
       if (ctxExt === 'py') {
         actions.push({
           id: "run_python",
           type: "action",
           title: "Run in Python",
           cmd: `service('001-core.layout', 'open-window') (command('ui.python'), '${file.path}')`,
+        });
+      }
+      if (AUDIO_EXTS.has(ctxExt)) {
+        actions.push({
+          id: "open_audio",
+          type: "action",
+          title: "Play in Music Player",
+          cmd: `service('001-core.layout', 'open-window') (command('ui.audioplayer'), '${file.path}')`,
+        });
+      }
+      if (ctxExt === 'db' || ctxExt === 'sqlite' || ctxExt === 'sqlite3') {
+        actions.push({
+          id: "open_sqlite",
+          type: "action",
+          title: "Open in SQLite Browser",
+          cmd: `service('001-core.layout', 'open-window') (command('ui.sqlite'), '${file.path}')`,
         });
       }
       actions.push({
@@ -697,12 +714,14 @@ const App = (props) => {
         type: 'group',
         title: 'Open with',
         children: [
-          { id: 'ow_notepad',     type: 'action', title: 'Text Editor',   cmd: `service('001-core.layout','open-window')(command('ui.notepad'),'${file.path}')` },
-          { id: 'ow_vscode',      type: 'action', title: 'VS Code',       cmd: `service('001-core.layout','open-window')(command('ui.vs-code'),'${file.path}')` },
-          { id: 'ow_csv',         type: 'action', title: 'Spreadsheet',   cmd: `service('001-core.layout','open-window')(command('ui.csv-viewer'),'${file.path}')` },
-          { id: 'ow_image',       type: 'action', title: 'Image Viewer',  cmd: `service('001-core.layout','open-window')(command('ui.imageviewer'),'${file.path}')` },
-          { id: 'ow_python',      type: 'action', title: 'Python REPL',   cmd: `service('001-core.layout','open-window')(command('ui.python'),'${file.path}')` },
-          { id: 'ow_browser',     type: 'action', title: 'Browser',       cmd: `service('001-core.layout','open-window')(command('ui.iframe'),'${file.path}')` },
+          { id: 'ow_notepad',     type: 'action', title: 'Text Editor',      cmd: `service('001-core.layout','open-window')(command('ui.notepad'),'${file.path}')` },
+          { id: 'ow_vscode',      type: 'action', title: 'VS Code',          cmd: `service('001-core.layout','open-window')(command('ui.vs-code'),'${file.path}')` },
+          { id: 'ow_csv',         type: 'action', title: 'Spreadsheet',      cmd: `service('001-core.layout','open-window')(command('ui.csv-viewer'),'${file.path}')` },
+          { id: 'ow_image',       type: 'action', title: 'Image Viewer',     cmd: `service('001-core.layout','open-window')(command('ui.imageviewer'),'${file.path}')` },
+          { id: 'ow_audio',       type: 'action', title: 'Music Player',     cmd: `service('001-core.layout','open-window')(command('ui.audioplayer'),'${file.path}')` },
+          { id: 'ow_sqlite',      type: 'action', title: 'SQLite Browser',   cmd: `service('001-core.layout','open-window')(command('ui.sqlite'),'${file.path}')` },
+          { id: 'ow_python',      type: 'action', title: 'Python REPL',      cmd: `service('001-core.layout','open-window')(command('ui.python'),'${file.path}')` },
+          { id: 'ow_browser',     type: 'action', title: 'Browser',          cmd: `service('001-core.layout','open-window')(command('ui.iframe'),'${file.path}')` },
         ],
       });
     } else {

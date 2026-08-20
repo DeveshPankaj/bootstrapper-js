@@ -1,0 +1,26 @@
+const terminal = platform.getService('terminal');
+const fs = platform.host.getFS();
+const [pwd, ...args] = $args;
+const write = terminal ? terminal.write.bind(terminal) : console.log;
+
+const onlyLines = args.includes('-l');
+const onlyWords = args.includes('-w');
+const onlyChars = args.includes('-c');
+const showAll   = !onlyLines && !onlyWords && !onlyChars;
+const paths = args.filter(a => !a.startsWith('-'));
+
+if (!paths.length) { write('usage: wc [-l] [-w] [-c] <file> [<file>...]'); return; }
+
+for (const fp of paths) {
+  const target = fp.startsWith('/') ? fp : `${pwd}/${fp}`;
+  if (!fs.existsSync(target)) { write(`wc: ${fp}: No such file`); continue; }
+  const text = fs.readFileSync(target, 'utf8');
+  const lines = text.split('\n').length - 1;
+  const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+  const chars = text.length;
+  const parts = [];
+  if (showAll || onlyLines) parts.push(String(lines).padStart(8));
+  if (showAll || onlyWords) parts.push(String(words).padStart(8));
+  if (showAll || onlyChars) parts.push(String(chars).padStart(8));
+  write(parts.join('') + ' ' + fp);
+}

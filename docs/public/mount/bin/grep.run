@@ -1,0 +1,36 @@
+const terminal = platform.getService('terminal');
+const fs = platform.host.getFS();
+const [pwd, ...args] = $args;
+const write = terminal ? terminal.write.bind(terminal) : console.log;
+
+const ignoreCase = args.includes('-i');
+const showLineNums = args.includes('-n');
+const invertMatch  = args.includes('-v');
+const countOnly    = args.includes('-c');
+const flags = new Set(['-i', '-n', '-v', '-c']);
+const positional   = args.filter(a => !flags.has(a));
+
+if (positional.length < 2) { write('usage: grep [-i] [-n] [-v] [-c] <pattern> <file>'); return; }
+
+const [pattern, ...filePaths] = positional;
+let re;
+try { re = new RegExp(pattern, ignoreCase ? 'i' : ''); }
+catch(e) { write(`grep: invalid pattern: ${e.message}`); return; }
+
+for (const fp of filePaths) {
+  const target = fp.startsWith('/') ? fp : `${pwd}/${fp}`;
+  if (!fs.existsSync(target)) { write(`grep: ${fp}: No such file`); continue; }
+  const lines = fs.readFileSync(target, 'utf8').split('\n');
+  let matchCount = 0;
+  const prefix = filePaths.length > 1 ? `${fp}:` : '';
+  lines.forEach((line, i) => {
+    const matched = re.test(line);
+    if (matched !== invertMatch) {
+      matchCount++;
+      if (!countOnly) {
+        write(`${prefix}${showLineNums ? (i + 1) + ':' : ''}${line}`);
+      }
+    }
+  });
+  if (countOnly) write(`${prefix}${matchCount}`);
+}

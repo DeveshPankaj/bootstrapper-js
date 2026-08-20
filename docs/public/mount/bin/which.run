@@ -1,0 +1,14 @@
+const terminal = platform.getService('terminal');
+const fs = platform.host.getFS();
+const [pwd, ...args] = $args;
+const write = terminal ? terminal.write.bind(terminal) : console.log;
+
+if (!args.length) { write('usage: which <command>'); return; }
+
+for (const cmd of args) {
+  const runPath = `/bin/${cmd}.run`;
+  const jsPath  = `/usr/bin/${cmd}.js`;
+  if (fs.existsSync(runPath))  { write(runPath); }
+  else if (fs.existsSync(jsPath)) { write(jsPath); }
+  else { write(`which: ${cmd}: not found`); }
+}

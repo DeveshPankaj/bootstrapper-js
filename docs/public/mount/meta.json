@@ -755,5 +755,35 @@
     "path": "/opt/apps/audio-player/player.html",
     "file": "/opt/apps/audio-player/player.html",
     "force_reload": true
+  },
+  { "path": "/bin/mkdir.run",  "file": "/bin/mkdir.run",  "force_reload": true },
+  { "path": "/bin/touch.run",  "file": "/bin/touch.run",  "force_reload": true },
+  { "path": "/bin/grep.run",   "file": "/bin/grep.run",   "force_reload": true },
+  { "path": "/bin/find.run",   "file": "/bin/find.run",   "force_reload": true },
+  { "path": "/bin/wc.run",     "file": "/bin/wc.run",     "force_reload": true },
+  { "path": "/bin/sort.run",   "file": "/bin/sort.run",   "force_reload": true },
+  { "path": "/bin/uniq.run",   "file": "/bin/uniq.run",   "force_reload": true },
+  { "path": "/bin/which.run",  "file": "/bin/which.run",  "force_reload": true },
+  { "path": "/bin/ln.run",     "file": "/bin/ln.run",     "force_reload": true },
+  { "path": "/bin/chmod.run",  "file": "/bin/chmod.run",  "force_reload": true },
+  {
+    "path": "/opt/apps/colleps/main.js",
+    "file": "/opt/apps/colleps/main.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/colleps/colleps.html",
+    "file": "/opt/apps/colleps/colleps.html",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/trainboard/main.js",
+    "file": "/opt/apps/trainboard/main.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/trainboard/board.html",
+    "file": "/opt/apps/trainboard/board.html",
+    "force_reload": true
   }
 ]

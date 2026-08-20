@@ -23,6 +23,10 @@ const CORE_APPS = [
   { id: 'image-viewer',   appDir: '/opt/apps/image-viewer',   mainFile: '/opt/apps/image-viewer/main.js' },
   { id: 'pkg-manager',    appDir: '/opt/apps/pkg-manager',    mainFile: '/opt/apps/pkg-manager/main.js' },
   { id: 'sqlite-charts',  appDir: '/opt/apps/sqlite-charts',  mainFile: '/opt/apps/sqlite-charts/main.js' },
+  { id: 'sqlite-browser', appDir: '/opt/apps/sqlite-browser', mainFile: '/opt/apps/sqlite-browser/main.js' },
+  { id: 'audio-player',   appDir: '/opt/apps/audio-player',   mainFile: '/opt/apps/audio-player/main.js' },
+  { id: 'colleps',        appDir: '/opt/apps/colleps',        mainFile: '/opt/apps/colleps/main.js' },
+  { id: 'trainboard',     appDir: '/opt/apps/trainboard',     mainFile: '/opt/apps/trainboard/main.js' },
   { id: 'app-launcher',   appDir: '/opt/apps/app-launcher',   mainFile: '/opt/apps/app-launcher/main.js' },
   // python-demo is not a core app — install via App Manager
 ];

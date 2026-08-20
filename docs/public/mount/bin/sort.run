@@ -1,0 +1,26 @@
+const terminal = platform.getService('terminal');
+const fs = platform.host.getFS();
+const [pwd, ...args] = $args;
+const write = terminal ? terminal.write.bind(terminal) : console.log;
+
+const reverse  = args.includes('-r');
+const numeric  = args.includes('-n');
+const unique   = args.includes('-u');
+const paths = args.filter(a => !a.startsWith('-'));
+
+if (!paths.length) { write('usage: sort [-r] [-n] [-u] <file>'); return; }
+
+const target = paths[0].startsWith('/') ? paths[0] : `${pwd}/${paths[0]}`;
+if (!fs.existsSync(target)) { write(`sort: ${paths[0]}: No such file`); return; }
+
+let lines = fs.readFileSync(target, 'utf8').split('\n');
+if (lines[lines.length - 1] === '') lines.pop();
+
+lines.sort((a, b) => {
+  if (numeric) return parseFloat(a) - parseFloat(b);
+  return a.localeCompare(b);
+});
+if (reverse) lines.reverse();
+if (unique) lines = lines.filter((l, i) => i === 0 || l !== lines[i - 1]);
+
+write(lines.join('\n'));

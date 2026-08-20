@@ -447,7 +447,10 @@ const App = (props) => {
     if (stats.isFile()) {
       actions.push({id:'edit_file', type:'action',title:'Edit',   cmd:`service('001-core.layout','open-window')(command('ui.notepad'),'${file.path}')`});
       const ctxExt=file.name.split('.').pop().toLowerCase();
+      const AUDIO_EXTS_SIFI = new Set(['mp3','wav','ogg','flac','m4a','aac','opus','mp4','mkv','webm']);
       if (ctxExt==='py') actions.push({id:'run_py',type:'action',title:'Run in Python',cmd:`service('001-core.layout','open-window')(command('ui.python'),'${file.path}')`});
+      if (AUDIO_EXTS_SIFI.has(ctxExt)) actions.push({id:'open_audio',type:'action',title:'Play in Music Player',cmd:`service('001-core.layout','open-window')(command('ui.audioplayer'),'${file.path}')`});
+      if (ctxExt==='db'||ctxExt==='sqlite'||ctxExt==='sqlite3') actions.push({id:'open_sqlite',type:'action',title:'Open in SQLite Browser',cmd:`service('001-core.layout','open-window')(command('ui.sqlite'),'${file.path}')`});
       actions.push({id:'open_file',  type:'action',title:'Open',   cmd:`service('001-core.layout','open-window')(command('ui.iframe'),'${file.path}')`});
       actions.push({id:'delete_file',type:'action',title:'Delete', cmd:`service('root','fs')('rm','${file.path}')`});
       actions.push({id:'rename_file',type:'action',title:'Rename',cmd:`platform.host.callCommand('${k}.rename','${file.path}')`});
@@ -459,12 +462,14 @@ const App = (props) => {
       actions.push({id:'props_file',type:'action',title:'Properties',cmd:`platform.host.callCommand('${k}.show-properties','${file.path}')`});
       actions.push({id:'div_ow',type:'divider',title:''});
       actions.push({id:'open_with',type:'group',title:'Open with',children:[
-        {id:'ow_notepad',type:'action',title:'Text Editor', cmd:`service('001-core.layout','open-window')(command('ui.notepad'),'${file.path}')`},
-        {id:'ow_vscode', type:'action',title:'VS Code',     cmd:`service('001-core.layout','open-window')(command('ui.vs-code'),'${file.path}')`},
-        {id:'ow_csv',    type:'action',title:'Spreadsheet', cmd:`service('001-core.layout','open-window')(command('ui.csv-viewer'),'${file.path}')`},
-        {id:'ow_image',  type:'action',title:'Image Viewer',cmd:`service('001-core.layout','open-window')(command('ui.imageviewer'),'${file.path}')`},
-        {id:'ow_python', type:'action',title:'Python REPL', cmd:`service('001-core.layout','open-window')(command('ui.python'),'${file.path}')`},
-        {id:'ow_browser',type:'action',title:'Browser',     cmd:`service('001-core.layout','open-window')(command('ui.iframe'),'${file.path}')`},
+        {id:'ow_notepad',type:'action',title:'Text Editor',    cmd:`service('001-core.layout','open-window')(command('ui.notepad'),'${file.path}')`},
+        {id:'ow_vscode', type:'action',title:'VS Code',        cmd:`service('001-core.layout','open-window')(command('ui.vs-code'),'${file.path}')`},
+        {id:'ow_csv',    type:'action',title:'Spreadsheet',    cmd:`service('001-core.layout','open-window')(command('ui.csv-viewer'),'${file.path}')`},
+        {id:'ow_image',  type:'action',title:'Image Viewer',   cmd:`service('001-core.layout','open-window')(command('ui.imageviewer'),'${file.path}')`},
+        {id:'ow_audio',  type:'action',title:'Music Player',   cmd:`service('001-core.layout','open-window')(command('ui.audioplayer'),'${file.path}')`},
+        {id:'ow_sqlite', type:'action',title:'SQLite Browser', cmd:`service('001-core.layout','open-window')(command('ui.sqlite'),'${file.path}')`},
+        {id:'ow_python', type:'action',title:'Python REPL',    cmd:`service('001-core.layout','open-window')(command('ui.python'),'${file.path}')`},
+        {id:'ow_browser',type:'action',title:'Browser',        cmd:`service('001-core.layout','open-window')(command('ui.iframe'),'${file.path}')`},
       ]});
     } else {
       actions.push({id:'open_dir',        type:'action',title:'Open',            cmd:`service('001-core.layout','open-window')(command('explorer-sifi'),'${file.path}')`});

@@ -1,0 +1,32 @@
+const terminal = platform.getService('terminal');
+const fs = platform.host.getFS();
+const [pwd, ...args] = $args;
+const write = terminal ? terminal.write.bind(terminal) : console.log;
+
+const countFlag = args.includes('-c');
+const dupOnly   = args.includes('-d');
+const uniqOnly  = args.includes('-u');
+const paths = args.filter(a => !a.startsWith('-'));
+
+if (!paths.length) { write('usage: uniq [-c] [-d] [-u] <file>'); return; }
+
+const target = paths[0].startsWith('/') ? paths[0] : `${pwd}/${paths[0]}`;
+if (!fs.existsSync(target)) { write(`uniq: ${paths[0]}: No such file`); return; }
+
+const lines = fs.readFileSync(target, 'utf8').split('\n');
+if (lines[lines.length - 1] === '') lines.pop();
+
+const groups = [];
+for (const line of lines) {
+  if (groups.length && groups[groups.length - 1].line === line) {
+    groups[groups.length - 1].count++;
+  } else {
+    groups.push({ line, count: 1 });
+  }
+}
+
+for (const { line, count } of groups) {
+  if (dupOnly && count === 1) continue;
+  if (uniqOnly && count > 1) continue;
+  write(countFlag ? `${String(count).padStart(7)} ${line}` : line);
+}

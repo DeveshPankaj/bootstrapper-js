@@ -1,0 +1,18 @@
+const terminal = platform.getService('terminal');
+const fs = platform.host.getFS();
+const [pwd, ...args] = $args;
+const write = terminal ? terminal.write.bind(terminal) : console.log;
+
+const paths = args.filter(a => !a.startsWith('-'));
+if (!paths.length) { write('usage: touch <file> [<file>...]'); return; }
+
+for (const p of paths) {
+  const target = p.startsWith('/') ? p : `${pwd}/${p}`;
+  try {
+    if (fs.existsSync(target)) {
+      fs.utimesSync(target, new Date(), new Date());
+    } else {
+      fs.writeFileSync(target, '');
+    }
+  } catch(e) { write(`touch: ${p}: ${e.message}`); }
+}
