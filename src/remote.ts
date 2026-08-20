@@ -167,11 +167,28 @@ platform.host.registerCommand('core.add-module', (namespace: string, mod: Module
 // Called on boot (after vfs is ready) and after keybindings are changed in Settings.
 // Bindings use `code` (e.g. 'KeyF', 'Space') so Alt+letter works on Mac (where e.key becomes
 // a Unicode char like 'ƒ' instead of 'f'). Falls back to matching `key` for old-format entries.
+//
+// OS-aware defaults — chosen to avoid conflicts with OS/browser shortcuts:
+//   macOS  : Alt (Option) alone — safe; browser/OS don't intercept Alt+letter on Mac
+//   Windows: Alt+Shift — avoids legacy Alt-menu shortcuts (Alt+F = File menu in Firefox,
+//            Alt+T = Tools menu); bare Alt+Shift does switch keyboard layout but only on
+//            release without an additional key, so Alt+Shift+letter is safe
+//   Linux  : Alt alone — WM shortcuts (Alt+Space, Alt+F2, Alt+F4) are intercepted at the
+//            compositor level, not inside the browser window's key event stream
+const _kbPlatform = (() => {
+  try {
+    const p = (navigator as any).userAgentData?.platform || navigator.platform || '';
+    if (/win/i.test(p)) return 'windows';
+    if (/mac/i.test(p)) return 'mac';
+    return 'linux';
+  } catch (_) { return 'linux'; }
+})();
+const _kbMods: string[] = _kbPlatform === 'windows' ? ['Alt', 'Shift'] : ['Alt'];
 const DEFAULT_KEYBINDINGS = [
-  { code: 'Space', modifiers: ['Alt'], command: 'spotlight' },
-  { code: 'KeyF',  modifiers: ['Alt'], command: 'explorer' },
-  { code: 'KeyT',  modifiers: ['Alt'], command: 'ui.terminal' },
-  { code: 'KeyS',  modifiers: ['Alt'], command: 'ui.settings' },
+  { code: 'Space', modifiers: _kbMods, command: 'spotlight' },
+  { code: 'KeyF',  modifiers: _kbMods, command: 'explorer' },
+  { code: 'KeyT',  modifiers: _kbMods, command: 'ui.terminal' },
+  { code: 'KeyS',  modifiers: _kbMods, command: 'ui.settings' },
 ];
 let keybindingAbort: AbortController | null = null;
 const wireKeybindings = () => {
