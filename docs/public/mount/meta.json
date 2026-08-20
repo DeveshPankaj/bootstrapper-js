@@ -102,7 +102,7 @@
   {
     "path": "/opt/window-manager.js",
     "file": "/opt/window-manager.js",
-    "force_reload": true
+    "force_reload": false
   },
   {
     "path": "/bin/cat.run",
