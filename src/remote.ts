@@ -292,13 +292,24 @@ platform.host.registerCommand('notify', ({ title = '', body = '', duration = 400
 });
 
 // Convenience commands for opening the terminal and settings via the keybinding
-// system (and Spotlight). The actual open logic mirrors the taskbar's execCommand calls.
-platform.host.registerCommand('ui.terminal', () => {
-    platform.host.execCommand("service('001-core.layout', 'open-window') (command('ui.iframe'), '/opt/apps/terminal/main.html')", platform)
+// system, Spotlight, and the desktop context menu. These are proper app commands
+// that render directly into the window body they receive (via ui.iframe's exec),
+// so only ONE window/taskbar entry is created per open. When called without a body
+// (e.g. from a keybinding via callCommand), they open a new window for themselves.
+platform.host.registerCommand('ui.terminal', (body: any, props: any) => {
+    if (!body) {
+        platform.host.execCommand("service('001-core.layout', 'open-window') (command('ui.terminal'))", platform)
+        return
+    }
+    platform.host.getCommand('ui.iframe')?.exec(body, props, '/opt/apps/terminal/main.html')
 }, { icon: 'terminal', title: 'Terminal' })
 
-platform.host.registerCommand('ui.settings', () => {
-    platform.host.execCommand("service('001-core.layout', 'open-window') (command('ui.iframe'), '/opt/apps/settings/main.html')", platform)
+platform.host.registerCommand('ui.settings', (body: any, props: any) => {
+    if (!body) {
+        platform.host.execCommand("service('001-core.layout', 'open-window') (command('ui.settings'))", platform)
+        return
+    }
+    platform.host.getCommand('ui.iframe')?.exec(body, props, '/opt/apps/settings/main.html')
 }, { icon: 'settings', title: 'Settings' })
 
 // Fallback 'explorer' command, delegating to the compiled ui.file-explorer module.
