@@ -988,24 +988,6 @@ export const render = (container: HTMLElement) => {
             },
             {
                 type: 'action',
-                id: '7',
-                title: 'Dashboard',
-                cmd: `service('001-core.layout', 'open-window') (command('ui.dashboard'))`
-            },
-            {
-                type: 'action',
-                id: '9',
-                title: 'Music Player',
-                cmd: `service('001-core.layout', 'open-window') (command('ui.audioplayer'))`
-            },
-            {
-                type: 'action',
-                id: '10',
-                title: 'SQLite Browser',
-                cmd: `service('001-core.layout', 'open-window') (command('ui.sqlite'))`
-            },
-            {
-                type: 'action',
                 id: '11',
                 title: 'App Manager',
                 cmd: `service('001-core.layout', 'open-window') (command('ui.pkg-manager'))`
