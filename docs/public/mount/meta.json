@@ -845,5 +845,10 @@
     "path": "/etc/taskbar.json",
     "file": "/etc/taskbar.json",
     "force_reload": false
+  },
+  {
+    "path": "/opt/wm/canvas.js",
+    "file": "/opt/wm/canvas.js",
+    "force_reload": false
   }
 ]

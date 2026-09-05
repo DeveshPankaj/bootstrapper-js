@@ -16,6 +16,7 @@ const WM_OPTIONS = [
     { id: 'ubuntu',   label: 'Ubuntu (GNOME)',  icon: 'fiber_manual_record', desc: 'App icon + title left, coloured circles right — GNOME look.' },
     { id: 'glass',    label: 'Glass',           icon: 'blur_on',             desc: 'Frosted-glass translucent header with dot controls.' },
     { id: 'tiling',   label: 'Tiling',          icon: 'view_quilt',          desc: 'Auto-tiles windows in a grid — no manual sizing needed.' },
+    { id: 'canvas',   label: 'Canvas',          icon: 'gesture',             desc: 'Infinite scrollable canvas — click a partial window to bring it into view.' },
 ]
 
 const DOCK_OPTIONS = [
