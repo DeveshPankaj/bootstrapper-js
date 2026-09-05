@@ -29836,13 +29836,38 @@ const FALLBACK_WM_SETTINGS = {
         bringToFrontOnClick: true,
     },
 };
+const MANAGERS_CONFIG_PATH = '/etc/managers.json';
 const loadWindowManagerModule = () => {
     try {
         const fs = platform.host.getFS();
-        if (!fs.existsSync(_shared_constants__WEBPACK_IMPORTED_MODULE_3__.WINDOW_MANAGER_MODULE_PATH))
-            return {};
-        const source = fs.readFileSync(_shared_constants__WEBPACK_IMPORTED_MODULE_3__.WINDOW_MANAGER_MODULE_PATH, "utf-8");
-        return platform.host.execString(source, _shared_constants__WEBPACK_IMPORTED_MODULE_3__.WINDOW_MANAGER_MODULE_PATH);
+        // Load base module — provides setupWindow, readSettings, snap zones, etc.
+        const baseModule = (() => {
+            if (!fs.existsSync(_shared_constants__WEBPACK_IMPORTED_MODULE_3__.WINDOW_MANAGER_MODULE_PATH))
+                return {};
+            const source = fs.readFileSync(_shared_constants__WEBPACK_IMPORTED_MODULE_3__.WINDOW_MANAGER_MODULE_PATH, "utf-8");
+            return platform.host.execString(source, _shared_constants__WEBPACK_IMPORTED_MODULE_3__.WINDOW_MANAGER_MODULE_PATH);
+        })();
+        // Check for an active WM style override in /etc/managers.json.
+        let wmId = 'default';
+        try {
+            if (fs.existsSync(MANAGERS_CONFIG_PATH)) {
+                const config = JSON.parse(fs.readFileSync(MANAGERS_CONFIG_PATH, 'utf-8'));
+                if (config.windowManager)
+                    wmId = config.windowManager;
+            }
+        }
+        catch (_) { }
+        if (wmId === 'default')
+            return baseModule;
+        // Load style override from /opt/wm/<id>.js — exports createHeader (and
+        // optionally createContainer). Merges over base: style overrides win for
+        // visual hooks, base keeps setupWindow/readSettings/etc.
+        const wmStylePath = `/opt/wm/${wmId}.js`;
+        if (!fs.existsSync(wmStylePath))
+            return baseModule;
+        const wmStyleSource = fs.readFileSync(wmStylePath, "utf-8");
+        const wmStyleModule = platform.host.execString(wmStyleSource, wmStylePath);
+        return Object.assign(Object.assign({}, baseModule), wmStyleModule);
     }
     catch (err) {
         console.error("Failed to load window manager module", err);
@@ -29951,7 +29976,15 @@ class WindowManager {
             closeButton = null;
             fullScreenButton = null;
             minimizeButton = null;
-            setTitleRaw = () => { };
+            // If custom header exposes _setTitle, call it on title updates.
+            setTitleRaw = (t) => {
+                if (typeof head._setTitle === 'function') {
+                    try {
+                        head._setTitle(t);
+                    }
+                    catch (_) { }
+                }
+            };
             appendActionButton = () => ({ remove: () => { } });
             setHeaderStyles = () => { };
         }

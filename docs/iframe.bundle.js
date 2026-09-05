@@ -28897,6 +28897,57 @@ const getLocalFilePath = (path) => {
     const blobURL = `/(sw)${path}`;
     return blobURL;
 };
+const IPC_SDK_PATH = '/usr/lib/ipc.js';
+// Reads a VFS text file and returns it as a string, or '' on failure.
+const readVfsText = (path) => {
+    try {
+        return platform.host.getFS().readFileSync(path, 'utf-8');
+    }
+    catch (_) {
+        return '';
+    }
+};
+// Builds srcdoc HTML for a sandboxed iframe:
+// inlines the IPC SDK then the app HTML, no same-origin so no direct storage access.
+const buildSrcdoc = (appPath) => {
+    const ipcSdk = readVfsText(IPC_SDK_PATH);
+    const appHtml = readVfsText(appPath);
+    // Inject the SDK before </head> or at the start of the body.
+    const sdkTag = `<script>\n${ipcSdk}\n</script>`;
+    if (appHtml.includes('</head>')) {
+        return appHtml.replace('</head>', `${sdkTag}\n</head>`);
+    }
+    return `${sdkTag}\n${appHtml}`;
+};
+// ui.sandboxed-app — loads a VFS HTML file in a fully isolated sandbox:
+//   • No allow-same-origin → opaque origin, no direct IndexedDB / localStorage access.
+//   • IPC SDK injected inline so apps can use window.ipc.fs.* for file access.
+//   • Apps must NOT rely on window.platform — use window.ipc instead.
+platform.host.registerCommand('ui.sandboxed-app', (body, props, vfsPath) => {
+    if (!body) {
+        console.error('ui.sandboxed-app: first argument must be a DOM element');
+        return;
+    }
+    if (!vfsPath) {
+        console.error('ui.sandboxed-app: vfsPath argument is required');
+        return;
+    }
+    const container = platform.window.document.createElement('div');
+    container.style.cssText = 'display:flex;height:100%;width:100%;';
+    body.appendChild(container);
+    const iframe = platform.window.document.createElement('iframe');
+    iframe.setAttribute('sandbox', 'allow-scripts allow-forms allow-modals');
+    iframe.style.cssText = 'border:0;width:100%;height:100%;flex:1;';
+    iframe.srcdoc = buildSrcdoc(vfsPath);
+    iframe.addEventListener('load', () => {
+        var _a;
+        const title = (_a = iframe.contentDocument) === null || _a === void 0 ? void 0 : _a.title;
+        if (title)
+            props.setTitle(title);
+    });
+    container.appendChild(iframe);
+    props.setWindowView(true);
+}, { icon: 'security', title: 'Sandboxed App' });
 let subscriptions = [];
 platform.host.registerCommand('ui.iframe', (body, props, url, ...args) => {
     if (!body) {

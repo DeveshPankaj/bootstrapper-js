@@ -785,5 +785,35 @@
     "path": "/opt/apps/trainboard/board.html",
     "file": "/opt/apps/trainboard/board.html",
     "force_reload": true
+  },
+  {
+    "path": "/etc/managers.json",
+    "file": "/etc/managers.json",
+    "force_reload": false
+  },
+  {
+    "path": "/opt/wm/classic.js",
+    "file": "/opt/wm/classic.js",
+    "force_reload": false
+  },
+  {
+    "path": "/opt/wm/minimal.js",
+    "file": "/opt/wm/minimal.js",
+    "force_reload": false
+  },
+  {
+    "path": "/opt/wm/ubuntu.js",
+    "file": "/opt/wm/ubuntu.js",
+    "force_reload": false
+  },
+  {
+    "path": "/opt/wm/glass.js",
+    "file": "/opt/wm/glass.js",
+    "force_reload": false
+  },
+  {
+    "path": "/etc/settings/20-managers.js",
+    "file": "/etc/settings/20-managers.js",
+    "force_reload": true
   }
 ]

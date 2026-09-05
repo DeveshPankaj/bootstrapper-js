@@ -195,12 +195,38 @@ const FALLBACK_WM_SETTINGS = {
   },
 };
 
+const MANAGERS_CONFIG_PATH = '/etc/managers.json';
+
 const loadWindowManagerModule = (): any => {
   try {
     const fs = platform.host.getFS();
-    if (!fs.existsSync(WINDOW_MANAGER_MODULE_PATH)) return {};
-    const source = fs.readFileSync(WINDOW_MANAGER_MODULE_PATH, "utf-8") as string;
-    return platform.host.execString(source, WINDOW_MANAGER_MODULE_PATH);
+
+    // Load base module — provides setupWindow, readSettings, snap zones, etc.
+    const baseModule: any = (() => {
+      if (!fs.existsSync(WINDOW_MANAGER_MODULE_PATH)) return {};
+      const source = fs.readFileSync(WINDOW_MANAGER_MODULE_PATH, "utf-8") as string;
+      return platform.host.execString(source, WINDOW_MANAGER_MODULE_PATH);
+    })();
+
+    // Check for an active WM style override in /etc/managers.json.
+    let wmId = 'default';
+    try {
+      if (fs.existsSync(MANAGERS_CONFIG_PATH)) {
+        const config = JSON.parse(fs.readFileSync(MANAGERS_CONFIG_PATH, 'utf-8') as string);
+        if (config.windowManager) wmId = config.windowManager;
+      }
+    } catch (_) {}
+
+    if (wmId === 'default') return baseModule;
+
+    // Load style override from /opt/wm/<id>.js — exports createHeader (and
+    // optionally createContainer). Merges over base: style overrides win for
+    // visual hooks, base keeps setupWindow/readSettings/etc.
+    const wmStylePath = `/opt/wm/${wmId}.js`;
+    if (!fs.existsSync(wmStylePath)) return baseModule;
+    const wmStyleSource = fs.readFileSync(wmStylePath, "utf-8") as string;
+    const wmStyleModule = platform.host.execString(wmStyleSource, wmStylePath);
+    return { ...baseModule, ...wmStyleModule };
   } catch (err) {
     console.error("Failed to load window manager module", err);
     return {};
@@ -315,7 +341,12 @@ export class WindowManager {
       closeButton = null;
       fullScreenButton = null;
       minimizeButton = null;
-      setTitleRaw = () => {};
+      // If custom header exposes _setTitle, call it on title updates.
+      setTitleRaw = (t: string) => {
+        if (typeof (head as any)._setTitle === 'function') {
+          try { (head as any)._setTitle(t); } catch (_) {}
+        }
+      };
       appendActionButton = () => ({ remove: () => {} });
       setHeaderStyles = () => {};
     } else {
