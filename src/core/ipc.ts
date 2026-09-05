@@ -14,6 +14,22 @@ export function broadcastIpcEvent(event: string, data: unknown) {
   });
 }
 
+// Registered by the layout bundle once windowsSubject is available.
+// Lets sandboxed dock/panel apps query or react to running windows via IPC.
+type WindowSnapshot = { pid: number; name: string; title: string; icon: string; minimized: boolean; active: boolean };
+let _getWindowsFn: (() => WindowSnapshot[]) | null = null;
+let _toggleWindowFn: ((pid: number) => void) | null = null;
+
+export function registerWindowIpcHandlers(
+  getWindows: () => WindowSnapshot[],
+  toggleWindow: (pid: number) => void,
+) {
+  _getWindowsFn = getWindows;
+  _toggleWindowFn = toggleWindow;
+  registerIpcHandler('wm.getWindows', () => _getWindowsFn?.() ?? []);
+  registerIpcHandler('wm.toggleWindow', (d: any) => { _toggleWindowFn?.(Number(d.pid)); return true; });
+}
+
 export function initIpc(fs: any) {
   window.addEventListener('message', async (e: MessageEvent) => {
     if (!e.data || e.data.type !== 'wos-ipc') return;

@@ -1,0 +1,112 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Dock</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: transparent; overflow: hidden; }
+#dock {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 100%;
+  padding: 0 12px;
+  background: var(--dock-bg, rgba(20,20,20,0.72));
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 1px solid rgba(255,255,255,0.1);
+}
+.win-icon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 8px;
+  transition: background 0.15s, transform 0.1s;
+  max-width: 72px;
+}
+.win-icon:hover { background: rgba(255,255,255,0.12); transform: scale(1.08); }
+.win-icon.active  { background: rgba(255,255,255,0.15); }
+.win-icon.minimized { opacity: 0.55; }
+.win-icon .icon {
+  font-family: 'Material Symbols Outlined', sans-serif;
+  font-size: 22px;
+  color: #fff;
+  line-height: 1;
+}
+.win-icon .label {
+  font-size: 10px;
+  color: rgba(255,255,255,0.75);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 68px;
+  text-align: center;
+}
+.win-icon .dot {
+  width: 4px; height: 4px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.6);
+}
+.win-icon.minimized .dot { background: rgba(255,255,255,0.3); }
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined');
+</style>
+</head>
+<body>
+<div id="dock"></div>
+<script>
+(function () {
+  var pending = new Map(), counter = 0, listeners = new Map();
+  window.addEventListener('message', function(e) {
+    if (!e.data) return;
+    if (e.data.type === 'wos-ipc-response') {
+      var cb = pending.get(e.data.id);
+      if (!cb) return;
+      pending.delete(e.data.id);
+      e.data.error ? cb.reject(new Error(e.data.error)) : cb.resolve(e.data.result);
+    } else if (e.data.type === 'wos-ipc-event') {
+      (listeners.get(e.data.event) || []).forEach(function(h) { h(e.data.data); });
+    }
+  });
+  var ipc = {
+    call: function(ev, data) {
+      return new Promise(function(resolve, reject) {
+        var id = 'wos-' + (++counter);
+        pending.set(id, { resolve: resolve, reject: reject });
+        var target = window !== window.parent ? window.parent : window.top;
+        target.postMessage({ type: 'wos-ipc', id: id, event: ev, data: data }, '*');
+      });
+    },
+    on: function(ev, handler) {
+      if (!listeners.has(ev)) listeners.set(ev, []);
+      listeners.get(ev).push(handler);
+    }
+  };
+
+  var dock = document.getElementById('dock');
+
+  function render(wins) {
+    dock.innerHTML = '';
+    wins.forEach(function(w) {
+      var item = document.createElement('div');
+      item.className = 'win-icon' + (w.active ? ' active' : '') + (w.minimized ? ' minimized' : '');
+      item.title = w.title || w.name;
+      item.innerHTML =
+        '<span class="icon">' + (w.icon || 'apps') + '</span>' +
+        '<span class="label">' + (w.title || w.name) + '</span>' +
+        '<span class="dot"></span>';
+      item.onclick = function() { ipc.call('wm.toggleWindow', { pid: w.pid }); };
+      dock.appendChild(item);
+    });
+  }
+
+  ipc.call('wm.getWindows').then(render).catch(function() {});
+  ipc.on('wm.windowsChanged', render);
+})();
+</script>
+</body>
+</html>

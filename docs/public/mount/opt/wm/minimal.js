@@ -3,7 +3,7 @@
 // /etc/managers.json to activate.
 
 export const createHeader = ({ command, settings, close, minimize, fullscreen }) => {
-    const doc = top.document;
+    
     const head = doc.createElement('div');
     head.className = 'window-header';
     head.style.cssText = [

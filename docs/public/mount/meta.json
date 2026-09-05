@@ -815,5 +815,20 @@
     "path": "/etc/settings/20-managers.js",
     "file": "/etc/settings/20-managers.js",
     "force_reload": true
+  },
+  {
+    "path": "/opt/wm/tiling.js",
+    "file": "/opt/wm/tiling.js",
+    "force_reload": false
+  },
+  {
+    "path": "/opt/apps/dock/default.html",
+    "file": "/opt/apps/dock/default.html",
+    "force_reload": false
+  },
+  {
+    "path": "/opt/apps/dock/macos.html",
+    "file": "/opt/apps/dock/macos.html",
+    "force_reload": false
   }
 ]

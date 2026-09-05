@@ -28587,6 +28587,97 @@ const ListDirComponent = ({ dir, openFile, showFileActions, customClass }) => {
 
 /***/ }),
 
+/***/ "./src/core/ipc.ts":
+/*!*************************!*\
+  !*** ./src/core/ipc.ts ***!
+  \*************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   broadcastIpcEvent: () => (/* binding */ broadcastIpcEvent),
+/* harmony export */   initIpc: () => (/* binding */ initIpc),
+/* harmony export */   registerIpcHandler: () => (/* binding */ registerIpcHandler),
+/* harmony export */   registerWindowIpcHandlers: () => (/* binding */ registerWindowIpcHandlers)
+/* harmony export */ });
+// Host-side IPC router — handles postMessage calls from sandboxed iframes.
+// Pairs with /usr/lib/ipc.js (VFS client library).
+var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+const handlers = new Map();
+function registerIpcHandler(event, handler) {
+    handlers.set(event, handler);
+}
+function broadcastIpcEvent(event, data) {
+    document.querySelectorAll('iframe').forEach(f => {
+        var _a;
+        try {
+            (_a = f.contentWindow) === null || _a === void 0 ? void 0 : _a.postMessage({ type: 'wos-ipc-event', event, data }, '*');
+        }
+        catch (_) { }
+    });
+}
+let _getWindowsFn = null;
+let _toggleWindowFn = null;
+function registerWindowIpcHandlers(getWindows, toggleWindow) {
+    _getWindowsFn = getWindows;
+    _toggleWindowFn = toggleWindow;
+    registerIpcHandler('wm.getWindows', () => { var _a; return (_a = _getWindowsFn === null || _getWindowsFn === void 0 ? void 0 : _getWindowsFn()) !== null && _a !== void 0 ? _a : []; });
+    registerIpcHandler('wm.toggleWindow', (d) => { _toggleWindowFn === null || _toggleWindowFn === void 0 ? void 0 : _toggleWindowFn(Number(d.pid)); return true; });
+}
+function initIpc(fs) {
+    window.addEventListener('message', (e) => __awaiter(this, void 0, void 0, function* () {
+        if (!e.data || e.data.type !== 'wos-ipc')
+            return;
+        const { id, event, data } = e.data;
+        const source = e.source;
+        if (!source)
+            return;
+        const handler = handlers.get(event);
+        if (!handler) {
+            source.postMessage({ type: 'wos-ipc-response', id, error: `Unknown IPC event: ${event}` }, '*');
+            return;
+        }
+        try {
+            const result = yield handler(data, source);
+            source.postMessage({ type: 'wos-ipc-response', id, result: result !== null && result !== void 0 ? result : null }, '*');
+        }
+        catch (err) {
+            source.postMessage({ type: 'wos-ipc-response', id, error: String(err) }, '*');
+        }
+    }));
+    registerIpcHandler('fs.read', (d) => Array.from(fs.readFileSync(d.path)));
+    registerIpcHandler('fs.readText', (d) => fs.readFileSync(d.path, 'utf8'));
+    registerIpcHandler('fs.write', (d) => {
+        const content = d.content;
+        if (typeof content === 'string')
+            fs.writeFileSync(d.path, content);
+        else
+            fs.writeFileSync(d.path, Buffer.from(content));
+        return true;
+    });
+    registerIpcHandler('fs.list', (d) => fs.readdirSync(d.path));
+    registerIpcHandler('fs.exists', (d) => fs.existsSync(d.path));
+    registerIpcHandler('fs.mkdir', (d) => { fs.mkdirSync(d.path, { recursive: true }); return true; });
+    registerIpcHandler('fs.rm', (d) => { fs.unlinkSync(d.path); return true; });
+    registerIpcHandler('fs.stat', (d) => {
+        var _a;
+        const s = fs.statSync(d.path);
+        return { isDirectory: s.isDirectory(), size: (_a = s.size) !== null && _a !== void 0 ? _a : 0 };
+    });
+}
+
+
+/***/ }),
+
 /***/ "./src/core/layout/commands.tsx":
 /*!**************************************!*\
   !*** ./src/core/layout/commands.tsx ***!
@@ -29908,8 +29999,10 @@ class WindowManager {
         // --- VFS hook: createContainer({ command, settings }) ---
         // Return an HTMLElement to replace the default <div class="window">.
         // Mandatory attributes/classes are still applied by compiled code below.
+        // Use nodeType === 1 (ELEMENT_NODE) instead of instanceof HTMLElement so
+        // elements created via top.document (a different frame) still match.
         const customContainer = (_c = wmModule.createContainer) === null || _c === void 0 ? void 0 : _c.call(wmModule, { command, settings: wmSettings });
-        const container = (customContainer instanceof HTMLElement
+        const container = ((customContainer === null || customContainer === void 0 ? void 0 : customContainer.nodeType) === 1
             ? customContainer
             : platform.window.document.createElement("div"));
         container.setAttribute("data-name", command.name);
@@ -29970,7 +30063,7 @@ class WindowManager {
             fullscreen: fullscreenCallback,
         });
         let head, closeButton, fullScreenButton, minimizeButton, setTitleRaw, appendActionButton, setHeaderStyles;
-        if (customHead instanceof HTMLElement) {
+        if ((customHead === null || customHead === void 0 ? void 0 : customHead.nodeType) === 1) {
             head = customHead;
             // VFS-provided header has already received the callbacks — don't wire compiled buttons.
             closeButton = null;
@@ -156468,8 +156561,8 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   render: () => (/* binding */ render)
 /* harmony export */ });
-/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_16__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/BehaviorSubject.js");
-/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_17__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/operators/filter.js");
+/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_17__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/BehaviorSubject.js");
+/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_18__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/operators/filter.js");
 /* harmony import */ var _shared_index__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @shared/index */ "./src/shared/index.ts");
 /* harmony import */ var _shared_fs_utils__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! @shared/fs-utils */ "./src/shared/fs-utils.ts");
 /* harmony import */ var _shared_constants__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! @shared/constants */ "./src/shared/constants.ts");
@@ -156479,14 +156572,16 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _commands__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ./commands */ "./src/core/layout/commands.tsx");
 /* harmony import */ var _contextmenu__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ./contextmenu */ "./src/core/layout/contextmenu.tsx");
 /* harmony import */ var _window_manager__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ../window-manager */ "./src/core/window-manager.ts");
-/* harmony import */ var _apps_file_explorer_desktop__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! ../../apps/file-explorer/desktop */ "./src/apps/file-explorer/desktop.tsx");
-/* harmony import */ var _styles_base__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! ./styles/base */ "./src/core/layout/styles/base.ts");
-/* harmony import */ var _styles_layout__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(/*! ./styles/layout */ "./src/core/layout/styles/layout.ts");
-/* harmony import */ var _styles_window__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(/*! ./styles/window */ "./src/core/layout/styles/window.ts");
-/* harmony import */ var _styles_taskbar__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(/*! ./styles/taskbar */ "./src/core/layout/styles/taskbar.ts");
-/* harmony import */ var _styles_widgets__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(/*! ./styles/widgets */ "./src/core/layout/styles/widgets.ts");
-/* harmony import */ var _styles_contextmenu__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(/*! ./styles/contextmenu */ "./src/core/layout/styles/contextmenu.ts");
-/* harmony import */ var _styles_desktop_env__WEBPACK_IMPORTED_MODULE_15__ = __webpack_require__(/*! ./styles/desktop-env */ "./src/core/layout/styles/desktop-env.ts");
+/* harmony import */ var _ipc__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! ../ipc */ "./src/core/ipc.ts");
+/* harmony import */ var _apps_file_explorer_desktop__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! ../../apps/file-explorer/desktop */ "./src/apps/file-explorer/desktop.tsx");
+/* harmony import */ var _styles_base__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(/*! ./styles/base */ "./src/core/layout/styles/base.ts");
+/* harmony import */ var _styles_layout__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(/*! ./styles/layout */ "./src/core/layout/styles/layout.ts");
+/* harmony import */ var _styles_window__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(/*! ./styles/window */ "./src/core/layout/styles/window.ts");
+/* harmony import */ var _styles_taskbar__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(/*! ./styles/taskbar */ "./src/core/layout/styles/taskbar.ts");
+/* harmony import */ var _styles_widgets__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(/*! ./styles/widgets */ "./src/core/layout/styles/widgets.ts");
+/* harmony import */ var _styles_contextmenu__WEBPACK_IMPORTED_MODULE_15__ = __webpack_require__(/*! ./styles/contextmenu */ "./src/core/layout/styles/contextmenu.ts");
+/* harmony import */ var _styles_desktop_env__WEBPACK_IMPORTED_MODULE_16__ = __webpack_require__(/*! ./styles/desktop-env */ "./src/core/layout/styles/desktop-env.ts");
+
 
 
 
@@ -156680,7 +156775,7 @@ const readCurrentLayoutId = () => {
 const writeCurrentLayoutId = (layoutId) => {
     (0,_shared_fs_utils__WEBPACK_IMPORTED_MODULE_1__.writeJsonFile)(platform.host.getFS(), _shared_constants__WEBPACK_IMPORTED_MODULE_2__.LAYOUT_CONFIG_PATH, { layout: layoutId }, true);
 };
-const layoutSubject = new rxjs__WEBPACK_IMPORTED_MODULE_16__.BehaviorSubject(readCurrentLayoutId());
+const layoutSubject = new rxjs__WEBPACK_IMPORTED_MODULE_17__.BehaviorSubject(readCurrentLayoutId());
 const getCurrentLayout = () => {
     const layouts = readLayouts();
     return layouts.find(l => l.id === layoutSubject.getValue()) || layouts[0] || DEFAULT_LAYOUTS[0];
@@ -156722,14 +156817,14 @@ const resolveWallpaperUrl = (wallpaper) => {
 const applyCss = ({ wallpaper, grid }) => {
     const wallpaperUrl = resolveWallpaperUrl(wallpaper);
     styles.replace([
-        _styles_base__WEBPACK_IMPORTED_MODULE_9__.RESET_CSS,
-        _styles_base__WEBPACK_IMPORTED_MODULE_9__.MATERIAL_SYMBOLS_CSS,
-        (0,_styles_layout__WEBPACK_IMPORTED_MODULE_10__.layoutCss)(grid, wallpaperUrl),
-        _styles_widgets__WEBPACK_IMPORTED_MODULE_13__.WIDGETS_CSS,
-        _styles_window__WEBPACK_IMPORTED_MODULE_11__.WINDOW_CSS,
-        _styles_taskbar__WEBPACK_IMPORTED_MODULE_12__.TASKBAR_CSS,
-        _styles_contextmenu__WEBPACK_IMPORTED_MODULE_14__.CONTEXTMENU_CSS,
-        _styles_desktop_env__WEBPACK_IMPORTED_MODULE_15__.DESKTOP_ENV_CSS,
+        _styles_base__WEBPACK_IMPORTED_MODULE_10__.RESET_CSS,
+        _styles_base__WEBPACK_IMPORTED_MODULE_10__.MATERIAL_SYMBOLS_CSS,
+        (0,_styles_layout__WEBPACK_IMPORTED_MODULE_11__.layoutCss)(grid, wallpaperUrl),
+        _styles_widgets__WEBPACK_IMPORTED_MODULE_14__.WIDGETS_CSS,
+        _styles_window__WEBPACK_IMPORTED_MODULE_12__.WINDOW_CSS,
+        _styles_taskbar__WEBPACK_IMPORTED_MODULE_13__.TASKBAR_CSS,
+        _styles_contextmenu__WEBPACK_IMPORTED_MODULE_15__.CONTEXTMENU_CSS,
+        _styles_desktop_env__WEBPACK_IMPORTED_MODULE_16__.DESKTOP_ENV_CSS,
     ].join('\n'));
 };
 const userPrefWallpaper = platform.userPref.getWallpaper();
@@ -156914,7 +157009,7 @@ const readEnabledWidgets = () => {
         return cfg.enabled;
     return null;
 };
-const enabledWidgetsSubject = new rxjs__WEBPACK_IMPORTED_MODULE_16__.BehaviorSubject(readEnabledWidgets());
+const enabledWidgetsSubject = new rxjs__WEBPACK_IMPORTED_MODULE_17__.BehaviorSubject(readEnabledWidgets());
 const setEnabledWidgets = (enabled) => {
     try {
         (0,_shared_fs_utils__WEBPACK_IMPORTED_MODULE_1__.writeJsonFile)(platform.host.getFS(), _shared_constants__WEBPACK_IMPORTED_MODULE_2__.WIDGETS_CONFIG_PATH, { enabled }, true);
@@ -157150,7 +157245,7 @@ const LayoutShell = (props) => {
         usedAreas.has('left-nav') ? (react__WEBPACK_IMPORTED_MODULE_4___default().createElement("div", { className: "left-nav" }, slot === 'left-nav' ? commands : null)) : null,
         react__WEBPACK_IMPORTED_MODULE_4___default().createElement("div", { className: "content-area", ref: props.contentRef, onContextMenu: props.onContextMenu },
             react__WEBPACK_IMPORTED_MODULE_4___default().createElement("div", { className: _window_manager__WEBPACK_IMPORTED_MODULE_7__.DESKTOP_CONTAINER_CLASS },
-                react__WEBPACK_IMPORTED_MODULE_4___default().createElement(_apps_file_explorer_desktop__WEBPACK_IMPORTED_MODULE_8__.ListDirComponent, { openFile: props.openFile, showFileActions: props.showFileActionsHandler, customClass: 'desktop-icons' })),
+                react__WEBPACK_IMPORTED_MODULE_4___default().createElement(_apps_file_explorer_desktop__WEBPACK_IMPORTED_MODULE_9__.ListDirComponent, { openFile: props.openFile, showFileActions: props.showFileActionsHandler, customClass: 'desktop-icons' })),
             react__WEBPACK_IMPORTED_MODULE_4___default().createElement(WidgetsPanel, null),
             react__WEBPACK_IMPORTED_MODULE_4___default().createElement("div", { className: _window_manager__WEBPACK_IMPORTED_MODULE_7__.WINDOWS_CONTAINER_CLASS })),
         usedAreas.has('right-nav') ? (react__WEBPACK_IMPORTED_MODULE_4___default().createElement("div", { className: "right-nav" }, slot === 'right-nav' ? commands : null)) : null,
@@ -157166,6 +157261,21 @@ const render = (container) => {
     const onCommandClick = (command, ...args) => {
         windowManager.createWindow(command.name, ...args);
     };
+    // Register IPC handlers so sandboxed dock/panel apps can query windows.
+    (0,_ipc__WEBPACK_IMPORTED_MODULE_8__.registerWindowIpcHandlers)(() => _window_manager__WEBPACK_IMPORTED_MODULE_7__.windowsSubject.getValue().map(w => ({
+        pid: w.pid, name: w.name, title: w.title,
+        icon: w.icon, minimized: w.minimized, active: w.active,
+    })), (pid) => {
+        const win = _window_manager__WEBPACK_IMPORTED_MODULE_7__.windowsSubject.getValue().find(w => w.pid === pid);
+        win === null || win === void 0 ? void 0 : win.toggle();
+    });
+    // Broadcast every window-list change to all sandboxed iframes.
+    _window_manager__WEBPACK_IMPORTED_MODULE_7__.windowsSubject.subscribe(wins => {
+        (0,_ipc__WEBPACK_IMPORTED_MODULE_8__.broadcastIpcEvent)('wm.windowsChanged', wins.map(w => ({
+            pid: w.pid, name: w.name, title: w.title,
+            icon: w.icon, minimized: w.minimized, active: w.active,
+        })));
+    });
     platform.register('open-window', onCommandClick);
     const root = (0,react_dom_client__WEBPACK_IMPORTED_MODULE_3__.createRoot)(container);
     const contextMenuRef = react__WEBPACK_IMPORTED_MODULE_4___default().createRef();
@@ -157322,13 +157432,13 @@ const registerContextMenu = (container, ref) => {
         }
     });
 };
-platform.events$.pipe((0,rxjs__WEBPACK_IMPORTED_MODULE_17__.filter)(x => x.type === 'loaded')).subscribe(event => {
+platform.events$.pipe((0,rxjs__WEBPACK_IMPORTED_MODULE_18__.filter)(x => x.type === 'loaded')).subscribe(event => {
     const container = platform.window.document.createElement('div');
     container.classList.add('layout-default');
     platform.host.appendDomElement(container);
     render(container);
 });
-platform.events$.pipe((0,rxjs__WEBPACK_IMPORTED_MODULE_17__.filter)(x => x.type === 'exit')).subscribe(event => {
+platform.events$.pipe((0,rxjs__WEBPACK_IMPORTED_MODULE_18__.filter)(x => x.type === 'exit')).subscribe(event => {
     console.log(event);
 });
 

@@ -28398,7 +28398,8 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   broadcastIpcEvent: () => (/* binding */ broadcastIpcEvent),
 /* harmony export */   initIpc: () => (/* binding */ initIpc),
-/* harmony export */   registerIpcHandler: () => (/* binding */ registerIpcHandler)
+/* harmony export */   registerIpcHandler: () => (/* binding */ registerIpcHandler),
+/* harmony export */   registerWindowIpcHandlers: () => (/* binding */ registerWindowIpcHandlers)
 /* harmony export */ });
 // Host-side IPC router — handles postMessage calls from sandboxed iframes.
 // Pairs with /usr/lib/ipc.js (VFS client library).
@@ -28423,6 +28424,14 @@ function broadcastIpcEvent(event, data) {
         }
         catch (_) { }
     });
+}
+let _getWindowsFn = null;
+let _toggleWindowFn = null;
+function registerWindowIpcHandlers(getWindows, toggleWindow) {
+    _getWindowsFn = getWindows;
+    _toggleWindowFn = toggleWindow;
+    registerIpcHandler('wm.getWindows', () => { var _a; return (_a = _getWindowsFn === null || _getWindowsFn === void 0 ? void 0 : _getWindowsFn()) !== null && _a !== void 0 ? _a : []; });
+    registerIpcHandler('wm.toggleWindow', (d) => { _toggleWindowFn === null || _toggleWindowFn === void 0 ? void 0 : _toggleWindowFn(Number(d.pid)); return true; });
 }
 function initIpc(fs) {
     window.addEventListener('message', (e) => __awaiter(this, void 0, void 0, function* () {
@@ -28721,8 +28730,10 @@ class WindowManager {
         // --- VFS hook: createContainer({ command, settings }) ---
         // Return an HTMLElement to replace the default <div class="window">.
         // Mandatory attributes/classes are still applied by compiled code below.
+        // Use nodeType === 1 (ELEMENT_NODE) instead of instanceof HTMLElement so
+        // elements created via top.document (a different frame) still match.
         const customContainer = (_c = wmModule.createContainer) === null || _c === void 0 ? void 0 : _c.call(wmModule, { command, settings: wmSettings });
-        const container = (customContainer instanceof HTMLElement
+        const container = ((customContainer === null || customContainer === void 0 ? void 0 : customContainer.nodeType) === 1
             ? customContainer
             : platform.window.document.createElement("div"));
         container.setAttribute("data-name", command.name);
@@ -28783,7 +28794,7 @@ class WindowManager {
             fullscreen: fullscreenCallback,
         });
         let head, closeButton, fullScreenButton, minimizeButton, setTitleRaw, appendActionButton, setHeaderStyles;
-        if (customHead instanceof HTMLElement) {
+        if ((customHead === null || customHead === void 0 ? void 0 : customHead.nodeType) === 1) {
             head = customHead;
             // VFS-provided header has already received the callbacks — don't wire compiled buttons.
             closeButton = null;

@@ -6,7 +6,8 @@ import { createRoot } from 'react-dom/client'
 import React from 'react'
 import { Taskbar } from './commands'
 import { ContextMenu, ContextMenuItem } from './contextmenu'
-import { DESKTOP_CONTAINER_CLASS, WINDOWS_CONTAINER_CLASS, WindowManager, desktopsSubject } from '../window-manager'
+import { DESKTOP_CONTAINER_CLASS, WINDOWS_CONTAINER_CLASS, WindowManager, desktopsSubject, windowsSubject } from '../window-manager'
+import { broadcastIpcEvent, registerWindowIpcHandlers } from '../ipc'
 import { FileType } from '../../shared/types'
 import { ListDirComponent } from '../../apps/file-explorer/desktop'
 import { Header } from './header'
@@ -850,8 +851,24 @@ export const render = (container: HTMLElement) => {
         windowManager.createWindow(command.name, ...args)
     }
 
-
-
+    // Register IPC handlers so sandboxed dock/panel apps can query windows.
+    registerWindowIpcHandlers(
+      () => windowsSubject.getValue().map(w => ({
+        pid: w.pid, name: w.name, title: w.title,
+        icon: w.icon, minimized: w.minimized, active: w.active,
+      })),
+      (pid) => {
+        const win = windowsSubject.getValue().find(w => w.pid === pid);
+        win?.toggle();
+      },
+    );
+    // Broadcast every window-list change to all sandboxed iframes.
+    windowsSubject.subscribe(wins => {
+      broadcastIpcEvent('wm.windowsChanged', wins.map(w => ({
+        pid: w.pid, name: w.name, title: w.title,
+        icon: w.icon, minimized: w.minimized, active: w.active,
+      })));
+    });
 
     platform.register('open-window', onCommandClick)
 

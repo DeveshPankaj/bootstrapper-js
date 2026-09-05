@@ -3,7 +3,7 @@
 // /etc/managers.json to activate.
 
 export const createContainer = ({ command, settings }) => {
-    const doc = top.document;
+    
     const div = doc.createElement('div');
     // Remove default solid bg so the glass effect of the header shows through.
     div.style.cssText = 'border-radius:12px;overflow:hidden;';
@@ -11,7 +11,7 @@ export const createContainer = ({ command, settings }) => {
 };
 
 export const createHeader = ({ command, settings, close, minimize, fullscreen }) => {
-    const doc = top.document;
+    
     const head = doc.createElement('div');
     head.className = 'window-header';
     head.style.cssText = [

@@ -1,3 +1,4 @@
 {
-  "windowManager": "default"
+  "windowManager": "default",
+  "dockManager": "default"
 }

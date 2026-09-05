@@ -271,8 +271,10 @@ export class WindowManager {
     // --- VFS hook: createContainer({ command, settings }) ---
     // Return an HTMLElement to replace the default <div class="window">.
     // Mandatory attributes/classes are still applied by compiled code below.
+    // Use nodeType === 1 (ELEMENT_NODE) instead of instanceof HTMLElement so
+    // elements created via top.document (a different frame) still match.
     const customContainer = wmModule.createContainer?.({ command, settings: wmSettings });
-    const container = (customContainer instanceof HTMLElement
+    const container = (customContainer?.nodeType === 1
       ? customContainer
       : platform.window.document.createElement("div")) as HTMLDivElement;
 
@@ -335,7 +337,7 @@ export class WindowManager {
         appendActionButton: (props: { icon: string; title: string; onClick: () => void }) => { remove: () => void },
         setHeaderStyles: (styles: Record<string, string>) => void;
 
-    if (customHead instanceof HTMLElement) {
+    if (customHead?.nodeType === 1) {
       head = customHead;
       // VFS-provided header has already received the callbacks — don't wire compiled buttons.
       closeButton = null;

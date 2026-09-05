@@ -4,7 +4,7 @@
 // else (setupWindow, readSettings, snap zones) comes from /opt/window-manager.js.
 
 export const createHeader = ({ command, settings, close, minimize, fullscreen }) => {
-    const doc = top.document;
+    
     const head = doc.createElement('div');
     head.className = 'window-header';
     head.style.cssText = [

@@ -12,7 +12,8 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   broadcastIpcEvent: () => (/* binding */ broadcastIpcEvent),
 /* harmony export */   initIpc: () => (/* binding */ initIpc),
-/* harmony export */   registerIpcHandler: () => (/* binding */ registerIpcHandler)
+/* harmony export */   registerIpcHandler: () => (/* binding */ registerIpcHandler),
+/* harmony export */   registerWindowIpcHandlers: () => (/* binding */ registerWindowIpcHandlers)
 /* harmony export */ });
 // Host-side IPC router — handles postMessage calls from sandboxed iframes.
 // Pairs with /usr/lib/ipc.js (VFS client library).
@@ -37,6 +38,14 @@ function broadcastIpcEvent(event, data) {
         }
         catch (_) { }
     });
+}
+let _getWindowsFn = null;
+let _toggleWindowFn = null;
+function registerWindowIpcHandlers(getWindows, toggleWindow) {
+    _getWindowsFn = getWindows;
+    _toggleWindowFn = toggleWindow;
+    registerIpcHandler('wm.getWindows', () => { var _a; return (_a = _getWindowsFn === null || _getWindowsFn === void 0 ? void 0 : _getWindowsFn()) !== null && _a !== void 0 ? _a : []; });
+    registerIpcHandler('wm.toggleWindow', (d) => { _toggleWindowFn === null || _toggleWindowFn === void 0 ? void 0 : _toggleWindowFn(Number(d.pid)); return true; });
 }
 function initIpc(fs) {
     window.addEventListener('message', (e) => __awaiter(this, void 0, void 0, function* () {

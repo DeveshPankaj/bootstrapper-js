@@ -28537,8 +28537,10 @@ class WindowManager {
         // --- VFS hook: createContainer({ command, settings }) ---
         // Return an HTMLElement to replace the default <div class="window">.
         // Mandatory attributes/classes are still applied by compiled code below.
+        // Use nodeType === 1 (ELEMENT_NODE) instead of instanceof HTMLElement so
+        // elements created via top.document (a different frame) still match.
         const customContainer = (_c = wmModule.createContainer) === null || _c === void 0 ? void 0 : _c.call(wmModule, { command, settings: wmSettings });
-        const container = (customContainer instanceof HTMLElement
+        const container = ((customContainer === null || customContainer === void 0 ? void 0 : customContainer.nodeType) === 1
             ? customContainer
             : platform.window.document.createElement("div"));
         container.setAttribute("data-name", command.name);
@@ -28599,7 +28601,7 @@ class WindowManager {
             fullscreen: fullscreenCallback,
         });
         let head, closeButton, fullScreenButton, minimizeButton, setTitleRaw, appendActionButton, setHeaderStyles;
-        if (customHead instanceof HTMLElement) {
+        if ((customHead === null || customHead === void 0 ? void 0 : customHead.nodeType) === 1) {
             head = customHead;
             // VFS-provided header has already received the callbacks — don't wire compiled buttons.
             closeButton = null;
