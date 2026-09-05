@@ -1,0 +1,10 @@
+[
+    { "id": "1",  "type": "action", "title": "Explorer",              "cmd": "service('001-core.layout', 'open-window') (command('explorer'))" },
+    { "id": "4",  "type": "action", "title": "Settings",              "cmd": "service('001-core.layout', 'open-window') (command('ui.settings'))" },
+    { "id": "0",  "type": "action", "title": "Terminal",              "cmd": "service('001-core.layout', 'open-window') (command('ui.terminal'))" },
+    { "id": "2",  "type": "action", "title": "Portfolio",             "cmd": "service('001-core.layout', 'open-window') (command('ui.iframe'), '/home/user1/index.html')" },
+    { "id": "11", "type": "action", "title": "App Manager",           "cmd": "service('001-core.layout', 'open-window') (command('ui.pkg-manager'))" },
+    { "id": "3",  "type": "action", "title": "Toggle Fullscreen",     "cmd": "service('root', 'exec') ('/usr/bin/fullscreen.js');" },
+    { "id": "5",  "type": "action", "title": "VsCode (password:demo)","cmd": "service('root', 'exec') ('/home/user1/projects/VSCode.html');" },
+    { "id": "6",  "type": "action", "title": "Add Desktop",           "cmd": "platform.host.callCommand('add-desktop')" }
+]

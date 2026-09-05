@@ -771,6 +771,42 @@ const WidgetsPanel = () => {
     )
 }
 
+// VFS Desktop Manager — loads /opt/desktop/manager.js if present, falls back
+// to the compiled ListDirComponent so the desktop always renders.
+const VFS_DESKTOP_PATH = '/opt/desktop/manager.js'
+
+const DesktopMount = ({ openFile, showFileActionsHandler }: {
+    openFile: (file: FileType) => void
+    showFileActionsHandler: (file: FileType, event: React.MouseEvent<HTMLDivElement, MouseEvent>) => void
+}) => {
+    const ref = React.useRef<HTMLDivElement>(null)
+
+    React.useEffect(() => {
+        const container = ref.current
+        if (!container) return
+
+        const fs = platform.host.getFS()
+        if (fs.existsSync(VFS_DESKTOP_PATH)) {
+            try {
+                const src = fs.readFileSync(VFS_DESKTOP_PATH, 'utf-8') as string
+                const mod = platform.host.execString(src, VFS_DESKTOP_PATH)
+                if (typeof mod?.render === 'function') {
+                    const cleanup = mod.render(container, { openFile, showFileActions: showFileActionsHandler })
+                    return typeof cleanup === 'function' ? cleanup : undefined
+                }
+            } catch (err) {
+                console.error('[desktop-manager] VFS load failed:', err)
+            }
+        }
+        // Fallback: compile-time ListDirComponent
+        const root = createRoot(container)
+        root.render(<ListDirComponent openFile={openFile} showFileActions={showFileActionsHandler} customClass='desktop-icons' />)
+        return () => setTimeout(() => root.unmount(), 0)
+    }, [])
+
+    return <div ref={ref} style={{ width: '100%', height: '100%' }} />
+}
+
 const LayoutShell = (props: {
     contentRef: React.RefObject<HTMLDivElement | null>
     contextMenuRef: React.RefObject<HTMLDivElement | null>
@@ -813,7 +849,7 @@ const LayoutShell = (props: {
             ) : null}
             <div className="content-area" ref={props.contentRef} onContextMenu={props.onContextMenu}>
                 <div className={DESKTOP_CONTAINER_CLASS}>
-                    <ListDirComponent openFile={props.openFile} showFileActions={props.showFileActionsHandler} customClass='desktop-icons' />
+                    <DesktopMount openFile={props.openFile} showFileActionsHandler={props.showFileActionsHandler} />
                 </div>
                 <WidgetsPanel />
                 <div className={WINDOWS_CONTAINER_CLASS}></div>
@@ -963,64 +999,32 @@ export const render = (container: HTMLElement) => {
 
     }
 
+    // Desktop right-click menu: load items from /etc/contextmenu.json (VFS),
+    // falling back to a minimal hardcoded set if the file is absent or invalid.
+    const loadContextMenuItems = (): Array<ContextMenuItem> => {
+        const fallback: Array<ContextMenuItem> = [
+            { id: '1', type: 'action', title: 'Explorer', cmd: `service('001-core.layout', 'open-window') (command('explorer'))` },
+            { id: '4', type: 'action', title: 'Settings', cmd: `service('001-core.layout', 'open-window') (command('ui.settings'))` },
+            { id: '0', type: 'action', title: 'Terminal', cmd: `service('001-core.layout', 'open-window') (command('ui.terminal'))` },
+        ]
+        try {
+            const fs = platform.host.getFS()
+            if (fs.existsSync('/etc/contextmenu.json')) {
+                const parsed = JSON.parse(fs.readFileSync('/etc/contextmenu.json', 'utf-8') as string)
+                if (Array.isArray(parsed) && parsed.length) return parsed
+            }
+        } catch (_) {}
+        return fallback
+    }
+
     const onContextMenu: React.MouseEventHandler<HTMLDivElement>  = (event) => {
         if(event.target !== contentRef.current) return;
         event.preventDefault()
+        const items = loadContextMenuItems()
+        const multiDesktop = desktopsSubject.getValue().length > 1
         showContextMenuHandler(event.clientX, event.clientY, [
-            {
-                type: 'action',
-                id: '1',
-                title: 'Explorer',
-                cmd: `service('001-core.layout', 'open-window') (command('explorer'))`
-            },
-            {
-                type: 'action',
-                id: '4',
-                title: 'Settings',
-                cmd: `service('001-core.layout', 'open-window') (command('ui.settings'))`
-            },
-            {
-                type: 'action',
-                id: '0',
-                title: 'XTerm',
-                cmd: `service('001-core.layout', 'open-window') (command('ui.terminal'))`
-            },
-            {
-                type: 'action',
-                id: '2',
-                title: 'Portfolio',
-                cmd: `service('001-core.layout', 'open-window') (command('ui.iframe'), '/home/user1/index.html')`
-            },
-            {
-                type: 'action',
-                id: '3',
-                title: 'Toggle Fullscreen',
-                cmd: `service('root', 'exec') ('/usr/bin/fullscreen.js');`
-            },
-            {
-                type: 'action',
-                id: '5',
-                title: 'VsCode (password:demo)',
-                cmd: `service('root', 'exec') ('/home/user1/projects/VSCode.html');`
-            },
-            {
-                type: 'action',
-                id: '11',
-                title: 'App Manager',
-                cmd: `service('001-core.layout', 'open-window') (command('ui.pkg-manager'))`
-            },
-            {
-                type: 'action',
-                id: '6',
-                title: 'Add Desktop',
-                cmd: `platform.host.callCommand('add-desktop')`
-            },
-            ...(desktopsSubject.getValue().length > 1 ? [{
-                type: 'action' as const,
-                id: '8',
-                title: 'Remove Desktop',
-                cmd: `platform.host.callCommand('remove-active-desktop')`
-            }] : []),
+            ...items,
+            ...(multiDesktop ? [{ type: 'action' as const, id: '8', title: 'Remove Desktop', cmd: `platform.host.callCommand('remove-active-desktop')` }] : []),
         ])
     }
     root.render(

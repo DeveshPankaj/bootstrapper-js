@@ -830,5 +830,20 @@
     "path": "/opt/apps/dock/macos.html",
     "file": "/opt/apps/dock/macos.html",
     "force_reload": false
+  },
+  {
+    "path": "/opt/desktop/manager.js",
+    "file": "/opt/desktop/manager.js",
+    "force_reload": false
+  },
+  {
+    "path": "/etc/contextmenu.json",
+    "file": "/etc/contextmenu.json",
+    "force_reload": false
+  },
+  {
+    "path": "/etc/taskbar.json",
+    "file": "/etc/taskbar.json",
+    "force_reload": false
   }
 ]

@@ -109,6 +109,37 @@ const ManagersSettings = () => {
             'WM files: /opt/wm/<id>.js — export createHeader (and optionally createContainer, setupWindow). ' +
             'Dock files: /opt/apps/dock/<id>.html — sandboxed, uses window.ipc for window info.'
         ),
+
+        React.createElement('p', { className: 'muted-small', style: { margin: '20px 0 6px' } }, 'VFS CONFIGURATION FILES'),
+        React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 4 } },
+            [
+                { path: '/opt/desktop/manager.js', label: 'Desktop icons renderer', desc: 'Controls how desktop icons are shown. Export render(container, api).' },
+                { path: '/etc/contextmenu.json',   label: 'Desktop right-click menu', desc: 'JSON array of { id, type, title, cmd } items for the desktop context menu.' },
+                { path: '/etc/taskbar.json',        label: 'Taskbar pinned apps', desc: 'JSON { pinned: ["command-name", ...] } to control which apps appear in the dock.' },
+            ].map(({ path, label, desc }) =>
+                React.createElement('div', {
+                    key: path,
+                    style: {
+                        background: 'rgba(128,128,128,0.07)',
+                        borderRadius: 6,
+                        padding: '6px 10px',
+                        cursor: 'pointer',
+                    },
+                    onClick: () => platform.host.execCommand(
+                        `service('001-core.layout','open-window')(command('ui.notepad'),'${path}')`,
+                        platform
+                    ),
+                    title: 'Open in editor',
+                },
+                    React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
+                        React.createElement('span', { style: { fontWeight: 500, fontSize: 12 } }, label),
+                        React.createElement('span', { className: 'material-symbols-outlined', style: { fontSize: 14, opacity: 0.5 } }, 'edit'),
+                    ),
+                    React.createElement('span', { style: { fontSize: 11, opacity: 0.55 } }, path),
+                    React.createElement('span', { style: { fontSize: 11, opacity: 0.45, marginTop: 2, display: 'block' } }, desc),
+                )
+            )
+        ),
     )
 }
 

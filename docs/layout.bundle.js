@@ -28705,14 +28705,20 @@ const platform = _shared_index__WEBPACK_IMPORTED_MODULE_0__.Platform.getInstance
 const Commands = ({ onCommandClick, vertical, align = 'start' }) => {
     const [commands, setCommands] = react__WEBPACK_IMPORTED_MODULE_1___default().useState([]);
     const [expended, setExpended] = react__WEBPACK_IMPORTED_MODULE_1___default().useState(localStorage.getItem('show_taskbar_title') === 'true');
-    const defaultCommands = [
-        'explorer',
-        'ui.vs-code',
-        'ui.notepad',
-        'webamp',
-        'ui.task-manager',
-    ];
+    const readPinnedCommands = () => {
+        try {
+            const fs = platform.host.getFS();
+            if (fs.existsSync('/etc/taskbar.json')) {
+                const cfg = JSON.parse(fs.readFileSync('/etc/taskbar.json', 'utf-8'));
+                if (Array.isArray(cfg.pinned) && cfg.pinned.length)
+                    return cfg.pinned;
+            }
+        }
+        catch (_) { }
+        return ['explorer', 'ui.vs-code', 'ui.notepad', 'webamp', 'ui.task-manager'];
+    };
     react__WEBPACK_IMPORTED_MODULE_1___default().useEffect(() => {
+        const defaultCommands = readPinnedCommands();
         const subscription = platform.host.commands$
             .pipe((0,rxjs__WEBPACK_IMPORTED_MODULE_4__.map)(commands => defaultCommands.map(cmd => commands.find(command => command.name === cmd)).filter(x => x)))
             .subscribe(_commands => setCommands(_commands));
@@ -157224,6 +157230,36 @@ const WidgetsPanel = () => {
         return null;
     return (react__WEBPACK_IMPORTED_MODULE_4___default().createElement("div", { className: "widgets-panel", ref: panelRef }, visibleWidgets.map((widget, i) => (react__WEBPACK_IMPORTED_MODULE_4___default().createElement(WidgetItem, { key: widget.name, widget: widget, savedPosition: positions[widget.name], defaultTop: i * 100, panelRef: panelRef, onRemove: handleRemove })))));
 };
+// VFS Desktop Manager — loads /opt/desktop/manager.js if present, falls back
+// to the compiled ListDirComponent so the desktop always renders.
+const VFS_DESKTOP_PATH = '/opt/desktop/manager.js';
+const DesktopMount = ({ openFile, showFileActionsHandler }) => {
+    const ref = react__WEBPACK_IMPORTED_MODULE_4___default().useRef(null);
+    react__WEBPACK_IMPORTED_MODULE_4___default().useEffect(() => {
+        const container = ref.current;
+        if (!container)
+            return;
+        const fs = platform.host.getFS();
+        if (fs.existsSync(VFS_DESKTOP_PATH)) {
+            try {
+                const src = fs.readFileSync(VFS_DESKTOP_PATH, 'utf-8');
+                const mod = platform.host.execString(src, VFS_DESKTOP_PATH);
+                if (typeof (mod === null || mod === void 0 ? void 0 : mod.render) === 'function') {
+                    const cleanup = mod.render(container, { openFile, showFileActions: showFileActionsHandler });
+                    return typeof cleanup === 'function' ? cleanup : undefined;
+                }
+            }
+            catch (err) {
+                console.error('[desktop-manager] VFS load failed:', err);
+            }
+        }
+        // Fallback: compile-time ListDirComponent
+        const root = (0,react_dom_client__WEBPACK_IMPORTED_MODULE_3__.createRoot)(container);
+        root.render(react__WEBPACK_IMPORTED_MODULE_4___default().createElement(_apps_file_explorer_desktop__WEBPACK_IMPORTED_MODULE_9__.ListDirComponent, { openFile: openFile, showFileActions: showFileActionsHandler, customClass: 'desktop-icons' }));
+        return () => setTimeout(() => root.unmount(), 0);
+    }, []);
+    return react__WEBPACK_IMPORTED_MODULE_4___default().createElement("div", { ref: ref, style: { width: '100%', height: '100%' } });
+};
 const LayoutShell = (props) => {
     var _a;
     const [layoutId, setLayoutId] = react__WEBPACK_IMPORTED_MODULE_4___default().useState(layoutSubject.getValue());
@@ -157245,7 +157281,7 @@ const LayoutShell = (props) => {
         usedAreas.has('left-nav') ? (react__WEBPACK_IMPORTED_MODULE_4___default().createElement("div", { className: "left-nav" }, slot === 'left-nav' ? commands : null)) : null,
         react__WEBPACK_IMPORTED_MODULE_4___default().createElement("div", { className: "content-area", ref: props.contentRef, onContextMenu: props.onContextMenu },
             react__WEBPACK_IMPORTED_MODULE_4___default().createElement("div", { className: _window_manager__WEBPACK_IMPORTED_MODULE_7__.DESKTOP_CONTAINER_CLASS },
-                react__WEBPACK_IMPORTED_MODULE_4___default().createElement(_apps_file_explorer_desktop__WEBPACK_IMPORTED_MODULE_9__.ListDirComponent, { openFile: props.openFile, showFileActions: props.showFileActionsHandler, customClass: 'desktop-icons' })),
+                react__WEBPACK_IMPORTED_MODULE_4___default().createElement(DesktopMount, { openFile: props.openFile, showFileActionsHandler: props.showFileActionsHandler })),
             react__WEBPACK_IMPORTED_MODULE_4___default().createElement(WidgetsPanel, null),
             react__WEBPACK_IMPORTED_MODULE_4___default().createElement("div", { className: _window_manager__WEBPACK_IMPORTED_MODULE_7__.WINDOWS_CONTAINER_CLASS })),
         usedAreas.has('right-nav') ? (react__WEBPACK_IMPORTED_MODULE_4___default().createElement("div", { className: "right-nav" }, slot === 'right-nav' ? commands : null)) : null,
@@ -157357,65 +157393,34 @@ const render = (container) => {
     const onCommandClickHandler = (command, ...args) => {
         platform.host.execCommand(`service('001-core.layout', 'open-window') (command('${command.name}')${args.length ? ',' : ''} ${args.map(x => "'" + x + "'").join(', ')})`, platform);
     };
+    // Desktop right-click menu: load items from /etc/contextmenu.json (VFS),
+    // falling back to a minimal hardcoded set if the file is absent or invalid.
+    const loadContextMenuItems = () => {
+        const fallback = [
+            { id: '1', type: 'action', title: 'Explorer', cmd: `service('001-core.layout', 'open-window') (command('explorer'))` },
+            { id: '4', type: 'action', title: 'Settings', cmd: `service('001-core.layout', 'open-window') (command('ui.settings'))` },
+            { id: '0', type: 'action', title: 'Terminal', cmd: `service('001-core.layout', 'open-window') (command('ui.terminal'))` },
+        ];
+        try {
+            const fs = platform.host.getFS();
+            if (fs.existsSync('/etc/contextmenu.json')) {
+                const parsed = JSON.parse(fs.readFileSync('/etc/contextmenu.json', 'utf-8'));
+                if (Array.isArray(parsed) && parsed.length)
+                    return parsed;
+            }
+        }
+        catch (_) { }
+        return fallback;
+    };
     const onContextMenu = (event) => {
         if (event.target !== contentRef.current)
             return;
         event.preventDefault();
+        const items = loadContextMenuItems();
+        const multiDesktop = _window_manager__WEBPACK_IMPORTED_MODULE_7__.desktopsSubject.getValue().length > 1;
         showContextMenuHandler(event.clientX, event.clientY, [
-            {
-                type: 'action',
-                id: '1',
-                title: 'Explorer',
-                cmd: `service('001-core.layout', 'open-window') (command('explorer'))`
-            },
-            {
-                type: 'action',
-                id: '4',
-                title: 'Settings',
-                cmd: `service('001-core.layout', 'open-window') (command('ui.settings'))`
-            },
-            {
-                type: 'action',
-                id: '0',
-                title: 'XTerm',
-                cmd: `service('001-core.layout', 'open-window') (command('ui.terminal'))`
-            },
-            {
-                type: 'action',
-                id: '2',
-                title: 'Portfolio',
-                cmd: `service('001-core.layout', 'open-window') (command('ui.iframe'), '/home/user1/index.html')`
-            },
-            {
-                type: 'action',
-                id: '3',
-                title: 'Toggle Fullscreen',
-                cmd: `service('root', 'exec') ('/usr/bin/fullscreen.js');`
-            },
-            {
-                type: 'action',
-                id: '5',
-                title: 'VsCode (password:demo)',
-                cmd: `service('root', 'exec') ('/home/user1/projects/VSCode.html');`
-            },
-            {
-                type: 'action',
-                id: '11',
-                title: 'App Manager',
-                cmd: `service('001-core.layout', 'open-window') (command('ui.pkg-manager'))`
-            },
-            {
-                type: 'action',
-                id: '6',
-                title: 'Add Desktop',
-                cmd: `platform.host.callCommand('add-desktop')`
-            },
-            ...(_window_manager__WEBPACK_IMPORTED_MODULE_7__.desktopsSubject.getValue().length > 1 ? [{
-                    type: 'action',
-                    id: '8',
-                    title: 'Remove Desktop',
-                    cmd: `platform.host.callCommand('remove-active-desktop')`
-                }] : []),
+            ...items,
+            ...(multiDesktop ? [{ type: 'action', id: '8', title: 'Remove Desktop', cmd: `platform.host.callCommand('remove-active-desktop')` }] : []),
         ]);
     };
     root.render(react__WEBPACK_IMPORTED_MODULE_4___default().createElement(LayoutShell, { contentRef: contentRef, contextMenuRef: contextMenuRef, onCommandClick: onCommandClick, onContextMenu: onContextMenu, openFile: openFile, showFileActionsHandler: showFileActionsHandler, contextMenuComponentRef: contextMenuComponentRef }));
