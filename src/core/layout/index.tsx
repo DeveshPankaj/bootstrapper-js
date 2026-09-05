@@ -908,6 +908,56 @@ export const render = (container: HTMLElement) => {
 
     platform.register('open-window', onCommandClick)
 
+    // Open a VFS dock HTML as a fixed-position frameless iframe in the layout.
+    // Sandboxed (no same-origin), IPC SDK inlined so it can communicate.
+    const openVfsDock = (id: string) => {
+        const doc = platform.window.document
+        const existing = doc.getElementById('vfs-dock-iframe')
+        if (existing) existing.remove()
+        doc.body.classList.remove('vfs-dock-active')
+
+        if (!id || id === 'none') return
+
+        const fs = platform.host.getFS()
+        const dockPath = `/opt/apps/dock/${id}.html`
+        if (!fs.existsSync(dockPath)) { console.warn('[dock] not found:', dockPath); return }
+
+        try {
+            const ipcSdk = fs.existsSync('/usr/lib/ipc.js')
+                ? (fs.readFileSync('/usr/lib/ipc.js', 'utf-8') as string) : ''
+            const appHtml = fs.readFileSync(dockPath, 'utf-8') as string
+            const sdkTag = `<script>\n${ipcSdk}\n</script>`
+            const srcdoc = appHtml.includes('</head>')
+                ? appHtml.replace('</head>', `${sdkTag}\n</head>`)
+                : `${sdkTag}\n${appHtml}`
+            // Read optional height hint from HTML comment: <!-- dock:height=80 -->
+            const hMatch = appHtml.match(/<!--\s*dock:height=(\d+)\s*-->/)
+            const h = hMatch ? parseInt(hMatch[1]) : 64
+
+            const iframe = doc.createElement('iframe')
+            iframe.id = 'vfs-dock-iframe'
+            iframe.setAttribute('sandbox', 'allow-scripts allow-forms allow-modals')
+            iframe.srcdoc = srcdoc
+            iframe.style.cssText = `position:fixed;bottom:0;left:0;width:100%;height:${h}px;border:none;background:transparent;z-index:9000;pointer-events:auto;`
+            doc.body.appendChild(iframe)
+            doc.body.classList.add('vfs-dock-active')
+        } catch (err) {
+            console.error('[dock-manager] Failed to open dock:', err)
+        }
+    }
+
+    platform.register('open-vfs-dock', openVfsDock)
+    platform.host.registerCommand('open-vfs-dock', openVfsDock)
+
+    // Restore dock from persisted config on layout boot.
+    try {
+        const fs = platform.host.getFS()
+        if (fs.existsSync('/etc/managers.json')) {
+            const cfg = JSON.parse(fs.readFileSync('/etc/managers.json', 'utf-8') as string)
+            if (cfg.dockManager && cfg.dockManager !== 'none') openVfsDock(cfg.dockManager)
+        }
+    } catch (_) {}
+
     const root = createRoot(container)
     const contextMenuRef = React.createRef<HTMLDivElement>()
     // registerContextMenu(container, contextMenuRef)
