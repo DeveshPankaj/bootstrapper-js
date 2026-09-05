@@ -6,4 +6,5 @@ node_modules/
 v2/
 
 # scratch/unrelated scripts, not part of the app
-temp/
+temp/.DS_Store
+**/.DS_Store
