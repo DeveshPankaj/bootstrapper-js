@@ -51,7 +51,8 @@ const buildSrcdoc = (appPath: string): string => {
     const ipcSdk = readVfsText(IPC_SDK_PATH);
     const appHtml = readVfsText(appPath);
     // Inject the SDK before </head> or at the start of the body.
-    const sdkTag = `<script>\n${ipcSdk}\n</script>`;
+    const safeIpcSdk = ipcSdk.replace(/<\/script>/gi, '<\\/script>');
+    const sdkTag = `<script>\n${safeIpcSdk}\n</script>`;
     if (appHtml.includes('</head>')) {
         return appHtml.replace('</head>', `${sdkTag}\n</head>`);
     }

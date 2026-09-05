@@ -926,7 +926,8 @@ export const render = (container: HTMLElement) => {
             const ipcSdk = fs.existsSync('/usr/lib/ipc.js')
                 ? (fs.readFileSync('/usr/lib/ipc.js', 'utf-8') as string) : ''
             const appHtml = fs.readFileSync(dockPath, 'utf-8') as string
-            const sdkTag = `<script>\n${ipcSdk}\n</script>`
+            const safeIpcSdk = ipcSdk.replace(/<\/script>/gi, '<\\/script>')
+            const sdkTag = `<script>\n${safeIpcSdk}\n</script>`
             const srcdoc = appHtml.includes('</head>')
                 ? appHtml.replace('</head>', `${sdkTag}\n</head>`)
                 : `${sdkTag}\n${appHtml}`
