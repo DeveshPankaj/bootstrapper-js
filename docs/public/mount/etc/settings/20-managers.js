@@ -87,10 +87,13 @@ const ManagersSettings = () => {
     )
 }
 
-const { registerSection } = platform.getService('settings')
-registerSection({
-    id: 'managers',
-    label: 'Window Manager',
+platform.getService('settings').registerSection('20-managers', (container, api) => {
+    const ReactDOM = platform.getService('ReactDOM')
+    const root = ReactDOM.createRoot(container)
+    root.render(React.createElement(ManagersSettings))
+    return () => setTimeout(() => root.unmount(), 0)
+}, {
+    title: 'Window Manager',
     icon: 'window',
-    component: ManagersSettings,
+    color: '#636366',
 })
