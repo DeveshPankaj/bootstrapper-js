@@ -29267,7 +29267,8 @@ const layoutCss = (grid, wallpaperUrl) => `
     .footer {
         grid-area: footer;
     }
-    body.vfs-dock-active .footer {
+    body.vfs-dock-active .footer,
+    body.vfs-dock-active .toolbar {
         display: none;
     }
 `;
