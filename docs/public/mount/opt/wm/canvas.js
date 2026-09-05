@@ -253,7 +253,8 @@ export const setupWindow = ({ container, head, settings, moveOnTop }) => {
 
 export const createHeader = ({ close, minimize, fullscreen }) => {
     const head = document.createElement('div')
-    head.style.cssText = 'display:flex;align-items:center;padding:0 10px;gap:6px;height:100%;'
+    head.className = 'window-header'
+    head.style.cssText = 'display:flex;align-items:center;padding:0 10px;gap:6px;'
 
     const dot = (bg, cls, action) => {
         const d = document.createElement('div')

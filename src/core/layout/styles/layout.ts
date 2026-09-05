@@ -28,4 +28,7 @@ export const layoutCss = (grid: { columns: string, rows: string, areas: string }
     .footer {
         grid-area: footer;
     }
+    body.vfs-dock-active .footer {
+        display: none;
+    }
 `
