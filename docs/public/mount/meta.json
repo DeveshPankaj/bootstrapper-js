@@ -622,6 +622,11 @@
     "force_reload": true
   },
   {
+    "path": "/opt/apps/snake-cnn3d/main.html",
+    "file": "/opt/apps/snake-cnn3d/main.html",
+    "force_reload": true
+  },
+  {
     "path": "/opt/apps/webgl-demo/main.html",
     "file": "/opt/apps/webgl-demo/main.html",
     "force_reload": true

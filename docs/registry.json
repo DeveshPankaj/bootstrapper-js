@@ -481,6 +481,22 @@
       "main": "main.html"
     },
     {
+      "id": "snake-cnn3d",
+      "name": "Snake AI (Conv3D)",
+      "description": "Snake game with a 3D convolutional neural network agent that trains entirely in the browser.",
+      "version": "1.0.0",
+      "icon": "view_in_ar",
+      "category": "AI",
+      "author": "bootstrapper-js",
+      "files": [
+        {
+          "dest": "main.html",
+          "src": "/public/mount/opt/apps/snake-cnn3d/main.html"
+        }
+      ],
+      "main": "main.html"
+    },
+    {
       "id": "webgl-demo",
       "name": "WebGL Demo",
       "description": "Interactive WebGL 3D graphics demo running entirely in the browser.",

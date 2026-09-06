@@ -1,137 +1,138 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Three.js Snake Game</title>
-    <style>
-        body { margin: 0; }
-        canvas { display: block; outline: none; }
-    </style>
+<meta charset="utf-8" />
+<style>
+  body { margin: 0; display: flex; flex-direction: column; align-items: center; height: 100vh; box-sizing: border-box; background: #1a1a1a; color: #eee; font-family: -apple-system, sans-serif; font-size: 13px; }
+  .bar { display: flex; gap: 16px; align-items: center; padding: 10px; }
+  .bar span { font-variant-numeric: tabular-nums; }
+  #board { background: #111; border-radius: 6px; box-shadow: 0 0 0 1px #333; }
+  .wrap { position: relative; }
+  .overlay { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: rgba(0,0,0,0.7); border-radius: 6px; }
+  .overlay button { border: none; background: #2ecc71; color: #fff; border-radius: 6px; padding: 8px 18px; cursor: pointer; font-size: 13px; }
+  .hint { padding: 6px; color: #999; font-size: 11px; }
+</style>
 </head>
 <body>
-    <script type="module">
-        import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.118/build/three.module.js";
-        import { OrbitControls } from "https://cdn.jsdelivr.net/npm/three@0.118/examples/jsm/controls/OrbitControls.js";
+  <div class="bar">
+    <span id="score">Score: 0</span>
+    <span id="best">Best: 0</span>
+  </div>
+  <div class="wrap">
+    <canvas id="board"></canvas>
+    <div class="overlay" id="overlay">
+      <div id="overlayMsg"></div>
+      <button id="playAgain">Play Again</button>
+    </div>
+  </div>
+  <div class="hint">Arrow keys to steer</div>
 
-        // Initialize scene, camera, and renderer
-        const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        document.body.appendChild(renderer.domElement);
+<script>
+const GRID = 20;
+const CELL = 18;
+const canvas = document.getElementById('board');
+const ctx = canvas.getContext('2d');
+canvas.width = GRID * CELL;
+canvas.height = GRID * CELL;
+const scoreEl = document.getElementById('score');
+const bestEl = document.getElementById('best');
+const overlay = document.getElementById('overlay');
+const overlayMsg = document.getElementById('overlayMsg');
+const playAgainBtn = document.getElementById('playAgain');
 
-        // Speed and block size variables
-        const speed = 5;  // Speed of the snake (higher value = faster movement)
-        const blockSize = 0.5;  // Size of each block
+const HIGHSCORE_PATH = '/home/user1/.local/share/snake-game/highscore.txt';
 
-        // Direction control variables
-        let direction = { x: 1, y: 0 };  // Initially moving to the right
+let snake, dir, nextDir, food, score, best = 0, alive, timer;
 
-        // Create the snake
-        const snake = [];
-        const segmentGeometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize);
-        const segmentMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+function randCell() {
+  return { x: Math.floor(Math.random() * GRID), y: Math.floor(Math.random() * GRID) };
+}
 
-        for (let i = 0; i < 5; i++) {
-            const segment = new THREE.Mesh(segmentGeometry, segmentMaterial);
-            segment.position.set(-i * blockSize, 0, 0);
-            snake.push(segment);
-            scene.add(segment);
-        }
+function spawnFood() {
+  let p;
+  do { p = randCell(); } while (snake.some(s => s.x === p.x && s.y === p.y));
+  food = p;
+}
 
-        // Set up camera position
-        camera.position.z = 10;
+function reset() {
+  snake = [{ x: 10, y: 10 }, { x: 9, y: 10 }, { x: 8, y: 10 }];
+  dir = { x: 1, y: 0 };
+  nextDir = { x: 1, y: 0 };
+  score = 0;
+  alive = true;
+  spawnFood();
+  scoreEl.textContent = 'Score: 0';
+  overlay.style.display = 'none';
+  draw();
+}
 
-        // Create food
-        const foodGeometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize);
-        const foodMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-        const food = new THREE.Mesh(foodGeometry, foodMaterial);
-        function repositionFood() {
-            food.position.set(
-                Math.floor(Math.random() * 10 - 5) * blockSize,
-                Math.floor(Math.random() * 10 - 5) * blockSize,
-                0
-            );
-        }
-        repositionFood();
-        scene.add(food);
+function tick() {
+  if (!alive) return;
+  dir = nextDir;
+  const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
 
-        // Handle keyboard inputs
-        window.addEventListener('keydown', (event) => {
-            switch (event.key) {
-                case 'ArrowUp':
-                    if (direction.y !== -1) {
-                        direction = { x: 0, y: 1 };
-                    }
-                    break;
-                case 'ArrowDown':
-                    if (direction.y !== 1) {
-                        direction = { x: 0, y: -1 };
-                    }
-                    break;
-                case 'ArrowLeft':
-                    if (direction.x !== 1) {
-                        direction = { x: -1, y: 0 };
-                    }
-                    break;
-                case 'ArrowRight':
-                    if (direction.x !== -1) {
-                        direction = { x: 1, y: 0 };
-                    }
-                    break;
-            }
-        });
+  if (head.x < 0 || head.y < 0 || head.x >= GRID || head.y >= GRID || snake.some(s => s.x === head.x && s.y === head.y)) {
+    gameOver();
+    return;
+  }
 
-        // Function to check if the snake's head is at the same position as the food
-        function checkCollision() {
-            const head = snake[0];
-            const foodPos = food.position;
-            return head.position.x === foodPos.x && head.position.y === foodPos.y;
-        }
+  snake.unshift(head);
+  if (head.x === food.x && head.y === food.y) {
+    score++;
+    scoreEl.textContent = 'Score: ' + score;
+    spawnFood();
+  } else {
+    snake.pop();
+  }
+  draw();
+}
 
-        // Function to grow the snake
-        function growSnake() {
-            const lastSegment = snake[snake.length - 1];
-            const newSegment = new THREE.Mesh(segmentGeometry, segmentMaterial);
-            newSegment.position.copy(lastSegment.position);
-            snake.push(newSegment);
-            scene.add(newSegment);
-        }
+function gameOver() {
+  alive = false;
+  overlayMsg.textContent = 'Game Over — Score: ' + score;
+  overlay.style.display = 'flex';
+  if (score > best) {
+    best = score;
+    bestEl.textContent = 'Best: ' + best;
+    AppSDK.writeText(HIGHSCORE_PATH, String(best)).catch(() => {});
+  }
+}
 
-        // Timing variables
-        let lastMoveTime = 0;
+function draw() {
+  ctx.fillStyle = '#111';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#e74c3c';
+  ctx.fillRect(food.x * CELL, food.y * CELL, CELL - 1, CELL - 1);
+  snake.forEach((s, i) => {
+    ctx.fillStyle = i === 0 ? '#2ecc71' : '#27ae60';
+    ctx.fillRect(s.x * CELL, s.y * CELL, CELL - 1, CELL - 1);
+  });
+}
 
-        // Function to move the snake
-        function moveSnake(time) {
-            // Move snake at the set speed
-            if (time - lastMoveTime >= 1000 / speed) {
-                // Update snake segments' positions
-                for (let i = snake.length - 1; i > 0; i--) {
-                    snake[i].position.copy(snake[i - 1].position);
-                }
-                // Move head (snake[0]) based on direction
-                snake[0].position.x += direction.x * blockSize;
-                snake[0].position.y += direction.y * blockSize;
+document.addEventListener('keydown', (e) => {
+  const key = e.key;
+  if (key === 'ArrowUp' && dir.y === 0) nextDir = { x: 0, y: -1 };
+  else if (key === 'ArrowDown' && dir.y === 0) nextDir = { x: 0, y: 1 };
+  else if (key === 'ArrowLeft' && dir.x === 0) nextDir = { x: -1, y: 0 };
+  else if (key === 'ArrowRight' && dir.x === 0) nextDir = { x: 1, y: 0 };
+  else return;
+  e.preventDefault();
+});
 
-                // Check for collision with food
-                if (checkCollision()) {
-                    growSnake();
-                    repositionFood();
-                }
+playAgainBtn.onclick = reset;
 
-                lastMoveTime = time;
-            }
-        }
-
-        // Animation loop
-        function animate(time) {
-            requestAnimationFrame(animate);
-            moveSnake(time);
-            renderer.render(scene, camera);
-        }
-
-        animate();
-    </script>
+(async () => {
+  try {
+    if (await AppSDK.exists(HIGHSCORE_PATH)) {
+      const text = await AppSDK.readText(HIGHSCORE_PATH);
+      const n = parseInt(text, 10);
+      if (!isNaN(n)) best = n;
+    }
+  } catch (err) {}
+  bestEl.textContent = 'Best: ' + best;
+  reset();
+  timer = setInterval(tick, 120);
+})();
+</script>
 </body>
 </html>

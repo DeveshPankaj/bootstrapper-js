@@ -1,0 +1,956 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  body { margin: 0; display: flex; height: 100vh; box-sizing: border-box; font-family: -apple-system, sans-serif; font-size: 13px; background: #1a1a1e; color: #eee; }
+  .panel { width: 280px; flex-shrink: 0; padding: 12px; box-sizing: border-box; background: #232328; border-right: 1px solid #34343c; overflow-y: auto; }
+  .panel h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: #999; margin: 14px 0 6px; }
+  .panel h2:first-child { margin-top: 0; }
+  label { display: block; font-size: 11px; color: #aaa; margin: 8px 0 3px; }
+  input, select { width: 100%; box-sizing: border-box; background: #17171b; border: 1px solid #3a3a44; color: #eee; border-radius: 4px; padding: 5px 6px; font-size: 12px; }
+  input:disabled, select:disabled { opacity: 0.5; }
+  input[type="range"] { padding: 0; background: transparent; border: none; height: 18px; }
+  .slider-val { color: #7fa8ff; font-weight: 600; font-variant-numeric: tabular-nums; }
+  button { border: none; background: #2d6cdf; color: #fff; border-radius: 6px; padding: 8px 12px; cursor: pointer; font-size: 12px; width: 100%; margin-top: 10px; }
+  button.stop { background: #e74c3c; }
+  button:disabled { background: #444; cursor: default; }
+  .hint { color: #888; font-size: 11px; margin-top: 6px; line-height: 1.5; }
+  .main { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 16px; gap: 12px; overflow-y: auto; }
+  #board { background: #0f0f12; border-radius: 6px; box-shadow: 0 0 0 1px #333; }
+  #stats { display: flex; gap: 18px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
+  #stats div { background: #232328; border: 1px solid #34343c; border-radius: 8px; padding: 8px 14px; text-align: center; }
+  #stats div b { display: block; font-size: 18px; }
+  #stats div span { font-size: 10px; color: #999; text-transform: uppercase; }
+  .layer-row { background: #17171b; border: 1px solid #3a3a44; border-radius: 6px; padding: 8px; margin-bottom: 8px; }
+  .layer-row.output { background: #1c1c21; }
+  .layer-row-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px; }
+  .layer-badge { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; padding: 2px 6px; border-radius: 4px; background: #444; color: #ddd; }
+  .layer-badge.conv { background: #2d6cdf; color: #fff; }
+  .layer-badge.dense { background: #2ecc71; color: #0a2f16; }
+  .layer-rm { width: auto; margin: 0; padding: 2px 8px; background: #3a3a44; font-size: 12px; line-height: 1; }
+  .layer-rm:hover:not(:disabled) { background: #e74c3c; }
+  .add-layer-row { display: flex; gap: 6px; }
+  .add-layer-row button { font-size: 11px; padding: 6px; margin-top: 0; }
+  #paramsLabel { font-size: 11px; color: #7fa8ff; margin-top: 6px; }
+</style>
+</head>
+<body>
+  <div class="panel">
+    <h2>Architecture</h2>
+    <div id="layerList"></div>
+    <div class="add-layer-row">
+      <button id="addConvBtn" type="button">+ Conv3D</button>
+      <button id="addDenseBtn" type="button">+ Dense</button>
+    </div>
+    <div id="paramsLabel" class="hint">0 parameters</div>
+    <div class="hint">"Dense" and "fully connected" name the same layer
+      (every output is a weighted sum of every input, plus a bias) &mdash;
+      different frameworks just call it different things, so there's one
+      button for it here.</div>
+
+    <h2>Training</h2>
+    <label>Games per batch</label>
+    <input id="gamesPerBatch" type="number" value="50" min="2" step="1" />
+    <label>Learning rate</label>
+    <input id="lr" type="number" value="0.05" step="0.001" min="0.0001" />
+    <label>Kill after idle steps (no progress)</label>
+    <input id="maxIdleSteps" type="number" value="196" min="10" step="1" />
+    <div class="hint">Each batch: play this many games with the current
+      network, keep only the moves from games with a positive total reward
+      (below), deduplicated so the same board+action pair only trains once
+      per batch even if several games passed through it, then fit that
+      filtered set as one supervised training pass before playing the next
+      batch. A batch with no positive-reward games trains on nothing and
+      just moves on to the next one. A snake looping without eating is
+      killed after "idle steps" ticks since its last food &mdash; defaults
+      to the board's box count (14&times;14 = 196).</div>
+
+    <h2>Reward weights</h2>
+    <label>Distance reward (closing in): <span id="distanceRewardVal" class="slider-val">1</span></label>
+    <input id="distanceReward" type="range" min="0" max="5" step="0.1" value="1" />
+    <label>Away-from-food penalty: <span id="awayPenaltyVal" class="slider-val">1.5</span></label>
+    <input id="awayPenalty" type="range" min="0" max="5" step="0.1" value="1.5" />
+    <label>Slow-path time penalty: <span id="timePenaltyVal" class="slider-val">0.5</span></label>
+    <input id="timePenalty" type="range" min="0" max="5" step="0.1" value="0.5" />
+    <label>Wall-hit penalty: <span id="wallHitVal" class="slider-val">10</span></label>
+    <input id="wallHit" type="range" min="0" max="50" step="1" value="10" />
+    <label>Tail-hit penalty: <span id="tailHitVal" class="slider-val">10</span></label>
+    <input id="tailHit" type="range" min="0" max="50" step="1" value="10" />
+    <label>Curl (looping) penalty: <span id="curlVal" class="slider-val">1</span></label>
+    <input id="curl" type="range" min="0" max="5" step="0.1" value="1" />
+    <div class="hint">Summed across every step of a game (food is worth a
+      fixed +10 internally, not a slider) to get that game's total reward
+      &mdash; the "final result" that decides whether a game's moves are
+      used for training at all. Distance reward/away penalty apply per
+      step of Manhattan distance closed/opened; slow-path fires once a
+      game takes longer than the gap between consecutive food spawns;
+      wall/tail-hit fire once on death by that cause; curl fires when the
+      head makes little net progress over a short rolling window of steps.</div>
+
+    <h2>Run</h2>
+    <button id="startBtn">Start training</button>
+    <div id="runId" class="hint">not started</div>
+
+    <h2>About</h2>
+    <div class="hint">
+      The board is fed in as a 3-channel volume (channel 0: board + food,
+      channel 1: snake body, channel 2: snake head) &mdash; 3&times;14&times;14
+      voxels with 1 input channel. Conv3D layers slide a k&times;k&times;k
+      kernel across all three axes (depth included) with same-padding, so
+      depth stays 3 throughout the stack while the channel count changes to
+      each layer's filter count. After the last Conv3D layer the volume is
+      flattened into Dense layers, ending in a fixed Dense(3, linear)
+      output; softmax turns those 3 logits into a straight/left/right
+      probability distribution.
+      <br /><br />
+      This is trained by real backpropagation, but as a <b>batch
+      self-imitation / Monte-Carlo policy-improvement method</b> (a strict
+      variant of the Cross-Entropy Method), not textbook
+      temporal-difference Q-learning &mdash; there's no per-step
+      bootstrapped target here. Each batch: (1) play "games per batch"
+      full games, sampling each move from the network's own softmax
+      output (so exploration comes from the policy's own uncertainty, no
+      separate exploration schedule needed) and summing every step's
+      reward into that game's total; (2) throw away every move from a game
+      whose total reward wasn't positive &mdash; only winning games teach
+      anything this batch &mdash; then, from what's left, keep only the
+      first occurrence of each distinct (board, action) pair so a common
+      transition seen across several games doesn't dominate the training
+      pass, and give every surviving move a clean one-hot target on the
+      action actually taken (no games are being pushed away from an
+      action, only reinforced toward one, since only wins reach this
+      stage); (3) fit the whole shuffled, filtered set of (board, target)
+      pairs as one supervised softmax-cross-entropy training pass &mdash;
+      whose gradient at the output layer has the standard closed form
+      <code>predicted probabilities &minus; target</code> &mdash;
+      backpropagated through every Dense and Conv3D layer (hand-derived,
+      not autodiff) with plain SGD at the learning rate above, then the
+      next batch is played with the freshly-updated network. A batch with
+      no winning games trains on nothing and just moves on. Rollout is
+      rendered live; the (typically much smaller, post-filtering) training
+      pass over the batch isn't, since there's no game to show &mdash; the
+      run status line below the Start
+      button reports which phase is active.
+      <br /><br />
+      The network's weights are checkpointed to this app's own data dir
+      after every batch and reloaded automatically next time this window
+      opens (only the latest checkpoint is kept, not a history), along
+      with all the settings above. Editing the architecture starts a fresh
+      randomly-initialized network &mdash; and a fresh checkpoint &mdash;
+      next time you press Start.
+    </div>
+  </div>
+
+  <div class="main">
+    <div id="stats">
+      <div><b id="statBatch">0</b><span>Batch</span></div>
+      <div><b id="statScore">0</b><span>Avg score</span></div>
+      <div><b id="statAllTime">0</b><span>Best game</span></div>
+      <div><b id="statAvg">0</b><span>Avg (20 batches)</span></div>
+      <div><b id="statMoves">0</b><span>Moves trained</span></div>
+    </div>
+    <canvas id="board"></canvas>
+  </div>
+
+<script>
+const LOG_PATH = '/home/user1/.local/share/trainboard/log.jsonl';
+const LOG_DIR = '/home/user1/.local/share/trainboard';
+let logBuffer = [];
+async function flushLog(force) {
+  if (!logBuffer.length) return;
+  const batch = logBuffer.splice(0, logBuffer.length);
+  try {
+    await AppSDK.mkdir(LOG_DIR).catch(() => {});
+    let existing = '';
+    try { existing = await AppSDK.readText(LOG_PATH); } catch (e) { existing = ''; }
+    const sep = existing && !existing.endsWith('\n') ? '\n' : '';
+    await AppSDK.writeText(LOG_PATH, existing + sep + batch.map(r => JSON.stringify(r)).join('\n') + '\n');
+  } catch (err) {
+    console.error('trainboard log write failed', err);
+  }
+}
+function logMetric(run, step, metric, value) { logBuffer.push({ run, step, metric, value }); }
+
+// ---------- checkpoint (this app's own private data dir, no permission prompt) ----------
+const CHECKPOINT_DIR = '/home/user1/.local/share/snake-cnn3d';
+const CHECKPOINT_PATH = CHECKPOINT_DIR + '/checkpoint.json';
+
+// ---------- game + training constants ----------
+const GRID = 14, CELL = 20, DEPTH = 3;
+const CURL_WINDOW = 8;
+const FOOD_REWARD = 10;
+const ROLLING_WINDOW = 20;
+const MAX_STEPS_HARD_CAP = 4000;
+const TRAIN_YIELD_EVERY = 200; // yield to the event loop this often during the supervised pass
+const canvas = document.getElementById('board');
+canvas.width = GRID * CELL;
+canvas.height = GRID * CELL;
+const ctx = canvas.getContext('2d');
+
+const DIRS = [{ x: 0, y: -1 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: -1, y: 0 }]; // up right down left, clockwise
+
+function manhattan(a, b) { return Math.abs(a.x - b.x) + Math.abs(a.y - b.y); }
+
+function newGameState() {
+  const start = { x: Math.floor(GRID / 2), y: Math.floor(GRID / 2) };
+  const snake = [start, { x: start.x - 1, y: start.y }, { x: start.x - 2, y: start.y }];
+  const food = spawnFood(snake);
+  return {
+    snake,
+    dirIdx: 1,
+    food,
+    score: 0,
+    steps: 0,
+    stepsSinceFood: 0,
+    expectedSteps: manhattan(start, food),
+    curlHistory: [],
+    alive: true,
+  };
+}
+
+function spawnFood(snake) {
+  let p;
+  do { p = { x: Math.floor(Math.random() * GRID), y: Math.floor(Math.random() * GRID) }; }
+  while (snake.some(s => s.x === p.x && s.y === p.y));
+  return p;
+}
+
+// action: 0 = straight, 1 = turn left, 2 = turn right
+function applyAction(state, action) {
+  if (action === 1) state.dirIdx = (state.dirIdx + 3) % 4;
+  else if (action === 2) state.dirIdx = (state.dirIdx + 1) % 4;
+}
+
+// ---------- board volume (3 x GRID x GRID, 1 input channel) ----------
+function buildVolume(state) {
+  const vol = new Float64Array(DEPTH * GRID * GRID);
+  const idx = (d, x, y) => (d * GRID + y) * GRID + x;
+  vol[idx(0, state.food.x, state.food.y)] = 1; // channel 0: board + food
+  for (let i = 1; i < state.snake.length; i++) {
+    const s = state.snake[i];
+    vol[idx(1, s.x, s.y)] = 1; // channel 1: snake body
+  }
+  const head = state.snake[0];
+  vol[idx(2, head.x, head.y)] = 1; // channel 2: snake head
+  return vol;
+}
+
+// one game step: applies the action, advances the game, returns the scalar
+// reward for this step (terminal penalties fire immediately on collision);
+// the caller sums these into a game's total reward
+function tickGame(state, action, rewards, maxIdle) {
+  applyAction(state, action);
+  const dir = DIRS[state.dirIdx];
+  const prevHead = state.snake[0];
+  const head = { x: prevHead.x + dir.x, y: prevHead.y + dir.y };
+  state.steps++;
+  state.stepsSinceFood++;
+
+  if (head.x < 0 || head.y < 0 || head.x >= GRID || head.y >= GRID) {
+    state.alive = false;
+    return -rewards.wallHit;
+  }
+  if (state.snake.some(s => s.x === head.x && s.y === head.y)) {
+    state.alive = false;
+    return -rewards.tailHit;
+  }
+
+  let reward = 0;
+  const prevDist = manhattan(prevHead, state.food);
+  state.snake.unshift(head);
+  const newDist = manhattan(head, state.food);
+  const distDelta = prevDist - newDist;
+  if (distDelta > 0) reward += rewards.distanceReward * distDelta;
+  else if (distDelta < 0) reward -= rewards.awayPenalty * -distDelta;
+
+  // curl: little net displacement over a short rolling window means the
+  // head is looping in place rather than actually going anywhere
+  state.curlHistory.push({ x: head.x, y: head.y });
+  if (state.curlHistory.length > CURL_WINDOW) state.curlHistory.shift();
+  if (state.curlHistory.length === CURL_WINDOW) {
+    const netDisp = manhattan(state.curlHistory[0], head);
+    reward -= rewards.curl * (Math.max(0, CURL_WINDOW - netDisp) / CURL_WINDOW);
+  }
+
+  // slow-path: taking longer than the gap between consecutive food spawns
+  // (as the crow flies) means it's wandering, not pathing efficiently
+  if (state.stepsSinceFood > state.expectedSteps) reward -= rewards.timePenalty;
+
+  if (head.x === state.food.x && head.y === state.food.y) {
+    state.score++;
+    reward += FOOD_REWARD;
+    state.stepsSinceFood = 0;
+    const prevFood = state.food;
+    state.food = spawnFood(state.snake);
+    state.expectedSteps = manhattan(prevFood, state.food);
+  } else {
+    state.snake.pop();
+  }
+
+  if (state.stepsSinceFood > maxIdle || state.steps > MAX_STEPS_HARD_CAP) state.alive = false;
+  return reward;
+}
+
+// ---------- activations (+ derivative, expressed in terms of the cached
+// activated output so the backward pass never needs to re-cache raw z) ----------
+const ACTIVATIONS = {
+  relu: x => Math.max(0, x),
+  tanh: Math.tanh,
+  sigmoid: x => 1 / (1 + Math.exp(-x)),
+  leaky: x => (x > 0 ? x : 0.01 * x),
+  linear: x => x,
+};
+const ACTIVATION_DERIV_FROM_OUTPUT = {
+  relu: out => (out > 0 ? 1 : 0),
+  tanh: out => 1 - out * out,
+  sigmoid: out => out * (1 - out),
+  leaky: out => (out >= 0 ? 1 : 0.01),
+  linear: () => 1,
+};
+const ACTIVATION_OPTIONS = [
+  ['relu', 'ReLU'], ['tanh', 'Tanh'], ['sigmoid', 'Sigmoid'], ['leaky', 'Leaky ReLU'], ['linear', 'Linear'],
+];
+
+// softmax over the 3 action logits (numerically stable), used both to
+// sample a move during rollout and as the predicted distribution the
+// cross-entropy gradient is computed against during training
+function softmax(logits) {
+  const max = Math.max(logits[0], logits[1], logits[2]);
+  const e0 = Math.exp(logits[0] - max), e1 = Math.exp(logits[1] - max), e2 = Math.exp(logits[2] - max);
+  const sum = e0 + e1 + e2;
+  return [e0 / sum, e1 / sum, e2 / sum];
+}
+
+function sampleAction(probs) {
+  const r = Math.random();
+  let cum = 0;
+  for (let i = 0; i < probs.length; i++) {
+    cum += probs[i];
+    if (r < cum) return i;
+  }
+  return probs.length - 1;
+}
+
+// ---------- architecture ----------
+let layers = [
+  { type: 'conv3d', filters: 4, kernel: 3, activation: 'relu' },
+  { type: 'dense', units: 16, activation: 'tanh' },
+];
+
+// resolves user-editable layers + a fixed Dense(3, linear) output layer into
+// concrete shapes/param counts, given the fixed 3x GRID x GRID x 1 input volume
+function resolveArchitecture(defs) {
+  let shape = { D: DEPTH, H: GRID, W: GRID, C: 1 };
+  let flat = null;
+  const resolved = [];
+  for (const layer of defs) {
+    if (layer.type === 'conv3d') {
+      const cin = shape.C;
+      const weightCount = layer.filters * layer.kernel * layer.kernel * layer.kernel * cin;
+      const biasCount = layer.filters;
+      resolved.push({ type: 'conv3d', filters: layer.filters, kernel: layer.kernel, activation: layer.activation, cin, weightCount, biasCount, paramCount: weightCount + biasCount });
+      shape = { D: shape.D, H: shape.H, W: shape.W, C: layer.filters };
+    } else {
+      if (flat === null) flat = shape.D * shape.H * shape.W * shape.C;
+      const inSize = flat;
+      const weightCount = layer.units * inSize;
+      const biasCount = layer.units;
+      resolved.push({ type: 'dense', units: layer.units, activation: layer.activation, inSize, weightCount, biasCount, paramCount: weightCount + biasCount });
+      flat = layer.units;
+    }
+  }
+  if (flat === null) flat = shape.D * shape.H * shape.W * shape.C;
+  const outWeightCount = 3 * flat;
+  resolved.push({ type: 'dense', units: 3, activation: 'linear', inSize: flat, weightCount: outWeightCount, biasCount: 3, paramCount: outWeightCount + 3, isOutput: true });
+  return resolved;
+}
+
+function countParams(resolved) { return resolved.reduce((s, l) => s + l.paramCount, 0); }
+
+function randomWeights(len) {
+  const w = new Float64Array(len);
+  for (let i = 0; i < len; i++) w[i] = (Math.random() * 2 - 1) * 0.5;
+  return w;
+}
+
+function buildNetwork(weights, resolved) {
+  let off = 0;
+  const net = [];
+  for (const layer of resolved) {
+    const w = weights.subarray(off, off + layer.weightCount); off += layer.weightCount;
+    const b = weights.subarray(off, off + layer.biasCount); off += layer.biasCount;
+    net.push({ layer, weights: w, biases: b });
+  }
+  return net;
+}
+
+// true 3D convolution: kernel slides over D, H and W (same-padding keeps D/H/W,
+// channel count becomes the layer's filter count)
+function conv3dForward(t, layer, weights, biases) {
+  const { data, D, H, W, C: cin } = t;
+  const cout = layer.filters;
+  const k = layer.kernel;
+  const pad = Math.floor(k / 2);
+  const act = ACTIVATIONS[layer.activation];
+  const out = new Float64Array(D * H * W * cout);
+  for (let d = 0; d < D; d++) {
+    for (let h = 0; h < H; h++) {
+      for (let w = 0; w < W; w++) {
+        for (let co = 0; co < cout; co++) {
+          let sum = biases[co];
+          for (let kd = 0; kd < k; kd++) {
+            const id = d + kd - pad;
+            if (id < 0 || id >= D) continue;
+            for (let kh = 0; kh < k; kh++) {
+              const ih = h + kh - pad;
+              if (ih < 0 || ih >= H) continue;
+              for (let kw = 0; kw < k; kw++) {
+                const iw = w + kw - pad;
+                if (iw < 0 || iw >= W) continue;
+                const inBase = ((id * H + ih) * W + iw) * cin;
+                const wBase = ((co * k + kd) * k + kh) * k * cin + kw * cin;
+                for (let ci = 0; ci < cin; ci++) sum += data[inBase + ci] * weights[wBase + ci];
+              }
+            }
+          }
+          out[((d * H + h) * W + w) * cout + co] = act(sum);
+        }
+      }
+    }
+  }
+  return { data: out, D, H, W, C: cout };
+}
+
+function denseForward(input, layer, weights, biases) {
+  const units = layer.units;
+  const inSize = layer.inSize;
+  const act = ACTIVATIONS[layer.activation];
+  const out = new Float64Array(units);
+  for (let u = 0; u < units; u++) {
+    let sum = biases[u];
+    const base = u * inSize;
+    for (let i = 0; i < inSize; i++) sum += weights[base + i] * input[i];
+    out[u] = act(sum);
+  }
+  return out;
+}
+
+// plain forward pass, no caching (used to pick the rollout action, which is
+// never backpropagated through directly)
+function runNetwork(net, volume) {
+  let t = { data: volume, D: DEPTH, H: GRID, W: GRID, C: 1 };
+  let flat = null;
+  for (const { layer, weights, biases } of net) {
+    if (layer.type === 'conv3d') {
+      t = conv3dForward(t, layer, weights, biases);
+    } else {
+      flat = denseForward(flat !== null ? flat : t.data, layer, weights, biases);
+    }
+  }
+  return flat;
+}
+
+// same forward pass, but caches each layer's input/output so backwardNetwork
+// can compute gradients afterward
+function forwardWithCache(net, volume) {
+  const caches = [];
+  let t = { data: volume, D: DEPTH, H: GRID, W: GRID, C: 1 };
+  let flat = null;
+  for (const { layer, weights, biases } of net) {
+    if (layer.type === 'conv3d') {
+      const input = t;
+      const out = conv3dForward(input, layer, weights, biases);
+      caches.push({ layer, weights, input, output: out });
+      t = out;
+    } else {
+      const input = flat !== null ? flat : t.data;
+      const out = denseForward(input, layer, weights, biases);
+      caches.push({ layer, weights, input, output: out });
+      flat = out;
+    }
+  }
+  return { output: flat, caches };
+}
+
+function denseBackward(cache, dOut, dWeights, dBiases) {
+  const { layer, weights, input, output } = cache;
+  const inSize = layer.inSize;
+  const deriv = ACTIVATION_DERIV_FROM_OUTPUT[layer.activation];
+  const dInput = new Float64Array(inSize);
+  for (let u = 0; u < layer.units; u++) {
+    const dz = dOut[u] * deriv(output[u]);
+    dBiases[u] += dz;
+    const base = u * inSize;
+    for (let i = 0; i < inSize; i++) {
+      dWeights[base + i] += dz * input[i];
+      dInput[i] += dz * weights[base + i];
+    }
+  }
+  return dInput;
+}
+
+// gradient of a true 3D convolution: dWeights via correlating the cached
+// input with the output gradient, dInput via scattering weight*dz back into
+// every input position each output voxel's receptive field touched (the
+// same nested loops as the forward pass, just accumulating into different
+// targets instead of summing into one output value)
+function conv3dBackward(cache, dOutFlat, dWeights, dBiases) {
+  const { layer, weights, input, output } = cache;
+  const { data: inData, D, H, W, C: cin } = input;
+  const cout = layer.filters;
+  const k = layer.kernel;
+  const pad = Math.floor(k / 2);
+  const deriv = ACTIVATION_DERIV_FROM_OUTPUT[layer.activation];
+  const outData = output.data;
+  const dInput = new Float64Array(D * H * W * cin);
+
+  for (let d = 0; d < D; d++) {
+    for (let h = 0; h < H; h++) {
+      for (let w = 0; w < W; w++) {
+        for (let co = 0; co < cout; co++) {
+          const outIdx = ((d * H + h) * W + w) * cout + co;
+          const dz = dOutFlat[outIdx] * deriv(outData[outIdx]);
+          if (dz === 0) continue;
+          dBiases[co] += dz;
+          for (let kd = 0; kd < k; kd++) {
+            const id = d + kd - pad;
+            if (id < 0 || id >= D) continue;
+            for (let kh = 0; kh < k; kh++) {
+              const ih = h + kh - pad;
+              if (ih < 0 || ih >= H) continue;
+              for (let kw = 0; kw < k; kw++) {
+                const iw = w + kw - pad;
+                if (iw < 0 || iw >= W) continue;
+                const inBase = ((id * H + ih) * W + iw) * cin;
+                const wBase = ((co * k + kd) * k + kh) * k * cin + kw * cin;
+                for (let ci = 0; ci < cin; ci++) {
+                  dWeights[wBase + ci] += dz * inData[inBase + ci];
+                  dInput[inBase + ci] += dz * weights[wBase + ci];
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return dInput;
+}
+
+// backprops dOutput (gradient wrt the network's final output) through every
+// layer in reverse order, returning one {dWeights, dBiases} pair per layer
+// aligned with `net`
+function backwardNetwork(net, caches, dOutput) {
+  const grads = net.map(({ weights, biases }) => ({
+    dWeights: new Float64Array(weights.length),
+    dBiases: new Float64Array(biases.length),
+  }));
+  let dNext = dOutput;
+  for (let li = net.length - 1; li >= 0; li--) {
+    const { layer } = net[li];
+    const g = grads[li];
+    dNext = layer.type === 'conv3d'
+      ? conv3dBackward(caches[li], dNext, g.dWeights, g.dBiases)
+      : denseBackward(caches[li], dNext, g.dWeights, g.dBiases);
+  }
+  return grads;
+}
+
+// plain SGD: `net`'s weights/biases are subarray views into the shared
+// weights buffer, so mutating them here updates that buffer directly
+function applyGradients(net, grads, lr) {
+  for (let li = 0; li < net.length; li++) {
+    const { weights, biases } = net[li];
+    const { dWeights, dBiases } = grads[li];
+    for (let i = 0; i < weights.length; i++) weights[i] -= lr * dWeights[i];
+    for (let i = 0; i < biases.length; i++) biases[i] -= lr * dBiases[i];
+  }
+}
+
+function draw(state) {
+  ctx.fillStyle = '#0f0f12';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#e74c3c';
+  ctx.fillRect(state.food.x * CELL, state.food.y * CELL, CELL - 1, CELL - 1);
+  state.snake.forEach((s, i) => {
+    ctx.fillStyle = i === 0 ? '#7fb2ff' : '#2d6cdf';
+    ctx.fillRect(s.x * CELL, s.y * CELL, CELL - 1, CELL - 1);
+  });
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ---------- architecture panel ----------
+const layerListEl = document.getElementById('layerList');
+const addConvBtn = document.getElementById('addConvBtn');
+const addDenseBtn = document.getElementById('addDenseBtn');
+const paramsLabelEl = document.getElementById('paramsLabel');
+
+function activationSelectHtml(id, selected, disabled) {
+  return `<select id="${id}" ${disabled ? 'disabled' : ''}>${ACTIVATION_OPTIONS.map(([v, l]) => `<option value="${v}" ${v === selected ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
+}
+
+function layerRowHtml(layer, i) {
+  const dis = running;
+  if (layer.type === 'conv3d') {
+    return `<div class="layer-row">
+      <div class="layer-row-head"><span class="layer-badge conv">Conv3D</span><button class="layer-rm" id="rm-${i}" type="button" ${dis ? 'disabled' : ''}>&times;</button></div>
+      <label>Filters</label><input id="filters-${i}" type="number" value="${layer.filters}" min="1" max="16" ${dis ? 'disabled' : ''} />
+      <label>Kernel size (k&times;k&times;k)</label><input id="kernel-${i}" type="number" value="${layer.kernel}" min="1" max="5" step="2" ${dis ? 'disabled' : ''} />
+      <label>Activation</label>${activationSelectHtml(`act-${i}`, layer.activation, dis)}
+    </div>`;
+  }
+  return `<div class="layer-row">
+    <div class="layer-row-head"><span class="layer-badge dense">Dense</span><button class="layer-rm" id="rm-${i}" type="button" ${dis ? 'disabled' : ''}>&times;</button></div>
+    <label>Units</label><input id="units-${i}" type="number" value="${layer.units}" min="1" max="128" ${dis ? 'disabled' : ''} />
+    <label>Activation</label>${activationSelectHtml(`act-${i}`, layer.activation, dis)}
+  </div>`;
+}
+
+function outputRowHtml() {
+  return `<div class="layer-row output">
+    <div class="layer-row-head"><span class="layer-badge">Output</span></div>
+    <div class="hint">Fixed: Dense(3, linear) &rarr; softmax &rarr; straight/left/right probability.</div>
+  </div>`;
+}
+
+function renderLayers() {
+  addConvBtn.disabled = running;
+  addDenseBtn.disabled = running;
+  layerListEl.innerHTML = layers.map(layerRowHtml).join('') + outputRowHtml();
+  layers.forEach((layer, i) => {
+    if (layer.type === 'conv3d') {
+      document.getElementById(`filters-${i}`).onchange = e => { layer.filters = Math.max(1, parseInt(e.target.value, 10) || 1); updateParamsLabel(); };
+      document.getElementById(`kernel-${i}`).onchange = e => { layer.kernel = Math.max(1, parseInt(e.target.value, 10) || 1); updateParamsLabel(); };
+    } else {
+      document.getElementById(`units-${i}`).onchange = e => { layer.units = Math.max(1, parseInt(e.target.value, 10) || 1); updateParamsLabel(); };
+    }
+    document.getElementById(`act-${i}`).onchange = e => { layer.activation = e.target.value; };
+    document.getElementById(`rm-${i}`).onclick = () => { layers.splice(i, 1); renderLayers(); };
+  });
+  updateParamsLabel();
+}
+
+function updateParamsLabel() {
+  paramsLabelEl.textContent = `${countParams(resolveArchitecture(layers)).toLocaleString()} parameters`;
+}
+
+addConvBtn.onclick = () => {
+  if (running) return;
+  // insert before the first Dense layer (if any) rather than appending, so
+  // conv layers always precede dense ones no matter how many of each exist
+  const insertAt = layers.findIndex(l => l.type === 'dense');
+  const newLayer = { type: 'conv3d', filters: 4, kernel: 3, activation: 'relu' };
+  if (insertAt === -1) layers.push(newLayer);
+  else layers.splice(insertAt, 0, newLayer);
+  renderLayers();
+};
+addDenseBtn.onclick = () => {
+  if (running) return;
+  layers.push({ type: 'dense', units: 16, activation: 'tanh' });
+  renderLayers();
+};
+
+// ---------- training + reward setting elements ----------
+const gamesPerBatchEl = document.getElementById('gamesPerBatch');
+const lrEl = document.getElementById('lr');
+const maxIdleStepsEl = document.getElementById('maxIdleSteps');
+maxIdleStepsEl.value = String(GRID * GRID);
+const distanceRewardEl = document.getElementById('distanceReward');
+const awayPenaltyEl = document.getElementById('awayPenalty');
+const timePenaltyEl = document.getElementById('timePenalty');
+const wallHitEl = document.getElementById('wallHit');
+const tailHitEl = document.getElementById('tailHit');
+const curlEl = document.getElementById('curl');
+
+function setSlider(id, value) {
+  const el = document.getElementById(id);
+  const val = document.getElementById(`${id}Val`);
+  el.value = String(value);
+  if (val) val.textContent = String(value);
+}
+
+['distanceReward', 'awayPenalty', 'timePenalty', 'wallHit', 'tailHit', 'curl'].forEach(id => {
+  const el = document.getElementById(id);
+  const val = document.getElementById(`${id}Val`);
+  el.oninput = () => { val.textContent = el.value; };
+});
+
+const startBtn = document.getElementById('startBtn');
+const runIdEl = document.getElementById('runId');
+const statBatch = document.getElementById('statBatch');
+const statScore = document.getElementById('statScore');
+const statAllTime = document.getElementById('statAllTime');
+const statAvg = document.getElementById('statAvg');
+const statMoves = document.getElementById('statMoves');
+
+let running = false;
+let currentRun = null;
+let batch = 0;
+let bestEver = 0;
+let rollingScores = [];
+let weights = null;         // Float64Array: the network's only copy of its parameters
+let currentNet = null;      // views into `weights`, rebuilt when the architecture changes
+let currentResolved = null;
+
+function resetTraining() {
+  currentResolved = resolveArchitecture(layers);
+  weights = randomWeights(countParams(currentResolved));
+  currentNet = buildNetwork(weights, currentResolved);
+  batch = 0;
+  bestEver = 0;
+  rollingScores = [];
+  statBatch.textContent = '0';
+  statScore.textContent = '0';
+  statAllTime.textContent = '0';
+  statAvg.textContent = '0';
+  statMoves.textContent = '0';
+}
+
+// ---------- checkpoint (this one network, overwritten every batch) ----------
+function serializeWeights(w) {
+  const arr = new Array(w.length);
+  for (let i = 0; i < w.length; i++) arr[i] = Math.round(w[i] * 1e6) / 1e6;
+  return arr;
+}
+
+async function saveCheckpoint(avgScoreThisBatch) {
+  const checkpoint = {
+    version: 3,
+    savedAt: Date.now(),
+    layers,
+    settings: {
+      gamesPerBatch: parseInt(gamesPerBatchEl.value, 10),
+      lr: parseFloat(lrEl.value),
+      maxIdleSteps: parseInt(maxIdleStepsEl.value, 10),
+      distanceReward: parseFloat(distanceRewardEl.value),
+      awayPenalty: parseFloat(awayPenaltyEl.value),
+      timePenalty: parseFloat(timePenaltyEl.value),
+      wallHit: parseFloat(wallHitEl.value),
+      tailHit: parseFloat(tailHitEl.value),
+      curl: parseFloat(curlEl.value),
+    },
+    batch,
+    bestEver,
+    lastAvgScore: avgScoreThisBatch,
+    runId: currentRun,
+    genome: serializeWeights(weights),
+  };
+  try {
+    await AppSDK.mkdir(CHECKPOINT_DIR).catch(() => {});
+    await AppSDK.writeText(CHECKPOINT_PATH, JSON.stringify(checkpoint));
+  } catch (err) {
+    console.error('checkpoint save failed', err);
+  }
+}
+
+// returns true if a checkpoint was found and the network was restored from it
+async function loadCheckpoint() {
+  let raw;
+  try { raw = await AppSDK.readText(CHECKPOINT_PATH); } catch (e) { return false; }
+  let cp;
+  try { cp = JSON.parse(raw); } catch (e) { return false; }
+  if (!cp || !Array.isArray(cp.layers) || !Array.isArray(cp.genome)) return false;
+
+  layers = cp.layers;
+  renderLayers();
+
+  const s = cp.settings || {};
+  if (s.gamesPerBatch != null) gamesPerBatchEl.value = String(s.gamesPerBatch);
+  if (s.lr != null) lrEl.value = String(s.lr);
+  if (s.maxIdleSteps != null) maxIdleStepsEl.value = String(s.maxIdleSteps);
+  if (s.distanceReward != null) setSlider('distanceReward', s.distanceReward);
+  if (s.awayPenalty != null) setSlider('awayPenalty', s.awayPenalty);
+  if (s.timePenalty != null) setSlider('timePenalty', s.timePenalty);
+  if (s.wallHit != null) setSlider('wallHit', s.wallHit);
+  if (s.tailHit != null) setSlider('tailHit', s.tailHit);
+  if (s.curl != null) setSlider('curl', s.curl);
+
+  currentResolved = resolveArchitecture(layers);
+  const len = countParams(currentResolved);
+  if (cp.genome.length !== len) return false; // architecture drifted since this was saved
+
+  weights = Float64Array.from(cp.genome);
+  currentNet = buildNetwork(weights, currentResolved);
+
+  batch = typeof cp.batch === 'number' ? cp.batch : 0;
+  bestEver = typeof cp.bestEver === 'number' ? cp.bestEver : 0;
+  currentRun = cp.runId || `snake-cnn3d-${Date.now()}`;
+  rollingScores = [];
+
+  statBatch.textContent = String(batch);
+  statAllTime.textContent = String(bestEver);
+  statScore.textContent = typeof cp.lastAvgScore === 'number' ? cp.lastAvgScore.toFixed(2) : '0';
+  statAvg.textContent = '0';
+  statMoves.textContent = '0';
+  runIdEl.textContent = `run: ${currentRun} (resumed from checkpoint)`;
+  return true;
+}
+
+// plays one full game with the current network, sampling every move from
+// its own softmax output; returns the recorded (board, action) pairs plus
+// the game's total reward and food score
+async function playGame(rewards, maxIdle) {
+  const state = newGameState();
+  const moves = [];
+  let totalReward = 0;
+  draw(state);
+  while (state.alive && running) {
+    const volume = buildVolume(state);
+    const logits = runNetwork(currentNet, volume);
+    const probs = softmax(logits);
+    const action = sampleAction(probs);
+    moves.push({ volume, action });
+    totalReward += tickGame(state, action, rewards, maxIdle);
+    draw(state);
+    await sleep(0);
+  }
+  return { moves, totalReward, score: state.score };
+}
+
+// compact string key for a board volume, used to dedupe (state, action)
+// pairs — the volume is a sparse array of 0/1 voxels, so a straight
+// character-per-voxel join is cheap and exact
+function volumeKey(volume) {
+  let s = '';
+  for (let i = 0; i < volume.length; i++) s += volume[i] ? '1' : '0';
+  return s;
+}
+
+// step 1+2 of the loop: play `numGames` games, then keep only moves from
+// games with a positive total reward (self-imitation on wins — losing
+// games contribute no training signal at all this batch) and only the
+// first occurrence of each distinct (state, action) pair in the batch, so
+// a common transition seen many times doesn't dominate the training pass.
+// Every kept move gets a clean one-hot target: since only winning games'
+// moves survive the filter, there's no need to blend toward the other two
+// actions the way a mixed good/bad batch would.
+async function collectBatch(numGames, rewards, maxIdle) {
+  const games = [];
+  for (let g = 0; g < numGames && running; g++) {
+    runIdEl.textContent = `run: ${currentRun} — playing game ${g + 1}/${numGames}`;
+    games.push(await playGame(rewards, maxIdle));
+  }
+  if (games.length === 0) return { examples: [], avgScore: 0, bestScore: 0 };
+
+  const seen = new Set();
+  const examples = [];
+  for (const g of games) {
+    if (g.totalReward <= 0) continue; // only +ve (winning) games contribute moves
+    for (const move of g.moves) {
+      const key = `${volumeKey(move.volume)}|${move.action}`;
+      if (seen.has(key)) continue; // only unique moves per batch
+      seen.add(key);
+      const target = new Float64Array(3);
+      target[move.action] = 1;
+      examples.push({ volume: move.volume, target });
+    }
+  }
+
+  const scores = games.map(g => g.score);
+  const avgScore = scores.reduce((a, b) => a + b, 0) / scores.length;
+  const bestScore = Math.max(...scores);
+  return { examples, avgScore, bestScore };
+}
+
+// step 3: one supervised softmax-cross-entropy pass over every collected
+// (board, target distribution) example, shuffled
+async function trainOnBatch(examples, lr) {
+  for (let i = examples.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [examples[i], examples[j]] = [examples[j], examples[i]];
+  }
+  let trained = 0;
+  for (const ex of examples) {
+    if (!running) break;
+    const { output: logits, caches } = forwardWithCache(currentNet, ex.volume);
+    const probs = softmax(logits);
+    const dOutput = new Float64Array(3);
+    for (let i = 0; i < 3; i++) dOutput[i] = probs[i] - ex.target[i];
+    const grads = backwardNetwork(currentNet, caches, dOutput);
+    applyGradients(currentNet, grads, lr);
+    trained++;
+    if (trained % TRAIN_YIELD_EVERY === 0) await sleep(0);
+  }
+  return trained;
+}
+
+async function trainLoop() {
+  while (running) {
+    batch++;
+    const numGames = Math.max(2, parseInt(gamesPerBatchEl.value, 10) || 50);
+    const lr = parseFloat(lrEl.value) || 0.05;
+    const maxIdle = Math.max(10, parseInt(maxIdleStepsEl.value, 10) || GRID * GRID);
+    const rewards = {
+      distanceReward: parseFloat(distanceRewardEl.value) || 0,
+      awayPenalty: parseFloat(awayPenaltyEl.value) || 0,
+      timePenalty: parseFloat(timePenaltyEl.value) || 0,
+      wallHit: parseFloat(wallHitEl.value) || 0,
+      tailHit: parseFloat(tailHitEl.value) || 0,
+      curl: parseFloat(curlEl.value) || 0,
+    };
+
+    const { examples, avgScore, bestScore } = await collectBatch(numGames, rewards, maxIdle);
+    if (!running) break;
+
+    // a batch can end up with no positive-reward games at all (common early
+    // on, before the network finds any winning behavior) — skip the
+    // training pass for this batch rather than aborting the whole loop
+    let trained = 0;
+    if (examples.length > 0) {
+      runIdEl.textContent = `run: ${currentRun} — training on ${examples.length.toLocaleString()} moves`;
+      trained = await trainOnBatch(examples, lr);
+    }
+
+    if (bestScore > bestEver) bestEver = bestScore;
+    rollingScores.push(avgScore);
+    if (rollingScores.length > ROLLING_WINDOW) rollingScores.shift();
+    const rollingAvg = rollingScores.reduce((a, b) => a + b, 0) / rollingScores.length;
+
+    statBatch.textContent = String(batch);
+    statScore.textContent = avgScore.toFixed(2);
+    statAllTime.textContent = String(bestEver);
+    statAvg.textContent = rollingAvg.toFixed(2);
+    statMoves.textContent = trained.toLocaleString();
+
+    logMetric(currentRun, batch, 'score', avgScore);
+    if (logBuffer.length >= 3) await flushLog();
+    await saveCheckpoint(avgScore);
+
+    runIdEl.textContent = `run: ${currentRun}`;
+  }
+  await flushLog(true);
+}
+
+startBtn.onclick = async () => {
+  if (running) {
+    running = false;
+    startBtn.textContent = 'Start training';
+    startBtn.classList.remove('stop');
+    renderLayers();
+    return;
+  }
+  const len = countParams(resolveArchitecture(layers));
+  if (!weights || weights.length !== len) {
+    resetTraining();
+    currentRun = `snake-cnn3d-${Date.now()}`;
+    runIdEl.textContent = `run: ${currentRun}`;
+  }
+  running = true;
+  startBtn.textContent = 'Stop';
+  startBtn.classList.add('stop');
+  renderLayers();
+  trainLoop();
+};
+
+async function boot() {
+  renderLayers();
+  const resumed = await loadCheckpoint();
+  if (!resumed) resetTraining();
+  draw(newGameState());
+}
+boot();
+</script>
+</body>
+</html>

@@ -1,307 +1,202 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Snake Game with Deep Q-Learning</title>
-    <style>
-        body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .container { display: flex; }
-        .game-container, .graph-container { margin: 10px; }
-        canvas { border: 1px solid #000; }
-    </style>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<meta charset="utf-8" />
+<style>
+  body { margin: 0; font-family: -apple-system, sans-serif; font-size: 13px; color: #1d1d1f; background: #fafafa; display: flex; flex-direction: column; height: 100vh; }
+  .bar { display: flex; align-items: center; gap: 10px; padding: 8px 14px; background: #f5f5f7; border-bottom: 1px solid #d8d8dc; }
+  .bar button { border: none; background: #e4e4e8; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 12px; }
+  .bar button.primary { background: #0a84ff; color: #fff; }
+  .main { flex: 1; display: flex; gap: 14px; padding: 14px; overflow: auto; }
+  canvas { background: #111; border-radius: 8px; }
+  .stats { font-size: 12px; color: #444; line-height: 1.8; }
+  .stats b { color: #000; }
+</style>
 </head>
 <body>
-    <div class="container">
-        <div class="game-container">
-            <h1>Snake Game</h1>
-            <p id="status">Training in progress...</p>
-            <canvas id="gameCanvas" width="400" height="400"></canvas>
-        </div>
-        <div class="graph-container">
-            <h1>Training Accuracy</h1>
-            <canvas id="accuracyChart" width="800" height="400"></canvas>
-        </div>
-    </div>
+  <div class="bar">
+    <button id="train100" class="primary">Train 100 episodes</button>
+    <button id="train1000" class="primary">Train 1000 episodes</button>
+    <button id="watch">Watch trained agent</button>
+    <button id="reset">Reset Q-table</button>
+  </div>
+  <div class="main">
+    <canvas id="canvas" width="360" height="360"></canvas>
+    <div class="stats" id="stats"></div>
+  </div>
 
-    <script>
-        // Game variables
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
-        const gridSize = 20;
-        const canvasSize = 400;
-        let snake = [{x: gridSize * 5, y: gridSize * 5}];
-        let food = {x: gridSize * 10, y: gridSize * 10};
-        let direction = {x: 1, y: 0};
-        let score = 0;
-        let stepsSinceFood = 0;
+<script>
+const GRID = 18, CELL = 20;
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const statsEl = document.getElementById('stats');
 
-        // Q-learning variables
-        const numActions = 4; // Right, Left, Up, Down
-        const learningRate = 0.001;
-        const discountFactor = 0.9;
-        const epsilon = 0.1; // Exploration rate
-        const replayBuffer = [];
-        const bufferSize = 10000;
-        const batchSize = 32; // Updated batch size
+const DIRS = [{ x: 1, y: 0 }, { x: 0, y: 1 }, { x: -1, y: 0 }, { x: 0, y: -1 }]; // right,down,left,up
 
-        // Define the Q-network model
-        const model = tf.sequential();
-        model.add(tf.layers.dense({inputShape: [4], units: 24, activation: 'relu'}));
-        model.add(tf.layers.dense({units: 24, activation: 'relu'}));
-        model.add(tf.layers.dense({units: numActions, activation: 'linear'}));
-        model.compile({optimizer: tf.train.adam(learningRate), loss: 'meanSquaredError'});
+const Q = {};
+const ALPHA = 0.15, GAMMA = 0.9;
+let epsilon = 1.0;
+let episode = 0;
+let bestScore = 0;
+let lastScores = [];
 
-        // Load model from local storage if it exists
-        async function loadModel() {
-            const modelUrl = 'localstorage://model';
-            try {
-                const loadedModel = await tf.loadLayersModel(modelUrl);
-                model.setWeights(loadedModel.getWeights());
-                console.log('Model loaded from local storage.');
-            } catch (error) {
-                console.log('No model found in local storage. Starting with a new model.');
-            }
-        }
+function qOf(state) { return (Q[state] ??= [0, 0, 0]); }
 
-        // Save model to local storage
-        async function saveModel() {
-            const modelUrl = 'localstorage://model';
-            await model.save(modelUrl);
-            console.log('Model saved to local storage.');
-        }
+function newGame() {
+  const start = { x: Math.floor(GRID / 2), y: Math.floor(GRID / 2) };
+  return { snake: [start], dirIdx: 0, food: randomFood([start]), score: 0, steps: 0 };
+}
 
-        // Training accuracy graph setup
-        const ctxChart = document.getElementById('accuracyChart').getContext('2d');
-        const accuracyChart = new Chart(ctxChart, {
-            type: 'line',
-            data: {
-                labels: [],
-                datasets: [{
-                    label: 'Total Reward',
-                    data: [],
-                    borderColor: 'rgba(75, 192, 192, 1)',
-                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                scales: {
-                    x: { beginAtZero: true },
-                    y: { beginAtZero: true }
-                }
-            }
-        });
+function randomFood(snake) {
+  while (true) {
+    const f = { x: Math.floor(Math.random() * GRID), y: Math.floor(Math.random() * GRID) };
+    if (!snake.some(s => s.x === f.x && s.y === f.y)) return f;
+  }
+}
 
-        function createState() {
-            return [
-                snake[0].x / canvasSize, 
-                snake[0].y / canvasSize, 
-                food.x / canvasSize, 
-                food.y / canvasSize
-            ];
-        }
+function willCollide(game, dirIdx) {
+  const d = DIRS[dirIdx];
+  const head = game.snake[0];
+  const nx = head.x + d.x, ny = head.y + d.y;
+  if (nx < 0 || ny < 0 || nx >= GRID || ny >= GRID) return true;
+  return game.snake.some((s, i) => i < game.snake.length - 1 && s.x === nx && s.y === ny);
+}
 
-        function getQValues(state) {
-            return model.predict(tf.tensor2d([state], [1, 4])).dataSync();
-        }
+function stateKey(game) {
+  const straight = game.dirIdx;
+  const left = (game.dirIdx + 3) % 4;
+  const right = (game.dirIdx + 1) % 4;
+  const dangerS = willCollide(game, straight) ? 1 : 0;
+  const dangerL = willCollide(game, left) ? 1 : 0;
+  const dangerR = willCollide(game, right) ? 1 : 0;
+  const head = game.snake[0];
+  const foodDx = Math.sign(game.food.x - head.x);
+  const foodDy = Math.sign(game.food.y - head.y);
+  return `${dangerS}${dangerL}${dangerR}|${game.dirIdx}|${foodDx}${foodDy}`;
+}
 
-        function chooseAction(state) {
-            if (Math.random() < epsilon) {
-                return Math.floor(Math.random() * numActions); // Explore
-            } else {
-                const qValues = getQValues(state);
-                return qValues.indexOf(Math.max(...qValues)); // Exploit
-            }
-        }
+// action: 0 = straight, 1 = turn left, 2 = turn right (relative to current heading)
+function applyAction(game, action) {
+  if (action === 1) game.dirIdx = (game.dirIdx + 3) % 4;
+  if (action === 2) game.dirIdx = (game.dirIdx + 1) % 4;
+  const d = DIRS[game.dirIdx];
+  const head = game.snake[0];
+  const next = { x: head.x + d.x, y: head.y + d.y };
+  game.steps++;
 
-        function storeExperience(state, action, reward, nextState, done) {
-            if (replayBuffer.length >= bufferSize) {
-                replayBuffer.shift();
-            }
-            replayBuffer.push({state, action, reward, nextState, done});
-        }
+  if (next.x < 0 || next.y < 0 || next.x >= GRID || next.y >= GRID || game.snake.some(s => s.x === next.x && s.y === next.y)) {
+    return { reward: -1, done: true };
+  }
 
-        async function trainModel() {
-            if (replayBuffer.length < batchSize) return;
+  game.snake.unshift(next);
+  if (next.x === game.food.x && next.y === game.food.y) {
+    game.score++;
+    game.food = randomFood(game.snake);
+    return { reward: 1, done: false };
+  }
+  game.snake.pop();
+  if (game.steps > GRID * GRID * 4) return { reward: -1, done: true };
+  return { reward: -0.01, done: false };
+}
 
-            const batch = [];
-            for (let i = 0; i < batchSize; i++) {
-                const index = Math.floor(Math.random() * replayBuffer.length);
-                batch.push(replayBuffer[index]);
-            }
+function chooseAction(state, exploreEpsilon) {
+  if (Math.random() < exploreEpsilon) return Math.floor(Math.random() * 3);
+  const q = qOf(state);
+  return q.indexOf(Math.max(...q));
+}
 
-            const states = [];
-            const targets = [];
-            for (const experience of batch) {
-                const {state, action, reward, nextState, done} = experience;
-                states.push(state);
+function runEpisode(exploreEpsilon, render) {
+  const game = newGame();
+  let done = false;
+  while (!done) {
+    const state = stateKey(game);
+    const action = chooseAction(state, exploreEpsilon);
+    const { reward, done: over } = applyAction(game, action);
+    const nextState = stateKey(game);
+    const q = qOf(state);
+    const nextMax = Math.max(...qOf(nextState));
+    q[action] += ALPHA * (reward + GAMMA * nextMax - q[action]);
+    done = over;
+    if (render) drawGame(game);
+  }
+  return game.score;
+}
 
-                const qValues = getQValues(state);
-                const qTarget = done ? reward : reward + discountFactor * Math.max(...getQValues(nextState));
-                qValues[action] = qTarget;
-                targets.push(qValues);
-            }
+function drawGame(game) {
+  ctx.fillStyle = '#111';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#ff453a';
+  ctx.fillRect(game.food.x * CELL, game.food.y * CELL, CELL - 1, CELL - 1);
+  game.snake.forEach((s, i) => {
+    ctx.fillStyle = i === 0 ? '#30d158' : '#0a84ff';
+    ctx.fillRect(s.x * CELL, s.y * CELL, CELL - 1, CELL - 1);
+  });
+}
 
-            await model.fit(tf.tensor2d(states), tf.tensor2d(targets), {epochs: 1});
-        }
+function updateStats() {
+  const avg = lastScores.length ? (lastScores.reduce((a, b) => a + b, 0) / lastScores.length).toFixed(2) : '0';
+  statsEl.innerHTML = `
+    Episodes trained: <b>${episode}</b><br/>
+    Epsilon: <b>${epsilon.toFixed(3)}</b><br/>
+    Best score: <b>${bestScore}</b><br/>
+    Avg score (last ${lastScores.length}): <b>${avg}</b><br/>
+    Q-table states: <b>${Object.keys(Q).length}</b>
+  `;
+}
 
-        function drawGame() {
-            ctx.clearRect(0, 0, canvasSize, canvasSize);
+async function logMetric(value) {
+  const path = '/home/user1/.local/share/trainboard/log.jsonl';
+  try {
+    const existing = (await AppSDK.exists(path)) ? await AppSDK.readText(path) : '';
+    const line = JSON.stringify({ run: window.__run, step: episode, metric: 'reward', value }) + '\n';
+    await AppSDK.writeText(path, existing + line);
+  } catch (_) { /* logging is best-effort */ }
+}
 
-            // Draw snake
-            ctx.fillStyle = 'green';
-            snake.forEach(segment => {
-                ctx.fillRect(segment.x, segment.y, gridSize, gridSize);
-            });
+async function train(count) {
+  const chunk = 50;
+  for (let i = 0; i < count; i += chunk) {
+    for (let j = 0; j < Math.min(chunk, count - i); j++) {
+      epsilon = Math.max(0.02, epsilon * 0.997);
+      const score = runEpisode(epsilon, false);
+      episode++;
+      bestScore = Math.max(bestScore, score);
+      lastScores.push(score);
+      if (lastScores.length > 100) lastScores.shift();
+      if (episode % 10 === 0) await logMetric(score);
+    }
+    updateStats();
+    await new Promise(r => setTimeout(r, 0)); // yield to keep the UI responsive
+  }
+  runEpisode(0, true); // show one greedy episode's final frame
+}
 
-            // Draw food
-            ctx.fillStyle = 'red';
-            ctx.fillRect(food.x, food.y, gridSize, gridSize);
+async function watch() {
+  const game = newGame();
+  let done = false;
+  while (!done) {
+    const state = stateKey(game);
+    const action = chooseAction(state, 0);
+    const { done: over } = applyAction(game, action);
+    drawGame(game);
+    done = over;
+    await new Promise(r => setTimeout(r, 60));
+  }
+}
 
-            // Update snake position
-            const head = {x: snake[0].x + direction.x * gridSize, y: snake[0].y + direction.y * gridSize};
+document.getElementById('train100').onclick = () => train(100);
+document.getElementById('train1000').onclick = () => train(1000);
+document.getElementById('watch').onclick = watch;
+document.getElementById('reset').onclick = () => {
+  Object.keys(Q).forEach(k => delete Q[k]);
+  epsilon = 1.0; episode = 0; bestScore = 0; lastScores = [];
+  updateStats();
+};
 
-            // Calculate distance to food
-            const distanceToFood = Math.sqrt(Math.pow(food.x - head.x, 2) + Math.pow(food.y - head.y, 2));
-            const prevDistanceToFood = Math.sqrt(Math.pow(food.x - snake[0].x, 2) + Math.pow(food.y - snake[0].y, 2));
-
-            // Reward and penalty
-            let reward = -0.05; // Small penalty for each move
-            let grew = false;
-
-            if (head.x === food.x && head.y === food.y) {
-                reward = 1; // Reward for eating the food
-                score++;
-                placeFood();
-                stepsSinceFood = 0;
-                grew = true; // Snake will grow
-            } else {
-                // Penalty for long lives without food
-                reward -= 0.05 * stepsSinceFood;
-                stepsSinceFood++;
-            }
-
-            // Reward for moving towards food
-            const newDistanceToFood = Math.sqrt(Math.pow(food.x - head.x, 2) + Math.pow(food.y - head.y, 2));
-            if (newDistanceToFood < prevDistanceToFood) {
-                reward += 0.4;
-            }
-
-            // Add the new head to the snake
-            snake.unshift(head);
-
-            // Remove the tail if the snake did not grow
-            if (!grew) {
-                snake.pop();
-            }
-
-            // Check for collisions
-            if (checkCollision(head)) {
-                reward = -1; // Penalty for collision
-                resetGame();
-                return reward;
-            }
-
-            return reward;
-        }
-
-        function placeFood() {
-            food.x = Math.floor(Math.random() * (canvasSize / gridSize)) * gridSize;
-            food.y = Math.floor(Math.random() * (canvasSize / gridSize)) * gridSize;
-        }
-
-        function checkCollision(head) {
-            // Check wall collisions
-            if (head.x < 0 || head.x >= canvasSize || head.y < 0 || head.y >= canvasSize) {
-                return true;
-            }
-
-            // Check self-collision
-            for (let i = 1; i < snake.length; i++) {
-                if (head.x === snake[i].x && head.y === snake[i].y) {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        function resetGame() {
-            snake = [{x: gridSize * 5, y: gridSize * 5}];
-            direction = {x: 1, y: 0};
-            score = 0;
-            placeFood();
-            stepsSinceFood = 0;
-        }
-
-        function getDirectionFromAction(action) {
-            switch(action) {
-                case 0: return {x: 1, y: 0}; // Right
-                case 1: return {x: -1, y: 0}; // Left
-                case 2: return {x: 0, y: -1}; // Up
-                case 3: return {x: 0, y: 1}; // Down
-                default: return {x: 1, y: 0};
-            }
-        }
-
-        async function trainAndPlay(episodes) {
-            const rewards = [];
-            for (let episode = 0; episode < episodes; episode++) {
-                resetGame();
-                let state = createState();
-                let totalReward = 0;
-                let steps = 0;
-                let done = false;
-
-                while (!done) {
-                    const action = chooseAction(state);
-                    direction = getDirectionFromAction(action);
-
-                    const reward = drawGame();
-                    totalReward += reward;
-                    const nextState = createState();
-                    done = reward === -1;
-
-                    storeExperience(state, action, reward, nextState, done);
-                    await trainModel();
-
-                    state = nextState;
-                    steps++;
-
-                    if (steps > 1000) done = true; // End of episode
-                }
-
-                rewards.push(totalReward);
-                document.getElementById('status').innerText = `Episode ${episode + 1}: Total Reward = ${totalReward}`;
-
-                // Update the accuracy graph
-                accuracyChart.data.labels.push(episode + 1);
-                accuracyChart.data.datasets[0].data.push(totalReward);
-                accuracyChart.update();
-
-                // Save model after every episode
-                await saveModel();
-            }
-
-            document.getElementById('status').innerText = 'Training completed! Now playing...';
-            playGame();
-        }
-
-        function playGame() {
-            resetGame();
-            setInterval(() => {
-                const state = createState();
-                const action = chooseAction(state);
-                direction = getDirectionFromAction(action);
-
-                drawGame();
-            }, 200); // Adjust speed as needed
-        }
-
-        // Load model and start training
-        loadModel().then(() => trainAndPlay(1000));
-    </script>
+window.__run = `snake-qlearning-${Date.now()}`;
+drawGame(newGame());
+updateStats();
+AppSDK.setTitle('Snake AI (Q-Learning)');
+</script>
 </body>
 </html>

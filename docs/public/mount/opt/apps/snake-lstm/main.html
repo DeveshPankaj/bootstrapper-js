@@ -1,321 +1,349 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Snake Game with LSTM Q-Learning</title>
-    <style>
-        body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .container { display: flex; }
-        .game-container, .graph-container { margin: 10px; }
-        canvas { border: 1px solid #000; }
-    </style>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<meta charset="utf-8" />
+<style>
+  body { margin: 0; display: flex; height: 100vh; box-sizing: border-box; font-family: -apple-system, sans-serif; font-size: 13px; background: #1a1a1e; color: #eee; }
+  .panel { width: 240px; flex-shrink: 0; padding: 12px; box-sizing: border-box; background: #232328; border-right: 1px solid #34343c; overflow-y: auto; }
+  .panel h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: #999; margin: 14px 0 6px; }
+  .panel h2:first-child { margin-top: 0; }
+  label { display: block; font-size: 11px; color: #aaa; margin: 8px 0 3px; }
+  input { width: 100%; box-sizing: border-box; background: #17171b; border: 1px solid #3a3a44; color: #eee; border-radius: 4px; padding: 5px 6px; font-size: 12px; }
+  button { border: none; background: #9b59ff; color: #fff; border-radius: 6px; padding: 8px 12px; cursor: pointer; font-size: 12px; width: 100%; margin-top: 10px; }
+  button.stop { background: #e74c3c; }
+  button:disabled { background: #444; cursor: default; }
+  .hint { color: #888; font-size: 11px; margin-top: 6px; line-height: 1.5; }
+  .main { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 16px; gap: 12px; overflow-y: auto; }
+  #board { background: #0f0f12; border-radius: 6px; box-shadow: 0 0 0 1px #333; }
+  #stats { display: flex; gap: 18px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
+  #stats div { background: #232328; border: 1px solid #34343c; border-radius: 8px; padding: 8px 14px; text-align: center; }
+  #stats div b { display: block; font-size: 18px; }
+  #stats div span { font-size: 10px; color: #999; text-transform: uppercase; }
+</style>
 </head>
 <body>
-    <div class="container">
-        <div class="game-container">
-            <h1>Snake Game</h1>
-            <p id="status">Training in progress...</p>
-            <canvas id="gameCanvas" width="400" height="400"></canvas>
-        </div>
-        <div class="graph-container">
-            <h1>Training Accuracy</h1>
-            <canvas id="accuracyChart" width="400" height="400"></canvas>
-        </div>
+  <div class="panel">
+    <h2>Population</h2>
+    <label>Population size</label>
+    <input id="popSize" type="number" value="30" min="6" step="2" />
+    <label>Hidden units (RNN state size)</label>
+    <input id="hiddenSize" type="number" value="8" min="2" step="1" />
+    <label>Mutation sigma</label>
+    <input id="sigma" type="number" value="0.15" step="0.01" min="0.01" />
+    <label>Elite count (kept unmutated)</label>
+    <input id="eliteCount" type="number" value="4" min="1" step="1" />
+    <label>Kill after idle steps (no progress)</label>
+    <input id="maxIdleSteps" type="number" value="196" min="10" step="1" />
+    <div class="hint">A snake looping without eating is killed after this
+      many steps since its last food. Defaults to the number of boxes on
+      the board (14&times;14 = 196).</div>
+
+    <h2>Run</h2>
+    <button id="startBtn">Start evolving</button>
+    <div id="runId" class="hint">not started</div>
+
+    <h2>About</h2>
+    <div class="hint">
+      This agent is a hand-written <b>single-layer recurrent network</b>
+      (hidden state feeds back each tick) — a simplified RNN, <b>not</b> a
+      literal LSTM (no forget/input/output gates or cell state). It is
+      trained by evolution: each generation, every genome in the population
+      plays one game, the best genomes are kept and the rest are regenerated
+      by mutating them, generation after generation.
     </div>
+  </div>
 
-    <script>
-        // Game variables
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
-        const gridSize = 20;
-        const canvasSize = 400;
-        let snake = [{x: gridSize * 5, y: gridSize * 5}];
-        let food = {x: gridSize * 10, y: gridSize * 10};
-        let direction = {x: 1, y: 0};
-        let score = 0;
-        let stepsSinceFood = 0;
+  <div class="main">
+    <div id="stats">
+      <div><b id="statGen">0</b><span>Generation</span></div>
+      <div><b id="statBest">0</b><span>Best score (gen)</span></div>
+      <div><b id="statAllTime">0</b><span>Best ever</span></div>
+      <div><b id="statAvg">0</b><span>Avg score</span></div>
+    </div>
+    <canvas id="board"></canvas>
+  </div>
 
-        // Q-learning variables
-        const numActions = 4; // Right, Left, Up, Down
-        const learningRate = 0.001;
-        const discountFactor = 0.9;
-        const epsilon = 0.1; // Exploration rate
-        const replayBuffer = [];
-        const bufferSize = 10000;
-        const batchSize = 12; // Updated batch size
+<script>
+const LOG_PATH = '/home/user1/.local/share/trainboard/log.jsonl';
+const LOG_DIR = '/home/user1/.local/share/trainboard';
+let logBuffer = [];
+async function flushLog(force) {
+  if (!logBuffer.length) return;
+  const batch = logBuffer.splice(0, logBuffer.length);
+  try {
+    await AppSDK.mkdir(LOG_DIR).catch(() => {});
+    let existing = '';
+    try { existing = await AppSDK.readText(LOG_PATH); } catch (e) { existing = ''; }
+    const sep = existing && !existing.endsWith('\n') ? '\n' : '';
+    await AppSDK.writeText(LOG_PATH, existing + sep + batch.map(r => JSON.stringify(r)).join('\n') + '\n');
+  } catch (err) {
+    console.error('trainboard log write failed', err);
+  }
+}
+function logMetric(run, step, metric, value) { logBuffer.push({ run, step, metric, value }); }
 
-        // Define the LSTM model
-        const model = tf.sequential();
-        model.add(tf.layers.lstm({inputShape: [1, 4], units: 24, returnSequences: true}));
-        model.add(tf.layers.lstm({units: 24}));
-        model.add(tf.layers.dense({units: numActions, activation: 'linear'}));
-        model.compile({optimizer: tf.train.adam(learningRate), loss: 'meanSquaredError'});
+// ---------- game constants ----------
+const GRID = 14, CELL = 20;
+const canvas = document.getElementById('board');
+canvas.width = GRID * CELL;
+canvas.height = GRID * CELL;
+const ctx = canvas.getContext('2d');
 
-        // Load model from local storage if it exists
-        async function loadModel() {
-            const modelUrl = 'localstorage://model';
-            try {
-                const loadedModel = await tf.loadLayersModel(modelUrl);
-                model.setWeights(loadedModel.getWeights());
-                console.log('Model loaded from local storage.');
-            } catch (error) {
-                console.log('No model found in local storage. Starting with a new model.');
-            }
-        }
+const DIRS = [{ x: 0, y: -1 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: -1, y: 0 }]; // up right down left, clockwise
 
-        // Save model to local storage
-        async function saveModel() {
-            const modelUrl = 'localstorage://model';
-            await model.save(modelUrl);
-            console.log('Model saved to local storage.');
-        }
-
-        // Training accuracy graph setup
-        const ctxChart = document.getElementById('accuracyChart').getContext('2d');
-        const accuracyChart = new Chart(ctxChart, {
-            type: 'line',
-            data: {
-                labels: [],
-                datasets: [{
-                    label: 'Total Reward',
-                    data: [],
-                    borderColor: 'rgba(75, 192, 192, 1)',
-                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                scales: {
-                    x: { beginAtZero: true },
-                    y: { beginAtZero: true }
-                }
-            }
-        });
-
-        function createState() {
-            return [
-                snake[0].x / canvasSize, 
-                snake[0].y / canvasSize, 
-                food.x / canvasSize, 
-                food.y / canvasSize
-            ];
-        }
-
-        function getQValues(state) {
-            return model.predict(tf.tensor3d(state, [1, 1, 4])).dataSync();
-        }
-
-        function chooseAction(state) {
-            if (Math.random() < epsilon) {
-                return Math.floor(Math.random() * numActions); // Explore
-            } else {
-                const qValues = getQValues(state);
-                return qValues.indexOf(Math.max(...qValues)); // Exploit
-            }
-        }
-
-        function storeExperience(state, action, reward, nextState, done) {
-            if (replayBuffer.length >= bufferSize) {
-                replayBuffer.shift();
-            }
-            replayBuffer.push({state, action, reward, nextState, done});
-        }
-
-  async function trainModel() {
-    if (replayBuffer.length < batchSize) return;
-
-    const batch = [];
-    for (let i = 0; i < batchSize; i++) {
-        const index = Math.floor(Math.random() * replayBuffer.length);
-        batch.push(replayBuffer[index]);
-    }
-
-    const states = [];
-    const targets = [];
-    for (const experience of batch) {
-        const {state, action, reward, nextState, done} = experience;
-
-        // Ensure state is a tensor-like 3D array: [batchSize, 1, 4]
-        states.push([state]);  // Wrap the state in an extra array to make it 3D
-
-        const qValues = getQValues(state);
-        const qTarget = done ? reward : reward + discountFactor * Math.max(...getQValues(nextState));
-        qValues[action] = qTarget;
-        targets.push(qValues);
-    }
-
-    
-    // Convert states and targets to tensors
-    const reshapedStates = tf.tensor3d(states, [batchSize, 1, 4]);  // No need for tf.stack
-    const targetTensor = tf.tensor2d(targets, [batchSize, numActions]);
-    console.log(reshapedStates, targets)
-
-    await model.fit(reshapedStates, targets, {epochs: 1});
-
-    // Cleanup
-    reshapedStates.dispose();
-    targetTensor.dispose();
+function newGameState() {
+  const start = { x: Math.floor(GRID / 2), y: Math.floor(GRID / 2) };
+  return {
+    snake: [start, { x: start.x - 1, y: start.y }, { x: start.x - 2, y: start.y }],
+    dirIdx: 1,
+    food: spawnFood([start, { x: start.x - 1, y: start.y }, { x: start.x - 2, y: start.y }]),
+    score: 0,
+    steps: 0,
+    stepsSinceFood: 0,
+    alive: true,
+  };
 }
 
+function spawnFood(snake) {
+  let p;
+  do { p = { x: Math.floor(Math.random() * GRID), y: Math.floor(Math.random() * GRID) }; }
+  while (snake.some(s => s.x === p.x && s.y === p.y));
+  return p;
+}
 
+function occupied(snake, x, y) {
+  if (x < 0 || y < 0 || x >= GRID || y >= GRID) return true;
+  return snake.some(s => s.x === x && s.y === y);
+}
 
-        function drawGame() {
-            ctx.clearRect(0, 0, canvasSize, canvasSize);
+function getFeatures(state) {
+  const head = state.snake[0];
+  const straightDir = DIRS[state.dirIdx];
+  const leftDir = DIRS[(state.dirIdx + 3) % 4];
+  const rightDir = DIRS[(state.dirIdx + 1) % 4];
+  const dangerStraight = occupied(state.snake, head.x + straightDir.x, head.y + straightDir.y) ? 1 : 0;
+  const dangerLeft = occupied(state.snake, head.x + leftDir.x, head.y + leftDir.y) ? 1 : 0;
+  const dangerRight = occupied(state.snake, head.x + rightDir.x, head.y + rightDir.y) ? 1 : 0;
+  const dx = (state.food.x - head.x) / GRID;
+  const dy = (state.food.y - head.y) / GRID;
+  const dirOneHot = [0, 0, 0, 0];
+  dirOneHot[state.dirIdx] = 1;
+  return [dangerStraight, dangerLeft, dangerRight, dx, dy, ...dirOneHot];
+}
 
-            // Draw snake
-            ctx.fillStyle = 'green';
-            snake.forEach(segment => {
-                ctx.fillRect(segment.x, segment.y, gridSize, gridSize);
-            });
+const INPUT_SIZE = 9;
 
-            // Draw food
-            ctx.fillStyle = 'red';
-            ctx.fillRect(food.x, food.y, gridSize, gridSize);
+// ---------- RNN agent ----------
+function genomeLength(hidden) {
+  return hidden * INPUT_SIZE + hidden * hidden + hidden + 3 * hidden + 3;
+}
 
-            // Update snake position
-            const head = {x: snake[0].x + direction.x * gridSize, y: snake[0].y + direction.y * gridSize};
+function randomGenome(hidden) {
+  const len = genomeLength(hidden);
+  const g = new Float64Array(len);
+  for (let i = 0; i < len; i++) g[i] = (Math.random() * 2 - 1) * 0.7;
+  return g;
+}
 
-            // Calculate distance to food
-            const distanceToFood = Math.sqrt(Math.pow(food.x - head.x, 2) + Math.pow(food.y - head.y, 2));
-            const prevDistanceToFood = Math.sqrt(Math.pow(food.x - snake[0].x, 2) + Math.pow(food.y - snake[0].y, 2));
+function mutate(genome, sigma) {
+  const child = genome.slice();
+  for (let i = 0; i < child.length; i++) child[i] += (Math.random() * 2 - 1) * sigma;
+  return child;
+}
 
-            // Reward and penalty
-            let reward = -0.1; // Small penalty for each move
-            let grew = false;
+function sliceMatrix(flat, offset, rows, cols) {
+  const m = [];
+  for (let r = 0; r < rows; r++) m.push(flat.subarray(offset + r * cols, offset + r * cols + cols));
+  return m;
+}
 
-            if (head.x === food.x && head.y === food.y) {
-                reward = 1; // Reward for eating the food
-                score++;
-                placeFood();
-                stepsSinceFood = 0;
-                grew = true; // Snake will grow
-            } else {
-                // Penalty for long lives without food
-                reward -= 0.01 * stepsSinceFood;
-                stepsSinceFood++;
-            }
+function buildRNN(genome, hidden) {
+  let off = 0;
+  const Wx = sliceMatrix(genome, off, hidden, INPUT_SIZE); off += hidden * INPUT_SIZE;
+  const Wh = sliceMatrix(genome, off, hidden, hidden); off += hidden * hidden;
+  const bh = genome.subarray(off, off + hidden); off += hidden;
+  const Wo = sliceMatrix(genome, off, 3, hidden); off += 3 * hidden;
+  const bo = genome.subarray(off, off + 3);
+  return { Wx, Wh, bh, Wo, bo, hidden };
+}
 
-            // Reward for moving towards food
-            const newDistanceToFood = Math.sqrt(Math.pow(food.x - head.x, 2) + Math.pow(food.y - head.y, 2));
-            if (newDistanceToFood < prevDistanceToFood) {
-                reward += 0.1;
-            }
+function rnnStep(rnn, x, hPrev) {
+  const hidden = rnn.hidden;
+  const h = new Float64Array(hidden);
+  for (let i = 0; i < hidden; i++) {
+    let z = rnn.bh[i];
+    const wx = rnn.Wx[i], wh = rnn.Wh[i];
+    for (let j = 0; j < x.length; j++) z += wx[j] * x[j];
+    for (let j = 0; j < hidden; j++) z += wh[j] * hPrev[j];
+    h[i] = Math.tanh(z);
+  }
+  const o = new Float64Array(3);
+  for (let k = 0; k < 3; k++) {
+    let z = rnn.bo[k];
+    const wo = rnn.Wo[k];
+    for (let j = 0; j < hidden; j++) z += wo[j] * h[j];
+    o[k] = z;
+  }
+  let best = 0;
+  for (let k = 1; k < 3; k++) if (o[k] > o[best]) best = k;
+  return { action: best, h };
+}
 
-            // Add the new head to the snake
-            snake.unshift(head);
+// action: 0 = straight, 1 = turn left, 2 = turn right
+function applyAction(state, action) {
+  if (action === 1) state.dirIdx = (state.dirIdx + 3) % 4;
+  else if (action === 2) state.dirIdx = (state.dirIdx + 1) % 4;
+}
 
-            // Remove the tail if the snake did not grow
-            if (!grew) {
-                snake.pop();
-            }
+const MAX_STEPS_HARD_CAP = 4000;
 
-            // Check for collisions
-            if (checkCollision(head)) {
-                reward = -1; // Penalty for collision
-                resetGame();
-                return reward;
-            }
+function tickGame(state, rnn, hState, maxIdle) {
+  const x = getFeatures(state);
+  const { action, h } = rnnStep(rnn, x, hState);
+  applyAction(state, action);
+  const dir = DIRS[state.dirIdx];
+  const head = { x: state.snake[0].x + dir.x, y: state.snake[0].y + dir.y };
+  state.steps++;
+  state.stepsSinceFood++;
+  if (occupied(state.snake, head.x, head.y)) { state.alive = false; return h; }
+  state.snake.unshift(head);
+  if (head.x === state.food.x && head.y === state.food.y) {
+    state.score++;
+    state.stepsSinceFood = 0;
+    state.food = spawnFood(state.snake);
+  } else {
+    state.snake.pop();
+  }
+  if (state.stepsSinceFood > maxIdle || state.steps > MAX_STEPS_HARD_CAP) state.alive = false;
+  return h;
+}
 
-            return reward;
-        }
+function evaluateGenome(genome, hidden, maxIdle) {
+  const rnn = buildRNN(genome, hidden);
+  const state = newGameState();
+  let h = new Float64Array(hidden);
+  while (state.alive) h = tickGame(state, rnn, h, maxIdle);
+  return { score: state.score, steps: state.steps, fitness: state.score * 1000 + Math.min(state.steps, 300) };
+}
 
-        function placeFood() {
-            food.x = Math.floor(Math.random() * (canvasSize / gridSize)) * gridSize;
-            food.y = Math.floor(Math.random() * (canvasSize / gridSize)) * gridSize;
-        }
+function draw(state) {
+  ctx.fillStyle = '#0f0f12';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#e74c3c';
+  ctx.fillRect(state.food.x * CELL, state.food.y * CELL, CELL - 1, CELL - 1);
+  state.snake.forEach((s, i) => {
+    ctx.fillStyle = i === 0 ? '#b478ff' : '#7a3fd6';
+    ctx.fillRect(s.x * CELL, s.y * CELL, CELL - 1, CELL - 1);
+  });
+}
 
-        function checkCollision(head) {
-            // Check wall collisions
-            if (head.x < 0 || head.x >= canvasSize || head.y < 0 || head.y >= canvasSize) {
-                return true;
-            }
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-            // Check self-collision
-            for (let i = 1; i < snake.length; i++) {
-                if (head.x === snake[i].x && head.y === snake[i].y) {
-                    return true;
-                }
-            }
-            return false;
-        }
+async function animateGenome(genome, hidden, maxIdle) {
+  const rnn = buildRNN(genome, hidden);
+  const state = newGameState();
+  let h = new Float64Array(hidden);
+  draw(state);
+  let frame = 0;
+  while (state.alive && frame < 600) {
+    h = tickGame(state, rnn, h, maxIdle);
+    draw(state);
+    frame++;
+    await sleep(45);
+  }
+  return state.score;
+}
 
-        function resetGame() {
-            snake = [{x: gridSize * 5, y: gridSize * 5}];
-            direction = {x: 1, y: 0};
-            score = 0;
-            placeFood();
-            stepsSinceFood = 0;
-        }
+// ---------- evolution loop ----------
+const popSizeEl = document.getElementById('popSize');
+const hiddenSizeEl = document.getElementById('hiddenSize');
+const sigmaEl = document.getElementById('sigma');
+const eliteCountEl = document.getElementById('eliteCount');
+const maxIdleStepsEl = document.getElementById('maxIdleSteps');
+maxIdleStepsEl.value = String(GRID * GRID);
+const startBtn = document.getElementById('startBtn');
+const runIdEl = document.getElementById('runId');
+const statGen = document.getElementById('statGen');
+const statBest = document.getElementById('statBest');
+const statAllTime = document.getElementById('statAllTime');
+const statAvg = document.getElementById('statAvg');
 
-        function getDirectionFromAction(action) {
-            switch(action) {
-                case 0: return {x: 1, y: 0}; // Right
-                case 1: return {x: -1, y: 0}; // Left
-                case 2: return {x: 0, y: -1}; // Up
-                case 3: return {x: 0, y: 1}; // Down
-                default: return {x: 1, y: 0};
-            }
-        }
+let running = false;
+let currentRun = null;
+let generation = 0;
+let population = [];
+let bestEver = 0;
 
-        async function trainAndPlay(episodes) {
-            const rewards = [];
-            for (let episode = 0; episode < episodes; episode++) {
-                resetGame();
-                let state = createState();
-                let totalReward = 0;
-                let steps = 0;
-                let done = false;
+function initPopulation() {
+  const popSize = Math.max(4, parseInt(popSizeEl.value, 10) || 20);
+  const hidden = Math.max(2, parseInt(hiddenSizeEl.value, 10) || 8);
+  population = Array.from({ length: popSize }, () => randomGenome(hidden));
+  generation = 0;
+  bestEver = 0;
+  statGen.textContent = '0';
+  statBest.textContent = '0';
+  statAllTime.textContent = '0';
+  statAvg.textContent = '0';
+}
 
-                while (!done) {
-                    const action = chooseAction(state);
-                    direction = getDirectionFromAction(action);
+async function evolveLoop() {
+  const hidden = Math.max(2, parseInt(hiddenSizeEl.value, 10) || 8);
+  const sigma = parseFloat(sigmaEl.value) || 0.15;
+  const eliteCount = Math.max(1, parseInt(eliteCountEl.value, 10) || 4);
+  const maxIdle = Math.max(10, parseInt(maxIdleStepsEl.value, 10) || GRID * GRID);
 
-                    const reward = drawGame();
-                    totalReward += reward;
-                    const nextState = createState();
-                    done = reward === -1;
+  while (running) {
+    generation++;
+    const results = population.map(g => ({ genome: g, ...evaluateGenome(g, hidden, maxIdle) }));
+    results.sort((a, b) => b.fitness - a.fitness);
 
-                    storeExperience(state, action, reward, nextState, done);
-                    await trainModel();
+    const bestScore = results[0].score;
+    const avgScore = results.reduce((s, r) => s + r.score, 0) / results.length;
+    if (bestScore > bestEver) bestEver = bestScore;
 
-                    state = nextState;
-                    steps++;
+    statGen.textContent = String(generation);
+    statBest.textContent = String(bestScore);
+    statAllTime.textContent = String(bestEver);
+    statAvg.textContent = avgScore.toFixed(2);
 
-                    if (steps > 1000) done = true; // End of episode
-                }
+    logMetric(currentRun, generation, 'score', bestScore);
+    if (logBuffer.length >= 3) await flushLog();
 
-                rewards.push(totalReward);
-                document.getElementById('status').innerText = `Episode ${episode + 1}: Total Reward = ${totalReward}`;
+    if (!running) break;
+    await animateGenome(results[0].genome, hidden, maxIdle);
+    if (!running) break;
 
-                // Update the accuracy graph
-                accuracyChart.data.labels.push(episode + 1);
-                accuracyChart.data.datasets[0].data.push(totalReward);
-                accuracyChart.update();
+    const elites = results.slice(0, eliteCount).map(r => r.genome);
+    const nextPop = elites.slice();
+    while (nextPop.length < population.length) {
+      const parent = elites[Math.floor(Math.random() * elites.length)];
+      nextPop.push(mutate(parent, sigma));
+    }
+    population = nextPop;
+  }
+  await flushLog(true);
+}
 
-                // Save model after every episode
-                await saveModel();
-            }
+startBtn.onclick = async () => {
+  if (running) {
+    running = false;
+    startBtn.textContent = 'Start evolving';
+    startBtn.classList.remove('stop');
+    return;
+  }
+  running = true;
+  startBtn.textContent = 'Stop';
+  startBtn.classList.add('stop');
+  if (population.length === 0) {
+    initPopulation();
+    currentRun = `snake-lstm-${Date.now()}`;
+    runIdEl.textContent = `run: ${currentRun}`;
+  }
+  evolveLoop();
+};
 
-            document.getElementById('status').innerText = 'Training completed! Now playing...';
-            playGame();
-        }
-
-        function playGame() {
-            resetGame();
-            setInterval(() => {
-                const state = createState();
-                const action = chooseAction(state);
-                direction = getDirectionFromAction(action);
-
-                drawGame();
-            }, 200); // Adjust speed as needed
-        }
-
-        // Load model and start training
-        loadModel().then(() => trainAndPlay(100));
-    </script>
+initPopulation();
+draw(newGameState());
+</script>
 </body>
 </html>
