@@ -19,7 +19,7 @@ const WM_OPTIONS = [
 ]
 
 const DOCK_OPTIONS = [
-    { id: 'none',    label: 'None (built-in)', icon: 'indeterminate_check_box', desc: 'Use the compiled taskbar — always visible, not sandboxed.' },
+    { id: 'none',    label: 'None',            icon: 'indeterminate_check_box', desc: 'No dock — desktop only, without any taskbar or launcher bar.' },
     { id: 'default', label: 'Default',         icon: 'dock_to_bottom',          desc: 'Dark floating pill — sandboxed, IPC-only.' },
     { id: 'macos',   label: 'macOS Style',     icon: 'dock',                    desc: 'Frosted full-width bar with icon magnification and labels.' },
     { id: 'windows', label: 'Windows 11',      icon: 'desktop_windows',         desc: 'Dark centered icon bar — Windows 11 taskbar look.' },
