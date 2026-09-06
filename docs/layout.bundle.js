@@ -29273,8 +29273,8 @@ const layoutCss = (grid, wallpaperUrl) => `
     .footer {
         grid-area: footer;
     }
-    body.vfs-dock-active .footer,
-    body.vfs-dock-active .toolbar {
+    .footer,
+    .toolbar {
         display: none;
     }
 `;
@@ -157323,7 +157323,7 @@ const render = (container) => {
             const fs = platform.host.getFS();
             const pinned = fs.existsSync('/etc/taskbar.json')
                 ? (_a = JSON.parse(fs.readFileSync('/etc/taskbar.json', 'utf-8')).pinned) !== null && _a !== void 0 ? _a : []
-                : ['explorer', 'ui.vs-code', 'ui.notepad', 'webamp', 'ui.task-manager'];
+                : ['explorer', 'ui.vs-code', 'ui.notepad', 'ui.terminal', 'webamp', 'ui.task-manager', 'ui.settings'];
             return pinned.map(name => {
                 var _a, _b, _c, _d;
                 const cmd = platform.host.getCommand(name);
@@ -157405,13 +157405,14 @@ const render = (container) => {
     platform.register('open-vfs-dock', openVfsDock);
     platform.host.registerCommand('open-vfs-dock', openVfsDock);
     // Restore dock from persisted config on layout boot.
+    // Default to 'default' VFS dock when no config exists — the compiled taskbar is hidden.
     try {
         const fs = platform.host.getFS();
-        if (fs.existsSync('/etc/managers.json')) {
-            const cfg = JSON.parse(fs.readFileSync('/etc/managers.json', 'utf-8'));
-            if (cfg.dockManager && cfg.dockManager !== 'none')
-                openVfsDock(cfg.dockManager);
-        }
+        const cfg = fs.existsSync('/etc/managers.json')
+            ? JSON.parse(fs.readFileSync('/etc/managers.json', 'utf-8'))
+            : { dockManager: 'default' };
+        if (cfg.dockManager && cfg.dockManager !== 'none')
+            openVfsDock(cfg.dockManager);
     }
     catch (_) { }
     const root = (0,react_dom_client__WEBPACK_IMPORTED_MODULE_3__.createRoot)(container);

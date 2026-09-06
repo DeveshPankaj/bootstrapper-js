@@ -817,6 +817,11 @@
     "force_reload": true
   },
   {
+    "path": "/etc/settings/21-architecture.js",
+    "file": "/etc/settings/21-architecture.js",
+    "force_reload": true
+  },
+  {
     "path": "/opt/wm/tiling.js",
     "file": "/opt/wm/tiling.js",
     "force_reload": false
@@ -844,7 +849,7 @@
   {
     "path": "/etc/taskbar.json",
     "file": "/etc/taskbar.json",
-    "force_reload": false
+    "force_reload": true
   },
   {
     "path": "/opt/wm/canvas.js",
