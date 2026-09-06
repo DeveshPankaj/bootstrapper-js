@@ -5,7 +5,7 @@
 
 export const createHeader = ({ command, settings, close, minimize, fullscreen }) => {
     
-    const head = doc.createElement('div');
+    const head = document.createElement('div');
     head.className = 'window-header';
     head.style.cssText = [
         'display:flex',
@@ -20,7 +20,7 @@ export const createHeader = ({ command, settings, close, minimize, fullscreen })
 
     // --- Traffic lights ---
     const makeDot = (bg, fn, label) => {
-        const b = doc.createElement('button');
+        const b = document.createElement('button');
         b.type = 'button';
         b.title = label;
         b.style.cssText = [
@@ -44,14 +44,14 @@ export const createHeader = ({ command, settings, close, minimize, fullscreen })
         return b;
     };
 
-    const lights = doc.createElement('div');
+    const lights = document.createElement('div');
     lights.style.cssText = 'display:flex;gap:6px;align-items:center;flex-shrink:0;z-index:1;';
     lights.appendChild(makeDot('#ff5f57', close,     'Close'));
     lights.appendChild(makeDot('#febc2e', minimize,  'Minimize'));
     lights.appendChild(makeDot('#28c840', fullscreen,'Fullscreen'));
 
     // --- Centred title (pointer-events:none so it doesn't eat drag) ---
-    const titleEl = doc.createElement('span');
+    const titleEl = document.createElement('span');
     titleEl.style.cssText = [
         'position:absolute',
         'left:0',

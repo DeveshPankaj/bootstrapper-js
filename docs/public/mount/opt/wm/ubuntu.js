@@ -4,7 +4,7 @@
 
 export const createHeader = ({ command, settings, close, minimize, fullscreen }) => {
     
-    const head = doc.createElement('div');
+    const head = document.createElement('div');
     head.className = 'window-header';
     head.style.cssText = [
         'display:flex',
@@ -17,13 +17,13 @@ export const createHeader = ({ command, settings, close, minimize, fullscreen })
     ].join(';');
 
     // --- App icon (material symbol) ---
-    const iconEl = doc.createElement('span');
+    const iconEl = document.createElement('span');
     iconEl.className = 'material-symbols-outlined';
     iconEl.style.cssText = 'font-size:16px;opacity:0.75;flex-shrink:0;';
     iconEl.textContent = command.meta?.icon || 'apps';
 
     // --- Title ---
-    const titleEl = doc.createElement('span');
+    const titleEl = document.createElement('span');
     titleEl.style.cssText = [
         'flex:1',
         'font-size:13px',
@@ -36,7 +36,7 @@ export const createHeader = ({ command, settings, close, minimize, fullscreen })
 
     // --- Circular buttons (GNOME-style, right side) ---
     const makeCircle = (symbol, fn, bg, label) => {
-        const b = doc.createElement('button');
+        const b = document.createElement('button');
         b.type = 'button';
         b.title = label;
         b.textContent = symbol;
@@ -61,7 +61,7 @@ export const createHeader = ({ command, settings, close, minimize, fullscreen })
         return b;
     };
 
-    const controls = doc.createElement('div');
+    const controls = document.createElement('div');
     controls.style.cssText = 'display:flex;gap:6px;align-items:center;flex-shrink:0;margin-left:auto;';
     controls.appendChild(makeCircle('─', minimize,  '#888',    'Minimize'));
     controls.appendChild(makeCircle('⤢', fullscreen,'#e67e22', 'Fullscreen'));

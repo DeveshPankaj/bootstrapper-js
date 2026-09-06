@@ -4,7 +4,7 @@
 
 export const createHeader = ({ command, settings, close, minimize, fullscreen }) => {
     
-    const head = doc.createElement('div');
+    const head = document.createElement('div');
     head.className = 'window-header';
     head.style.cssText = [
         'display:flex',
@@ -17,7 +17,7 @@ export const createHeader = ({ command, settings, close, minimize, fullscreen })
     ].join(';');
 
     // --- Title left ---
-    const titleEl = doc.createElement('span');
+    const titleEl = document.createElement('span');
     titleEl.style.cssText = [
         'flex:1',
         'font-size:12px',
@@ -31,7 +31,7 @@ export const createHeader = ({ command, settings, close, minimize, fullscreen })
 
     // --- Square control buttons right ---
     const makeBtn = (symbol, fn, hoverBg, label) => {
-        const b = doc.createElement('button');
+        const b = document.createElement('button');
         b.type = 'button';
         b.title = label;
         b.textContent = symbol;
@@ -55,7 +55,7 @@ export const createHeader = ({ command, settings, close, minimize, fullscreen })
         return b;
     };
 
-    const controls = doc.createElement('div');
+    const controls = document.createElement('div');
     controls.style.cssText = 'display:flex;align-items:center;flex-shrink:0;margin-left:auto;height:100%;';
     controls.appendChild(makeBtn('─', minimize,  'rgba(128,128,128,0.25)', 'Minimize'));
     controls.appendChild(makeBtn('☐', fullscreen,'rgba(128,128,128,0.25)', 'Fullscreen'));

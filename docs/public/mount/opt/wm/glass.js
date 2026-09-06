@@ -4,7 +4,7 @@
 
 export const createContainer = ({ command, settings }) => {
     
-    const div = doc.createElement('div');
+    const div = document.createElement('div');
     // Remove default solid bg so the glass effect of the header shows through.
     div.style.cssText = 'border-radius:12px;overflow:hidden;';
     return div;
@@ -12,7 +12,7 @@ export const createContainer = ({ command, settings }) => {
 
 export const createHeader = ({ command, settings, close, minimize, fullscreen }) => {
     
-    const head = doc.createElement('div');
+    const head = document.createElement('div');
     head.className = 'window-header';
     head.style.cssText = [
         'display:flex',
@@ -30,7 +30,7 @@ export const createHeader = ({ command, settings, close, minimize, fullscreen })
 
     // --- Minimal dot buttons ---
     const makeDot = (bg, fn, label) => {
-        const b = doc.createElement('button');
+        const b = document.createElement('button');
         b.type = 'button';
         b.title = label;
         b.style.cssText = [
@@ -51,13 +51,13 @@ export const createHeader = ({ command, settings, close, minimize, fullscreen })
         return b;
     };
 
-    const lights = doc.createElement('div');
+    const lights = document.createElement('div');
     lights.style.cssText = 'display:flex;gap:5px;align-items:center;flex-shrink:0;';
     lights.appendChild(makeDot('rgba(255,95,87,0.9)',  close,     'Close'));
     lights.appendChild(makeDot('rgba(254,188,46,0.9)', minimize,  'Minimize'));
     lights.appendChild(makeDot('rgba(40,200,64,0.9)',  fullscreen,'Fullscreen'));
 
-    const titleEl = doc.createElement('span');
+    const titleEl = document.createElement('span');
     titleEl.style.cssText = [
         'flex:1',
         'text-align:center',
