@@ -49,7 +49,7 @@ function injectAppSDK(iframe, props) {
     };
     // Create log dir and initial log file on app start
     try {
-      var logDir = '/opt/apps/model-builder/logs';
+      var logDir = '/home/user1/.local/share/model-builder';
       fs.mkdirSync(logDir, { recursive: true });
       var logPath = logDir + '/model-builder.log';
       if (!fs.existsSync(logPath)) {
