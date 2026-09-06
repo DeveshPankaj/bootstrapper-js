@@ -8,3 +8,6 @@ v2/
 # scratch/unrelated scripts, not part of the app
 temp/.DS_Store
 **/.DS_Store
+
+# generated test screenshots — local only, not tracked
+testing/screenshots/

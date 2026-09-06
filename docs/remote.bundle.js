@@ -28398,7 +28398,8 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   broadcastIpcEvent: () => (/* binding */ broadcastIpcEvent),
 /* harmony export */   initIpc: () => (/* binding */ initIpc),
-/* harmony export */   registerIpcHandler: () => (/* binding */ registerIpcHandler)
+/* harmony export */   registerIpcHandler: () => (/* binding */ registerIpcHandler),
+/* harmony export */   registerWindowIpcHandlers: () => (/* binding */ registerWindowIpcHandlers)
 /* harmony export */ });
 // Host-side IPC router — handles postMessage calls from sandboxed iframes.
 // Pairs with /usr/lib/ipc.js (VFS client library).
@@ -28415,8 +28416,10 @@ const handlers = new Map();
 function registerIpcHandler(event, handler) {
     handlers.set(event, handler);
 }
-function broadcastIpcEvent(event, data) {
-    document.querySelectorAll('iframe').forEach(f => {
+// targetDoc defaults to `document` so existing call sites work unchanged.
+// The layout bundle (which runs in a hidden iframe) passes platform.window.document.
+function broadcastIpcEvent(event, data, targetDoc = document) {
+    targetDoc.querySelectorAll('iframe').forEach(f => {
         var _a;
         try {
             (_a = f.contentWindow) === null || _a === void 0 ? void 0 : _a.postMessage({ type: 'wos-ipc-event', event, data }, '*');
@@ -28424,27 +28427,74 @@ function broadcastIpcEvent(event, data) {
         catch (_) { }
     });
 }
+function registerWindowIpcHandlers(getWindows, toggleWindow, mainWindow = window, getLaunchItems) {
+    mainWindow.__wosWmBridge = {
+        getWindows,
+        toggleWindow,
+        getLaunchItems: getLaunchItems !== null && getLaunchItems !== void 0 ? getLaunchItems : (() => []),
+    };
+}
 function initIpc(fs) {
-    window.addEventListener('message', (e) => __awaiter(this, void 0, void 0, function* () {
-        if (!e.data || e.data.type !== 'wos-ipc')
-            return;
-        const { id, event, data } = e.data;
-        const source = e.source;
-        if (!source)
-            return;
-        const handler = handlers.get(event);
-        if (!handler) {
-            source.postMessage({ type: 'wos-ipc-response', id, error: `Unknown IPC event: ${event}` }, '*');
-            return;
+    // Both bootstrapper.bundle and remote.bundle call initIpc in the same window.
+    // Each bundle has its own module scope, so a module-level flag would be
+    // duplicated. Use window.__wosIpcInit (shared across all scripts) to ensure
+    // only one message listener is ever added.
+    if (!window.__wosIpcInit) {
+        window.__wosIpcInit = true;
+        window.addEventListener('message', (e) => __awaiter(this, void 0, void 0, function* () {
+            if (!e.data || e.data.type !== 'wos-ipc')
+                return;
+            const { id, event, data } = e.data;
+            const source = e.source;
+            if (!source)
+                return;
+            const handler = handlers.get(event);
+            if (!handler) {
+                source.postMessage({ type: 'wos-ipc-response', id, error: `Unknown IPC event: ${event}` }, '*');
+                return;
+            }
+            try {
+                const result = yield handler(data, source);
+                source.postMessage({ type: 'wos-ipc-response', id, result: result !== null && result !== void 0 ? result : null }, '*');
+            }
+            catch (err) {
+                source.postMessage({ type: 'wos-ipc-response', id, error: String(err) }, '*');
+            }
+        }));
+    }
+    // WM handlers delegate to the bridge set by the layout bundle on the main window.
+    registerIpcHandler('wm.getWindows', () => { var _a, _b; return (_b = (_a = window.__wosWmBridge) === null || _a === void 0 ? void 0 : _a.getWindows()) !== null && _b !== void 0 ? _b : []; });
+    registerIpcHandler('wm.toggleWindow', (d) => { var _a; (_a = window.__wosWmBridge) === null || _a === void 0 ? void 0 : _a.toggleWindow(Number(d.pid)); return true; });
+    registerIpcHandler('wm.getLaunchItems', () => { var _a, _b; return (_b = (_a = window.__wosWmBridge) === null || _a === void 0 ? void 0 : _a.getLaunchItems()) !== null && _b !== void 0 ? _b : []; });
+    registerIpcHandler('wm.launch', (d) => { var _a, _b; (_b = (_a = window.__wosWmBridge) === null || _a === void 0 ? void 0 : _a.launch) === null || _b === void 0 ? void 0 : _b.call(_a, String(d.name)); return true; });
+    // Dock settings — active dock iframe registers its schema; settings UI reads and mutates it.
+    registerIpcHandler('dock.registerSettings', (d) => {
+        var _a, _b, _c, _d;
+        if (window.__wosDockBridge) {
+            window.__wosDockBridge.schema = (_a = d.schema) !== null && _a !== void 0 ? _a : [];
+            window.__wosDockBridge.dockId = (_b = d.dockId) !== null && _b !== void 0 ? _b : '';
         }
-        try {
-            const result = yield handler(data, source);
-            source.postMessage({ type: 'wos-ipc-response', id, result: result !== null && result !== void 0 ? result : null }, '*');
+        else {
+            window.__wosDockBridge = { schema: (_c = d.schema) !== null && _c !== void 0 ? _c : [], dockId: (_d = d.dockId) !== null && _d !== void 0 ? _d : '', set: () => { } };
         }
-        catch (err) {
-            source.postMessage({ type: 'wos-ipc-response', id, error: String(err) }, '*');
-        }
-    }));
+        // Notify settings UI that dock schema changed.
+        broadcastIpcEvent('dock.schemaChanged', { schema: window.__wosDockBridge.schema, dockId: window.__wosDockBridge.dockId });
+        return true;
+    });
+    registerIpcHandler('dock.getSchema', () => window.__wosDockBridge
+        ? { schema: window.__wosDockBridge.schema, dockId: window.__wosDockBridge.dockId }
+        : { schema: [], dockId: '' });
+    registerIpcHandler('dock.setSetting', (d, source) => {
+        if (!window.__wosDockBridge)
+            return false;
+        const entry = window.__wosDockBridge.schema.find(e => e.key === d.key);
+        if (entry)
+            entry.value = d.value;
+        // Forward the change to the dock iframe.
+        broadcastIpcEvent('dock.settingChanged', { key: d.key, value: d.value });
+        return true;
+    });
+    registerIpcHandler('dock.getSettings', () => window.__wosDockBridge ? window.__wosDockBridge.schema.reduce((acc, e) => { acc[e.key] = e.value; return acc; }, {}) : {});
     registerIpcHandler('fs.read', (d) => Array.from(fs.readFileSync(d.path)));
     registerIpcHandler('fs.readText', (d) => fs.readFileSync(d.path, 'utf8'));
     registerIpcHandler('fs.write', (d) => {
@@ -28649,13 +28699,38 @@ const FALLBACK_WM_SETTINGS = {
         bringToFrontOnClick: true,
     },
 };
+const MANAGERS_CONFIG_PATH = '/etc/managers.json';
 const loadWindowManagerModule = () => {
     try {
         const fs = platform.host.getFS();
-        if (!fs.existsSync(_shared_constants__WEBPACK_IMPORTED_MODULE_3__.WINDOW_MANAGER_MODULE_PATH))
-            return {};
-        const source = fs.readFileSync(_shared_constants__WEBPACK_IMPORTED_MODULE_3__.WINDOW_MANAGER_MODULE_PATH, "utf-8");
-        return platform.host.execString(source, _shared_constants__WEBPACK_IMPORTED_MODULE_3__.WINDOW_MANAGER_MODULE_PATH);
+        // Load base module — provides setupWindow, readSettings, snap zones, etc.
+        const baseModule = (() => {
+            if (!fs.existsSync(_shared_constants__WEBPACK_IMPORTED_MODULE_3__.WINDOW_MANAGER_MODULE_PATH))
+                return {};
+            const source = fs.readFileSync(_shared_constants__WEBPACK_IMPORTED_MODULE_3__.WINDOW_MANAGER_MODULE_PATH, "utf-8");
+            return platform.host.execString(source, _shared_constants__WEBPACK_IMPORTED_MODULE_3__.WINDOW_MANAGER_MODULE_PATH);
+        })();
+        // Check for an active WM style override in /etc/managers.json.
+        let wmId = 'default';
+        try {
+            if (fs.existsSync(MANAGERS_CONFIG_PATH)) {
+                const config = JSON.parse(fs.readFileSync(MANAGERS_CONFIG_PATH, 'utf-8'));
+                if (config.windowManager)
+                    wmId = config.windowManager;
+            }
+        }
+        catch (_) { }
+        if (wmId === 'default')
+            return baseModule;
+        // Load style override from /opt/wm/<id>.js — exports createHeader (and
+        // optionally createContainer). Merges over base: style overrides win for
+        // visual hooks, base keeps setupWindow/readSettings/etc.
+        const wmStylePath = `/opt/wm/${wmId}.js`;
+        if (!fs.existsSync(wmStylePath))
+            return baseModule;
+        const wmStyleSource = fs.readFileSync(wmStylePath, "utf-8");
+        const wmStyleModule = platform.host.execString(wmStyleSource, wmStylePath);
+        return Object.assign(Object.assign({}, baseModule), wmStyleModule);
     }
     catch (err) {
         console.error("Failed to load window manager module", err);
@@ -28696,8 +28771,10 @@ class WindowManager {
         // --- VFS hook: createContainer({ command, settings }) ---
         // Return an HTMLElement to replace the default <div class="window">.
         // Mandatory attributes/classes are still applied by compiled code below.
+        // Use nodeType === 1 (ELEMENT_NODE) instead of instanceof HTMLElement so
+        // elements created via top.document (a different frame) still match.
         const customContainer = (_c = wmModule.createContainer) === null || _c === void 0 ? void 0 : _c.call(wmModule, { command, settings: wmSettings });
-        const container = (customContainer instanceof HTMLElement
+        const container = ((customContainer === null || customContainer === void 0 ? void 0 : customContainer.nodeType) === 1
             ? customContainer
             : platform.window.document.createElement("div"));
         container.setAttribute("data-name", command.name);
@@ -28758,13 +28835,21 @@ class WindowManager {
             fullscreen: fullscreenCallback,
         });
         let head, closeButton, fullScreenButton, minimizeButton, setTitleRaw, appendActionButton, setHeaderStyles;
-        if (customHead instanceof HTMLElement) {
+        if ((customHead === null || customHead === void 0 ? void 0 : customHead.nodeType) === 1) {
             head = customHead;
             // VFS-provided header has already received the callbacks — don't wire compiled buttons.
             closeButton = null;
             fullScreenButton = null;
             minimizeButton = null;
-            setTitleRaw = () => { };
+            // If custom header exposes _setTitle, call it on title updates.
+            setTitleRaw = (t) => {
+                if (typeof head._setTitle === 'function') {
+                    try {
+                        head._setTitle(t);
+                    }
+                    catch (_) { }
+                }
+            };
             appendActionButton = () => ({ remove: () => { } });
             setHeaderStyles = () => { };
         }
@@ -29068,17 +29153,27 @@ const appendWindow = (contentArea, windowElement) => {
         .appendChild(windowElement);
 };
 const toggleFullScreen = (contentArea, win) => {
-    const container = contentArea;
     const isFullScreen = (win.getAttribute("data-fullscreen") || "false") === "true";
     win.setAttribute("data-fullscreen", isFullScreen ? "false" : "true");
-    const mergeAttributes = ["height", "width", "left", "right", "top"];
+    const saveAttrs = ["height", "width", "left", "right", "top"];
     if (isFullScreen) {
-        mergeAttributes.forEach((attr) => (win.style[attr] = `${win.getAttribute(`data-prev-${attr}`)}`));
+        saveAttrs.forEach((attr) => (win.style[attr] = `${win.getAttribute(`data-prev-${attr}`)}`));
     }
     else {
-        const containerRect = container === null || container === void 0 ? void 0 : container.getBoundingClientRect();
-        mergeAttributes.forEach((attr) => win.setAttribute(`data-prev-${attr}`, win.style[attr]));
-        mergeAttributes.forEach((attr) => (win.style[attr] = `${containerRect[attr]}px`));
+        saveAttrs.forEach((attr) => win.setAttribute(`data-prev-${attr}`, win.style[attr]));
+        // Use visible viewport dimensions (clientWidth/Height) rather than the element's
+        // bounding rect, so canvas-mode (where .content-area is a huge scrollable canvas)
+        // doesn't produce a 6000×3600 fullscreen window. scrollLeft/Top shifts the window
+        // into the currently-visible viewport region.
+        const vw = contentArea.clientWidth;
+        const vh = contentArea.clientHeight;
+        const sx = contentArea.scrollLeft;
+        const sy = contentArea.scrollTop;
+        win.style.left = `${Math.round(sx + vw * 0.01)}px`;
+        win.style.top = `${Math.round(sy + vh * 0.01)}px`;
+        win.style.width = `${Math.round(vw * 0.98)}px`;
+        win.style.height = `${Math.round(vh * 0.98)}px`;
+        win.style.right = '';
     }
 };
 
@@ -29297,7 +29392,7 @@ const draggable = (elmnt, header) => {
         }
     }
     function closeDragElement() {
-        var _a;
+        var _a, _b, _c;
         document.onmouseup = null;
         document.onmousemove = null;
         elmnt.classList.remove('dragging');
@@ -29308,8 +29403,14 @@ const draggable = (elmnt, header) => {
             const bounds = getContentAreaBounds(document);
             if (bounds) {
                 const rect = buildSnapRect(currentSnapZone, bounds);
-                elmnt.style.left = rect.left + 'px';
-                elmnt.style.top = rect.top + 'px';
+                // In canvas mode the content-area is a scrollable container;
+                // snap rect coords are viewport-relative but style.left/top are
+                // canvas-relative, so add the scroll offset.
+                const scrollEl = document.querySelector('.content-area.canvas-wm-active');
+                const sx = (_b = scrollEl === null || scrollEl === void 0 ? void 0 : scrollEl.scrollLeft) !== null && _b !== void 0 ? _b : 0;
+                const sy = (_c = scrollEl === null || scrollEl === void 0 ? void 0 : scrollEl.scrollTop) !== null && _c !== void 0 ? _c : 0;
+                elmnt.style.left = (rect.left + sx) + 'px';
+                elmnt.style.top = (rect.top + sy) + 'px';
                 elmnt.style.width = rect.width + 'px';
                 elmnt.style.height = rect.height + 'px';
             }

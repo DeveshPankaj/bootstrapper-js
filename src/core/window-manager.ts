@@ -195,12 +195,38 @@ const FALLBACK_WM_SETTINGS = {
   },
 };
 
+const MANAGERS_CONFIG_PATH = '/etc/managers.json';
+
 const loadWindowManagerModule = (): any => {
   try {
     const fs = platform.host.getFS();
-    if (!fs.existsSync(WINDOW_MANAGER_MODULE_PATH)) return {};
-    const source = fs.readFileSync(WINDOW_MANAGER_MODULE_PATH, "utf-8") as string;
-    return platform.host.execString(source, WINDOW_MANAGER_MODULE_PATH);
+
+    // Load base module — provides setupWindow, readSettings, snap zones, etc.
+    const baseModule: any = (() => {
+      if (!fs.existsSync(WINDOW_MANAGER_MODULE_PATH)) return {};
+      const source = fs.readFileSync(WINDOW_MANAGER_MODULE_PATH, "utf-8") as string;
+      return platform.host.execString(source, WINDOW_MANAGER_MODULE_PATH);
+    })();
+
+    // Check for an active WM style override in /etc/managers.json.
+    let wmId = 'default';
+    try {
+      if (fs.existsSync(MANAGERS_CONFIG_PATH)) {
+        const config = JSON.parse(fs.readFileSync(MANAGERS_CONFIG_PATH, 'utf-8') as string);
+        if (config.windowManager) wmId = config.windowManager;
+      }
+    } catch (_) {}
+
+    if (wmId === 'default') return baseModule;
+
+    // Load style override from /opt/wm/<id>.js — exports createHeader (and
+    // optionally createContainer). Merges over base: style overrides win for
+    // visual hooks, base keeps setupWindow/readSettings/etc.
+    const wmStylePath = `/opt/wm/${wmId}.js`;
+    if (!fs.existsSync(wmStylePath)) return baseModule;
+    const wmStyleSource = fs.readFileSync(wmStylePath, "utf-8") as string;
+    const wmStyleModule = platform.host.execString(wmStyleSource, wmStylePath);
+    return { ...baseModule, ...wmStyleModule };
   } catch (err) {
     console.error("Failed to load window manager module", err);
     return {};
@@ -245,8 +271,10 @@ export class WindowManager {
     // --- VFS hook: createContainer({ command, settings }) ---
     // Return an HTMLElement to replace the default <div class="window">.
     // Mandatory attributes/classes are still applied by compiled code below.
+    // Use nodeType === 1 (ELEMENT_NODE) instead of instanceof HTMLElement so
+    // elements created via top.document (a different frame) still match.
     const customContainer = wmModule.createContainer?.({ command, settings: wmSettings });
-    const container = (customContainer instanceof HTMLElement
+    const container = (customContainer?.nodeType === 1
       ? customContainer
       : platform.window.document.createElement("div")) as HTMLDivElement;
 
@@ -309,13 +337,18 @@ export class WindowManager {
         appendActionButton: (props: { icon: string; title: string; onClick: () => void }) => { remove: () => void },
         setHeaderStyles: (styles: Record<string, string>) => void;
 
-    if (customHead instanceof HTMLElement) {
+    if (customHead?.nodeType === 1) {
       head = customHead;
       // VFS-provided header has already received the callbacks — don't wire compiled buttons.
       closeButton = null;
       fullScreenButton = null;
       minimizeButton = null;
-      setTitleRaw = () => {};
+      // If custom header exposes _setTitle, call it on title updates.
+      setTitleRaw = (t: string) => {
+        if (typeof (head as any)._setTitle === 'function') {
+          try { (head as any)._setTitle(t); } catch (_) {}
+        }
+      };
       appendActionButton = () => ({ remove: () => {} });
       setHeaderStyles = () => {};
     } else {
@@ -684,24 +717,27 @@ const appendWindow = (
 };
 
 const toggleFullScreen = (contentArea: HTMLElement, win: HTMLElement) => {
-  const container = contentArea;
-
   const isFullScreen = (win.getAttribute("data-fullscreen") || "false") === "true";
   win.setAttribute("data-fullscreen", isFullScreen ? "false" : "true");
 
-  const mergeAttributes = ["height", "width", "left", "right", "top"] as const;
+  const saveAttrs = ["height", "width", "left", "right", "top"] as const;
 
   if (isFullScreen) {
-    mergeAttributes.forEach(
-      (attr) => (win.style[attr] = `${win.getAttribute(`data-prev-${attr}`)}`)
-    );
+    saveAttrs.forEach((attr) => (win.style[attr] = `${win.getAttribute(`data-prev-${attr}`)}`));
   } else {
-    const containerRect = container?.getBoundingClientRect();
-    mergeAttributes.forEach((attr) =>
-      win.setAttribute(`data-prev-${attr}`, win.style[attr])
-    );
-    mergeAttributes.forEach(
-      (attr) => (win.style[attr] = `${containerRect[attr]}px`)
-    );
+    saveAttrs.forEach((attr) => win.setAttribute(`data-prev-${attr}`, win.style[attr]));
+    // Use visible viewport dimensions (clientWidth/Height) rather than the element's
+    // bounding rect, so canvas-mode (where .content-area is a huge scrollable canvas)
+    // doesn't produce a 6000×3600 fullscreen window. scrollLeft/Top shifts the window
+    // into the currently-visible viewport region.
+    const vw = contentArea.clientWidth;
+    const vh = contentArea.clientHeight;
+    const sx = contentArea.scrollLeft;
+    const sy = contentArea.scrollTop;
+    win.style.left   = `${Math.round(sx + vw * 0.01)}px`;
+    win.style.top    = `${Math.round(sy + vh * 0.01)}px`;
+    win.style.width  = `${Math.round(vw * 0.98)}px`;
+    win.style.height = `${Math.round(vh * 0.98)}px`;
+    win.style.right  = '';
   }
 };

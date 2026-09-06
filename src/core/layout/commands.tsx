@@ -11,16 +11,20 @@ export const Commands = ({ onCommandClick, vertical, align = 'start' }: { onComm
 
     const [commands, setCommands] = React.useState<Array<Command>>([])
     const [expended, setExpended] = React.useState(localStorage.getItem('show_taskbar_title') === 'true')
-    const defaultCommands = [
-        'explorer',
-        'ui.vs-code',
-        'ui.notepad',
-        'webamp',
-        'ui.task-manager',
-    ]
 
+    const readPinnedCommands = (): string[] => {
+        try {
+            const fs = platform.host.getFS()
+            if (fs.existsSync('/etc/taskbar.json')) {
+                const cfg = JSON.parse(fs.readFileSync('/etc/taskbar.json', 'utf-8') as string)
+                if (Array.isArray(cfg.pinned) && cfg.pinned.length) return cfg.pinned
+            }
+        } catch (_) {}
+        return ['ui.app-drawer', 'explorer', 'ui.notepad', 'ui.terminal', 'ui.pkg-manager', 'ui.settings']
+    }
 
     React.useEffect(() => {
+        const defaultCommands = readPinnedCommands()
 
         const subscription = platform.host.commands$
             .pipe(map(commands => defaultCommands.map(cmd => commands.find(command => command.name === cmd)!).filter(x => x)))

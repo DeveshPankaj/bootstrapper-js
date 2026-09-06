@@ -1,0 +1,205 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<!-- dock:height=60 -->
+<title>Dock</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  height: 100%;
+  background: rgba(36, 36, 42, 0.92);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border-top: 1px solid rgba(255,255,255,0.06);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0 12px;
+  font-family: system-ui, sans-serif;
+}
+#dock {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 100%;
+  width: 100%;
+}
+.spacer { flex: 1; }
+.sep {
+  width: 1px; height: 32px;
+  background: rgba(255,255,255,0.10);
+  margin: 0 6px; flex-shrink: 0;
+}
+.item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  border-radius: 8px;
+  padding: 6px 10px;
+  transition: background 0.12s;
+  user-select: none;
+  min-width: 40px;
+}
+.item:hover { background: rgba(255,255,255,0.09); }
+.item.active { background: rgba(255,255,255,0.12); }
+.item.minimized { opacity: 0.5; }
+.item .icon {
+  font-family: 'Material Symbols Outlined', sans-serif;
+  font-size: 22px;
+  line-height: 1;
+  color: rgba(255,255,255,0.88);
+  font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 22;
+  flex-shrink: 0;
+}
+.item.active .icon { color: #fff; font-variation-settings: 'FILL' 1, 'wght' 300, 'GRAD' 0, 'opsz' 22; }
+.item .label {
+  font-size: 11px;
+  color: rgba(255,255,255,0.75);
+  white-space: nowrap;
+  display: none;
+}
+.item.active .label { display: block; color: #fff; }
+.dot {
+  width: 4px; height: 4px; border-radius: 50%;
+  background: #3584e4;
+  position: absolute;
+  bottom: 2px; left: 50%; transform: translateX(-50%);
+}
+.item:not(.running) .dot { display: none; }
+/* Right section in the center spacer — clock area placeholder */
+.right-label {
+  font-size: 12px;
+  color: rgba(255,255,255,0.5);
+  padding: 0 12px;
+  white-space: nowrap;
+}
+</style>
+</head>
+<body>
+<div id="dock"></div>
+<script>
+(function () {
+  var pending = new Map(), counter = 0, listeners = new Map();
+  window.addEventListener('message', function(e) {
+    if (!e.data) return;
+    if (e.data.type === 'wos-ipc-response') {
+      var cb = pending.get(e.data.id);
+      if (!cb) return;
+      pending.delete(e.data.id);
+      e.data.error ? cb.reject(new Error(e.data.error)) : cb.resolve(e.data.result);
+    } else if (e.data.type === 'wos-ipc-event') {
+      (listeners.get(e.data.event) || []).forEach(function(h) { h(e.data.data); });
+    }
+  });
+  var ipc = {
+    call: function(ev, data) {
+      return new Promise(function(resolve, reject) {
+        var id = 'wos-' + (++counter);
+        pending.set(id, { resolve: resolve, reject: reject });
+        var target = window !== window.parent ? window.parent : window.top;
+        target.postMessage({ type: 'wos-ipc', id: id, event: ev, data: data }, '*');
+      });
+    },
+    on: function(ev, handler) {
+      if (!listeners.has(ev)) listeners.set(ev, []);
+      listeners.get(ev).push(handler);
+    }
+  };
+
+  var DOCK_ID = 'gnome';
+  var SCHEMA = [
+    { key: 'bg-color', label: 'Background color', type: 'color', value: 'rgba(36,36,42,0.92)' },
+    { key: 'opacity', label: 'Opacity', type: 'range', value: 1, min: 0.2, max: 1, step: 0.05 },
+  ];
+
+  var dock = document.getElementById('dock');
+  var launchItems = [];
+  var openWindows  = [];
+  var launching = {};
+
+  function applySettings() {
+    var bg = SCHEMA.find(function(e){return e.key==='bg-color';}).value;
+    var op = SCHEMA.find(function(e){return e.key==='opacity';}).value;
+    document.body.style.background = bg;
+    document.documentElement.style.opacity = op;
+  }
+
+  ipc.on('dock.settingChanged', function(d) {
+    var entry = SCHEMA.find(function(e){return e.key===d.key;});
+    if (entry) entry.value = d.value;
+    applySettings();
+  });
+
+  ipc.call('fs.readText', { path: '/etc/dock/' + DOCK_ID + '.json' })
+    .then(function(txt) {
+      var saved = JSON.parse(txt);
+      SCHEMA.forEach(function(e) { if (saved[e.key] !== undefined) e.value = saved[e.key]; });
+    })
+    .catch(function() {})
+    .then(function() {
+      applySettings();
+      ipc.call('dock.registerSettings', { dockId: DOCK_ID, schema: SCHEMA }).catch(function(){});
+    });
+
+  function makeItem(icon, label, running, active, minimized, onclick) {
+    var el = document.createElement('div');
+    el.className = 'item' + (running ? ' running' : '') + (active ? ' active' : '') + (minimized ? ' minimized' : '');
+    el.title = label;
+    el.innerHTML = '<span class="icon">' + icon + '</span><span class="label">' + label + '</span><span class="dot"></span>';
+    el.onclick = onclick;
+    return el;
+  }
+
+  function render() {
+    dock.innerHTML = '';
+
+    launchItems.forEach(function(item) {
+      var win = openWindows.find(function(w) { return w.name === item.name; });
+      dock.appendChild(makeItem(
+        item.icon, item.label,
+        !!win, !!(win && win.active), !!(win && win.minimized),
+        function() {
+          if (win) { ipc.call('wm.toggleWindow', { pid: win.pid }); return; }
+          var now = Date.now();
+          if (launching[item.name] && now - launching[item.name] < 1200) return;
+          launching[item.name] = now;
+          ipc.call('wm.launch', { name: item.name });
+        }
+      ));
+    });
+
+    var pinned = launchItems.map(function(i) { return i.name; });
+    var extras = openWindows.filter(function(w) { return pinned.indexOf(w.name) === -1; });
+    if (extras.length && launchItems.length) {
+      var sep = document.createElement('div'); sep.className = 'sep'; dock.appendChild(sep);
+    }
+    extras.forEach(function(w) {
+      dock.appendChild(makeItem(
+        w.icon || 'apps', w.title || w.name, true, !!w.active, !!w.minimized,
+        function() { ipc.call('wm.toggleWindow', { pid: w.pid }); }
+      ));
+    });
+  }
+
+  Promise.all([
+    ipc.call('wm.getLaunchItems').catch(function() { return []; }),
+    ipc.call('wm.getWindows').catch(function() { return []; })
+  ]).then(function(results) {
+    launchItems = results[0] || [];
+    openWindows  = results[1] || [];
+    render();
+  });
+
+  ipc.on('wm.windowsChanged', function(wins) {
+    openWindows = wins || [];
+    render();
+  });
+})();
+</script>
+</body>
+</html>

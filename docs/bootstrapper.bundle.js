@@ -12,7 +12,8 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   broadcastIpcEvent: () => (/* binding */ broadcastIpcEvent),
 /* harmony export */   initIpc: () => (/* binding */ initIpc),
-/* harmony export */   registerIpcHandler: () => (/* binding */ registerIpcHandler)
+/* harmony export */   registerIpcHandler: () => (/* binding */ registerIpcHandler),
+/* harmony export */   registerWindowIpcHandlers: () => (/* binding */ registerWindowIpcHandlers)
 /* harmony export */ });
 // Host-side IPC router — handles postMessage calls from sandboxed iframes.
 // Pairs with /usr/lib/ipc.js (VFS client library).
@@ -29,8 +30,10 @@ const handlers = new Map();
 function registerIpcHandler(event, handler) {
     handlers.set(event, handler);
 }
-function broadcastIpcEvent(event, data) {
-    document.querySelectorAll('iframe').forEach(f => {
+// targetDoc defaults to `document` so existing call sites work unchanged.
+// The layout bundle (which runs in a hidden iframe) passes platform.window.document.
+function broadcastIpcEvent(event, data, targetDoc = document) {
+    targetDoc.querySelectorAll('iframe').forEach(f => {
         var _a;
         try {
             (_a = f.contentWindow) === null || _a === void 0 ? void 0 : _a.postMessage({ type: 'wos-ipc-event', event, data }, '*');
@@ -38,27 +41,74 @@ function broadcastIpcEvent(event, data) {
         catch (_) { }
     });
 }
+function registerWindowIpcHandlers(getWindows, toggleWindow, mainWindow = window, getLaunchItems) {
+    mainWindow.__wosWmBridge = {
+        getWindows,
+        toggleWindow,
+        getLaunchItems: getLaunchItems !== null && getLaunchItems !== void 0 ? getLaunchItems : (() => []),
+    };
+}
 function initIpc(fs) {
-    window.addEventListener('message', (e) => __awaiter(this, void 0, void 0, function* () {
-        if (!e.data || e.data.type !== 'wos-ipc')
-            return;
-        const { id, event, data } = e.data;
-        const source = e.source;
-        if (!source)
-            return;
-        const handler = handlers.get(event);
-        if (!handler) {
-            source.postMessage({ type: 'wos-ipc-response', id, error: `Unknown IPC event: ${event}` }, '*');
-            return;
+    // Both bootstrapper.bundle and remote.bundle call initIpc in the same window.
+    // Each bundle has its own module scope, so a module-level flag would be
+    // duplicated. Use window.__wosIpcInit (shared across all scripts) to ensure
+    // only one message listener is ever added.
+    if (!window.__wosIpcInit) {
+        window.__wosIpcInit = true;
+        window.addEventListener('message', (e) => __awaiter(this, void 0, void 0, function* () {
+            if (!e.data || e.data.type !== 'wos-ipc')
+                return;
+            const { id, event, data } = e.data;
+            const source = e.source;
+            if (!source)
+                return;
+            const handler = handlers.get(event);
+            if (!handler) {
+                source.postMessage({ type: 'wos-ipc-response', id, error: `Unknown IPC event: ${event}` }, '*');
+                return;
+            }
+            try {
+                const result = yield handler(data, source);
+                source.postMessage({ type: 'wos-ipc-response', id, result: result !== null && result !== void 0 ? result : null }, '*');
+            }
+            catch (err) {
+                source.postMessage({ type: 'wos-ipc-response', id, error: String(err) }, '*');
+            }
+        }));
+    }
+    // WM handlers delegate to the bridge set by the layout bundle on the main window.
+    registerIpcHandler('wm.getWindows', () => { var _a, _b; return (_b = (_a = window.__wosWmBridge) === null || _a === void 0 ? void 0 : _a.getWindows()) !== null && _b !== void 0 ? _b : []; });
+    registerIpcHandler('wm.toggleWindow', (d) => { var _a; (_a = window.__wosWmBridge) === null || _a === void 0 ? void 0 : _a.toggleWindow(Number(d.pid)); return true; });
+    registerIpcHandler('wm.getLaunchItems', () => { var _a, _b; return (_b = (_a = window.__wosWmBridge) === null || _a === void 0 ? void 0 : _a.getLaunchItems()) !== null && _b !== void 0 ? _b : []; });
+    registerIpcHandler('wm.launch', (d) => { var _a, _b; (_b = (_a = window.__wosWmBridge) === null || _a === void 0 ? void 0 : _a.launch) === null || _b === void 0 ? void 0 : _b.call(_a, String(d.name)); return true; });
+    // Dock settings — active dock iframe registers its schema; settings UI reads and mutates it.
+    registerIpcHandler('dock.registerSettings', (d) => {
+        var _a, _b, _c, _d;
+        if (window.__wosDockBridge) {
+            window.__wosDockBridge.schema = (_a = d.schema) !== null && _a !== void 0 ? _a : [];
+            window.__wosDockBridge.dockId = (_b = d.dockId) !== null && _b !== void 0 ? _b : '';
         }
-        try {
-            const result = yield handler(data, source);
-            source.postMessage({ type: 'wos-ipc-response', id, result: result !== null && result !== void 0 ? result : null }, '*');
+        else {
+            window.__wosDockBridge = { schema: (_c = d.schema) !== null && _c !== void 0 ? _c : [], dockId: (_d = d.dockId) !== null && _d !== void 0 ? _d : '', set: () => { } };
         }
-        catch (err) {
-            source.postMessage({ type: 'wos-ipc-response', id, error: String(err) }, '*');
-        }
-    }));
+        // Notify settings UI that dock schema changed.
+        broadcastIpcEvent('dock.schemaChanged', { schema: window.__wosDockBridge.schema, dockId: window.__wosDockBridge.dockId });
+        return true;
+    });
+    registerIpcHandler('dock.getSchema', () => window.__wosDockBridge
+        ? { schema: window.__wosDockBridge.schema, dockId: window.__wosDockBridge.dockId }
+        : { schema: [], dockId: '' });
+    registerIpcHandler('dock.setSetting', (d, source) => {
+        if (!window.__wosDockBridge)
+            return false;
+        const entry = window.__wosDockBridge.schema.find(e => e.key === d.key);
+        if (entry)
+            entry.value = d.value;
+        // Forward the change to the dock iframe.
+        broadcastIpcEvent('dock.settingChanged', { key: d.key, value: d.value });
+        return true;
+    });
+    registerIpcHandler('dock.getSettings', () => window.__wosDockBridge ? window.__wosDockBridge.schema.reduce((acc, e) => { acc[e.key] = e.value; return acc; }, {}) : {});
     registerIpcHandler('fs.read', (d) => Array.from(fs.readFileSync(d.path)));
     registerIpcHandler('fs.readText', (d) => fs.readFileSync(d.path, 'utf8'));
     registerIpcHandler('fs.write', (d) => {

@@ -125,9 +125,15 @@ export const draggable = (elmnt: HTMLDivElement, header: HTMLDivElement) => {
             const bounds = getContentAreaBounds(document)
             if (bounds) {
                 const rect = buildSnapRect(currentSnapZone, bounds)
-                elmnt.style.left = rect.left + 'px'
-                elmnt.style.top = rect.top + 'px'
-                elmnt.style.width = rect.width + 'px'
+                // In canvas mode the content-area is a scrollable container;
+                // snap rect coords are viewport-relative but style.left/top are
+                // canvas-relative, so add the scroll offset.
+                const scrollEl = document.querySelector<HTMLElement>('.content-area.canvas-wm-active')
+                const sx = scrollEl?.scrollLeft ?? 0
+                const sy = scrollEl?.scrollTop  ?? 0
+                elmnt.style.left   = (rect.left + sx) + 'px'
+                elmnt.style.top    = (rect.top  + sy) + 'px'
+                elmnt.style.width  = rect.width  + 'px'
                 elmnt.style.height = rect.height + 'px'
             }
         }

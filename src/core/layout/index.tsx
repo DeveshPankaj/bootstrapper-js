@@ -6,7 +6,8 @@ import { createRoot } from 'react-dom/client'
 import React from 'react'
 import { Taskbar } from './commands'
 import { ContextMenu, ContextMenuItem } from './contextmenu'
-import { DESKTOP_CONTAINER_CLASS, WINDOWS_CONTAINER_CLASS, WindowManager, desktopsSubject } from '../window-manager'
+import { DESKTOP_CONTAINER_CLASS, WINDOWS_CONTAINER_CLASS, WindowManager, desktopsSubject, windowsSubject } from '../window-manager'
+import { broadcastIpcEvent, registerWindowIpcHandlers } from '../ipc'
 import { FileType } from '../../shared/types'
 import { ListDirComponent } from '../../apps/file-explorer/desktop'
 import { Header } from './header'
@@ -509,7 +510,7 @@ const writeWidgetPosition = (name: string, top: number, left: number) => {
 // Widgets hidden by default until the user enables them from Settings ->
 // Widgets, even though their script is loaded/registered at boot.
 // Only clock, memory, shortcuts are shown by default.
-const DEFAULT_HIDDEN_WIDGETS = ['toolbar', 'public-ip', 'sticky-notes', 'rss']
+const DEFAULT_HIDDEN_WIDGETS = ['toolbar', 'public-ip', 'sticky-notes', 'rss', 'shortcuts']
 
 const readEnabledWidgets = (): string[] | null => {
     const cfg = readJsonFileLocal(WIDGETS_CONFIG_PATH)
@@ -770,6 +771,42 @@ const WidgetsPanel = () => {
     )
 }
 
+// VFS Desktop Manager — loads /opt/desktop/manager.js if present, falls back
+// to the compiled ListDirComponent so the desktop always renders.
+const VFS_DESKTOP_PATH = '/opt/desktop/manager.js'
+
+const DesktopMount = ({ openFile, showFileActionsHandler }: {
+    openFile: (file: FileType) => void
+    showFileActionsHandler: (file: FileType, event: React.MouseEvent<HTMLDivElement, MouseEvent>) => void
+}) => {
+    const ref = React.useRef<HTMLDivElement>(null)
+
+    React.useEffect(() => {
+        const container = ref.current
+        if (!container) return
+
+        const fs = platform.host.getFS()
+        if (fs.existsSync(VFS_DESKTOP_PATH)) {
+            try {
+                const src = fs.readFileSync(VFS_DESKTOP_PATH, 'utf-8') as string
+                const mod = platform.host.execString(src, VFS_DESKTOP_PATH)
+                if (typeof mod?.render === 'function') {
+                    const cleanup = mod.render(container, { openFile, showFileActions: showFileActionsHandler })
+                    return typeof cleanup === 'function' ? cleanup : undefined
+                }
+            } catch (err) {
+                console.error('[desktop-manager] VFS load failed:', err)
+            }
+        }
+        // Fallback: compile-time ListDirComponent
+        const root = createRoot(container)
+        root.render(<ListDirComponent openFile={openFile} showFileActions={showFileActionsHandler} customClass='desktop-icons' />)
+        return () => setTimeout(() => root.unmount(), 0)
+    }, [])
+
+    return <div ref={ref} style={{ width: '100%', height: '100%' }} />
+}
+
 const LayoutShell = (props: {
     contentRef: React.RefObject<HTMLDivElement | null>
     contextMenuRef: React.RefObject<HTMLDivElement | null>
@@ -812,7 +849,7 @@ const LayoutShell = (props: {
             ) : null}
             <div className="content-area" ref={props.contentRef} onContextMenu={props.onContextMenu}>
                 <div className={DESKTOP_CONTAINER_CLASS}>
-                    <ListDirComponent openFile={props.openFile} showFileActions={props.showFileActionsHandler} customClass='desktop-icons' />
+                    <DesktopMount openFile={props.openFile} showFileActionsHandler={props.showFileActionsHandler} />
                 </div>
                 <WidgetsPanel />
                 <div className={WINDOWS_CONTAINER_CLASS}></div>
@@ -850,10 +887,177 @@ export const render = (container: HTMLElement) => {
         windowManager.createWindow(command.name, ...args)
     }
 
+    // Bridge WM handlers onto platform.window (the main window) so the remote
+    // bundle's IPC listener — which runs in a different module instance — can
+    // serve wm.getWindows / wm.toggleWindow requests from sandboxed dock iframes.
+    const DEFAULT_ICON: Record<string, string> = {
+      'explorer': 'folder', 'ui.file-explorer': 'folder',
+      'ui.vs-code': 'data_object', 'ui.notepad': 'edit_note',
+      'ui.task-manager': 'monitoring',
+      'ui.terminal': 'terminal', 'ui.settings': 'settings',
+      'ui.pkg-manager': 'package_2', 'ui.app-drawer': 'apps',
+    }
+    const getLaunchItems = () => {
+      try {
+        const fs = platform.host.getFS()
+        const pinned: string[] = fs.existsSync('/etc/taskbar.json')
+          ? JSON.parse(fs.readFileSync('/etc/taskbar.json', 'utf-8') as string).pinned ?? []
+          : ['ui.app-drawer', 'explorer', 'ui.notepad', 'ui.terminal', 'ui.pkg-manager', 'ui.settings']
+        return pinned.map(name => {
+          const cmd = platform.host.getCommand(name)
+          const meta = (cmd as any)?.meta ?? {}
+          return {
+            name,
+            label: meta.title ?? name,
+            icon: meta.icon ?? DEFAULT_ICON[name] ?? 'apps',
+            cmd: `service('001-core.layout','open-window')(command('${name}'))`,
+          }
+        })
+      } catch { return [] }
+    }
 
-
+    registerWindowIpcHandlers(
+      () => windowsSubject.getValue().map(w => ({
+        pid: w.pid, name: w.name, title: w.title,
+        icon: w.icon, minimized: w.minimized, active: w.active,
+      })),
+      (pid) => {
+        const win = windowsSubject.getValue().find(w => w.pid === pid);
+        win?.toggle();
+      },
+      platform.window,
+      getLaunchItems,
+    );
+    platform.window.__wosWmBridge!.launch = (name: string) => {
+      const cmd = platform.host.getCommand(name)
+      if (!cmd) return
+      // Commands with meta.callable=true manage their own lifecycle (overlay toggles,
+      // singletons, etc.) — call them directly instead of wrapping in a WM window.
+      if ((cmd.meta as any)?.callable) {
+        platform.host.callCommand(name)
+      } else {
+        windowManager.createWindow(cmd.name)
+      }
+    };
+    // Broadcast window-list changes to all iframes in the main document.
+    // Pass platform.window.document explicitly — bare `document` inside the
+    // layout bundle resolves to the hidden-iframe document (no child iframes).
+    windowsSubject.subscribe(wins => {
+      broadcastIpcEvent('wm.windowsChanged', wins.map(w => ({
+        pid: w.pid, name: w.name, title: w.title,
+        icon: w.icon, minimized: w.minimized, active: w.active,
+      })), platform.window.document);
+    });
 
     platform.register('open-window', onCommandClick)
+
+    // Dock settings commands — read/write dock schema and persist to /etc/dock/{id}.json.
+    const getDockSchema = () => {
+        const bridge = platform.window.__wosDockBridge
+        return bridge ? { schema: bridge.schema, dockId: bridge.dockId } : { schema: [], dockId: '' }
+    }
+    const setDockSetting = (data: { key: string; value: unknown }) => {
+        const bridge = platform.window.__wosDockBridge
+        if (!bridge) return false
+        const entry = bridge.schema.find((e: any) => e.key === data.key)
+        if (entry) entry.value = data.value
+        try {
+            const fs = platform.host.getFS()
+            const settingsPath = `/etc/dock/${bridge.dockId}.json`
+            let current: Record<string, unknown> = {}
+            try { current = JSON.parse(fs.readFileSync(settingsPath, 'utf-8') as string) } catch (_) {}
+            current[data.key] = data.value
+            if (!fs.existsSync('/etc/dock')) fs.mkdirSync('/etc/dock', { recursive: true })
+            fs.writeFileSync(settingsPath, JSON.stringify(current, null, 2))
+        } catch (_) {}
+        broadcastIpcEvent('dock.settingChanged', { key: data.key, value: data.value }, platform.window.document)
+        return true
+    }
+    platform.register('get-dock-schema', getDockSchema)
+    platform.host.registerCommand('get-dock-schema', getDockSchema)
+    platform.register('set-dock-setting', setDockSetting)
+    platform.host.registerCommand('set-dock-setting', setDockSetting)
+
+    // Open a VFS dock HTML as a fixed-position frameless iframe in the layout.
+    // Sandboxed (no same-origin), IPC SDK inlined so it can communicate.
+    const openVfsDock = (id: string) => {
+        const doc = platform.window.document
+        const existing = doc.getElementById('vfs-dock-iframe')
+        if (existing) existing.remove()
+        doc.body.classList.remove('vfs-dock-active')
+        doc.body.classList.remove('vfs-dock-occupy')
+        doc.documentElement.style.removeProperty('--vfs-dock-height')
+
+        if (!id || id === 'none') return
+
+        const fs = platform.host.getFS()
+        const dockPath = `/opt/apps/dock/${id}.html`
+        if (!fs.existsSync(dockPath)) { console.warn('[dock] not found:', dockPath); return }
+
+        try {
+            const ipcSdk = fs.existsSync('/usr/lib/ipc.js')
+                ? (fs.readFileSync('/usr/lib/ipc.js', 'utf-8') as string) : ''
+            const appHtml = fs.readFileSync(dockPath, 'utf-8') as string
+            const safeIpcSdk = ipcSdk.replace(/<\/script>/gi, '<\\/script>')
+            const sdkTag = `<script>\n${safeIpcSdk}\n</script>`
+            const srcdoc = appHtml.includes('</head>')
+                ? appHtml.replace('</head>', `${sdkTag}\n</head>`)
+                : `${sdkTag}\n${appHtml}`
+            // Read optional height hint from HTML comment: <!-- dock:height=80 -->
+            const hMatch = appHtml.match(/<!--\s*dock:height=(\d+)\s*-->/)
+            const h = hMatch ? parseInt(hMatch[1]) : 64
+
+            const iframe = doc.createElement('iframe')
+            iframe.id = 'vfs-dock-iframe'
+            iframe.setAttribute('sandbox', 'allow-scripts allow-forms allow-modals')
+            iframe.srcdoc = srcdoc
+            iframe.style.cssText = `position:fixed;bottom:0;left:0;width:100%;height:${h}px;border:none;background:transparent;z-index:9000;pointer-events:auto;`
+            doc.body.appendChild(iframe)
+            doc.body.classList.add('vfs-dock-active')
+
+            // Reserve bottom space so windows don't go behind the dock.
+            // Reads occupyBottom from /etc/managers.json; defaults to true.
+            doc.documentElement.style.setProperty('--vfs-dock-height', `${h}px`)
+            let occupyBottom = true
+            try {
+                const cfg = JSON.parse(fs.readFileSync('/etc/managers.json', 'utf-8') as string)
+                if (cfg.occupyBottom === false) occupyBottom = false
+            } catch (_) {}
+            if (occupyBottom) doc.body.classList.add('vfs-dock-occupy')
+        } catch (err) {
+            console.error('[dock-manager] Failed to open dock:', err)
+        }
+    }
+
+    // Toggle whether the dock reserves bottom space (shrinks content-area).
+    const setDockOccupy = (occupy: boolean) => {
+        const doc = platform.window.document
+        const fs = platform.host.getFS()
+        try {
+            const cfg = fs.existsSync('/etc/managers.json')
+                ? JSON.parse(fs.readFileSync('/etc/managers.json', 'utf-8') as string) : {}
+            cfg.occupyBottom = occupy
+            fs.writeFileSync('/etc/managers.json', JSON.stringify(cfg, null, 2))
+        } catch (_) {}
+        const h = doc.documentElement.style.getPropertyValue('--vfs-dock-height')
+        if (occupy && h) doc.body.classList.add('vfs-dock-occupy')
+        else doc.body.classList.remove('vfs-dock-occupy')
+    }
+
+    platform.register('open-vfs-dock', openVfsDock)
+    platform.host.registerCommand('open-vfs-dock', openVfsDock)
+    platform.register('set-dock-occupy', setDockOccupy)
+    platform.host.registerCommand('set-dock-occupy', setDockOccupy)
+
+    // Restore dock from persisted config on layout boot.
+    // Default to 'default' VFS dock when no config exists — the compiled taskbar is hidden.
+    try {
+        const fs = platform.host.getFS()
+        const cfg = fs.existsSync('/etc/managers.json')
+            ? JSON.parse(fs.readFileSync('/etc/managers.json', 'utf-8') as string)
+            : { dockManager: 'default' }
+        if (cfg.dockManager && cfg.dockManager !== 'none') openVfsDock(cfg.dockManager)
+    } catch (_) {}
 
     const root = createRoot(container)
     const contextMenuRef = React.createRef<HTMLDivElement>()
@@ -946,64 +1150,32 @@ export const render = (container: HTMLElement) => {
 
     }
 
+    // Desktop right-click menu: load items from /etc/contextmenu.json (VFS),
+    // falling back to a minimal hardcoded set if the file is absent or invalid.
+    const loadContextMenuItems = (): Array<ContextMenuItem> => {
+        const fallback: Array<ContextMenuItem> = [
+            { id: '1', type: 'action', title: 'Explorer', cmd: `service('001-core.layout', 'open-window') (command('explorer'))` },
+            { id: '4', type: 'action', title: 'Settings', cmd: `service('001-core.layout', 'open-window') (command('ui.settings'))` },
+            { id: '0', type: 'action', title: 'Terminal', cmd: `service('001-core.layout', 'open-window') (command('ui.terminal'))` },
+        ]
+        try {
+            const fs = platform.host.getFS()
+            if (fs.existsSync('/etc/contextmenu.json')) {
+                const parsed = JSON.parse(fs.readFileSync('/etc/contextmenu.json', 'utf-8') as string)
+                if (Array.isArray(parsed) && parsed.length) return parsed
+            }
+        } catch (_) {}
+        return fallback
+    }
+
     const onContextMenu: React.MouseEventHandler<HTMLDivElement>  = (event) => {
-        if(event.target !== contentRef.current) return;
+        if ((event.target as HTMLElement).closest('.window, iframe')) return;
         event.preventDefault()
+        const items = loadContextMenuItems()
+        const multiDesktop = desktopsSubject.getValue().length > 1
         showContextMenuHandler(event.clientX, event.clientY, [
-            {
-                type: 'action',
-                id: '1',
-                title: 'Explorer',
-                cmd: `service('001-core.layout', 'open-window') (command('explorer'))`
-            },
-            {
-                type: 'action',
-                id: '4',
-                title: 'Settings',
-                cmd: `service('001-core.layout', 'open-window') (command('ui.settings'))`
-            },
-            {
-                type: 'action',
-                id: '0',
-                title: 'XTerm',
-                cmd: `service('001-core.layout', 'open-window') (command('ui.terminal'))`
-            },
-            {
-                type: 'action',
-                id: '2',
-                title: 'Portfolio',
-                cmd: `service('001-core.layout', 'open-window') (command('ui.iframe'), '/home/user1/index.html')`
-            },
-            {
-                type: 'action',
-                id: '3',
-                title: 'Toggle Fullscreen',
-                cmd: `service('root', 'exec') ('/usr/bin/fullscreen.js');`
-            },
-            {
-                type: 'action',
-                id: '5',
-                title: 'VsCode (password:demo)',
-                cmd: `service('root', 'exec') ('/home/user1/projects/VSCode.html');`
-            },
-            {
-                type: 'action',
-                id: '11',
-                title: 'App Manager',
-                cmd: `service('001-core.layout', 'open-window') (command('ui.pkg-manager'))`
-            },
-            {
-                type: 'action',
-                id: '6',
-                title: 'Add Desktop',
-                cmd: `platform.host.callCommand('add-desktop')`
-            },
-            ...(desktopsSubject.getValue().length > 1 ? [{
-                type: 'action' as const,
-                id: '8',
-                title: 'Remove Desktop',
-                cmd: `platform.host.callCommand('remove-active-desktop')`
-            }] : []),
+            ...items,
+            ...(multiDesktop ? [{ type: 'action' as const, id: '8', title: 'Remove Desktop', cmd: `platform.host.callCommand('remove-active-desktop')` }] : []),
         ])
     }
     root.render(

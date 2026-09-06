@@ -94,16 +94,23 @@
     };
 
     const centerAndResize = () => {
-      // Calculate new centered position
-      const newRect = {
-        left: '15%',
-        top: '5%',
-        height: '90%',
-        width: '70%',
+      const host = props.host || platform.window.top || platform.window;
+      const vw = host.innerWidth  || 1280;
+      const vh = host.innerHeight || 800;
+      // Fixed size, capped to fit smaller screens
+      const w = Math.min(860, vw - 80);
+      const h = Math.min(580, vh - 60);
+      const sx = (host.document && host.document.querySelector && host.document.querySelector('.windows'))
+                   ? (host.document.querySelector('.windows').parentElement?.scrollLeft || 0) : 0;
+      const sy = (host.document && host.document.querySelector && host.document.querySelector('.windows'))
+                   ? (host.document.querySelector('.windows').parentElement?.scrollTop  || 0) : 0;
+      props.setBoundingClientRect({
+        left:         sx + Math.round((vw - w) / 2),
+        top:          sy + Math.round((vh - h) / 2),
+        width:        w,
+        height:       h,
         borderRadius: '1.5rem'
-      };
-
-      props.setBoundingClientRect(newRect);
+      });
     };
 
     centerAndResize()

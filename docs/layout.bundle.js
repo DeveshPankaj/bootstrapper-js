@@ -28525,6 +28525,65 @@ const ListDirComponent = ({ dir, openFile, showFileActions, customClass }) => {
         // {name: 'app.proj', path: '/c/app.proj', meta: {ext: '.proj'}, type: 'file'},
         // {name: 'projects', path: '/usr/desktop/projects', meta: {ext: '.'}, type: 'dir'},
     ];
+    const orderPath = `${dir}/.desktop-order.json`;
+    const [order, setOrder] = react__WEBPACK_IMPORTED_MODULE_0___default().useState(() => {
+        try {
+            return JSON.parse(fs.readFileSync(orderPath));
+        }
+        catch (_a) {
+            return [];
+        }
+    });
+    const dragSrc = react__WEBPACK_IMPORTED_MODULE_0___default().useRef(null);
+    const [dragOver, setDragOver] = react__WEBPACK_IMPORTED_MODULE_0___default().useState(null);
+    const sortedFiles = react__WEBPACK_IMPORTED_MODULE_0___default().useMemo(() => {
+        if (!order.length)
+            return files;
+        return [...files].sort((a, b) => {
+            const ia = order.indexOf(a.name), ib = order.indexOf(b.name);
+            if (ia === -1 && ib === -1)
+                return 0;
+            if (ia === -1)
+                return 1;
+            if (ib === -1)
+                return -1;
+            return ia - ib;
+        });
+    }, [files, order]);
+    const saveOrder = (names) => {
+        try {
+            fs.writeFileSync(orderPath, JSON.stringify(names));
+        }
+        catch (_a) { }
+        setOrder(names);
+    };
+    const onDragStart = (e, name) => {
+        dragSrc.current = name;
+        e.dataTransfer.setData('application/x-desktop-reorder', name);
+        e.dataTransfer.effectAllowed = 'move';
+    };
+    const onDragOver = (e, name) => {
+        if (!e.dataTransfer.types.includes('application/x-desktop-reorder'))
+            return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        setDragOver(name);
+    };
+    const onDrop = (e, targetName) => {
+        e.preventDefault();
+        setDragOver(null);
+        const src = dragSrc.current;
+        if (!src || src === targetName)
+            return;
+        const names = sortedFiles.map(f => f.name);
+        const from = names.indexOf(src), to = names.indexOf(targetName);
+        if (from === -1 || to === -1)
+            return;
+        names.splice(from, 1);
+        names.splice(to, 0, src);
+        saveOrder(names);
+    };
+    const onDragEnd = () => { dragSrc.current = null; setDragOver(null); };
     const containerRef = react__WEBPACK_IMPORTED_MODULE_0___default().useRef(null);
     react__WEBPACK_IMPORTED_MODULE_0___default().useLayoutEffect(() => {
         if (!containerRef.current)
@@ -28545,16 +28604,16 @@ const ListDirComponent = ({ dir, openFile, showFileActions, customClass }) => {
         .${_core_window_manager__WEBPACK_IMPORTED_MODULE_3__.DESKTOP_CONTAINER_CLASS} {
             display: contents;
         }
-        
+
         .desktop-icons{
             flex-direction: column;
             width: min-content;
             height: 100%;
         }
-    
+
         .${_core_window_manager__WEBPACK_IMPORTED_MODULE_3__.DESKTOP_CONTAINER_CLASS}-files .file[data-ext] {
         }
-    
+
         .${_core_window_manager__WEBPACK_IMPORTED_MODULE_3__.DESKTOP_CONTAINER_CLASS}-files .file {
             box-sizing: border-box;
             display: inline-block;
@@ -28564,25 +28623,161 @@ const ListDirComponent = ({ dir, openFile, showFileActions, customClass }) => {
             overflow: hidden;
             cursor: pointer;
         }
-        
+
+        .${_core_window_manager__WEBPACK_IMPORTED_MODULE_3__.DESKTOP_CONTAINER_CLASS}-files .desktop-item.drag-over {
+            outline: 2px dashed rgba(10,132,255,0.6);
+            border-radius: 6px;
+        }
+
         `);
         (0,_shared_utils__WEBPACK_IMPORTED_MODULE_2__.appendStyleSheet)(doc, styles);
         doc.adoptedStyleSheets;
     }, []);
     const rightClickHandler = (file, event) => {
-        // console.log(event);
         event.preventDefault();
         const customEvent = new CustomEvent('showmenu', { detail: {} });
         event.target.dispatchEvent(customEvent);
         showFileActions(file, event);
     };
-    return (react__WEBPACK_IMPORTED_MODULE_0___default().createElement("main", { className: `${_core_window_manager__WEBPACK_IMPORTED_MODULE_3__.DESKTOP_CONTAINER_CLASS}-files ${customClass !== null && customClass !== void 0 ? customClass : ''}`, ref: containerRef }, files.map(file => {
+    return (react__WEBPACK_IMPORTED_MODULE_0___default().createElement("main", { className: `${_core_window_manager__WEBPACK_IMPORTED_MODULE_3__.DESKTOP_CONTAINER_CLASS}-files ${customClass !== null && customClass !== void 0 ? customClass : ''}`, ref: containerRef }, sortedFiles.map(file => {
         var _a;
-        return (react__WEBPACK_IMPORTED_MODULE_0___default().createElement("div", { key: file.path, onDoubleClick: () => openFile(file), style: { display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'center' } },
+        return (react__WEBPACK_IMPORTED_MODULE_0___default().createElement("div", { key: file.path, className: `desktop-item${dragOver === file.name ? ' drag-over' : ''}`, draggable: true, onDragStart: e => onDragStart(e, file.name), onDragOver: e => onDragOver(e, file.name), onDragLeave: () => setDragOver(null), onDrop: e => onDrop(e, file.name), onDragEnd: onDragEnd, onDoubleClick: () => openFile(file), style: { display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'center' } },
             react__WEBPACK_IMPORTED_MODULE_0___default().createElement("div", { className: `file`, "data-ext": file.meta.ext, style: { backgroundImage: `url('${file.type === 'file' && imageExtensions.has(file.meta.ext) ? `/(sw)${file.path}` : (_a = extIconMap[file.meta.ext]) !== null && _a !== void 0 ? _a : extIconMap['']}')`, backgroundRepeat: 'no-repeat', backgroundSize: 'cover', backgroundPosition: 'center center' }, onContextMenu: ev => rightClickHandler(file, ev) }),
             react__WEBPACK_IMPORTED_MODULE_0___default().createElement("span", { style: { color: 'black', mixBlendMode: 'difference', overflow: 'hidden', maxWidth: '8rem', textOverflow: 'ellipsis', filter: 'contrast(0)' } }, file.name)));
     })));
 };
+
+
+/***/ }),
+
+/***/ "./src/core/ipc.ts":
+/*!*************************!*\
+  !*** ./src/core/ipc.ts ***!
+  \*************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   broadcastIpcEvent: () => (/* binding */ broadcastIpcEvent),
+/* harmony export */   initIpc: () => (/* binding */ initIpc),
+/* harmony export */   registerIpcHandler: () => (/* binding */ registerIpcHandler),
+/* harmony export */   registerWindowIpcHandlers: () => (/* binding */ registerWindowIpcHandlers)
+/* harmony export */ });
+// Host-side IPC router — handles postMessage calls from sandboxed iframes.
+// Pairs with /usr/lib/ipc.js (VFS client library).
+var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+const handlers = new Map();
+function registerIpcHandler(event, handler) {
+    handlers.set(event, handler);
+}
+// targetDoc defaults to `document` so existing call sites work unchanged.
+// The layout bundle (which runs in a hidden iframe) passes platform.window.document.
+function broadcastIpcEvent(event, data, targetDoc = document) {
+    targetDoc.querySelectorAll('iframe').forEach(f => {
+        var _a;
+        try {
+            (_a = f.contentWindow) === null || _a === void 0 ? void 0 : _a.postMessage({ type: 'wos-ipc-event', event, data }, '*');
+        }
+        catch (_) { }
+    });
+}
+function registerWindowIpcHandlers(getWindows, toggleWindow, mainWindow = window, getLaunchItems) {
+    mainWindow.__wosWmBridge = {
+        getWindows,
+        toggleWindow,
+        getLaunchItems: getLaunchItems !== null && getLaunchItems !== void 0 ? getLaunchItems : (() => []),
+    };
+}
+function initIpc(fs) {
+    // Both bootstrapper.bundle and remote.bundle call initIpc in the same window.
+    // Each bundle has its own module scope, so a module-level flag would be
+    // duplicated. Use window.__wosIpcInit (shared across all scripts) to ensure
+    // only one message listener is ever added.
+    if (!window.__wosIpcInit) {
+        window.__wosIpcInit = true;
+        window.addEventListener('message', (e) => __awaiter(this, void 0, void 0, function* () {
+            if (!e.data || e.data.type !== 'wos-ipc')
+                return;
+            const { id, event, data } = e.data;
+            const source = e.source;
+            if (!source)
+                return;
+            const handler = handlers.get(event);
+            if (!handler) {
+                source.postMessage({ type: 'wos-ipc-response', id, error: `Unknown IPC event: ${event}` }, '*');
+                return;
+            }
+            try {
+                const result = yield handler(data, source);
+                source.postMessage({ type: 'wos-ipc-response', id, result: result !== null && result !== void 0 ? result : null }, '*');
+            }
+            catch (err) {
+                source.postMessage({ type: 'wos-ipc-response', id, error: String(err) }, '*');
+            }
+        }));
+    }
+    // WM handlers delegate to the bridge set by the layout bundle on the main window.
+    registerIpcHandler('wm.getWindows', () => { var _a, _b; return (_b = (_a = window.__wosWmBridge) === null || _a === void 0 ? void 0 : _a.getWindows()) !== null && _b !== void 0 ? _b : []; });
+    registerIpcHandler('wm.toggleWindow', (d) => { var _a; (_a = window.__wosWmBridge) === null || _a === void 0 ? void 0 : _a.toggleWindow(Number(d.pid)); return true; });
+    registerIpcHandler('wm.getLaunchItems', () => { var _a, _b; return (_b = (_a = window.__wosWmBridge) === null || _a === void 0 ? void 0 : _a.getLaunchItems()) !== null && _b !== void 0 ? _b : []; });
+    registerIpcHandler('wm.launch', (d) => { var _a, _b; (_b = (_a = window.__wosWmBridge) === null || _a === void 0 ? void 0 : _a.launch) === null || _b === void 0 ? void 0 : _b.call(_a, String(d.name)); return true; });
+    // Dock settings — active dock iframe registers its schema; settings UI reads and mutates it.
+    registerIpcHandler('dock.registerSettings', (d) => {
+        var _a, _b, _c, _d;
+        if (window.__wosDockBridge) {
+            window.__wosDockBridge.schema = (_a = d.schema) !== null && _a !== void 0 ? _a : [];
+            window.__wosDockBridge.dockId = (_b = d.dockId) !== null && _b !== void 0 ? _b : '';
+        }
+        else {
+            window.__wosDockBridge = { schema: (_c = d.schema) !== null && _c !== void 0 ? _c : [], dockId: (_d = d.dockId) !== null && _d !== void 0 ? _d : '', set: () => { } };
+        }
+        // Notify settings UI that dock schema changed.
+        broadcastIpcEvent('dock.schemaChanged', { schema: window.__wosDockBridge.schema, dockId: window.__wosDockBridge.dockId });
+        return true;
+    });
+    registerIpcHandler('dock.getSchema', () => window.__wosDockBridge
+        ? { schema: window.__wosDockBridge.schema, dockId: window.__wosDockBridge.dockId }
+        : { schema: [], dockId: '' });
+    registerIpcHandler('dock.setSetting', (d, source) => {
+        if (!window.__wosDockBridge)
+            return false;
+        const entry = window.__wosDockBridge.schema.find(e => e.key === d.key);
+        if (entry)
+            entry.value = d.value;
+        // Forward the change to the dock iframe.
+        broadcastIpcEvent('dock.settingChanged', { key: d.key, value: d.value });
+        return true;
+    });
+    registerIpcHandler('dock.getSettings', () => window.__wosDockBridge ? window.__wosDockBridge.schema.reduce((acc, e) => { acc[e.key] = e.value; return acc; }, {}) : {});
+    registerIpcHandler('fs.read', (d) => Array.from(fs.readFileSync(d.path)));
+    registerIpcHandler('fs.readText', (d) => fs.readFileSync(d.path, 'utf8'));
+    registerIpcHandler('fs.write', (d) => {
+        const content = d.content;
+        if (typeof content === 'string')
+            fs.writeFileSync(d.path, content);
+        else
+            fs.writeFileSync(d.path, Buffer.from(content));
+        return true;
+    });
+    registerIpcHandler('fs.list', (d) => fs.readdirSync(d.path));
+    registerIpcHandler('fs.exists', (d) => fs.existsSync(d.path));
+    registerIpcHandler('fs.mkdir', (d) => { fs.mkdirSync(d.path, { recursive: true }); return true; });
+    registerIpcHandler('fs.rm', (d) => { fs.unlinkSync(d.path); return true; });
+    registerIpcHandler('fs.stat', (d) => {
+        var _a;
+        const s = fs.statSync(d.path);
+        return { isDirectory: s.isDirectory(), size: (_a = s.size) !== null && _a !== void 0 ? _a : 0 };
+    });
+}
 
 
 /***/ }),
@@ -28614,14 +28809,20 @@ const platform = _shared_index__WEBPACK_IMPORTED_MODULE_0__.Platform.getInstance
 const Commands = ({ onCommandClick, vertical, align = 'start' }) => {
     const [commands, setCommands] = react__WEBPACK_IMPORTED_MODULE_1___default().useState([]);
     const [expended, setExpended] = react__WEBPACK_IMPORTED_MODULE_1___default().useState(localStorage.getItem('show_taskbar_title') === 'true');
-    const defaultCommands = [
-        'explorer',
-        'ui.vs-code',
-        'ui.notepad',
-        'webamp',
-        'ui.task-manager',
-    ];
+    const readPinnedCommands = () => {
+        try {
+            const fs = platform.host.getFS();
+            if (fs.existsSync('/etc/taskbar.json')) {
+                const cfg = JSON.parse(fs.readFileSync('/etc/taskbar.json', 'utf-8'));
+                if (Array.isArray(cfg.pinned) && cfg.pinned.length)
+                    return cfg.pinned;
+            }
+        }
+        catch (_) { }
+        return ['ui.app-drawer', 'explorer', 'ui.notepad', 'ui.terminal', 'ui.pkg-manager', 'ui.settings'];
+    };
     react__WEBPACK_IMPORTED_MODULE_1___default().useEffect(() => {
+        const defaultCommands = readPinnedCommands();
         const subscription = platform.host.commands$
             .pipe((0,rxjs__WEBPACK_IMPORTED_MODULE_4__.map)(commands => defaultCommands.map(cmd => commands.find(command => command.name === cmd)).filter(x => x)))
             .subscribe(_commands => setCommands(_commands));
@@ -29140,6 +29341,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   layoutCss: () => (/* binding */ layoutCss)
 /* harmony export */ });
+const isCssGradient = (v) => /^\s*(linear|radial|conic)-gradient\s*\(/i.test(v);
 const layoutCss = (grid, wallpaperUrl) => `
     .layout-default {
         height: 100%;
@@ -29148,7 +29350,7 @@ const layoutCss = (grid, wallpaperUrl) => `
         grid-template-rows: ${grid.rows};
         grid-auto-flow: row;
         grid-template-areas: ${grid.areas};
-        background-image: url(${wallpaperUrl});
+        background-image: ${isCssGradient(wallpaperUrl) ? wallpaperUrl : `url(${wallpaperUrl})`};
         background-repeat: no-repeat;
         background-size: cover;
     }
@@ -29169,6 +29371,14 @@ const layoutCss = (grid, wallpaperUrl) => `
     }
     .footer {
         grid-area: footer;
+    }
+    .footer,
+    .toolbar {
+        display: none;
+    }
+    body.vfs-dock-occupy .layout-default {
+        box-sizing: border-box;
+        padding-bottom: var(--vfs-dock-height, 0px);
     }
 `;
 
@@ -29836,13 +30046,38 @@ const FALLBACK_WM_SETTINGS = {
         bringToFrontOnClick: true,
     },
 };
+const MANAGERS_CONFIG_PATH = '/etc/managers.json';
 const loadWindowManagerModule = () => {
     try {
         const fs = platform.host.getFS();
-        if (!fs.existsSync(_shared_constants__WEBPACK_IMPORTED_MODULE_3__.WINDOW_MANAGER_MODULE_PATH))
-            return {};
-        const source = fs.readFileSync(_shared_constants__WEBPACK_IMPORTED_MODULE_3__.WINDOW_MANAGER_MODULE_PATH, "utf-8");
-        return platform.host.execString(source, _shared_constants__WEBPACK_IMPORTED_MODULE_3__.WINDOW_MANAGER_MODULE_PATH);
+        // Load base module — provides setupWindow, readSettings, snap zones, etc.
+        const baseModule = (() => {
+            if (!fs.existsSync(_shared_constants__WEBPACK_IMPORTED_MODULE_3__.WINDOW_MANAGER_MODULE_PATH))
+                return {};
+            const source = fs.readFileSync(_shared_constants__WEBPACK_IMPORTED_MODULE_3__.WINDOW_MANAGER_MODULE_PATH, "utf-8");
+            return platform.host.execString(source, _shared_constants__WEBPACK_IMPORTED_MODULE_3__.WINDOW_MANAGER_MODULE_PATH);
+        })();
+        // Check for an active WM style override in /etc/managers.json.
+        let wmId = 'default';
+        try {
+            if (fs.existsSync(MANAGERS_CONFIG_PATH)) {
+                const config = JSON.parse(fs.readFileSync(MANAGERS_CONFIG_PATH, 'utf-8'));
+                if (config.windowManager)
+                    wmId = config.windowManager;
+            }
+        }
+        catch (_) { }
+        if (wmId === 'default')
+            return baseModule;
+        // Load style override from /opt/wm/<id>.js — exports createHeader (and
+        // optionally createContainer). Merges over base: style overrides win for
+        // visual hooks, base keeps setupWindow/readSettings/etc.
+        const wmStylePath = `/opt/wm/${wmId}.js`;
+        if (!fs.existsSync(wmStylePath))
+            return baseModule;
+        const wmStyleSource = fs.readFileSync(wmStylePath, "utf-8");
+        const wmStyleModule = platform.host.execString(wmStyleSource, wmStylePath);
+        return Object.assign(Object.assign({}, baseModule), wmStyleModule);
     }
     catch (err) {
         console.error("Failed to load window manager module", err);
@@ -29883,8 +30118,10 @@ class WindowManager {
         // --- VFS hook: createContainer({ command, settings }) ---
         // Return an HTMLElement to replace the default <div class="window">.
         // Mandatory attributes/classes are still applied by compiled code below.
+        // Use nodeType === 1 (ELEMENT_NODE) instead of instanceof HTMLElement so
+        // elements created via top.document (a different frame) still match.
         const customContainer = (_c = wmModule.createContainer) === null || _c === void 0 ? void 0 : _c.call(wmModule, { command, settings: wmSettings });
-        const container = (customContainer instanceof HTMLElement
+        const container = ((customContainer === null || customContainer === void 0 ? void 0 : customContainer.nodeType) === 1
             ? customContainer
             : platform.window.document.createElement("div"));
         container.setAttribute("data-name", command.name);
@@ -29945,13 +30182,21 @@ class WindowManager {
             fullscreen: fullscreenCallback,
         });
         let head, closeButton, fullScreenButton, minimizeButton, setTitleRaw, appendActionButton, setHeaderStyles;
-        if (customHead instanceof HTMLElement) {
+        if ((customHead === null || customHead === void 0 ? void 0 : customHead.nodeType) === 1) {
             head = customHead;
             // VFS-provided header has already received the callbacks — don't wire compiled buttons.
             closeButton = null;
             fullScreenButton = null;
             minimizeButton = null;
-            setTitleRaw = () => { };
+            // If custom header exposes _setTitle, call it on title updates.
+            setTitleRaw = (t) => {
+                if (typeof head._setTitle === 'function') {
+                    try {
+                        head._setTitle(t);
+                    }
+                    catch (_) { }
+                }
+            };
             appendActionButton = () => ({ remove: () => { } });
             setHeaderStyles = () => { };
         }
@@ -30255,17 +30500,27 @@ const appendWindow = (contentArea, windowElement) => {
         .appendChild(windowElement);
 };
 const toggleFullScreen = (contentArea, win) => {
-    const container = contentArea;
     const isFullScreen = (win.getAttribute("data-fullscreen") || "false") === "true";
     win.setAttribute("data-fullscreen", isFullScreen ? "false" : "true");
-    const mergeAttributes = ["height", "width", "left", "right", "top"];
+    const saveAttrs = ["height", "width", "left", "right", "top"];
     if (isFullScreen) {
-        mergeAttributes.forEach((attr) => (win.style[attr] = `${win.getAttribute(`data-prev-${attr}`)}`));
+        saveAttrs.forEach((attr) => (win.style[attr] = `${win.getAttribute(`data-prev-${attr}`)}`));
     }
     else {
-        const containerRect = container === null || container === void 0 ? void 0 : container.getBoundingClientRect();
-        mergeAttributes.forEach((attr) => win.setAttribute(`data-prev-${attr}`, win.style[attr]));
-        mergeAttributes.forEach((attr) => (win.style[attr] = `${containerRect[attr]}px`));
+        saveAttrs.forEach((attr) => win.setAttribute(`data-prev-${attr}`, win.style[attr]));
+        // Use visible viewport dimensions (clientWidth/Height) rather than the element's
+        // bounding rect, so canvas-mode (where .content-area is a huge scrollable canvas)
+        // doesn't produce a 6000×3600 fullscreen window. scrollLeft/Top shifts the window
+        // into the currently-visible viewport region.
+        const vw = contentArea.clientWidth;
+        const vh = contentArea.clientHeight;
+        const sx = contentArea.scrollLeft;
+        const sy = contentArea.scrollTop;
+        win.style.left = `${Math.round(sx + vw * 0.01)}px`;
+        win.style.top = `${Math.round(sy + vh * 0.01)}px`;
+        win.style.width = `${Math.round(vw * 0.98)}px`;
+        win.style.height = `${Math.round(vh * 0.98)}px`;
+        win.style.right = '';
     }
 };
 
@@ -30455,7 +30710,7 @@ const draggable = (elmnt, header) => {
         }
     }
     function closeDragElement() {
-        var _a;
+        var _a, _b, _c;
         document.onmouseup = null;
         document.onmousemove = null;
         elmnt.classList.remove('dragging');
@@ -30466,8 +30721,14 @@ const draggable = (elmnt, header) => {
             const bounds = getContentAreaBounds(document);
             if (bounds) {
                 const rect = buildSnapRect(currentSnapZone, bounds);
-                elmnt.style.left = rect.left + 'px';
-                elmnt.style.top = rect.top + 'px';
+                // In canvas mode the content-area is a scrollable container;
+                // snap rect coords are viewport-relative but style.left/top are
+                // canvas-relative, so add the scroll offset.
+                const scrollEl = document.querySelector('.content-area.canvas-wm-active');
+                const sx = (_b = scrollEl === null || scrollEl === void 0 ? void 0 : scrollEl.scrollLeft) !== null && _b !== void 0 ? _b : 0;
+                const sy = (_c = scrollEl === null || scrollEl === void 0 ? void 0 : scrollEl.scrollTop) !== null && _c !== void 0 ? _c : 0;
+                elmnt.style.left = (rect.left + sx) + 'px';
+                elmnt.style.top = (rect.top + sy) + 'px';
                 elmnt.style.width = rect.width + 'px';
                 elmnt.style.height = rect.height + 'px';
             }
@@ -156435,8 +156696,8 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   render: () => (/* binding */ render)
 /* harmony export */ });
-/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_16__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/BehaviorSubject.js");
-/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_17__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/operators/filter.js");
+/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_17__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/BehaviorSubject.js");
+/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_18__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/operators/filter.js");
 /* harmony import */ var _shared_index__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @shared/index */ "./src/shared/index.ts");
 /* harmony import */ var _shared_fs_utils__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! @shared/fs-utils */ "./src/shared/fs-utils.ts");
 /* harmony import */ var _shared_constants__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! @shared/constants */ "./src/shared/constants.ts");
@@ -156446,14 +156707,16 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _commands__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ./commands */ "./src/core/layout/commands.tsx");
 /* harmony import */ var _contextmenu__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ./contextmenu */ "./src/core/layout/contextmenu.tsx");
 /* harmony import */ var _window_manager__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ../window-manager */ "./src/core/window-manager.ts");
-/* harmony import */ var _apps_file_explorer_desktop__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! ../../apps/file-explorer/desktop */ "./src/apps/file-explorer/desktop.tsx");
-/* harmony import */ var _styles_base__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! ./styles/base */ "./src/core/layout/styles/base.ts");
-/* harmony import */ var _styles_layout__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(/*! ./styles/layout */ "./src/core/layout/styles/layout.ts");
-/* harmony import */ var _styles_window__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(/*! ./styles/window */ "./src/core/layout/styles/window.ts");
-/* harmony import */ var _styles_taskbar__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(/*! ./styles/taskbar */ "./src/core/layout/styles/taskbar.ts");
-/* harmony import */ var _styles_widgets__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(/*! ./styles/widgets */ "./src/core/layout/styles/widgets.ts");
-/* harmony import */ var _styles_contextmenu__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(/*! ./styles/contextmenu */ "./src/core/layout/styles/contextmenu.ts");
-/* harmony import */ var _styles_desktop_env__WEBPACK_IMPORTED_MODULE_15__ = __webpack_require__(/*! ./styles/desktop-env */ "./src/core/layout/styles/desktop-env.ts");
+/* harmony import */ var _ipc__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! ../ipc */ "./src/core/ipc.ts");
+/* harmony import */ var _apps_file_explorer_desktop__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! ../../apps/file-explorer/desktop */ "./src/apps/file-explorer/desktop.tsx");
+/* harmony import */ var _styles_base__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(/*! ./styles/base */ "./src/core/layout/styles/base.ts");
+/* harmony import */ var _styles_layout__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(/*! ./styles/layout */ "./src/core/layout/styles/layout.ts");
+/* harmony import */ var _styles_window__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(/*! ./styles/window */ "./src/core/layout/styles/window.ts");
+/* harmony import */ var _styles_taskbar__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(/*! ./styles/taskbar */ "./src/core/layout/styles/taskbar.ts");
+/* harmony import */ var _styles_widgets__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(/*! ./styles/widgets */ "./src/core/layout/styles/widgets.ts");
+/* harmony import */ var _styles_contextmenu__WEBPACK_IMPORTED_MODULE_15__ = __webpack_require__(/*! ./styles/contextmenu */ "./src/core/layout/styles/contextmenu.ts");
+/* harmony import */ var _styles_desktop_env__WEBPACK_IMPORTED_MODULE_16__ = __webpack_require__(/*! ./styles/desktop-env */ "./src/core/layout/styles/desktop-env.ts");
+
 
 
 
@@ -156647,7 +156910,7 @@ const readCurrentLayoutId = () => {
 const writeCurrentLayoutId = (layoutId) => {
     (0,_shared_fs_utils__WEBPACK_IMPORTED_MODULE_1__.writeJsonFile)(platform.host.getFS(), _shared_constants__WEBPACK_IMPORTED_MODULE_2__.LAYOUT_CONFIG_PATH, { layout: layoutId }, true);
 };
-const layoutSubject = new rxjs__WEBPACK_IMPORTED_MODULE_16__.BehaviorSubject(readCurrentLayoutId());
+const layoutSubject = new rxjs__WEBPACK_IMPORTED_MODULE_17__.BehaviorSubject(readCurrentLayoutId());
 const getCurrentLayout = () => {
     const layouts = readLayouts();
     return layouts.find(l => l.id === layoutSubject.getValue()) || layouts[0] || DEFAULT_LAYOUTS[0];
@@ -156689,14 +156952,14 @@ const resolveWallpaperUrl = (wallpaper) => {
 const applyCss = ({ wallpaper, grid }) => {
     const wallpaperUrl = resolveWallpaperUrl(wallpaper);
     styles.replace([
-        _styles_base__WEBPACK_IMPORTED_MODULE_9__.RESET_CSS,
-        _styles_base__WEBPACK_IMPORTED_MODULE_9__.MATERIAL_SYMBOLS_CSS,
-        (0,_styles_layout__WEBPACK_IMPORTED_MODULE_10__.layoutCss)(grid, wallpaperUrl),
-        _styles_widgets__WEBPACK_IMPORTED_MODULE_13__.WIDGETS_CSS,
-        _styles_window__WEBPACK_IMPORTED_MODULE_11__.WINDOW_CSS,
-        _styles_taskbar__WEBPACK_IMPORTED_MODULE_12__.TASKBAR_CSS,
-        _styles_contextmenu__WEBPACK_IMPORTED_MODULE_14__.CONTEXTMENU_CSS,
-        _styles_desktop_env__WEBPACK_IMPORTED_MODULE_15__.DESKTOP_ENV_CSS,
+        _styles_base__WEBPACK_IMPORTED_MODULE_10__.RESET_CSS,
+        _styles_base__WEBPACK_IMPORTED_MODULE_10__.MATERIAL_SYMBOLS_CSS,
+        (0,_styles_layout__WEBPACK_IMPORTED_MODULE_11__.layoutCss)(grid, wallpaperUrl),
+        _styles_widgets__WEBPACK_IMPORTED_MODULE_14__.WIDGETS_CSS,
+        _styles_window__WEBPACK_IMPORTED_MODULE_12__.WINDOW_CSS,
+        _styles_taskbar__WEBPACK_IMPORTED_MODULE_13__.TASKBAR_CSS,
+        _styles_contextmenu__WEBPACK_IMPORTED_MODULE_15__.CONTEXTMENU_CSS,
+        _styles_desktop_env__WEBPACK_IMPORTED_MODULE_16__.DESKTOP_ENV_CSS,
     ].join('\n'));
 };
 const userPrefWallpaper = platform.userPref.getWallpaper();
@@ -156874,14 +157137,14 @@ const writeWidgetPosition = (name, top, left) => {
 // Widgets hidden by default until the user enables them from Settings ->
 // Widgets, even though their script is loaded/registered at boot.
 // Only clock, memory, shortcuts are shown by default.
-const DEFAULT_HIDDEN_WIDGETS = ['toolbar', 'public-ip', 'sticky-notes', 'rss'];
+const DEFAULT_HIDDEN_WIDGETS = ['toolbar', 'public-ip', 'sticky-notes', 'rss', 'shortcuts'];
 const readEnabledWidgets = () => {
     const cfg = readJsonFileLocal(_shared_constants__WEBPACK_IMPORTED_MODULE_2__.WIDGETS_CONFIG_PATH);
     if (cfg && Array.isArray(cfg.enabled))
         return cfg.enabled;
     return null;
 };
-const enabledWidgetsSubject = new rxjs__WEBPACK_IMPORTED_MODULE_16__.BehaviorSubject(readEnabledWidgets());
+const enabledWidgetsSubject = new rxjs__WEBPACK_IMPORTED_MODULE_17__.BehaviorSubject(readEnabledWidgets());
 const setEnabledWidgets = (enabled) => {
     try {
         (0,_shared_fs_utils__WEBPACK_IMPORTED_MODULE_1__.writeJsonFile)(platform.host.getFS(), _shared_constants__WEBPACK_IMPORTED_MODULE_2__.WIDGETS_CONFIG_PATH, { enabled }, true);
@@ -157096,6 +157359,36 @@ const WidgetsPanel = () => {
         return null;
     return (react__WEBPACK_IMPORTED_MODULE_4___default().createElement("div", { className: "widgets-panel", ref: panelRef }, visibleWidgets.map((widget, i) => (react__WEBPACK_IMPORTED_MODULE_4___default().createElement(WidgetItem, { key: widget.name, widget: widget, savedPosition: positions[widget.name], defaultTop: i * 100, panelRef: panelRef, onRemove: handleRemove })))));
 };
+// VFS Desktop Manager — loads /opt/desktop/manager.js if present, falls back
+// to the compiled ListDirComponent so the desktop always renders.
+const VFS_DESKTOP_PATH = '/opt/desktop/manager.js';
+const DesktopMount = ({ openFile, showFileActionsHandler }) => {
+    const ref = react__WEBPACK_IMPORTED_MODULE_4___default().useRef(null);
+    react__WEBPACK_IMPORTED_MODULE_4___default().useEffect(() => {
+        const container = ref.current;
+        if (!container)
+            return;
+        const fs = platform.host.getFS();
+        if (fs.existsSync(VFS_DESKTOP_PATH)) {
+            try {
+                const src = fs.readFileSync(VFS_DESKTOP_PATH, 'utf-8');
+                const mod = platform.host.execString(src, VFS_DESKTOP_PATH);
+                if (typeof (mod === null || mod === void 0 ? void 0 : mod.render) === 'function') {
+                    const cleanup = mod.render(container, { openFile, showFileActions: showFileActionsHandler });
+                    return typeof cleanup === 'function' ? cleanup : undefined;
+                }
+            }
+            catch (err) {
+                console.error('[desktop-manager] VFS load failed:', err);
+            }
+        }
+        // Fallback: compile-time ListDirComponent
+        const root = (0,react_dom_client__WEBPACK_IMPORTED_MODULE_3__.createRoot)(container);
+        root.render(react__WEBPACK_IMPORTED_MODULE_4___default().createElement(_apps_file_explorer_desktop__WEBPACK_IMPORTED_MODULE_9__.ListDirComponent, { openFile: openFile, showFileActions: showFileActionsHandler, customClass: 'desktop-icons' }));
+        return () => setTimeout(() => root.unmount(), 0);
+    }, []);
+    return react__WEBPACK_IMPORTED_MODULE_4___default().createElement("div", { ref: ref, style: { width: '100%', height: '100%' } });
+};
 const LayoutShell = (props) => {
     var _a;
     const [layoutId, setLayoutId] = react__WEBPACK_IMPORTED_MODULE_4___default().useState(layoutSubject.getValue());
@@ -157117,7 +157410,7 @@ const LayoutShell = (props) => {
         usedAreas.has('left-nav') ? (react__WEBPACK_IMPORTED_MODULE_4___default().createElement("div", { className: "left-nav" }, slot === 'left-nav' ? commands : null)) : null,
         react__WEBPACK_IMPORTED_MODULE_4___default().createElement("div", { className: "content-area", ref: props.contentRef, onContextMenu: props.onContextMenu },
             react__WEBPACK_IMPORTED_MODULE_4___default().createElement("div", { className: _window_manager__WEBPACK_IMPORTED_MODULE_7__.DESKTOP_CONTAINER_CLASS },
-                react__WEBPACK_IMPORTED_MODULE_4___default().createElement(_apps_file_explorer_desktop__WEBPACK_IMPORTED_MODULE_8__.ListDirComponent, { openFile: props.openFile, showFileActions: props.showFileActionsHandler, customClass: 'desktop-icons' })),
+                react__WEBPACK_IMPORTED_MODULE_4___default().createElement(DesktopMount, { openFile: props.openFile, showFileActionsHandler: props.showFileActionsHandler })),
             react__WEBPACK_IMPORTED_MODULE_4___default().createElement(WidgetsPanel, null),
             react__WEBPACK_IMPORTED_MODULE_4___default().createElement("div", { className: _window_manager__WEBPACK_IMPORTED_MODULE_7__.WINDOWS_CONTAINER_CLASS })),
         usedAreas.has('right-nav') ? (react__WEBPACK_IMPORTED_MODULE_4___default().createElement("div", { className: "right-nav" }, slot === 'right-nav' ? commands : null)) : null,
@@ -157133,7 +157426,189 @@ const render = (container) => {
     const onCommandClick = (command, ...args) => {
         windowManager.createWindow(command.name, ...args);
     };
+    // Bridge WM handlers onto platform.window (the main window) so the remote
+    // bundle's IPC listener — which runs in a different module instance — can
+    // serve wm.getWindows / wm.toggleWindow requests from sandboxed dock iframes.
+    const DEFAULT_ICON = {
+        'explorer': 'folder', 'ui.file-explorer': 'folder',
+        'ui.vs-code': 'data_object', 'ui.notepad': 'edit_note',
+        'ui.task-manager': 'monitoring',
+        'ui.terminal': 'terminal', 'ui.settings': 'settings',
+        'ui.pkg-manager': 'package_2', 'ui.app-drawer': 'apps',
+    };
+    const getLaunchItems = () => {
+        var _a;
+        try {
+            const fs = platform.host.getFS();
+            const pinned = fs.existsSync('/etc/taskbar.json')
+                ? (_a = JSON.parse(fs.readFileSync('/etc/taskbar.json', 'utf-8')).pinned) !== null && _a !== void 0 ? _a : []
+                : ['ui.app-drawer', 'explorer', 'ui.notepad', 'ui.terminal', 'ui.pkg-manager', 'ui.settings'];
+            return pinned.map(name => {
+                var _a, _b, _c, _d;
+                const cmd = platform.host.getCommand(name);
+                const meta = (_a = cmd === null || cmd === void 0 ? void 0 : cmd.meta) !== null && _a !== void 0 ? _a : {};
+                return {
+                    name,
+                    label: (_b = meta.title) !== null && _b !== void 0 ? _b : name,
+                    icon: (_d = (_c = meta.icon) !== null && _c !== void 0 ? _c : DEFAULT_ICON[name]) !== null && _d !== void 0 ? _d : 'apps',
+                    cmd: `service('001-core.layout','open-window')(command('${name}'))`,
+                };
+            });
+        }
+        catch (_b) {
+            return [];
+        }
+    };
+    (0,_ipc__WEBPACK_IMPORTED_MODULE_8__.registerWindowIpcHandlers)(() => _window_manager__WEBPACK_IMPORTED_MODULE_7__.windowsSubject.getValue().map(w => ({
+        pid: w.pid, name: w.name, title: w.title,
+        icon: w.icon, minimized: w.minimized, active: w.active,
+    })), (pid) => {
+        const win = _window_manager__WEBPACK_IMPORTED_MODULE_7__.windowsSubject.getValue().find(w => w.pid === pid);
+        win === null || win === void 0 ? void 0 : win.toggle();
+    }, platform.window, getLaunchItems);
+    platform.window.__wosWmBridge.launch = (name) => {
+        var _a;
+        const cmd = platform.host.getCommand(name);
+        if (!cmd)
+            return;
+        // Commands with meta.callable=true manage their own lifecycle (overlay toggles,
+        // singletons, etc.) — call them directly instead of wrapping in a WM window.
+        if ((_a = cmd.meta) === null || _a === void 0 ? void 0 : _a.callable) {
+            platform.host.callCommand(name);
+        }
+        else {
+            windowManager.createWindow(cmd.name);
+        }
+    };
+    // Broadcast window-list changes to all iframes in the main document.
+    // Pass platform.window.document explicitly — bare `document` inside the
+    // layout bundle resolves to the hidden-iframe document (no child iframes).
+    _window_manager__WEBPACK_IMPORTED_MODULE_7__.windowsSubject.subscribe(wins => {
+        (0,_ipc__WEBPACK_IMPORTED_MODULE_8__.broadcastIpcEvent)('wm.windowsChanged', wins.map(w => ({
+            pid: w.pid, name: w.name, title: w.title,
+            icon: w.icon, minimized: w.minimized, active: w.active,
+        })), platform.window.document);
+    });
     platform.register('open-window', onCommandClick);
+    // Dock settings commands — read/write dock schema and persist to /etc/dock/{id}.json.
+    const getDockSchema = () => {
+        const bridge = platform.window.__wosDockBridge;
+        return bridge ? { schema: bridge.schema, dockId: bridge.dockId } : { schema: [], dockId: '' };
+    };
+    const setDockSetting = (data) => {
+        const bridge = platform.window.__wosDockBridge;
+        if (!bridge)
+            return false;
+        const entry = bridge.schema.find((e) => e.key === data.key);
+        if (entry)
+            entry.value = data.value;
+        try {
+            const fs = platform.host.getFS();
+            const settingsPath = `/etc/dock/${bridge.dockId}.json`;
+            let current = {};
+            try {
+                current = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+            }
+            catch (_) { }
+            current[data.key] = data.value;
+            if (!fs.existsSync('/etc/dock'))
+                fs.mkdirSync('/etc/dock', { recursive: true });
+            fs.writeFileSync(settingsPath, JSON.stringify(current, null, 2));
+        }
+        catch (_) { }
+        (0,_ipc__WEBPACK_IMPORTED_MODULE_8__.broadcastIpcEvent)('dock.settingChanged', { key: data.key, value: data.value }, platform.window.document);
+        return true;
+    };
+    platform.register('get-dock-schema', getDockSchema);
+    platform.host.registerCommand('get-dock-schema', getDockSchema);
+    platform.register('set-dock-setting', setDockSetting);
+    platform.host.registerCommand('set-dock-setting', setDockSetting);
+    // Open a VFS dock HTML as a fixed-position frameless iframe in the layout.
+    // Sandboxed (no same-origin), IPC SDK inlined so it can communicate.
+    const openVfsDock = (id) => {
+        const doc = platform.window.document;
+        const existing = doc.getElementById('vfs-dock-iframe');
+        if (existing)
+            existing.remove();
+        doc.body.classList.remove('vfs-dock-active');
+        doc.body.classList.remove('vfs-dock-occupy');
+        doc.documentElement.style.removeProperty('--vfs-dock-height');
+        if (!id || id === 'none')
+            return;
+        const fs = platform.host.getFS();
+        const dockPath = `/opt/apps/dock/${id}.html`;
+        if (!fs.existsSync(dockPath)) {
+            console.warn('[dock] not found:', dockPath);
+            return;
+        }
+        try {
+            const ipcSdk = fs.existsSync('/usr/lib/ipc.js')
+                ? fs.readFileSync('/usr/lib/ipc.js', 'utf-8') : '';
+            const appHtml = fs.readFileSync(dockPath, 'utf-8');
+            const safeIpcSdk = ipcSdk.replace(/<\/script>/gi, '<\\/script>');
+            const sdkTag = `<script>\n${safeIpcSdk}\n</script>`;
+            const srcdoc = appHtml.includes('</head>')
+                ? appHtml.replace('</head>', `${sdkTag}\n</head>`)
+                : `${sdkTag}\n${appHtml}`;
+            // Read optional height hint from HTML comment: <!-- dock:height=80 -->
+            const hMatch = appHtml.match(/<!--\s*dock:height=(\d+)\s*-->/);
+            const h = hMatch ? parseInt(hMatch[1]) : 64;
+            const iframe = doc.createElement('iframe');
+            iframe.id = 'vfs-dock-iframe';
+            iframe.setAttribute('sandbox', 'allow-scripts allow-forms allow-modals');
+            iframe.srcdoc = srcdoc;
+            iframe.style.cssText = `position:fixed;bottom:0;left:0;width:100%;height:${h}px;border:none;background:transparent;z-index:9000;pointer-events:auto;`;
+            doc.body.appendChild(iframe);
+            doc.body.classList.add('vfs-dock-active');
+            // Reserve bottom space so windows don't go behind the dock.
+            // Reads occupyBottom from /etc/managers.json; defaults to true.
+            doc.documentElement.style.setProperty('--vfs-dock-height', `${h}px`);
+            let occupyBottom = true;
+            try {
+                const cfg = JSON.parse(fs.readFileSync('/etc/managers.json', 'utf-8'));
+                if (cfg.occupyBottom === false)
+                    occupyBottom = false;
+            }
+            catch (_) { }
+            if (occupyBottom)
+                doc.body.classList.add('vfs-dock-occupy');
+        }
+        catch (err) {
+            console.error('[dock-manager] Failed to open dock:', err);
+        }
+    };
+    // Toggle whether the dock reserves bottom space (shrinks content-area).
+    const setDockOccupy = (occupy) => {
+        const doc = platform.window.document;
+        const fs = platform.host.getFS();
+        try {
+            const cfg = fs.existsSync('/etc/managers.json')
+                ? JSON.parse(fs.readFileSync('/etc/managers.json', 'utf-8')) : {};
+            cfg.occupyBottom = occupy;
+            fs.writeFileSync('/etc/managers.json', JSON.stringify(cfg, null, 2));
+        }
+        catch (_) { }
+        const h = doc.documentElement.style.getPropertyValue('--vfs-dock-height');
+        if (occupy && h)
+            doc.body.classList.add('vfs-dock-occupy');
+        else
+            doc.body.classList.remove('vfs-dock-occupy');
+    };
+    platform.register('open-vfs-dock', openVfsDock);
+    platform.host.registerCommand('open-vfs-dock', openVfsDock);
+    platform.register('set-dock-occupy', setDockOccupy);
+    platform.host.registerCommand('set-dock-occupy', setDockOccupy);
+    // Restore dock from persisted config on layout boot.
+    // Default to 'default' VFS dock when no config exists — the compiled taskbar is hidden.
+    try {
+        const fs = platform.host.getFS();
+        const cfg = fs.existsSync('/etc/managers.json')
+            ? JSON.parse(fs.readFileSync('/etc/managers.json', 'utf-8'))
+            : { dockManager: 'default' };
+        if (cfg.dockManager && cfg.dockManager !== 'none')
+            openVfsDock(cfg.dockManager);
+    }
+    catch (_) { }
     const root = (0,react_dom_client__WEBPACK_IMPORTED_MODULE_3__.createRoot)(container);
     const contextMenuRef = react__WEBPACK_IMPORTED_MODULE_4___default().createRef();
     // registerContextMenu(container, contextMenuRef)
@@ -157214,65 +157689,34 @@ const render = (container) => {
     const onCommandClickHandler = (command, ...args) => {
         platform.host.execCommand(`service('001-core.layout', 'open-window') (command('${command.name}')${args.length ? ',' : ''} ${args.map(x => "'" + x + "'").join(', ')})`, platform);
     };
+    // Desktop right-click menu: load items from /etc/contextmenu.json (VFS),
+    // falling back to a minimal hardcoded set if the file is absent or invalid.
+    const loadContextMenuItems = () => {
+        const fallback = [
+            { id: '1', type: 'action', title: 'Explorer', cmd: `service('001-core.layout', 'open-window') (command('explorer'))` },
+            { id: '4', type: 'action', title: 'Settings', cmd: `service('001-core.layout', 'open-window') (command('ui.settings'))` },
+            { id: '0', type: 'action', title: 'Terminal', cmd: `service('001-core.layout', 'open-window') (command('ui.terminal'))` },
+        ];
+        try {
+            const fs = platform.host.getFS();
+            if (fs.existsSync('/etc/contextmenu.json')) {
+                const parsed = JSON.parse(fs.readFileSync('/etc/contextmenu.json', 'utf-8'));
+                if (Array.isArray(parsed) && parsed.length)
+                    return parsed;
+            }
+        }
+        catch (_) { }
+        return fallback;
+    };
     const onContextMenu = (event) => {
-        if (event.target !== contentRef.current)
+        if (event.target.closest('.window, iframe'))
             return;
         event.preventDefault();
+        const items = loadContextMenuItems();
+        const multiDesktop = _window_manager__WEBPACK_IMPORTED_MODULE_7__.desktopsSubject.getValue().length > 1;
         showContextMenuHandler(event.clientX, event.clientY, [
-            {
-                type: 'action',
-                id: '1',
-                title: 'Explorer',
-                cmd: `service('001-core.layout', 'open-window') (command('explorer'))`
-            },
-            {
-                type: 'action',
-                id: '4',
-                title: 'Settings',
-                cmd: `service('001-core.layout', 'open-window') (command('ui.settings'))`
-            },
-            {
-                type: 'action',
-                id: '0',
-                title: 'XTerm',
-                cmd: `service('001-core.layout', 'open-window') (command('ui.terminal'))`
-            },
-            {
-                type: 'action',
-                id: '2',
-                title: 'Portfolio',
-                cmd: `service('001-core.layout', 'open-window') (command('ui.iframe'), '/home/user1/index.html')`
-            },
-            {
-                type: 'action',
-                id: '3',
-                title: 'Toggle Fullscreen',
-                cmd: `service('root', 'exec') ('/usr/bin/fullscreen.js');`
-            },
-            {
-                type: 'action',
-                id: '5',
-                title: 'VsCode (password:demo)',
-                cmd: `service('root', 'exec') ('/home/user1/projects/VSCode.html');`
-            },
-            {
-                type: 'action',
-                id: '11',
-                title: 'App Manager',
-                cmd: `service('001-core.layout', 'open-window') (command('ui.pkg-manager'))`
-            },
-            {
-                type: 'action',
-                id: '6',
-                title: 'Add Desktop',
-                cmd: `platform.host.callCommand('add-desktop')`
-            },
-            ...(_window_manager__WEBPACK_IMPORTED_MODULE_7__.desktopsSubject.getValue().length > 1 ? [{
-                    type: 'action',
-                    id: '8',
-                    title: 'Remove Desktop',
-                    cmd: `platform.host.callCommand('remove-active-desktop')`
-                }] : []),
+            ...items,
+            ...(multiDesktop ? [{ type: 'action', id: '8', title: 'Remove Desktop', cmd: `platform.host.callCommand('remove-active-desktop')` }] : []),
         ]);
     };
     root.render(react__WEBPACK_IMPORTED_MODULE_4___default().createElement(LayoutShell, { contentRef: contentRef, contextMenuRef: contextMenuRef, onCommandClick: onCommandClick, onContextMenu: onContextMenu, openFile: openFile, showFileActionsHandler: showFileActionsHandler, contextMenuComponentRef: contextMenuComponentRef }));
@@ -157289,13 +157733,13 @@ const registerContextMenu = (container, ref) => {
         }
     });
 };
-platform.events$.pipe((0,rxjs__WEBPACK_IMPORTED_MODULE_17__.filter)(x => x.type === 'loaded')).subscribe(event => {
+platform.events$.pipe((0,rxjs__WEBPACK_IMPORTED_MODULE_18__.filter)(x => x.type === 'loaded')).subscribe(event => {
     const container = platform.window.document.createElement('div');
     container.classList.add('layout-default');
     platform.host.appendDomElement(container);
     render(container);
 });
-platform.events$.pipe((0,rxjs__WEBPACK_IMPORTED_MODULE_17__.filter)(x => x.type === 'exit')).subscribe(event => {
+platform.events$.pipe((0,rxjs__WEBPACK_IMPORTED_MODULE_18__.filter)(x => x.type === 'exit')).subscribe(event => {
     console.log(event);
 });
 
