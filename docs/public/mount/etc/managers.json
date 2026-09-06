@@ -1,4 +1,5 @@
 {
   "windowManager": "default",
-  "dockManager": "default"
+  "dockManager": "default",
+  "occupyBottom": false
 }

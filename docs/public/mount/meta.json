@@ -824,7 +824,7 @@
   {
     "path": "/etc/managers.json",
     "file": "/etc/managers.json",
-    "force_reload": false
+    "force_reload": true
   },
   {
     "path": "/opt/wm/classic.js",
