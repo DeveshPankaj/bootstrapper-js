@@ -18,6 +18,19 @@ const getUUID = () => {
     return `${++uid}`
 }
 
+// Injected into every /opt/apps/**/*.html response so sandboxed iframes get
+// a postMessage-based AppSDK without needing same-origin access.
+// Each method queues its call until the parent sends the wos:sdk-init message
+// with a MessagePort — then the queue drains and all subsequent calls go direct.
+const APPSDK_BOOTSTRAP = `<script id="wos-appsdk-bootstrap">(function(){var _p=null,_q=[],_d={},_i=0;function _c(m,a){return new Promise(function(s,f){var id=++_i;_d[id]={s:s,f:f};var msg={t:m,id:id,a:a};_p?_p.postMessage(msg):_q.push(msg)})}window.AppSDK={readText:function(p){return _c('r',[p])},writeText:function(p,t){return _c('w',[p,t])},mkdir:function(p){return _c('d',[p])},remove:function(p){return _c('rm',[p])},list:function(p){return _c('ls',[p])},exists:function(p){return _c('e',[p])},stat:function(p){return _c('st',[p])},rename:function(a,b){return _c('mv',[a,b])},setTitle:function(t){return _c('title',[t])},log:function(m){return _c('log',[m])}};window.addEventListener('message',function(ev){if(!ev.data||ev.data.type!=='wos:sdk-init'||!ev.ports||!ev.ports[0])return;_p=ev.ports[0];_p.onmessage=function(e){var d=e.data,cb=_d[d.id];if(!cb)return;delete _d[d.id];d.err?cb.f(new Error(d.err)):cb.s(d.r)};for(var i=0;i<_q.length;i++)_p.postMessage(_q[i]);_q=[]},{once:true})})()</script>`;
+
+const injectAppSdkBootstrap = (html: string): string => {
+    if (html.includes('<head>')) return html.replace('<head>', '<head>' + APPSDK_BOOTSTRAP)
+    const m = html.match(/<head\s[^>]*>/)
+    if (m) return html.replace(m[0], m[0] + APPSDK_BOOTSTRAP)
+    return APPSDK_BOOTSTRAP + html
+}
+
 const clientRequests: Map<string, Function> = new Map();
 
 const getMIMEtype = (fileName: string) => {
@@ -96,13 +109,27 @@ self.addEventListener('fetch', function(event: Event | any) {
                         return new Promise((resolve, reject) => {
                             const request_id = getUUID()
                             const vfsPath = decodeURIComponent(_url.pathname.slice('/(sw)'.length))
-                            clientRequests.set(request_id, (fileData: string, error: string) => {
+                            clientRequests.set(request_id, (fileData: string | Uint8Array, error: string) => {
                                 clientRequests.delete(request_id)
                                 if(error) {
                                     resolve(fetch(_url.pathname.slice('/(sw)'.length)))
                                 }
                                 else {
-                                    resolve(new Response(fileData, {headers: {'Content-Type': getMIMEtype(url)!}}))
+                                    const mimeType = getMIMEtype(url)!
+                                    // Inject AppSDK bootstrap into app HTML so sandboxed
+                                    // iframes get a postMessage-based AppSDK without
+                                    // needing same-origin (window.top) access.
+                                    // fileData may arrive as Uint8Array (Buffer from BrowserFS
+                                    // readFileSync without 'utf-8' encoding), so decode first.
+                                    const isAppHtml = mimeType === 'text/html' && vfsPath.startsWith('/opt/apps/')
+                                    let body: string | Uint8Array = fileData
+                                    if (isAppHtml) {
+                                        const htmlStr = typeof fileData === 'string'
+                                            ? fileData
+                                            : new TextDecoder().decode(fileData as Uint8Array)
+                                        body = injectAppSdkBootstrap(htmlStr)
+                                    }
+                                    resolve(new Response(body, {headers: {'Content-Type': mimeType}}))
                                 }
                             });
 

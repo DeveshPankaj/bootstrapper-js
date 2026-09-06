@@ -487,6 +487,46 @@ export class WindowManager {
           toggleHeader,
           appendActionButton,
           setHeaderStyles,
+          // Sandbox an app sub-iframe and wire its AppSDK via a MessageChannel
+          // bridge backed by ProxyFS — prevents direct VFS/platform access.
+          // Call this BEFORE setting iframe.src so the sandbox is active from
+          // the first navigation.
+          sandboxAppIframe: (appIframe: HTMLIFrameElement) => {
+            // allow-same-origin is required: sandboxed null-origin iframes are not
+            // controlled by the service worker, so /(sw)/ sub-resources 404.
+            // Access control is enforced by the ProxyFS ACL in the MessageChannel
+            // bridge below — the AppSDK is the only endorsed API for VFS access.
+            appIframe.setAttribute('sandbox',
+              'allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-downloads')
+            appIframe.addEventListener('load', () => {
+              try {
+                const channel = new MessageChannel()
+                appIframe.contentWindow!.postMessage({ type: 'wos:sdk-init' }, '*', [channel.port2])
+                const port = channel.port1
+                port.start()
+                port.onmessage = (ev: MessageEvent) => {
+                  const d = ev.data as { t: string; id: number; a: unknown[] }
+                  const ok  = (r: unknown) => port.postMessage({ id: d.id, r, err: null })
+                  const err = (e: Error)   => port.postMessage({ id: d.id, r: null, err: e.message })
+                  const fs  = proxyFs
+                  if (!fs) { err(new Error('no sandbox fs')); return }
+                  switch (d.t) {
+                    case 'r':     fs.readText(d.a[0] as string).then(ok).catch(err); break
+                    case 'w':     fs.writeText(d.a[0] as string, d.a[1] as string).then(ok).catch(err); break
+                    case 'd':     fs.mkdir(d.a[0] as string).then(ok).catch(err); break
+                    case 'rm':    fs.remove(d.a[0] as string).then(ok).catch(err); break
+                    case 'ls':    fs.list(d.a[0] as string).then(ok).catch(err); break
+                    case 'e':     fs.exists(d.a[0] as string).then(ok).catch(err); break
+                    case 'st':    fs.stat(d.a[0] as string).then(ok).catch(err); break
+                    case 'mv':    fs.rename(d.a[0] as string, d.a[1] as string).then(ok).catch(err); break
+                    case 'title': setTitle(d.a[0] as string); ok(true); break
+                    case 'log':   console.log('[app]', d.a[0]); ok(true); break
+                    default:      err(new Error('unknown: ' + d.t))
+                  }
+                }
+              } catch (_) {}
+            }, { once: true })
+          },
           setWindowView: (show: boolean) =>
             show
               ? container.classList.remove("hidden")
