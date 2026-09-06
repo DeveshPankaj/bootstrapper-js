@@ -48,12 +48,13 @@ function registerWindowIpcHandlers(getWindows, toggleWindow, mainWindow = window
         getLaunchItems: getLaunchItems !== null && getLaunchItems !== void 0 ? getLaunchItems : (() => []),
     };
 }
-let _ipcListenerAdded = false;
 function initIpc(fs) {
-    // Re-registering FS handlers on a second call is fine (Map.set overwrites),
-    // but adding a second message listener would double-dispatch every IPC call.
-    if (!_ipcListenerAdded) {
-        _ipcListenerAdded = true;
+    // Both bootstrapper.bundle and remote.bundle call initIpc in the same window.
+    // Each bundle has its own module scope, so a module-level flag would be
+    // duplicated. Use window.__wosIpcInit (shared across all scripts) to ensure
+    // only one message listener is ever added.
+    if (!window.__wosIpcInit) {
+        window.__wosIpcInit = true;
         window.addEventListener('message', (e) => __awaiter(this, void 0, void 0, function* () {
             if (!e.data || e.data.type !== 'wos-ipc')
                 return;
@@ -74,7 +75,7 @@ function initIpc(fs) {
                 source.postMessage({ type: 'wos-ipc-response', id, error: String(err) }, '*');
             }
         }));
-    } // end if (!_ipcListenerAdded)
+    }
     // WM handlers delegate to the bridge set by the layout bundle on the main window.
     registerIpcHandler('wm.getWindows', () => { var _a, _b; return (_b = (_a = window.__wosWmBridge) === null || _a === void 0 ? void 0 : _a.getWindows()) !== null && _b !== void 0 ? _b : []; });
     registerIpcHandler('wm.toggleWindow', (d) => { var _a; (_a = window.__wosWmBridge) === null || _a === void 0 ? void 0 : _a.toggleWindow(Number(d.pid)); return true; });

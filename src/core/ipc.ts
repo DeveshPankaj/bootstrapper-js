@@ -63,31 +63,31 @@ export function registerWindowIpcHandlers(
   };
 }
 
-let _ipcListenerAdded = false;
-
 export function initIpc(fs: any) {
-  // Re-registering FS handlers on a second call is fine (Map.set overwrites),
-  // but adding a second message listener would double-dispatch every IPC call.
-  if (!_ipcListenerAdded) {
-    _ipcListenerAdded = true;
+  // Both bootstrapper.bundle and remote.bundle call initIpc in the same window.
+  // Each bundle has its own module scope, so a module-level flag would be
+  // duplicated. Use window.__wosIpcInit (shared across all scripts) to ensure
+  // only one message listener is ever added.
+  if (!(window as any).__wosIpcInit) {
+    (window as any).__wosIpcInit = true;
     window.addEventListener('message', async (e: MessageEvent) => {
-    if (!e.data || e.data.type !== 'wos-ipc') return;
-    const { id, event, data } = e.data;
-    const source = e.source as Window | null;
-    if (!source) return;
-    const handler = handlers.get(event);
-    if (!handler) {
-      source.postMessage({ type: 'wos-ipc-response', id, error: `Unknown IPC event: ${event}` }, '*');
-      return;
-    }
-    try {
-      const result = await handler(data, source);
-      source.postMessage({ type: 'wos-ipc-response', id, result: result ?? null }, '*');
-    } catch (err) {
-      source.postMessage({ type: 'wos-ipc-response', id, error: String(err) }, '*');
-    }
-  });
-  } // end if (!_ipcListenerAdded)
+      if (!e.data || e.data.type !== 'wos-ipc') return;
+      const { id, event, data } = e.data;
+      const source = e.source as Window | null;
+      if (!source) return;
+      const handler = handlers.get(event);
+      if (!handler) {
+        source.postMessage({ type: 'wos-ipc-response', id, error: `Unknown IPC event: ${event}` }, '*');
+        return;
+      }
+      try {
+        const result = await handler(data, source);
+        source.postMessage({ type: 'wos-ipc-response', id, result: result ?? null }, '*');
+      } catch (err) {
+        source.postMessage({ type: 'wos-ipc-response', id, error: String(err) }, '*');
+      }
+    });
+  }
 
   // WM handlers delegate to the bridge set by the layout bundle on the main window.
   registerIpcHandler('wm.getWindows', () => window.__wosWmBridge?.getWindows() ?? []);
