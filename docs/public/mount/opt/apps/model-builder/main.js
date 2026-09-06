@@ -47,6 +47,15 @@ function injectAppSDK(iframe, props) {
       },
       log: function(v) { console.log('[app]', v); return Promise.resolve(true); },
     };
+    // Create log dir and initial log file on app start
+    try {
+      var logDir = '/opt/apps/model-builder/logs';
+      fs.mkdirSync(logDir, { recursive: true });
+      var logPath = logDir + '/model-builder.log';
+      if (!fs.existsSync(logPath)) {
+        fs.writeFileSync(logPath, '');
+      }
+    } catch(le) { console.warn('[model-builder] log init failed', le); }
   } catch(e) { console.warn('[model-builder] AppSDK inject failed', e); }
 }
 
