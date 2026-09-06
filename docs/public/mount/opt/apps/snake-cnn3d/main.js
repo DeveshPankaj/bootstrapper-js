@@ -22,10 +22,7 @@ function injectAppSDK(iframe, props) {
         try { fs.mkdirSync(p, { recursive: true }); } catch(_) {}
         return Promise.resolve(true);
       },
-      remove: function(p) {
-        try { fs.unlinkSync(p); } catch(_) {}
-        return Promise.resolve(true);
-      },
+      remove: function(p) { try { fs.unlinkSync(p); } catch(_) {} return Promise.resolve(true); },
       list: function(p) {
         try { return Promise.resolve(fs.readdirSync(p)); }
         catch(e) { return Promise.reject(e); }
@@ -47,28 +44,27 @@ function injectAppSDK(iframe, props) {
       },
       log: function(v) { console.log('[app]', v); return Promise.resolve(true); },
     };
-  } catch(e) { console.warn('[trainboard] AppSDK inject failed', e); }
+  } catch(e) { console.warn('[snake-cnn3d] AppSDK inject failed', e); }
 }
 
-platform.host.registerCommand('ui.trainboard', function(body, props) {
+platform.host.registerCommand('ui.snake-cnn3d', function(body, props) {
   if (!body) {
     platform.host.execCommand(
-      "service('001-core.layout', 'open-window') (command('ui.trainboard'))",
+      "service('001-core.layout', 'open-window') (command('ui.snake-cnn3d'))",
       platform
     );
     return;
   }
 
   var iframe = document.createElement('iframe');
-  iframe.src = '/(sw)/opt/apps/trainboard/main.html';
-  iframe.style.cssText = 'width:100%;height:100%;border:none;display:block;background:#fafafa;';
+  iframe.src = '/(sw)/opt/apps/snake-cnn3d/main.html';
+  iframe.style.cssText = 'width:100%;height:100%;border:none;display:block;background:#1a1a1e;';
   body.appendChild(iframe);
 
   if (props && props.setWindowView) props.setWindowView(true);
   iframe.addEventListener('load', function() { injectAppSDK(iframe, props); });
 }, {
-  title: 'TrainBoard',
-  icon: 'monitoring',
-  description: 'Training metrics dashboard — log loss and accuracy from AI apps, view live charts.',
+  title: 'Snake AI (Conv3D)',
+  icon: 'view_in_ar',
   callable: true,
 });

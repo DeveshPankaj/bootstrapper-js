@@ -469,13 +469,12 @@
       "icon": "sports_esports",
       "category": "Games",
       "author": "bootstrapper-js",
+      "commandName": "ui.snake-game",
       "files": [
-        {
-          "dest": "main.html",
-          "src": "/public/mount/opt/apps/snake-game/main.html"
-        }
+        { "dest": "main.js",   "src": "/public/mount/opt/apps/snake-game/main.js" },
+        { "dest": "main.html", "src": "/public/mount/opt/apps/snake-game/main.html" }
       ],
-      "main": "main.html"
+      "main": "main.js"
     },
     {
       "id": "snake-lstm",
@@ -485,13 +484,12 @@
       "icon": "psychology",
       "category": "AI",
       "author": "bootstrapper-js",
+      "commandName": "ui.snake-lstm",
       "files": [
-        {
-          "dest": "main.html",
-          "src": "/public/mount/opt/apps/snake-lstm/main.html"
-        }
+        { "dest": "main.js",   "src": "/public/mount/opt/apps/snake-lstm/main.js" },
+        { "dest": "main.html", "src": "/public/mount/opt/apps/snake-lstm/main.html" }
       ],
-      "main": "main.html"
+      "main": "main.js"
     },
     {
       "id": "snake-qlearning",
@@ -501,13 +499,12 @@
       "icon": "model_training",
       "category": "AI",
       "author": "bootstrapper-js",
+      "commandName": "ui.snake-qlearning",
       "files": [
-        {
-          "dest": "main.html",
-          "src": "/public/mount/opt/apps/snake-qlearning/main.html"
-        }
+        { "dest": "main.js",   "src": "/public/mount/opt/apps/snake-qlearning/main.js" },
+        { "dest": "main.html", "src": "/public/mount/opt/apps/snake-qlearning/main.html" }
       ],
-      "main": "main.html"
+      "main": "main.js"
     },
     {
       "id": "snake-cnn3d",
@@ -517,13 +514,12 @@
       "icon": "view_in_ar",
       "category": "AI",
       "author": "bootstrapper-js",
+      "commandName": "ui.snake-cnn3d",
       "files": [
-        {
-          "dest": "main.html",
-          "src": "/public/mount/opt/apps/snake-cnn3d/main.html"
-        }
+        { "dest": "main.js",   "src": "/public/mount/opt/apps/snake-cnn3d/main.js" },
+        { "dest": "main.html", "src": "/public/mount/opt/apps/snake-cnn3d/main.html" }
       ],
-      "main": "main.html"
+      "main": "main.js"
     },
     {
       "id": "webgl-demo",

@@ -627,8 +627,18 @@
     "force_reload": true
   },
   {
+    "path": "/opt/apps/snake-game/main.js",
+    "file": "/opt/apps/snake-game/main.js",
+    "force_reload": true
+  },
+  {
     "path": "/opt/apps/snake-game/main.html",
     "file": "/opt/apps/snake-game/main.html",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/snake-lstm/main.js",
+    "file": "/opt/apps/snake-lstm/main.js",
     "force_reload": true
   },
   {
@@ -637,8 +647,18 @@
     "force_reload": true
   },
   {
+    "path": "/opt/apps/snake-qlearning/main.js",
+    "file": "/opt/apps/snake-qlearning/main.js",
+    "force_reload": true
+  },
+  {
     "path": "/opt/apps/snake-qlearning/main.html",
     "file": "/opt/apps/snake-qlearning/main.html",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/snake-cnn3d/main.js",
+    "file": "/opt/apps/snake-cnn3d/main.js",
     "force_reload": true
   },
   {

@@ -22,6 +22,10 @@
   .run-pill button { border: none; background: none; color: #999; cursor: pointer; font-size: 13px; line-height: 1; padding: 2px; border-radius: 50%; }
   .run-pill button:hover { background: #fdeaea; color: #c0392b; }
 </style>
+<script>
+// Stub replaced by host after load — covers any top-level fire-and-forget calls
+window.AppSDK = { setTitle: function(t){ return Promise.resolve(); }, log: function(v){ return Promise.resolve(); }, readText: function(){ return Promise.reject(new Error('AppSDK not ready')); }, writeText: function(){ return Promise.reject(new Error('AppSDK not ready')); }, mkdir: function(){ return Promise.resolve(); }, remove: function(){ return Promise.resolve(); }, list: function(){ return Promise.resolve([]); }, exists: function(){ return Promise.resolve(false); }, stat: function(){ return Promise.reject(new Error('AppSDK not ready')); }, rename: function(){ return Promise.resolve(); }, readBinary: function(){ return Promise.reject(new Error('AppSDK not ready')); } };
+</script>
 </head>
 <body>
   <div class="bar">

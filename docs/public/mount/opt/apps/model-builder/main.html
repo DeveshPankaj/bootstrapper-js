@@ -63,6 +63,10 @@
   .status { padding: 5px 10px; font-size: 11.5px; color: #999; border-top: 1px solid #37373f; min-height: 16px; flex-shrink: 0; }
   .status.error { color: #ff8080; }
 </style>
+<script>
+// Stub replaced by host after load — covers any top-level fire-and-forget calls
+window.AppSDK = { setTitle: function(t){ return Promise.resolve(); }, log: function(v){ return Promise.resolve(); }, readText: function(){ return Promise.reject(new Error('AppSDK not ready')); }, writeText: function(){ return Promise.reject(new Error('AppSDK not ready')); }, mkdir: function(){ return Promise.resolve(); }, remove: function(){ return Promise.resolve(); }, list: function(){ return Promise.resolve([]); }, exists: function(){ return Promise.resolve(false); }, stat: function(){ return Promise.reject(new Error('AppSDK not ready')); }, rename: function(){ return Promise.resolve(); }, readBinary: function(){ return Promise.reject(new Error('AppSDK not ready')); } };
+</script>
 </head>
 <body>
   <div class="toolbar">

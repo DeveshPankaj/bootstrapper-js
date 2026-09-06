@@ -26,9 +26,13 @@ const CORE_APPS = [
   { id: 'sqlite-browser', appDir: '/opt/apps/sqlite-browser', mainFile: '/opt/apps/sqlite-browser/main.js' },
   { id: 'audio-player',   appDir: '/opt/apps/audio-player',   mainFile: '/opt/apps/audio-player/main.js' },
   { id: 'colleps',        appDir: '/opt/apps/colleps',        mainFile: '/opt/apps/colleps/main.js' },
-  { id: 'trainboard',     appDir: '/opt/apps/trainboard',     mainFile: '/opt/apps/trainboard/main.js' },
-  { id: 'nn-ide',         appDir: '/opt/apps/nn-ide',         mainFile: '/opt/apps/nn-ide/main.js' },
-  { id: 'model-builder',  appDir: '/opt/apps/model-builder',  mainFile: '/opt/apps/model-builder/main.js' },
+  { id: 'trainboard',       appDir: '/opt/apps/trainboard',       mainFile: '/opt/apps/trainboard/main.js' },
+  { id: 'nn-ide',           appDir: '/opt/apps/nn-ide',           mainFile: '/opt/apps/nn-ide/main.js' },
+  { id: 'model-builder',    appDir: '/opt/apps/model-builder',    mainFile: '/opt/apps/model-builder/main.js' },
+  { id: 'snake-game',       appDir: '/opt/apps/snake-game',       mainFile: '/opt/apps/snake-game/main.js' },
+  { id: 'snake-lstm',       appDir: '/opt/apps/snake-lstm',       mainFile: '/opt/apps/snake-lstm/main.js' },
+  { id: 'snake-qlearning',  appDir: '/opt/apps/snake-qlearning',  mainFile: '/opt/apps/snake-qlearning/main.js' },
+  { id: 'snake-cnn3d',      appDir: '/opt/apps/snake-cnn3d',      mainFile: '/opt/apps/snake-cnn3d/main.js' },
   { id: 'app-launcher',   appDir: '/opt/apps/app-launcher',   mainFile: '/opt/apps/app-launcher/main.js' },
   // python-demo is not a core app — install via App Manager
 ];

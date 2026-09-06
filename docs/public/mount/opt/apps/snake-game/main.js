@@ -22,10 +22,7 @@ function injectAppSDK(iframe, props) {
         try { fs.mkdirSync(p, { recursive: true }); } catch(_) {}
         return Promise.resolve(true);
       },
-      remove: function(p) {
-        try { fs.unlinkSync(p); } catch(_) {}
-        return Promise.resolve(true);
-      },
+      remove: function(p) { try { fs.unlinkSync(p); } catch(_) {} return Promise.resolve(true); },
       list: function(p) {
         try { return Promise.resolve(fs.readdirSync(p)); }
         catch(e) { return Promise.reject(e); }
@@ -47,28 +44,27 @@ function injectAppSDK(iframe, props) {
       },
       log: function(v) { console.log('[app]', v); return Promise.resolve(true); },
     };
-  } catch(e) { console.warn('[trainboard] AppSDK inject failed', e); }
+  } catch(e) { console.warn('[snake-game] AppSDK inject failed', e); }
 }
 
-platform.host.registerCommand('ui.trainboard', function(body, props) {
+platform.host.registerCommand('ui.snake-game', function(body, props) {
   if (!body) {
     platform.host.execCommand(
-      "service('001-core.layout', 'open-window') (command('ui.trainboard'))",
+      "service('001-core.layout', 'open-window') (command('ui.snake-game'))",
       platform
     );
     return;
   }
 
   var iframe = document.createElement('iframe');
-  iframe.src = '/(sw)/opt/apps/trainboard/main.html';
-  iframe.style.cssText = 'width:100%;height:100%;border:none;display:block;background:#fafafa;';
+  iframe.src = '/(sw)/opt/apps/snake-game/main.html';
+  iframe.style.cssText = 'width:100%;height:100%;border:none;display:block;background:#0f0f12;';
   body.appendChild(iframe);
 
   if (props && props.setWindowView) props.setWindowView(true);
   iframe.addEventListener('load', function() { injectAppSDK(iframe, props); });
 }, {
-  title: 'TrainBoard',
-  icon: 'monitoring',
-  description: 'Training metrics dashboard — log loss and accuracy from AI apps, view live charts.',
+  title: 'Snake',
+  icon: 'sports_esports',
   callable: true,
 });

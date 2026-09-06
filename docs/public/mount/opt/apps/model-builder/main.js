@@ -1,79 +1,56 @@
 const platform = window.platform;
 const fs = platform.host.getFS();
-const realWindow = platform.window;
 
-function attachFsBridge(iframe, props) {
-  const handler = (event) => {
-    try {
-      if (event.source !== iframe.contentWindow) return;
-      const { id, method, params } = event.data || {};
-      if (!id || !method) return;
-      let result, error;
-      try {
-        switch (method) {
-          case 'fs.read':
-            result = fs.readFileSync(params.path, 'utf8');
-            break;
-          case 'fs.write': {
-            const dir = params.path.split('/').slice(0, -1).join('/');
-            if (dir) try { fs.mkdirSync(dir, { recursive: true }); } catch (_) {}
-            fs.writeFileSync(params.path, params.content);
-            result = true;
-            break;
-          }
-          case 'fs.mkdir':
-            fs.mkdirSync(params.path, { recursive: true });
-            result = true;
-            break;
-          case 'fs.remove':
-            try { fs.unlinkSync(params.path); } catch (_) {}
-            result = true;
-            break;
-          case 'fs.list':
-            result = fs.readdirSync(params.path);
-            break;
-          case 'fs.exists':
-            result = fs.existsSync(params.path);
-            break;
-          case 'fs.stat': {
-            const s = fs.statSync(params.path);
-            result = { isDirectory: s.isDirectory(), isFile: s.isFile(), size: s.size };
-            break;
-          }
-          case 'fs.rename':
-            fs.renameSync(params.from, params.to);
-            result = true;
-            break;
-          case 'window.setTitle':
-            if (props && props.setTitle) props.setTitle(params.title);
-            result = true;
-            break;
-          case 'app.log':
-            console.log('[app]', params.value);
-            result = true;
-            break;
-          default:
-            error = 'Unknown method: ' + method;
-        }
-      } catch (e) {
-        error = e.message;
-      }
-      try { iframe.contentWindow.postMessage({ id, result, error }, '*'); } catch (_) {}
-    } catch (_) {}
-  };
-
-  realWindow.addEventListener('message', handler);
-
-  const obs = new MutationObserver(() => {
-    if (!iframe.isConnected) {
-      realWindow.removeEventListener('message', handler);
-      obs.disconnect();
-    }
-  });
-  if (iframe.parentElement) obs.observe(iframe.parentElement, { childList: true });
+function injectAppSDK(iframe, props) {
+  try {
+    const iwin = iframe.contentWindow;
+    if (!iwin) return;
+    iwin.AppSDK = {
+      readText: function(p) {
+        try { return Promise.resolve(fs.readFileSync(p, 'utf8')); }
+        catch(e) { return Promise.reject(e); }
+      },
+      writeText: function(p, c) {
+        try {
+          var dir = p.split('/').slice(0, -1).join('/');
+          if (dir) try { fs.mkdirSync(dir, { recursive: true }); } catch(_) {}
+          fs.writeFileSync(p, c);
+          return Promise.resolve(true);
+        } catch(e) { return Promise.reject(e); }
+      },
+      mkdir: function(p) {
+        try { fs.mkdirSync(p, { recursive: true }); } catch(_) {}
+        return Promise.resolve(true);
+      },
+      remove: function(p) {
+        try { fs.unlinkSync(p); } catch(_) {}
+        return Promise.resolve(true);
+      },
+      list: function(p) {
+        try { return Promise.resolve(fs.readdirSync(p)); }
+        catch(e) { return Promise.reject(e); }
+      },
+      exists: function(p) { return Promise.resolve(fs.existsSync(p)); },
+      stat: function(p) {
+        try {
+          var s = fs.statSync(p);
+          return Promise.resolve({ isDirectory: s.isDirectory(), isFile: s.isFile(), size: s.size });
+        } catch(e) { return Promise.reject(e); }
+      },
+      rename: function(f, t) {
+        try { fs.renameSync(f, t); return Promise.resolve(true); }
+        catch(e) { return Promise.reject(e); }
+      },
+      setTitle: function(t) {
+        if (props && props.setTitle) props.setTitle(t);
+        return Promise.resolve(true);
+      },
+      log: function(v) { console.log('[app]', v); return Promise.resolve(true); },
+    };
+  } catch(e) { console.warn('[model-builder] AppSDK inject failed', e); }
 }
 
-platform.host.registerCommand('ui.model-builder', (body, props) => {
+platform.host.registerCommand('ui.model-builder', function(body, props) {
   if (!body) {
     platform.host.execCommand(
       "service('001-core.layout', 'open-window') (command('ui.model-builder'))",
@@ -82,13 +59,13 @@ platform.host.registerCommand('ui.model-builder', (body, props) => {
     return;
   }
 
-  const iframe = document.createElement('iframe');
+  var iframe = document.createElement('iframe');
   iframe.src = '/(sw)/opt/apps/model-builder/main.html';
-  iframe.style.cssText = 'width:100%;height:100%;border:none;display:block;background:#1a1a1e;';
+  iframe.style.cssText = 'width:100%;height:100%;border:none;display:block;background:#1e1e22;';
   body.appendChild(iframe);
 
   if (props && props.setWindowView) props.setWindowView(true);
-  attachFsBridge(iframe, props);
+  iframe.addEventListener('load', function() { injectAppSDK(iframe, props); });
 }, {
   title: 'Model Builder',
   icon: 'schema',
