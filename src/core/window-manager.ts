@@ -717,24 +717,27 @@ const appendWindow = (
 };
 
 const toggleFullScreen = (contentArea: HTMLElement, win: HTMLElement) => {
-  const container = contentArea;
-
   const isFullScreen = (win.getAttribute("data-fullscreen") || "false") === "true";
   win.setAttribute("data-fullscreen", isFullScreen ? "false" : "true");
 
-  const mergeAttributes = ["height", "width", "left", "right", "top"] as const;
+  const saveAttrs = ["height", "width", "left", "right", "top"] as const;
 
   if (isFullScreen) {
-    mergeAttributes.forEach(
-      (attr) => (win.style[attr] = `${win.getAttribute(`data-prev-${attr}`)}`)
-    );
+    saveAttrs.forEach((attr) => (win.style[attr] = `${win.getAttribute(`data-prev-${attr}`)}`));
   } else {
-    const containerRect = container?.getBoundingClientRect();
-    mergeAttributes.forEach((attr) =>
-      win.setAttribute(`data-prev-${attr}`, win.style[attr])
-    );
-    mergeAttributes.forEach(
-      (attr) => (win.style[attr] = `${containerRect[attr]}px`)
-    );
+    saveAttrs.forEach((attr) => win.setAttribute(`data-prev-${attr}`, win.style[attr]));
+    // Use visible viewport dimensions (clientWidth/Height) rather than the element's
+    // bounding rect, so canvas-mode (where .content-area is a huge scrollable canvas)
+    // doesn't produce a 6000×3600 fullscreen window. scrollLeft/Top shifts the window
+    // into the currently-visible viewport region.
+    const vw = contentArea.clientWidth;
+    const vh = contentArea.clientHeight;
+    const sx = contentArea.scrollLeft;
+    const sy = contentArea.scrollTop;
+    win.style.left   = `${Math.round(sx + vw * 0.01)}px`;
+    win.style.top    = `${Math.round(sy + vh * 0.01)}px`;
+    win.style.width  = `${Math.round(vw * 0.98)}px`;
+    win.style.height = `${Math.round(vh * 0.98)}px`;
+    win.style.right  = '';
   }
 };

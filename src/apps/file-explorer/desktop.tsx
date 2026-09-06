@@ -66,6 +66,54 @@ export const ListDirComponent = ({ dir, openFile, showFileActions, customClass }
         // {name: 'projects', path: '/usr/desktop/projects', meta: {ext: '.'}, type: 'dir'},
     ]
 
+    const orderPath = `${dir}/.desktop-order.json`
+    const [order, setOrder] = React.useState<string[]>(() => {
+        try { return JSON.parse(fs.readFileSync(orderPath) as any) } catch { return [] }
+    })
+    const dragSrc = React.useRef<string | null>(null)
+    const [dragOver, setDragOver] = React.useState<string | null>(null)
+
+    const sortedFiles = React.useMemo(() => {
+        if (!order.length) return files
+        return [...files].sort((a, b) => {
+            const ia = order.indexOf(a.name), ib = order.indexOf(b.name)
+            if (ia === -1 && ib === -1) return 0
+            if (ia === -1) return 1
+            if (ib === -1) return -1
+            return ia - ib
+        })
+    }, [files, order])
+
+    const saveOrder = (names: string[]) => {
+        try { fs.writeFileSync(orderPath, JSON.stringify(names)) } catch {}
+        setOrder(names)
+    }
+
+    const onDragStart = (e: React.DragEvent, name: string) => {
+        dragSrc.current = name
+        e.dataTransfer.setData('application/x-desktop-reorder', name)
+        e.dataTransfer.effectAllowed = 'move'
+    }
+    const onDragOver = (e: React.DragEvent, name: string) => {
+        if (!e.dataTransfer.types.includes('application/x-desktop-reorder')) return
+        e.preventDefault()
+        e.dataTransfer.dropEffect = 'move'
+        setDragOver(name)
+    }
+    const onDrop = (e: React.DragEvent, targetName: string) => {
+        e.preventDefault()
+        setDragOver(null)
+        const src = dragSrc.current
+        if (!src || src === targetName) return
+        const names = sortedFiles.map(f => f.name)
+        const from = names.indexOf(src), to = names.indexOf(targetName)
+        if (from === -1 || to === -1) return
+        names.splice(from, 1)
+        names.splice(to, 0, src)
+        saveOrder(names)
+    }
+    const onDragEnd = () => { dragSrc.current = null; setDragOver(null) }
+
     const containerRef = React.useRef<HTMLElement>(null)
     React.useLayoutEffect(() => {
         if (!containerRef.current) return;
@@ -86,16 +134,16 @@ export const ListDirComponent = ({ dir, openFile, showFileActions, customClass }
         .${DESKTOP_CONTAINER_CLASS} {
             display: contents;
         }
-        
+
         .desktop-icons{
             flex-direction: column;
             width: min-content;
             height: 100%;
         }
-    
+
         .${DESKTOP_CONTAINER_CLASS}-files .file[data-ext] {
         }
-    
+
         .${DESKTOP_CONTAINER_CLASS}-files .file {
             box-sizing: border-box;
             display: inline-block;
@@ -105,7 +153,12 @@ export const ListDirComponent = ({ dir, openFile, showFileActions, customClass }
             overflow: hidden;
             cursor: pointer;
         }
-        
+
+        .${DESKTOP_CONTAINER_CLASS}-files .desktop-item.drag-over {
+            outline: 2px dashed rgba(10,132,255,0.6);
+            border-radius: 6px;
+        }
+
         `);
 
         appendStyleSheet(doc, styles)
@@ -113,7 +166,6 @@ export const ListDirComponent = ({ dir, openFile, showFileActions, customClass }
     }, []);
 
     const rightClickHandler = (file: FileType, event: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
-        // console.log(event);
         event.preventDefault();
         const customEvent = new CustomEvent('showmenu', { detail: {} });
         event.target.dispatchEvent(customEvent);
@@ -123,8 +175,19 @@ export const ListDirComponent = ({ dir, openFile, showFileActions, customClass }
     return (
         <main className={`${DESKTOP_CONTAINER_CLASS}-files ${customClass??''}` } ref={containerRef}>
             {
-                files.map(file => (
-                    <div key={file.path} onDoubleClick={() => openFile(file)} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'center' }}>
+                sortedFiles.map(file => (
+                    <div
+                        key={file.path}
+                        className={`desktop-item${dragOver === file.name ? ' drag-over' : ''}`}
+                        draggable
+                        onDragStart={e => onDragStart(e, file.name)}
+                        onDragOver={e => onDragOver(e, file.name)}
+                        onDragLeave={() => setDragOver(null)}
+                        onDrop={e => onDrop(e, file.name)}
+                        onDragEnd={onDragEnd}
+                        onDoubleClick={() => openFile(file)}
+                        style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'center' }}
+                    >
                         <div className={`file`} data-ext={file.meta.ext} style={{ backgroundImage: `url('${file.type === 'file' && imageExtensions.has(file.meta.ext as string) ? `/(sw)${file.path}` : extIconMap[file.meta.ext as string] ?? extIconMap['']}')`, backgroundRepeat: 'no-repeat', backgroundSize: 'cover', backgroundPosition: 'center center' }} onContextMenu={ev => rightClickHandler(file, ev)}></div>
                         <span style={{ color: 'black', mixBlendMode: 'difference', overflow: 'hidden', maxWidth: '8rem', textOverflow: 'ellipsis', filter: 'contrast(0)' }}>{file.name}</span>
                     </div>

@@ -29153,17 +29153,27 @@ const appendWindow = (contentArea, windowElement) => {
         .appendChild(windowElement);
 };
 const toggleFullScreen = (contentArea, win) => {
-    const container = contentArea;
     const isFullScreen = (win.getAttribute("data-fullscreen") || "false") === "true";
     win.setAttribute("data-fullscreen", isFullScreen ? "false" : "true");
-    const mergeAttributes = ["height", "width", "left", "right", "top"];
+    const saveAttrs = ["height", "width", "left", "right", "top"];
     if (isFullScreen) {
-        mergeAttributes.forEach((attr) => (win.style[attr] = `${win.getAttribute(`data-prev-${attr}`)}`));
+        saveAttrs.forEach((attr) => (win.style[attr] = `${win.getAttribute(`data-prev-${attr}`)}`));
     }
     else {
-        const containerRect = container === null || container === void 0 ? void 0 : container.getBoundingClientRect();
-        mergeAttributes.forEach((attr) => win.setAttribute(`data-prev-${attr}`, win.style[attr]));
-        mergeAttributes.forEach((attr) => (win.style[attr] = `${containerRect[attr]}px`));
+        saveAttrs.forEach((attr) => win.setAttribute(`data-prev-${attr}`, win.style[attr]));
+        // Use visible viewport dimensions (clientWidth/Height) rather than the element's
+        // bounding rect, so canvas-mode (where .content-area is a huge scrollable canvas)
+        // doesn't produce a 6000×3600 fullscreen window. scrollLeft/Top shifts the window
+        // into the currently-visible viewport region.
+        const vw = contentArea.clientWidth;
+        const vh = contentArea.clientHeight;
+        const sx = contentArea.scrollLeft;
+        const sy = contentArea.scrollTop;
+        win.style.left = `${Math.round(sx + vw * 0.01)}px`;
+        win.style.top = `${Math.round(sy + vh * 0.01)}px`;
+        win.style.width = `${Math.round(vw * 0.98)}px`;
+        win.style.height = `${Math.round(vh * 0.98)}px`;
+        win.style.right = '';
     }
 };
 
@@ -29382,7 +29392,7 @@ const draggable = (elmnt, header) => {
         }
     }
     function closeDragElement() {
-        var _a;
+        var _a, _b, _c;
         document.onmouseup = null;
         document.onmousemove = null;
         elmnt.classList.remove('dragging');
@@ -29393,8 +29403,14 @@ const draggable = (elmnt, header) => {
             const bounds = getContentAreaBounds(document);
             if (bounds) {
                 const rect = buildSnapRect(currentSnapZone, bounds);
-                elmnt.style.left = rect.left + 'px';
-                elmnt.style.top = rect.top + 'px';
+                // In canvas mode the content-area is a scrollable container;
+                // snap rect coords are viewport-relative but style.left/top are
+                // canvas-relative, so add the scroll offset.
+                const scrollEl = document.querySelector('.content-area.canvas-wm-active');
+                const sx = (_b = scrollEl === null || scrollEl === void 0 ? void 0 : scrollEl.scrollLeft) !== null && _b !== void 0 ? _b : 0;
+                const sy = (_c = scrollEl === null || scrollEl === void 0 ? void 0 : scrollEl.scrollTop) !== null && _c !== void 0 ? _c : 0;
+                elmnt.style.left = (rect.left + sx) + 'px';
+                elmnt.style.top = (rect.top + sy) + 'px';
                 elmnt.style.width = rect.width + 'px';
                 elmnt.style.height = rect.height + 'px';
             }

@@ -27,10 +27,24 @@ const injectStyles = () => {
         .content-area.canvas-wm-active {
             overflow: auto !important;
             scroll-behavior: smooth;
+            position: relative !important;
         }
         .content-area.canvas-wm-active .windows {
-            position: relative !important;
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
             overflow: visible !important;
+            pointer-events: none !important;
+        }
+        .content-area.canvas-wm-active .windows .window {
+            pointer-events: auto !important;
+        }
+        .content-area.canvas-wm-active .widgets-panel {
+            position: fixed !important;
+            top: 1rem !important;
+            right: 1rem !important;
+            bottom: 1rem !important;
+            left: 1rem !important;
         }
     `
     document.head.appendChild(s)
@@ -49,11 +63,50 @@ const setupCanvas = (windowsEl) => {
     // Make the content-area scrollable
     const scrollEl = windowsEl.parentElement
     if (scrollEl) scrollEl.classList.add('canvas-wm-active')
+
+    // Override wm bridge toggleWindow for canvas-aware dock-click behavior.
+    // window.__wosWmBridge is on the layout iframe window, not the execString shim —
+    // access it via platform.window which IS the real layout window.
+    const bridge = platform.window.__wosWmBridge
+    if (bridge && !bridge._canvasTogglePatch) {
+        bridge._canvasTogglePatch = true
+        const orig = bridge.toggleWindow.bind(bridge)
+        bridge.toggleWindow = (pid) => {
+            const win = windowsEl.querySelector('[data-pid="' + pid + '"]')
+            if (win && !win.classList.contains('minimized')) {
+                if (scrollEl && !isInViewport(win, scrollEl)) {
+                    // Visible but off-screen → scroll to center then bring to front
+                    scrollToCenterWindow(win, scrollEl)
+                    win._wmMoveOnTop?.()
+                    return
+                }
+                // Fully in view → bring to front, don't minimize
+                win._wmMoveOnTop?.()
+                return
+            }
+            // Minimized → un-minimize (MutationObserver handles scroll-to-center)
+            orig(pid)
+        }
+    }
 }
 
-// ─── Scroll-to-view ───────────────────────────────────────────────────────────
-// Only scrolls if the window is actually clipped, and by the minimum amount.
+// ─── Scroll helpers ───────────────────────────────────────────────────────────
 
+// Returns true if the window is fully visible in the viewport (with padding).
+const isInViewport = (container, scrollEl, PAD = 48) => {
+    const winL = container.offsetLeft
+    const winT = container.offsetTop
+    const winR = winL + container.offsetWidth
+    const winB = winT + container.offsetHeight
+    const vpL  = scrollEl.scrollLeft
+    const vpT  = scrollEl.scrollTop
+    const vpR  = vpL + scrollEl.clientWidth
+    const vpB  = vpT + scrollEl.clientHeight
+    return winL >= vpL + PAD && winR <= vpR - PAD &&
+           winT >= vpT + PAD && winB <= vpB - PAD
+}
+
+// Scrolls by the minimum amount to bring the window fully into view.
 const scrollToWindow = (container, windowsEl) => {
     const scrollEl = windowsEl.parentElement
     if (!scrollEl) return
@@ -78,6 +131,18 @@ const scrollToWindow = (container, windowsEl) => {
                                                                          dy = winB - vpB + PAD
 
     if (dx || dy) scrollEl.scrollBy({ left: dx, top: dy, behavior: 'smooth' })
+}
+
+// Centers the viewport on the window.
+const scrollToCenterWindow = (container, scrollEl) => {
+    if (!scrollEl) return
+    const cx = container.offsetLeft + container.offsetWidth  / 2
+    const cy = container.offsetTop  + container.offsetHeight / 2
+    scrollEl.scrollTo({
+        left: Math.max(0, cx - scrollEl.clientWidth  / 2),
+        top:  Math.max(0, cy - scrollEl.clientHeight / 2),
+        behavior: 'smooth',
+    })
 }
 
 // ─── Minimap ──────────────────────────────────────────────────────────────────
@@ -233,11 +298,27 @@ export const setupWindow = ({ container, head, settings, moveOnTop }) => {
         )
     }
 
-    // Scroll-to-view on click (partial visibility → bring fully in view)
-    container.addEventListener('mousedown', () => {
-        moveOnTop()
-        scrollToWindow(container, windowsEl)
+    // Store moveOnTop so the bridge override can call it on dock-icon click.
+    container._wmMoveOnTop = moveOnTop
+
+    // Bring window to front on click. No scrollToWindow here — calling it on
+    // mousedown fires between draggable's onmousedown (saves clientX/Y) and
+    // the first mousemove, changing scrollTop mid-drag and making the drag
+    // position jump. Scroll-to-center is handled by dock clicks and un-minimize.
+    container.addEventListener('mousedown', () => moveOnTop())
+
+    // When a window is un-minimized (minimized class removed), scroll to center it.
+    // Track previous state so we only scroll on the minimized→visible transition,
+    // not on other class changes like the 'top' class toggled by moveOnTop().
+    let _wasMinimized = container.classList.contains('minimized')
+    const classObs = new MutationObserver(() => {
+        const isMinimized = container.classList.contains('minimized')
+        if (_wasMinimized && !isMinimized && scrollEl) {
+            requestAnimationFrame(() => scrollToCenterWindow(container, scrollEl))
+        }
+        _wasMinimized = isMinimized
     })
+    classObs.observe(container, { attributes: true, attributeFilter: ['class'] })
 
     // Build minimap once (persisted on document.body across module-reloads)
     if (!document.body[MINIMAP_KEY]) {
@@ -254,7 +335,7 @@ export const setupWindow = ({ container, head, settings, moveOnTop }) => {
 export const createHeader = ({ close, minimize, fullscreen }) => {
     const head = document.createElement('div')
     head.className = 'window-header'
-    head.style.cssText = 'display:flex;align-items:center;padding:0 10px;gap:6px;'
+    head.style.cssText = 'display:flex;align-items:center;padding:4px 10px;gap:6px;'
 
     const dot = (bg, cls, action) => {
         const d = document.createElement('div')

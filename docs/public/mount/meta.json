@@ -854,6 +854,6 @@
   {
     "path": "/opt/wm/canvas.js",
     "file": "/opt/wm/canvas.js",
-    "force_reload": false
+    "force_reload": true
   }
 ]

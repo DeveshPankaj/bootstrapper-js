@@ -1,3 +1,6 @@
+const isCssGradient = (v: string) =>
+    /^\s*(linear|radial|conic)-gradient\s*\(/i.test(v)
+
 export const layoutCss = (grid: { columns: string, rows: string, areas: string }, wallpaperUrl: string) => `
     .layout-default {
         height: 100%;
@@ -6,7 +9,7 @@ export const layoutCss = (grid: { columns: string, rows: string, areas: string }
         grid-template-rows: ${grid.rows};
         grid-auto-flow: row;
         grid-template-areas: ${grid.areas};
-        background-image: url(${wallpaperUrl});
+        background-image: ${isCssGradient(wallpaperUrl) ? wallpaperUrl : `url(${wallpaperUrl})`};
         background-repeat: no-repeat;
         background-size: cover;
     }

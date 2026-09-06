@@ -5,8 +5,11 @@ const ReactDOM = platform.getService('ReactDOM')
 const { utils } = platform.getService('settings')
 const { fs, origin, configWallpapers, imageExtensions, getExt, FilePicker } = utils
 
+const isGradient = (v) => /^\s*(linear|radial|conic)-gradient\s*\(/i.test(v)
+
 const Wallpapers = () => {
   const [inputValue, setInputValue] = React.useState('');
+  const [gradientInput, setGradientInput] = React.useState('linear-gradient(135deg, #667eea 0%, #764ba2 100%)');
   const [wallpapers, setWallpapers] = React.useState(configWallpapers);
   const [showPicker, setShowPicker] = React.useState(false);
   const [showFolderPicker, setShowFolderPicker] = React.useState(false);
@@ -91,6 +94,18 @@ const Wallpapers = () => {
     platform.host.callCommand('set-wallpapers-dir', path);
   };
 
+  const onApplyGradient = () => {
+    const g = gradientInput.trim();
+    if (!g || !isGradient(g)) return;
+    // Gradients are stored and applied directly as CSS values (no origin prefix needed).
+    if (!wallpapers.includes(g)) {
+      setWallpapers(state => [...state, g]);
+      platform.host.callCommand('add-wallpaper', g);
+    }
+    platform.host.callCommand('set-wallpaper', g);
+    setActiveWallpaper(g);
+  };
+
   return (
     <div className="settings-page">
       <h1 className="settings-page-title">Wallpaper</h1>
@@ -118,24 +133,58 @@ const Wallpapers = () => {
           {wallpapersDir ? 'Change Folder' : 'Set Wallpapers Folder'}
         </button>
       </div>
+
+      <h2 className="settings-section-title" style={{marginTop: '1.5rem', marginBottom: '0.75rem', fontSize: '0.9rem', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.06em'}}>CSS Gradient</h2>
+      <div className="wallpaper-toolbar" style={{alignItems: 'flex-start', gap: '0.75rem'}}>
+        <div style={{flex: 1}}>
+          <input
+            type="text"
+            className="settings-input"
+            placeholder="e.g. linear-gradient(135deg, #667eea, #764ba2)"
+            value={gradientInput}
+            onChange={(e) => setGradientInput(e.target.value)}
+            style={{width: '100%', fontFamily: 'monospace', fontSize: '0.82rem'}}
+          />
+          <div style={{marginTop: '0.5rem', fontSize: '0.78rem', opacity: 0.55}}>
+            Supports <code>linear-gradient</code>, <code>radial-gradient</code>, <code>conic-gradient</code>
+          </div>
+        </div>
+        <div
+          style={{
+            width: '80px', height: '52px', borderRadius: '8px', flexShrink: 0,
+            background: isGradient(gradientInput) ? gradientInput : 'rgba(128,128,128,0.2)',
+            border: '2px solid rgba(128,128,128,0.2)',
+          }}
+          title="Live preview"
+        />
+        <button
+          className="settings-btn primary"
+          onClick={onApplyGradient}
+          disabled={!isGradient(gradientInput)}
+        >Apply</button>
+      </div>
+
+      <h2 className="settings-section-title" style={{marginTop: '1.5rem', marginBottom: '0.75rem', fontSize: '0.9rem', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.06em'}}>Images</h2>
       <div className="wallpaper-grid">
         {[...wallpapers, ...folderWallpapers].map((url, index) => {
           const fullUrl = toFullUrl(url);
-          const active = fullUrl === activeWallpaper;
+          const active = fullUrl === activeWallpaper || url === activeWallpaper;
           const fromList = index < wallpapers.length;
+          const gradient = isGradient(url);
           return (
             <div
               key={url}
               className={`wallpaper-card ${active ? 'active' : ''}`}
               onClick={() => onClickHandler(url)}
               onContextMenu={fromList ? (ev) => onContextMenuHandler(ev, url) : undefined}
+              style={gradient ? {background: url, minHeight: '80px'} : undefined}
             >
-              <img src={fullUrl} alt={`Wallpaper ${index + 1}`} className="wallpaper-thumb" />
+              {gradient ? null : <img src={fullUrl} alt={`Wallpaper ${index + 1}`} className="wallpaper-thumb" />}
               <div className="wallpaper-overlay">
                 {active ? (
                   <span className="material-symbols-outlined wallpaper-check">check_circle</span>
                 ) : (
-                  <span className="wallpaper-overlay-label">Set as Wallpaper</span>
+                  <span className="wallpaper-overlay-label">{gradient ? 'Gradient' : 'Set as Wallpaper'}</span>
                 )}
               </div>
             </div>
