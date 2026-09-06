@@ -28434,27 +28434,33 @@ function registerWindowIpcHandlers(getWindows, toggleWindow, mainWindow = window
         getLaunchItems: getLaunchItems !== null && getLaunchItems !== void 0 ? getLaunchItems : (() => []),
     };
 }
+let _ipcListenerAdded = false;
 function initIpc(fs) {
-    window.addEventListener('message', (e) => __awaiter(this, void 0, void 0, function* () {
-        if (!e.data || e.data.type !== 'wos-ipc')
-            return;
-        const { id, event, data } = e.data;
-        const source = e.source;
-        if (!source)
-            return;
-        const handler = handlers.get(event);
-        if (!handler) {
-            source.postMessage({ type: 'wos-ipc-response', id, error: `Unknown IPC event: ${event}` }, '*');
-            return;
-        }
-        try {
-            const result = yield handler(data, source);
-            source.postMessage({ type: 'wos-ipc-response', id, result: result !== null && result !== void 0 ? result : null }, '*');
-        }
-        catch (err) {
-            source.postMessage({ type: 'wos-ipc-response', id, error: String(err) }, '*');
-        }
-    }));
+    // Re-registering FS handlers on a second call is fine (Map.set overwrites),
+    // but adding a second message listener would double-dispatch every IPC call.
+    if (!_ipcListenerAdded) {
+        _ipcListenerAdded = true;
+        window.addEventListener('message', (e) => __awaiter(this, void 0, void 0, function* () {
+            if (!e.data || e.data.type !== 'wos-ipc')
+                return;
+            const { id, event, data } = e.data;
+            const source = e.source;
+            if (!source)
+                return;
+            const handler = handlers.get(event);
+            if (!handler) {
+                source.postMessage({ type: 'wos-ipc-response', id, error: `Unknown IPC event: ${event}` }, '*');
+                return;
+            }
+            try {
+                const result = yield handler(data, source);
+                source.postMessage({ type: 'wos-ipc-response', id, result: result !== null && result !== void 0 ? result : null }, '*');
+            }
+            catch (err) {
+                source.postMessage({ type: 'wos-ipc-response', id, error: String(err) }, '*');
+            }
+        }));
+    } // end if (!_ipcListenerAdded)
     // WM handlers delegate to the bridge set by the layout bundle on the main window.
     registerIpcHandler('wm.getWindows', () => { var _a, _b; return (_b = (_a = window.__wosWmBridge) === null || _a === void 0 ? void 0 : _a.getWindows()) !== null && _b !== void 0 ? _b : []; });
     registerIpcHandler('wm.toggleWindow', (d) => { var _a; (_a = window.__wosWmBridge) === null || _a === void 0 ? void 0 : _a.toggleWindow(Number(d.pid)); return true; });

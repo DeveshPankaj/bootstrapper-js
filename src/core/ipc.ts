@@ -63,8 +63,14 @@ export function registerWindowIpcHandlers(
   };
 }
 
+let _ipcListenerAdded = false;
+
 export function initIpc(fs: any) {
-  window.addEventListener('message', async (e: MessageEvent) => {
+  // Re-registering FS handlers on a second call is fine (Map.set overwrites),
+  // but adding a second message listener would double-dispatch every IPC call.
+  if (!_ipcListenerAdded) {
+    _ipcListenerAdded = true;
+    window.addEventListener('message', async (e: MessageEvent) => {
     if (!e.data || e.data.type !== 'wos-ipc') return;
     const { id, event, data } = e.data;
     const source = e.source as Window | null;
@@ -81,6 +87,7 @@ export function initIpc(fs: any) {
       source.postMessage({ type: 'wos-ipc-response', id, error: String(err) }, '*');
     }
   });
+  } // end if (!_ipcListenerAdded)
 
   // WM handlers delegate to the bridge set by the layout bundle on the main window.
   registerIpcHandler('wm.getWindows', () => window.__wosWmBridge?.getWindows() ?? []);
