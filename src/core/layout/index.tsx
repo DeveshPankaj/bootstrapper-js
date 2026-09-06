@@ -1074,7 +1074,7 @@ export const render = (container: HTMLElement) => {
     }
 
     const onContextMenu: React.MouseEventHandler<HTMLDivElement>  = (event) => {
-        if(event.target !== contentRef.current) return;
+        if ((event.target as HTMLElement).closest('.window, iframe')) return;
         event.preventDefault()
         const items = loadContextMenuItems()
         const multiDesktop = desktopsSubject.getValue().length > 1

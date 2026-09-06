@@ -157473,7 +157473,7 @@ const render = (container) => {
         return fallback;
     };
     const onContextMenu = (event) => {
-        if (event.target !== contentRef.current)
+        if (event.target.closest('.window, iframe'))
             return;
         event.preventDefault();
         const items = loadContextMenuItems();
