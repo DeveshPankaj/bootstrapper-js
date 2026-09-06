@@ -930,7 +930,14 @@ export const render = (container: HTMLElement) => {
     );
     platform.window.__wosWmBridge!.launch = (name: string) => {
       const cmd = platform.host.getCommand(name)
-      if (cmd) windowManager.createWindow(cmd.name)
+      if (!cmd) return
+      // Commands with meta.callable=true manage their own lifecycle (overlay toggles,
+      // singletons, etc.) — call them directly instead of wrapping in a WM window.
+      if ((cmd.meta as any)?.callable) {
+        platform.host.callCommand(name)
+      } else {
+        windowManager.createWindow(cmd.name)
+      }
     };
     // Broadcast window-list changes to all iframes in the main document.
     // Pass platform.window.document explicitly — bare `document` inside the

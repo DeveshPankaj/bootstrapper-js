@@ -317,4 +317,5 @@ platform.host.registerCommand('ui.app-drawer', openDrawer, {
   title: 'App Drawer',
   icon:  'grid_view',
   description: 'Browse and launch all apps',
+  callable: true,
 })

@@ -28635,26 +28635,33 @@ function registerWindowIpcHandlers(getWindows, toggleWindow, mainWindow = window
     };
 }
 function initIpc(fs) {
-    window.addEventListener('message', (e) => __awaiter(this, void 0, void 0, function* () {
-        if (!e.data || e.data.type !== 'wos-ipc')
-            return;
-        const { id, event, data } = e.data;
-        const source = e.source;
-        if (!source)
-            return;
-        const handler = handlers.get(event);
-        if (!handler) {
-            source.postMessage({ type: 'wos-ipc-response', id, error: `Unknown IPC event: ${event}` }, '*');
-            return;
-        }
-        try {
-            const result = yield handler(data, source);
-            source.postMessage({ type: 'wos-ipc-response', id, result: result !== null && result !== void 0 ? result : null }, '*');
-        }
-        catch (err) {
-            source.postMessage({ type: 'wos-ipc-response', id, error: String(err) }, '*');
-        }
-    }));
+    // Both bootstrapper.bundle and remote.bundle call initIpc in the same window.
+    // Each bundle has its own module scope, so a module-level flag would be
+    // duplicated. Use window.__wosIpcInit (shared across all scripts) to ensure
+    // only one message listener is ever added.
+    if (!window.__wosIpcInit) {
+        window.__wosIpcInit = true;
+        window.addEventListener('message', (e) => __awaiter(this, void 0, void 0, function* () {
+            if (!e.data || e.data.type !== 'wos-ipc')
+                return;
+            const { id, event, data } = e.data;
+            const source = e.source;
+            if (!source)
+                return;
+            const handler = handlers.get(event);
+            if (!handler) {
+                source.postMessage({ type: 'wos-ipc-response', id, error: `Unknown IPC event: ${event}` }, '*');
+                return;
+            }
+            try {
+                const result = yield handler(data, source);
+                source.postMessage({ type: 'wos-ipc-response', id, result: result !== null && result !== void 0 ? result : null }, '*');
+            }
+            catch (err) {
+                source.postMessage({ type: 'wos-ipc-response', id, error: String(err) }, '*');
+            }
+        }));
+    }
     // WM handlers delegate to the bridge set by the layout bundle on the main window.
     registerIpcHandler('wm.getWindows', () => { var _a, _b; return (_b = (_a = window.__wosWmBridge) === null || _a === void 0 ? void 0 : _a.getWindows()) !== null && _b !== void 0 ? _b : []; });
     registerIpcHandler('wm.toggleWindow', (d) => { var _a; (_a = window.__wosWmBridge) === null || _a === void 0 ? void 0 : _a.toggleWindow(Number(d.pid)); return true; });
@@ -157376,9 +157383,18 @@ const render = (container) => {
         win === null || win === void 0 ? void 0 : win.toggle();
     }, platform.window, getLaunchItems);
     platform.window.__wosWmBridge.launch = (name) => {
+        var _a;
         const cmd = platform.host.getCommand(name);
-        if (cmd)
+        if (!cmd)
+            return;
+        // Commands with meta.callable=true manage their own lifecycle (overlay toggles,
+        // singletons, etc.) — call them directly instead of wrapping in a WM window.
+        if ((_a = cmd.meta) === null || _a === void 0 ? void 0 : _a.callable) {
+            platform.host.callCommand(name);
+        }
+        else {
             windowManager.createWindow(cmd.name);
+        }
     };
     // Broadcast window-list changes to all iframes in the main document.
     // Pass platform.window.document explicitly — bare `document` inside the
