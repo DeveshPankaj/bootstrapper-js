@@ -890,6 +890,32 @@ export const render = (container: HTMLElement) => {
     // Bridge WM handlers onto platform.window (the main window) so the remote
     // bundle's IPC listener — which runs in a different module instance — can
     // serve wm.getWindows / wm.toggleWindow requests from sandboxed dock iframes.
+    const DEFAULT_ICON: Record<string, string> = {
+      'explorer': 'folder', 'ui.file-explorer': 'folder',
+      'ui.vs-code': 'data_object', 'ui.notepad': 'edit_note',
+      'ui.task-manager': 'monitoring', 'webamp': 'music_note',
+      'ui.terminal': 'terminal', 'ui.settings': 'settings',
+      'ui.pkg-manager': 'package_2', 'ui.app-drawer': 'apps',
+    }
+    const getLaunchItems = () => {
+      try {
+        const fs = platform.host.getFS()
+        const pinned: string[] = fs.existsSync('/etc/taskbar.json')
+          ? JSON.parse(fs.readFileSync('/etc/taskbar.json', 'utf-8') as string).pinned ?? []
+          : ['explorer', 'ui.vs-code', 'ui.notepad', 'webamp', 'ui.task-manager']
+        return pinned.map(name => {
+          const cmd = platform.host.getCommand(name)
+          const meta = (cmd as any)?.meta ?? {}
+          return {
+            name,
+            label: meta.title ?? name,
+            icon: meta.icon ?? DEFAULT_ICON[name] ?? 'apps',
+            cmd: `service('001-core.layout','open-window')(command('${name}'))`,
+          }
+        })
+      } catch { return [] }
+    }
+
     registerWindowIpcHandlers(
       () => windowsSubject.getValue().map(w => ({
         pid: w.pid, name: w.name, title: w.title,
@@ -900,7 +926,12 @@ export const render = (container: HTMLElement) => {
         win?.toggle();
       },
       platform.window,
+      getLaunchItems,
     );
+    platform.window.__wosWmBridge!.launch = (name: string) => {
+      const cmd = platform.host.getCommand(name)
+      if (cmd) windowManager.createWindow(cmd.name)
+    };
     // Broadcast window-list changes to all iframes in the main document.
     // Pass platform.window.document explicitly — bare `document` inside the
     // layout bundle resolves to the hidden-iframe document (no child iframes).

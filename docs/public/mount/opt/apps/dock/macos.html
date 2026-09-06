@@ -4,51 +4,79 @@
 <meta charset="utf-8">
 <!-- dock:height=80 -->
 <title>Dock</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { height: 100%; background: transparent; overflow: hidden; display: flex; align-items: flex-end; justify-content: center; }
-#dock {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-  padding: 8px 16px 6px;
+html, body {
+  height: 100%;
   background: rgba(255,255,255,0.18);
   backdrop-filter: blur(30px) saturate(180%);
   -webkit-backdrop-filter: blur(30px) saturate(180%);
-  border: 1px solid rgba(255,255,255,0.3);
-  border-radius: 20px 20px 0 0;
-  border-bottom: none;
-  box-shadow: 0 -4px 32px rgba(0,0,0,0.2);
+  border-top: 1px solid rgba(255,255,255,0.30);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: system-ui, -apple-system, sans-serif;
 }
-.win-icon {
+#dock {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 16px;
+  height: 100%;
+}
+.sep {
+  width: 1px;
+  height: 40px;
+  background: rgba(0,0,0,0.15);
+  margin: 0 8px;
+  flex-shrink: 0;
+}
+.item {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 2px;
   cursor: pointer;
-  transition: transform 0.15s cubic-bezier(.34,1.56,.64,1);
-  position: relative;
+  border-radius: 10px;
+  padding: 5px 9px 7px;
+  min-width: 52px;
+  transition: background 0.12s, transform 0.15s cubic-bezier(.34,1.56,.64,1);
+  user-select: none;
 }
-.win-icon:hover { transform: scale(1.35) translateY(-8px); }
-.win-icon .icon {
+.item:hover { transform: scale(1.12) translateY(-4px); background: rgba(0,0,0,0.07); }
+.item.active  { background: rgba(0,0,0,0.09); }
+.item.minimized { opacity: 0.5; }
+.item .icon {
   font-family: 'Material Symbols Outlined', sans-serif;
-  font-size: 32px;
-  color: #fff;
-  background: linear-gradient(160deg, rgba(255,255,255,0.3), rgba(255,255,255,0.05));
-  border-radius: 12px;
-  width: 44px; height: 44px;
-  display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-  text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+  font-size: 30px;
+  line-height: 1;
+  color: rgba(0,0,0,0.82);
+  font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 30;
 }
-.win-icon.active .icon { background: linear-gradient(160deg, rgba(10,132,255,0.4), rgba(10,132,255,0.1)); }
-.win-icon.minimized { opacity: 0.5; }
-.win-icon .dot {
-  width: 4px; height: 4px; border-radius: 50%;
-  background: rgba(255,255,255,0.8);
+.item.active .icon { color: #000; font-variation-settings: 'FILL' 1, 'wght' 300, 'GRAD' 0, 'opsz' 30; }
+.label {
+  font-size: 9px;
+  color: rgba(0,0,0,0.6);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 60px;
+  text-align: center;
+  font-weight: 500;
+  letter-spacing: 0.01em;
 }
-.win-icon.minimized .dot { background: rgba(255,255,255,0.3); }
-@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined');
+.item.active .label { color: rgba(0,0,0,0.85); }
+.dot {
+  width: 4px; height: 4px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.45);
+  position: absolute;
+  bottom: 2px;
+}
+.item:not(.running) .dot { display: none; }
 </style>
 </head>
 <body>
@@ -83,23 +111,59 @@ html, body { height: 100%; background: transparent; overflow: hidden; display: f
   };
 
   var dock = document.getElementById('dock');
+  var launchItems = [];
+  var openWindows  = [];
 
-  function render(wins) {
+  function render() {
     dock.innerHTML = '';
-    wins.forEach(function(w) {
-      var item = document.createElement('div');
-      item.className = 'win-icon' + (w.active ? ' active' : '') + (w.minimized ? ' minimized' : '');
-      item.title = w.title || w.name;
-      item.innerHTML =
-        '<span class="icon">' + (w.icon || 'apps') + '</span>' +
+
+    launchItems.forEach(function(item) {
+      var win = openWindows.find(function(w) { return w.name === item.name; });
+      var el = document.createElement('div');
+      el.className = 'item' + (win ? ' running' : '') + (win && win.active ? ' active' : '') + (win && win.minimized ? ' minimized' : '');
+      el.title = item.label;
+      el.innerHTML =
+        '<span class="icon">' + item.icon + '</span>' +
+        '<span class="label">' + item.label + '</span>' +
         '<span class="dot"></span>';
-      item.onclick = function() { ipc.call('wm.toggleWindow', { pid: w.pid }); };
-      dock.appendChild(item);
+      el.onclick = function() {
+        if (win) ipc.call('wm.toggleWindow', { pid: win.pid });
+        else ipc.call('wm.launch', { name: item.name });
+      };
+      dock.appendChild(el);
+    });
+
+    var pinned = launchItems.map(function(i) { return i.name; });
+    var extras = openWindows.filter(function(w) { return pinned.indexOf(w.name) === -1; });
+    if (extras.length && launchItems.length) {
+      var sep = document.createElement('div'); sep.className = 'sep'; dock.appendChild(sep);
+    }
+    extras.forEach(function(w) {
+      var el = document.createElement('div');
+      el.className = 'item running' + (w.active ? ' active' : '') + (w.minimized ? ' minimized' : '');
+      el.title = w.title || w.name;
+      el.innerHTML =
+        '<span class="icon">' + (w.icon || 'apps') + '</span>' +
+        '<span class="label">' + (w.title || w.name) + '</span>' +
+        '<span class="dot"></span>';
+      el.onclick = function() { ipc.call('wm.toggleWindow', { pid: w.pid }); };
+      dock.appendChild(el);
     });
   }
 
-  ipc.call('wm.getWindows').then(render).catch(function() {});
-  ipc.on('wm.windowsChanged', render);
+  Promise.all([
+    ipc.call('wm.getLaunchItems').catch(function() { return []; }),
+    ipc.call('wm.getWindows').catch(function() { return []; })
+  ]).then(function(results) {
+    launchItems  = results[0] || [];
+    openWindows  = results[1] || [];
+    render();
+  });
+
+  ipc.on('wm.windowsChanged', function(wins) {
+    openWindows = wins || [];
+    render();
+  });
 })();
 </script>
 </body>

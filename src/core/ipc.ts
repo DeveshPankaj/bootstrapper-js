@@ -22,6 +22,8 @@ export function broadcastIpcEvent(event: string, data: unknown, targetDoc: Docum
 export type WmBridge = {
   getWindows: () => { pid: number; name: string; title: string; icon: string; minimized: boolean; active: boolean }[];
   toggleWindow: (pid: number) => void;
+  getLaunchItems: () => { name: string; label: string; icon: string; cmd: string }[];
+  launch?: (name: string) => void;
 };
 declare global { interface Window { __wosWmBridge?: WmBridge } }
 
@@ -29,8 +31,13 @@ export function registerWindowIpcHandlers(
   getWindows: WmBridge['getWindows'],
   toggleWindow: WmBridge['toggleWindow'],
   mainWindow: Window = window,
+  getLaunchItems?: WmBridge['getLaunchItems'],
 ) {
-  mainWindow.__wosWmBridge = { getWindows, toggleWindow };
+  mainWindow.__wosWmBridge = {
+    getWindows,
+    toggleWindow,
+    getLaunchItems: getLaunchItems ?? (() => []),
+  };
 }
 
 export function initIpc(fs: any) {
@@ -55,6 +62,8 @@ export function initIpc(fs: any) {
   // WM handlers delegate to the bridge set by the layout bundle on the main window.
   registerIpcHandler('wm.getWindows', () => window.__wosWmBridge?.getWindows() ?? []);
   registerIpcHandler('wm.toggleWindow', (d: any) => { window.__wosWmBridge?.toggleWindow(Number(d.pid)); return true; });
+  registerIpcHandler('wm.getLaunchItems', () => window.__wosWmBridge?.getLaunchItems() ?? []);
+  registerIpcHandler('wm.launch', (d: any) => { window.__wosWmBridge?.launch?.(String(d.name)); return true; });
 
   registerIpcHandler('fs.read', (d: any) => Array.from(fs.readFileSync(d.path) as Buffer));
   registerIpcHandler('fs.readText', (d: any) => fs.readFileSync(d.path, 'utf8') as string);

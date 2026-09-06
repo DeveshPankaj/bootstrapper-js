@@ -28627,8 +28627,12 @@ function broadcastIpcEvent(event, data, targetDoc = document) {
         catch (_) { }
     });
 }
-function registerWindowIpcHandlers(getWindows, toggleWindow, mainWindow = window) {
-    mainWindow.__wosWmBridge = { getWindows, toggleWindow };
+function registerWindowIpcHandlers(getWindows, toggleWindow, mainWindow = window, getLaunchItems) {
+    mainWindow.__wosWmBridge = {
+        getWindows,
+        toggleWindow,
+        getLaunchItems: getLaunchItems !== null && getLaunchItems !== void 0 ? getLaunchItems : (() => []),
+    };
 }
 function initIpc(fs) {
     window.addEventListener('message', (e) => __awaiter(this, void 0, void 0, function* () {
@@ -28654,6 +28658,8 @@ function initIpc(fs) {
     // WM handlers delegate to the bridge set by the layout bundle on the main window.
     registerIpcHandler('wm.getWindows', () => { var _a, _b; return (_b = (_a = window.__wosWmBridge) === null || _a === void 0 ? void 0 : _a.getWindows()) !== null && _b !== void 0 ? _b : []; });
     registerIpcHandler('wm.toggleWindow', (d) => { var _a; (_a = window.__wosWmBridge) === null || _a === void 0 ? void 0 : _a.toggleWindow(Number(d.pid)); return true; });
+    registerIpcHandler('wm.getLaunchItems', () => { var _a, _b; return (_b = (_a = window.__wosWmBridge) === null || _a === void 0 ? void 0 : _a.getLaunchItems()) !== null && _b !== void 0 ? _b : []; });
+    registerIpcHandler('wm.launch', (d) => { var _a, _b; (_b = (_a = window.__wosWmBridge) === null || _a === void 0 ? void 0 : _a.launch) === null || _b === void 0 ? void 0 : _b.call(_a, String(d.name)); return true; });
     registerIpcHandler('fs.read', (d) => Array.from(fs.readFileSync(d.path)));
     registerIpcHandler('fs.readText', (d) => fs.readFileSync(d.path, 'utf8'));
     registerIpcHandler('fs.write', (d) => {
@@ -157304,13 +157310,48 @@ const render = (container) => {
     // Bridge WM handlers onto platform.window (the main window) so the remote
     // bundle's IPC listener — which runs in a different module instance — can
     // serve wm.getWindows / wm.toggleWindow requests from sandboxed dock iframes.
+    const DEFAULT_ICON = {
+        'explorer': 'folder', 'ui.file-explorer': 'folder',
+        'ui.vs-code': 'data_object', 'ui.notepad': 'edit_note',
+        'ui.task-manager': 'monitoring', 'webamp': 'music_note',
+        'ui.terminal': 'terminal', 'ui.settings': 'settings',
+        'ui.pkg-manager': 'package_2', 'ui.app-drawer': 'apps',
+    };
+    const getLaunchItems = () => {
+        var _a;
+        try {
+            const fs = platform.host.getFS();
+            const pinned = fs.existsSync('/etc/taskbar.json')
+                ? (_a = JSON.parse(fs.readFileSync('/etc/taskbar.json', 'utf-8')).pinned) !== null && _a !== void 0 ? _a : []
+                : ['explorer', 'ui.vs-code', 'ui.notepad', 'webamp', 'ui.task-manager'];
+            return pinned.map(name => {
+                var _a, _b, _c, _d;
+                const cmd = platform.host.getCommand(name);
+                const meta = (_a = cmd === null || cmd === void 0 ? void 0 : cmd.meta) !== null && _a !== void 0 ? _a : {};
+                return {
+                    name,
+                    label: (_b = meta.title) !== null && _b !== void 0 ? _b : name,
+                    icon: (_d = (_c = meta.icon) !== null && _c !== void 0 ? _c : DEFAULT_ICON[name]) !== null && _d !== void 0 ? _d : 'apps',
+                    cmd: `service('001-core.layout','open-window')(command('${name}'))`,
+                };
+            });
+        }
+        catch (_b) {
+            return [];
+        }
+    };
     (0,_ipc__WEBPACK_IMPORTED_MODULE_8__.registerWindowIpcHandlers)(() => _window_manager__WEBPACK_IMPORTED_MODULE_7__.windowsSubject.getValue().map(w => ({
         pid: w.pid, name: w.name, title: w.title,
         icon: w.icon, minimized: w.minimized, active: w.active,
     })), (pid) => {
         const win = _window_manager__WEBPACK_IMPORTED_MODULE_7__.windowsSubject.getValue().find(w => w.pid === pid);
         win === null || win === void 0 ? void 0 : win.toggle();
-    }, platform.window);
+    }, platform.window, getLaunchItems);
+    platform.window.__wosWmBridge.launch = (name) => {
+        const cmd = platform.host.getCommand(name);
+        if (cmd)
+            windowManager.createWindow(cmd.name);
+    };
     // Broadcast window-list changes to all iframes in the main document.
     // Pass platform.window.document explicitly — bare `document` inside the
     // layout bundle resolves to the hidden-iframe document (no child iframes).
