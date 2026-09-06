@@ -1,128 +1,166 @@
-# bootstrapper-js — Feature TODO
+# Platform Rings Refactor
 
-Each task is a self-contained feature. Check off when done.
-
----
-
-## System / Window Manager
-
-- [x] **Remove widget clamp logic** (`src/core/layout/index.tsx`)
-  - Remove the `clampToBounds` / `ResizeObserver` added to `WidgetItem`
-
-- [x] **Resize handles** (`src/core/window-manager.ts`, `src/core/layout/index.tsx`)
-  - 8 drag handles (N/S/E/W + corners) on every window via `addResizeHandles()`
-  - CSS in layout.tsx; pointer-capture based resize with 200×120 minimum size
-
-- [x] **Window snapping** (`/opt/window-manager.js`)
-  - Snap zones at screen edges (left/right halves, fullscreen, quarters)
-  - Translucent blue overlay shown while dragging; applied on pointerup
-
-- [x] **Minimize to taskbar** (`src/core/layout/commands.tsx`, `src/core/layout/index.tsx`)
-  - Already wired: minimize button + taskbar toggle working
-  - Added `.minimized` CSS class on taskbar icon (small grey dot indicator)
+Restructure bootstrapper-js into Linux-style privilege rings so apps are
+fully isolated and all resource access is mediated by Platform.
 
 ---
 
-## File Explorer
+## Architecture
 
-- [x] **File search** — search icon in toolbar, recursive filter, results list
-- [x] **CSV viewer** (`/home/user1/apps/csv-viewer.js`) — sortable table; opens on double-click of `.csv` in explorer
-- [x] **Diff viewer** (`/home/user1/apps/diff.js`) — side-by-side LCS diff; "Compare with…" in explorer right-click
-- [x] **ZIP / archive support** (`explorer.js`, `usr/lib/fflate.min.js`)
-  - Bundled `fflate` v0.8.2 at `/usr/lib/fflate.min.js` (bootstrapped via meta.json)
-  - Double-click `.zip` → confirm + extract into current directory
-  - Right-click `.zip` → "Extract here" via platform service `zip-extract`
-  - Right-click any file/folder → "Compress to ZIP" via platform service `zip-compress`
+```
+Ring 0 — Kernel
+  vfs         BrowserFS mount, sync mirror, path helpers
+  sw-bridge   Service worker registration + /(sw)/ request routing
+  ipc-bus     Raw postMessage router (send/reply/broadcast)
 
+Ring 1 — Platform  (the only entry point rings 2-3 can call)
+  process-manager   PID generator, namespace lifecycle
+  namespace         Per-app context: pid, id, ACL, owned resources
+  message-bus       Mediated send between namespaces via platform
+  proxy-fs          FS API for apps — path ACL + segment-safe mkdir
+  command-registry  Registered commands (moved out of Host)
+  service-registry  Named service map (moved out of Host)
+  exec-engine       execString / execCommand / exec (moved out of Host)
+  platform          Platform class (thin — delegates to above)
+  host              Host class (kept, delegates to platform)
 
----
+Ring 2 — System  (system services, access platform via approved API)
+  layout-manager    Grid areas, active layout, layout switching
+  window-manager    Window open/close/minimize/focus/pid tracking
+  desktop-manager   Desktop icons, context menu, wallpaper
 
-## Terminal
-
-- [x] **Multiple shell environments + env vars** (`xtermjs.html`)
-  - Each `TerminalSession` has its own `this.env` map
-  - `export VAR=value` sets env var; `env` lists all env vars
-
-- [x] **Command aliases** (`xtermjs.html`)
-  - `alias name='cmd'` sets alias; `alias` lists all; `unalias name` removes
-  - Aliases loaded from `/home/user1/.aliases` on session init
-  - Aliases resolved before PATH lookup in `processCommand`
-
-- [x] **Inline images** (`xtermjs.html`)
-  - `cat image.png` (and .jpg, .gif, .webp, .svg, .bmp) renders `<img>` preview in terminal pane
-
----
-
-## Widgets
-
-- [x] **RSS reader widget** (`/etc/widgets/rss.js`)
-  - Widget shows a feed title + list of clickable headlines (open URL in `ui.iframe`)
-  - Saves list of feed URLs to `/home/user1/rss-feeds.json`
-  - "+" / "×" buttons in widget header to add/remove feed URLs
-  - Fetches via `fetch()` + DOMParser (CORS-permitting feeds) or a CORS proxy
+Ring 3 — Apps  (access nothing below platform)
+  Each app launch:
+    1. platform creates Namespace (pid + id + ACL)
+    2. platform creates iframe + postMessage IPC channel for that namespace
+    3. app receives proxy-fs + message-bus handle only
+    4. to reach another process: app → platform.send(targetPid, msg)
+    5. platform routes the message (enforces ACL) → target namespace
+```
 
 ---
 
-## Apps
+## Tasks
 
-- [x] **URL launcher / bookmarks** (`/home/user1/apps/bookmarks.js`, registered as `ui.bookmarks`)
-  - Saved list of `{title, url}` entries in `/home/user1/bookmarks.json`
-  - Clicking entry opens URL in `ui.iframe`; add/edit/delete inline; favicon preview
+### Phase 1 — Kernel layer  [ ]
+- [ ] 1.1  Create `src/kernel/vfs.ts`
+        Extract VFS init from `src/index.ts`:
+        `initVFS()` → mounts BrowserFS (indexeddb / localstorage),
+        `bootstrapMetaFiles()` → reads meta.json, copies force_reload files,
+        `mkdirRecursive(fs, path)` → segment-by-segment mkdir helper (fixes BrowserFS bug)
+        Export: `getFS()`, `mkdirRecursive`
+- [ ] 1.2  Create `src/kernel/ipc-bus.ts`
+        Move `initIpc`, `registerIpcHandler`, `broadcastIpcEvent` out of `src/core/ipc.ts`
+        Add `IpcBus` class: `register(event, handler)`, `dispatch(event, data)`, `broadcast(event, data)`
+        Keep WmBridge / DockBridge types here
+- [ ] 1.3  Create `src/kernel/sw-bridge.ts`
+        Extract SW registration from `src/index.ts`
+        `registerServiceWorker()`, `getServiceWorker()`
+- [ ] 1.4  Update `src/index.ts` to call kernel layer only (no inline VFS/SW code)
 
-- [x] **Image viewer** — zoom/pan viewer registered as `ui.imageviewer`
-- [x] **Spotlight launcher** — Alt+Space overlay
+### Phase 2 — Platform core  [ ]
+- [ ] 2.1  Create `src/platform/namespace.ts`
+        `Namespace` class: `{ pid, id, appDir, acl: { paths: string[], read, write } }`
+        ACL defaults: read `/opt/apps/<id>/`, `/home/user1/.local/share/<id>/`, write same
+        `checkRead(path)`, `checkWrite(path)` → throws if denied
+- [ ] 2.2  Create `src/platform/process-manager.ts`
+        `ProcessManager`: PID counter, `Map<pid, Namespace>`, `spawn(id, opts)`, `kill(pid)`, `list()`
+        Emits observable `processes$` (used by task-manager)
+- [ ] 2.3  Create `src/platform/proxy-fs.ts`
+        `ProxyFS` wraps kernel VFS with a `Namespace`
+        All path args are checked via `ns.checkRead` / `ns.checkWrite` before calling real fs
+        `mkdirRecursive(path)` uses segment-by-segment approach (no { recursive } flag)
+        Exported to app as its only FS interface — no raw `getFS()` access
+- [ ] 2.4  Create `src/platform/message-bus.ts`
+        `MessageBus` singleton owned by Platform
+        `subscribe(pid, handler)`, `unsubscribe(pid)`
+        `send(fromPid, toPid, channel, payload)` — platform checks ACL then routes
+        `broadcast(fromPid, channel, payload)` — sends to all subscribed pids
+        IPC wire: wraps existing `ipc-bus` postMessage under the hood
+- [ ] 2.5  Create `src/platform/command-registry.ts`
+        Extract `Command` type, `registerCommand`, `getCommand`, `callCommand`,
+        `getCommandsForExtension` from `Host` in `src/shared/index.ts`
+        Backed by `BehaviorSubject<Command[]>` (same as today)
+- [ ] 2.6  Create `src/platform/service-registry.ts`
+        Extract `register`, `getServiceSync`, `getService` from `Platform` class
+        `ServiceRegistry`: `Map<string, unknown>`, `register(name, value)`, `get(name)`
+- [ ] 2.7  Create `src/platform/exec-engine.ts`
+        Extract `execString`, `execCommand`, `exec` from `Host`
+        `ExecEngine` takes `CommandRegistry`, `ServiceRegistry`, `ProcessManager`
+        `execString` creates a Namespace via ProcessManager before running the script
+        Window shim passed to scripts: `{ platform: namespacedProxy, document, top }`
+        namespacedProxy exposes only: `ProxyFS`, `MessageBus.send`, `CommandRegistry` (read-only)
+- [ ] 2.8  Slim down `src/shared/index.ts`
+        `Host` delegates all methods to the new modules above
+        `Platform` becomes a thin proxy; constructor accepts registry + bus + exec refs
+        Remove direct `getFS()` from Host public API (internal only via ProxyFS)
+        Keep `execCommand` on Host for backward compat during transition
+
+### Phase 3 — System layer  [ ]
+- [ ] 3.1  Create `src/system/layout-manager.ts`
+        Extract layout load/switch/config from `src/core/layout/index.tsx`
+        `LayoutManager`: `layouts$`, `active$`, `setLayout(id)`, `readLayouts()`
+- [ ] 3.2  Create `src/system/window-manager.ts`
+        Extract window open/close/minimize/focus from `src/core/layout/index.tsx`
+        Each window tracks its namespace pid
+        `WindowManager`: `openWindow(cmd, pid, body, props)`, `closeWindow(pid)`,
+        `minimizeWindow(pid)`, `focusWindow(pid)`, `windows$`
+- [ ] 3.3  Create `src/system/desktop-manager.ts`
+        Extract desktop icon rendering, right-click context menu from layout
+        `DesktopManager`: `icons$`, `refresh()`, wallpaper apply
+- [ ] 3.4  Slim `src/core/layout/index.tsx`
+        Becomes a thin React shell that wires LayoutManager + WindowManager + DesktopManager
+        No more direct VFS calls or business logic in the component
+
+### Phase 4 — App launch flow  [ ]
+- [ ] 4.1  Update `pkg-manager/loader.js` boot flow
+        Each CORE_APPS entry: `ProcessManager.spawn(id)` → get namespace → `ExecEngine.exec`
+        Script runs in namespace context, gets ProxyFS + MessageBus only
+- [ ] 4.2  Update window open flow in `open-window` service
+        `WindowManager.openWindow` calls `ProcessManager.spawn` for the new window pid
+        Iframe gets its namespace pid injected; AppSDK injected = ProxyFS + MessageBus
+- [ ] 4.3  Update AppSDK injection (in app main.js loaders)
+        Replace raw `fs.*` with `ProxyFS` methods from the namespace
+        Replace `iframe.contentWindow.AppSDK = { readText: fs... }` with
+        `iframe.contentWindow.AppSDK = namespace.proxyFs` (same API shape)
+- [ ] 4.4  Update snake + NN app loaders
+        Same pattern: get namespace from ProcessManager, inject ProxyFS
+- [ ] 4.5  IPC channel per app iframe
+        Each iframe postMessage channel registered in MessageBus under its pid
+        Apps call `AppSDK.send(channel, payload)` → platform routes via MessageBus
+
+### Phase 5 — Tests + cleanup  [ ]
+- [ ] 5.1  Update/add browser tests for new launch flow
+- [ ] 5.2  Remove dead code from old Host (direct fs exposure, inline IPC handlers)
+- [ ] 5.3  Verify task-manager still shows processes via `ProcessManager.list()`
+- [ ] 5.4  Verify settings, spotlight, pkg-manager still work
+- [ ] 5.5  Rebuild (`npx webpack`) and smoke-test in browser
 
 ---
 
-## Settings
+## File map (new vs old)
 
-- [x] **Theme builder** (`/etc/settings/14-theme-builder.js`)
-  - Live color pickers + range sliders for all `--wm-*` CSS vars; applies instantly
-  - "Save as new theme" writes `/etc/wm/themes/<name>.json`
-
-- [x] **Font settings** (`/etc/settings/15-fonts.js`)
-  - UI font + mono font pickers (Google Fonts); live preview; saved to `/user-preferences.json`
-
-- [x] **App manager** (`/etc/settings/16-app-manager.js`)
-  - Lists all registered commands; "Pin" saves to preferences; "Launch" opens the app
-
-- [x] **Startup apps** (`/etc/settings/17-startup.js`)
-  - Checkbox list for boot-time auto-launch; raw editor for `/home/user1/initd.run`
-
-- [x] **Cron job editor** (`/etc/settings/18-cron.js`)
-  - Visual time-field editor for `/etc/crontab`; add/edit/delete entries
-
-- [x] **Keyboard shortcuts** — `/etc/settings/09-keybindings.js`
-- [x] **Boot log** — `/etc/settings/10-bootlog.js`
-- [x] **VFS snapshot** — `/etc/settings/11-vfs-snapshot.js`
-- [x] **Storage backend** — `/etc/settings/08-storage.js`
-- [x] **Notifications demo** — `/etc/settings/13-notifications.js`
+| New file | Replaces / source |
+|---|---|
+| `src/kernel/vfs.ts` | inline in `src/index.ts` |
+| `src/kernel/ipc-bus.ts` | `src/core/ipc.ts` |
+| `src/kernel/sw-bridge.ts` | inline in `src/index.ts` |
+| `src/platform/namespace.ts` | new |
+| `src/platform/process-manager.ts` | new |
+| `src/platform/proxy-fs.ts` | new (replaces raw `host.getFS()` in apps) |
+| `src/platform/message-bus.ts` | new (wraps existing `ipc-bus`) |
+| `src/platform/command-registry.ts` | extracted from `src/shared/index.ts` Host |
+| `src/platform/service-registry.ts` | extracted from `src/shared/index.ts` Platform |
+| `src/platform/exec-engine.ts` | extracted from `src/shared/index.ts` Host |
+| `src/system/layout-manager.ts` | extracted from `src/core/layout/index.tsx` |
+| `src/system/window-manager.ts` | extracted from `src/core/layout/index.tsx` |
+| `src/system/desktop-manager.ts` | extracted from `src/core/layout/index.tsx` |
 
 ---
 
-## Desktop / Platform
-
-- [x] **All apps listing** (`/home/user1/apps/app-launcher.js`, registered as `ui.app-launcher`)
-  - Searchable icon grid of all registered commands; Enter launches first match
-
----
-
-## Done
-
-- [x] **Shell history persistence** — `xtermjs.html` (`HISTORY_FILE`, `loadHistory`, `appendHistory`)
-- [x] **Tab completion** — `xtermjs.html`: Tab key handler
-- [x] **Keyboard shortcuts manager** — `/etc/settings/09-keybindings.js` + `src/remote.ts`
-- [x] **Boot log** — `src/index.ts` + `/etc/settings/10-bootlog.js`
-- [x] **VFS snapshot** — `/etc/settings/11-vfs-snapshot.js`
-- [x] **File search** — `explorer.js` search icon, recursive filter
-- [x] **Notification / toast system** — `src/remote.ts` `notify` command
-- [x] **Spotlight launcher** — `/opt/spotlight.js`, Alt+Space keybinding
-- [x] **Sticky notes widget** — `/etc/widgets/sticky-notes.js`
-- [x] **Image viewer** — `/home/user1/apps/imageviewer.js`
-- [x] **Force reload meta.json files** — Settings → Storage page
-- [x] **Storage backend switch** — `src/index.ts` + Settings → Storage
-- [x] **Query-param app launcher** — `src/remote.ts` `?app=` / `?apps=`
-- [x] **Alt-based keybindings** — `src/remote.ts` + `09-keybindings.js`
-- [x] **Exit command** — `xtermjs.html`
-- [x] **Widget clamp removed** — `src/core/layout/index.tsx`
-- [x] **Notifications demo** — `/etc/settings/13-notifications.js`
+## Rules
+- Apps MUST NOT import from `src/kernel/*` or call `host.getFS()` directly
+- All FS access from apps goes through `ProxyFS` (enforced by namespace ACL)
+- All inter-app messaging goes through `MessageBus.send(fromPid, toPid, ...)`
+- Platform is the only layer that instantiates `Namespace` or calls kernel directly
+- `src/shared/index.ts` is kept during transition; Host methods become thin delegators

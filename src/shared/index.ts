@@ -1,6 +1,9 @@
 import { Module } from "@modules/modules"
 import { BehaviorSubject, Observable, Subject } from "rxjs"
 import type fs from 'fs'
+import { CommandRegistry } from '../platform/command-registry'
+import { ProcessManager } from '../platform/process-manager'
+import { ProxyFS } from '../platform/proxy-fs'
 const Babel = require('./babel.js');
 
 const babelOpts = (filename: string, cwd: string) => ({
@@ -169,13 +172,32 @@ export class Host {
     });
     this.commands.next([newCommandObject, ...this.commands.getValue()]);
 
+    // Mirror into Ring 1 CommandRegistry so system/platform code can reach commands
+    // without going through the Host BehaviorSubject.
+    const regHandle = CommandRegistry.getInstance().register(
+      command_name, callback, meta, this.platform.name
+    );
+
     return {
       remove: () => {
         this.commands.next(
           this.commands.getValue().filter((x) => x !== newCommandObject)
         );
+        regHandle.remove();
       },
     };
+  }
+
+  // Ring 1 accessors — used by system layer (window-manager, etc.) to reach
+  // platform services without going through Host's private internals.
+  public getProcessManager(): ProcessManager {
+    return ProcessManager.getInstance()
+  }
+
+  public getProxyFs(pid: number): ProxyFS | undefined {
+    const ns = ProcessManager.getInstance().get(pid)?.namespace
+    if (!ns) return undefined
+    return new ProxyFS(this.getFS(), ns)
   }
 
   public registerWidget(

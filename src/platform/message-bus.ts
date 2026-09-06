@@ -19,6 +19,10 @@ export type BusSubscription = {
     handler: (msg: BusMessage) => void
 }
 
+declare global {
+    interface Window { __wosMessageBus?: MessageBus }
+}
+
 export class MessageBus {
     private static _instance: MessageBus | null = null
 
@@ -28,7 +32,12 @@ export class MessageBus {
     private _subscriptions = new Map<number, Set<(msg: BusMessage) => void>>()
 
     static getInstance(): MessageBus {
-        if (!MessageBus._instance) MessageBus._instance = new MessageBus()
+        const shared = (window.top as any)?.__wosMessageBus
+        if (shared) return shared
+        if (!MessageBus._instance) {
+            MessageBus._instance = new MessageBus()
+            try { (window.top as any).__wosMessageBus = MessageBus._instance } catch (_) {}
+        }
         return MessageBus._instance
     }
 

@@ -29779,8 +29779,14 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _shared_index__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! @shared/index */ "./src/shared/index.ts");
 /* harmony import */ var _shared_fs_utils__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! @shared/fs-utils */ "./src/shared/fs-utils.ts");
 /* harmony import */ var _shared_constants__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! @shared/constants */ "./src/shared/constants.ts");
-/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/BehaviorSubject.js");
-/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/Subject.js");
+/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/BehaviorSubject.js");
+/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/Subject.js");
+/* harmony import */ var _platform_process_manager__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ../platform/process-manager */ "./src/platform/process-manager.ts");
+/* harmony import */ var _platform_proxy_fs__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ../platform/proxy-fs */ "./src/platform/proxy-fs.ts");
+/* harmony import */ var _system_window_manager__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ../system/window-manager */ "./src/system/window-manager.ts");
+
+
+
 
 
 
@@ -29789,7 +29795,28 @@ __webpack_require__.r(__webpack_exports__);
 const platform = _shared_index__WEBPACK_IMPORTED_MODULE_1__.Platform.getInstance();
 const WINDOWS_CONTAINER_CLASS = "windows";
 const DESKTOP_CONTAINER_CLASS = "desktop";
-const windowsSubject = new rxjs__WEBPACK_IMPORTED_MODULE_4__.BehaviorSubject([]);
+const windowsSubject = new rxjs__WEBPACK_IMPORTED_MODULE_7__.BehaviorSubject([]);
+// Mirror windowsSubject into Ring 2 WindowManager so external consumers
+// (task-manager, spotlight, etc.) can subscribe to Wm2.getInstance().windows$.
+windowsSubject.subscribe(wins => {
+    const wm2 = _system_window_manager__WEBPACK_IMPORTED_MODULE_6__.WindowManager.getInstance();
+    const current = new Set(wm2.getAll().map(w => w.pid));
+    const next = new Set(wins.map(w => w.pid));
+    // Unregister closed windows
+    for (const pid of current) {
+        if (!next.has(pid))
+            wm2.unregister(pid);
+    }
+    // Update or register open windows
+    for (const w of wins) {
+        if (current.has(w.pid)) {
+            wm2.updateRecord(w.pid, { title: w.title, minimized: w.minimized, active: w.active });
+        }
+        else {
+            wm2.register({ pid: w.pid, command: w.name, title: w.title, icon: w.icon, minimized: w.minimized, active: w.active });
+        }
+    }
+});
 const DEFAULT_DESKTOPS_CONFIG = { desktops: [{ id: "1", name: "Desktop 1" }], active: "1" };
 const readDesktopsConfig = () => {
     try {
@@ -29807,8 +29834,8 @@ const writeDesktopsConfig = (desktops, active) => {
     catch (err) { /* best effort */ }
 };
 const initialDesktopsConfig = readDesktopsConfig();
-const desktopsSubject = new rxjs__WEBPACK_IMPORTED_MODULE_4__.BehaviorSubject(initialDesktopsConfig.desktops);
-const activeDesktopSubject = new rxjs__WEBPACK_IMPORTED_MODULE_4__.BehaviorSubject(initialDesktopsConfig.active);
+const desktopsSubject = new rxjs__WEBPACK_IMPORTED_MODULE_7__.BehaviorSubject(initialDesktopsConfig.desktops);
+const activeDesktopSubject = new rxjs__WEBPACK_IMPORTED_MODULE_7__.BehaviorSubject(initialDesktopsConfig.active);
 const switchDesktop = (id) => {
     if (id === activeDesktopSubject.getValue())
         return;
@@ -29841,7 +29868,6 @@ const removeDesktop = (id) => {
     activeDesktopSubject.next(newActive);
     writeDesktopsConfig(updated, newActive);
 };
-let nextPid = 1;
 const processRegistry = new Map();
 const writeProcMeta = (pid, meta) => {
     try {
@@ -29994,23 +30020,34 @@ class WindowManager {
         }));
     }
     createWindow(command_name, ...args) {
-        var _a, _b, _c, _d, _e, _f;
-        var _g, _h;
+        var _a, _b, _c, _d, _e, _f, _g;
+        var _h, _j;
         const command = platform.host.getCommand(command_name);
         if (!command) {
             throw `Command not found [${command_name}]`;
         }
-        const pid = nextPid++;
+        // Ring 1: spawn a namespace for this process — assigns pid + ACL
+        const ns = _platform_process_manager__WEBPACK_IMPORTED_MODULE_4__.ProcessManager.getInstance().spawn(command_name, {
+            label: ((_a = command.meta) === null || _a === void 0 ? void 0 : _a.title) || command_name,
+        });
+        const pid = ns.pid;
+        // Build a ProxyFS scoped to this namespace — passed to app loaders via props
+        let proxyFs;
+        try {
+            const rawFs = platform.host.getFS();
+            proxyFs = new _platform_proxy_fs__WEBPACK_IMPORTED_MODULE_5__.ProxyFS(rawFs, ns);
+        }
+        catch (_) { }
         // Load the VFS window-manager module once at the top so its hooks
         // (createContainer, createHeader, setupWindow) are all available.
         const wmModule = loadWindowManagerModule();
-        const wmSettings = (_b = (_a = wmModule.readSettings) === null || _a === void 0 ? void 0 : _a.call(wmModule)) !== null && _b !== void 0 ? _b : FALLBACK_WM_SETTINGS;
+        const wmSettings = (_c = (_b = wmModule.readSettings) === null || _b === void 0 ? void 0 : _b.call(wmModule)) !== null && _c !== void 0 ? _c : FALLBACK_WM_SETTINGS;
         // --- VFS hook: createContainer({ command, settings }) ---
         // Return an HTMLElement to replace the default <div class="window">.
         // Mandatory attributes/classes are still applied by compiled code below.
         // Use nodeType === 1 (ELEMENT_NODE) instead of instanceof HTMLElement so
         // elements created via top.document (a different frame) still match.
-        const customContainer = (_c = wmModule.createContainer) === null || _c === void 0 ? void 0 : _c.call(wmModule, { command, settings: wmSettings });
+        const customContainer = (_d = wmModule.createContainer) === null || _d === void 0 ? void 0 : _d.call(wmModule, { command, settings: wmSettings });
         const container = ((customContainer === null || customContainer === void 0 ? void 0 : customContainer.nodeType) === 1
             ? customContainer
             : platform.window.document.createElement("div"));
@@ -30022,7 +30059,7 @@ class WindowManager {
         container.classList.add("hidden");
         // windowRef must exist before closeFunction since closeFunction calls closeWindow(windowRef).
         const windowRef = { container, command, pid };
-        (_d = (_g = this.windows)[_h = command.name]) !== null && _d !== void 0 ? _d : (_g[_h] = []);
+        (_e = (_h = this.windows)[_j = command.name]) !== null && _e !== void 0 ? _e : (_h[_j] = []);
         this.windows[command.name].push(windowRef);
         Object.freeze(windowRef);
         // Declare iframe early so emitSignal can close over it before its assignment below.
@@ -30064,7 +30101,7 @@ class WindowManager {
         // Return an HTMLElement to replace the default header.
         // The callbacks are provided so custom headers can wire their own controls.
         // If null/undefined is returned, the default compiled header is used instead.
-        const customHead = (_e = wmModule.createHeader) === null || _e === void 0 ? void 0 : _e.call(wmModule, {
+        const customHead = (_f = wmModule.createHeader) === null || _f === void 0 ? void 0 : _f.call(wmModule, {
             command,
             settings: wmSettings,
             close: closeFunction,
@@ -30101,7 +30138,7 @@ class WindowManager {
             windowsSubject.next(windowsSubject.getValue().map(w => w.pid === pid ? Object.assign(Object.assign({}, w), { title: newTitle }) : w));
         };
         const title = command.meta.title || command.name;
-        const icon = ((_f = command.meta) === null || _f === void 0 ? void 0 : _f.icon) || "";
+        const icon = ((_g = command.meta) === null || _g === void 0 ? void 0 : _g.icon) || "";
         writeProcMeta(pid, { pid, name: command.name, title, icon, startedAt: Date.now() });
         windowsSubject.next([
             ...windowsSubject.getValue(),
@@ -30131,13 +30168,14 @@ class WindowManager {
         iframe = platform.window.document.createElement("iframe");
         iframe.classList.add("draggable");
         iframe.setAttribute("allowfullscreen", "");
-        const messages$ = new rxjs__WEBPACK_IMPORTED_MODULE_5__.Subject();
+        const messages$ = new rxjs__WEBPACK_IMPORTED_MODULE_8__.Subject();
         processRegistry.set(pid, {
             close: closeFunction,
             kill: killFunction,
             messages$,
             servicePlatformName: command.servicePlatformName,
             startedAt: Date.now(),
+            proxyFs,
         });
         iframe.onload = () => {
             var _a, _b, _c;
@@ -30158,6 +30196,9 @@ class WindowManager {
                 // `/proc/<pid>/...`, and use it as the target for `process.kill`
                 // and `process.send-message` from other scripts.
                 pid,
+                // Ring 1: scoped VFS proxy — app loaders use this instead of host.getFS()
+                proxyFs,
+                namespace: ns,
                 close: closeFunction,
                 onMessage: (cb) => {
                     const subscription = messages$.subscribe(cb);
@@ -30237,6 +30278,7 @@ class WindowManager {
         (0,_shared_fs_utils__WEBPACK_IMPORTED_MODULE_2__.removeRecursive)(platform.host.getFS(), `${_shared_constants__WEBPACK_IMPORTED_MODULE_3__.PROC_DIR}/${windowRef.pid}`);
         (_b = processRegistry.get(windowRef.pid)) === null || _b === void 0 ? void 0 : _b.messages$.complete();
         processRegistry.delete(windowRef.pid);
+        _platform_process_manager__WEBPACK_IMPORTED_MODULE_4__.ProcessManager.getInstance().kill(windowRef.pid);
         windowsSubject.next(windowsSubject.getValue().filter(w => w.pid !== windowRef.pid));
     }
     moveOnTop(windowRef) {
@@ -30546,6 +30588,558 @@ function initIpcBus(fs) {
 
 /***/ }),
 
+/***/ "./src/kernel/vfs.ts":
+/*!***************************!*\
+  !*** ./src/kernel/vfs.ts ***!
+  \***************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   FS_BACKEND_QUERY_PARAM: () => (/* binding */ FS_BACKEND_QUERY_PARAM),
+/* harmony export */   FS_BACKEND_STORAGE_KEY: () => (/* binding */ FS_BACKEND_STORAGE_KEY),
+/* harmony export */   initVFS: () => (/* binding */ initVFS),
+/* harmony export */   mkdirRecursive: () => (/* binding */ mkdirRecursive),
+/* harmony export */   resolveFsBackend: () => (/* binding */ resolveFsBackend)
+/* harmony export */ });
+/* harmony import */ var _ipc_bus__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./ipc-bus */ "./src/kernel/ipc-bus.ts");
+// Ring 0 — VFS kernel module
+// Owns BrowserFS mount, path bootstrap from meta.json, and segment-safe mkdir.
+// No business logic. Called once at boot from src/index.ts.
+var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+
+const FS_BACKEND_STORAGE_KEY = '__app_fs_backend__';
+const FS_BACKEND_QUERY_PARAM = 'fsBackend';
+function resolveFsBackend() {
+    const fromQuery = new URLSearchParams(window.location.search).get(FS_BACKEND_QUERY_PARAM);
+    if (fromQuery === 'indexeddb' || fromQuery === 'localstorage') {
+        localStorage.setItem(FS_BACKEND_STORAGE_KEY, fromQuery);
+        return fromQuery;
+    }
+    return localStorage.getItem(FS_BACKEND_STORAGE_KEY) === 'localstorage' ? 'localstorage' : 'indexeddb';
+}
+// BrowserFS ignores { recursive: true } — create each segment individually.
+function mkdirRecursive(fs, path) {
+    const segments = path.replace(/^\//, '').split('/');
+    let cur = '';
+    for (const seg of segments) {
+        cur += '/' + seg;
+        try {
+            fs.mkdirSync(cur);
+        }
+        catch (e) {
+            if (e.code !== 'EEXIST')
+                throw e;
+        }
+    }
+}
+const DEFAULT_DIRS = [
+    '/home', '/home/user1', '/home/user1/apps', '/home/user1/tools',
+    '/home/user1/projects', '/home/user1/quotes',
+    '/mnt', '/usr', '/usr/bin', '/usr/lib', '/usr/local',
+    '/usr/share', '/usr/share/icons',
+    '/bin', '/etc', '/etc/wm', '/etc/pkg',
+    '/opt', '/opt/apps',
+    '/proc', '/srv', '/sys', '/tmp',
+    '/var', '/var/log', '/var/spool',
+];
+const createBackend = (Ctor, opts) => new Promise((resolve, reject) => Ctor.Create(opts, (err, fs) => err ? reject(err) : resolve(fs)));
+const createIndexedDBMirror = (Backend, storeName) => __awaiter(void 0, void 0, void 0, function* () {
+    const idbFS = yield createBackend(Backend.IndexedDB, { storeName });
+    yield new Promise((resolve, reject) => idbFS.makeRootDirectory((err) => err ? reject(err) : resolve()));
+    const memFS = yield createBackend(Backend.InMemory, {});
+    return createBackend(Backend.AsyncMirror, { sync: memFS, async: idbFS });
+});
+function initVFS(bootLog) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const t0 = Date.now();
+        window.BrowserFS.install(window);
+        const Backend = window.BrowserFS.FileSystem;
+        const fsBackend = resolveFsBackend();
+        let mfs;
+        if (fsBackend === 'localstorage') {
+            const rootFS = yield createBackend(Backend.LocalStorage, {});
+            const tmpFS = yield createBackend(Backend.InMemory, {});
+            const mntFS = yield createBackend(Backend.InMemory, {});
+            mfs = yield createBackend(Backend.MountableFileSystem, { '/': rootFS, '/tmp': tmpFS, '/mnt': mntFS });
+        }
+        else {
+            const rootFS = yield createIndexedDBMirror(Backend, 'fs');
+            const tmpFS = yield createIndexedDBMirror(Backend, 'tmp');
+            const mntFS = yield createIndexedDBMirror(Backend, 'mnt');
+            mfs = yield createBackend(Backend.MountableFileSystem, { '/': rootFS, '/tmp': tmpFS, '/mnt': mntFS });
+        }
+        window.BrowserFS.initialize(mfs);
+        bootLog(`VFS init (${fsBackend})`, t0);
+        const fs = window.require('fs');
+        window.fs = fs;
+        // Wire IPC fs handlers so service worker / iframes can call fs via postMessage
+        (0,_ipc_bus__WEBPACK_IMPORTED_MODULE_0__.initIpcBus)(fs);
+        DEFAULT_DIRS.forEach(dir => {
+            if (!fs.existsSync(dir))
+                fs.mkdirSync(dir);
+        });
+        yield bootstrapMetaFiles(fs, bootLog);
+        return fs;
+    });
+}
+function bootstrapMetaFiles(fs, bootLog) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const t1 = Date.now();
+        const metaFilePath = '/meta.json';
+        const metaFileServerPath = '/public/mount/meta.json';
+        let defaultFiles = [];
+        if (fs.existsSync(metaFilePath)) {
+            defaultFiles = JSON.parse(fs.readFileSync(metaFilePath).toString());
+        }
+        const ignoreMetaReload = defaultFiles.find(item => item.path === metaFilePath && item.force_reload === false);
+        if (!ignoreMetaReload)
+            defaultFiles = yield (yield fetch(metaFileServerPath)).json();
+        let fileCount = 0;
+        yield Promise.all(defaultFiles.map((item) => __awaiter(this, void 0, void 0, function* () {
+            if (fs.existsSync(item.path) && !item.force_reload)
+                return;
+            const serverPath = item.file.startsWith('http')
+                ? item.file
+                : `/public/mount${item.file.startsWith('/') ? '' : '/'}${item.file}`;
+            const fileData = yield (yield fetch(serverPath)).arrayBuffer();
+            const dir = item.path.slice(0, item.path.lastIndexOf('/')) || '/';
+            if (!fs.existsSync(dir))
+                mkdirRecursive(fs, dir);
+            fs.writeFileSync(item.path, Buffer.from(fileData));
+            fileCount++;
+        })));
+        bootLog(`meta.json bootstrap (${fileCount} files written)`, t1);
+    });
+}
+
+
+/***/ }),
+
+/***/ "./src/platform/command-registry.ts":
+/*!******************************************!*\
+  !*** ./src/platform/command-registry.ts ***!
+  \******************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   CommandRegistry: () => (/* binding */ CommandRegistry)
+/* harmony export */ });
+/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/BehaviorSubject.js");
+// Ring 1 — Command Registry
+// Extracted from Host in src/shared/index.ts.
+// Manages named commands (launch actions registered by apps/system services).
+
+class CommandRegistry {
+    constructor() {
+        this._commands = new rxjs__WEBPACK_IMPORTED_MODULE_0__.BehaviorSubject([]);
+        this.commands$ = this._commands.asObservable();
+    }
+    static getInstance() {
+        var _a;
+        const shared = (_a = window.top) === null || _a === void 0 ? void 0 : _a.__wosCommandRegistry;
+        if (shared)
+            return shared;
+        if (!CommandRegistry._instance) {
+            CommandRegistry._instance = new CommandRegistry();
+            try {
+                window.top.__wosCommandRegistry = CommandRegistry._instance;
+            }
+            catch (_) { }
+        }
+        return CommandRegistry._instance;
+    }
+    register(name, exec, meta = {}, platformName = 'unknown') {
+        const existing = this._commands.getValue().find(x => x.name === name);
+        if (existing) {
+            console.warn(`[command-registry] '${name}' already registered — new registration takes precedence`);
+        }
+        const cmd = Object.freeze({ name, exec, servicePlatformName: platformName, meta });
+        this._commands.next([cmd, ...this._commands.getValue()]);
+        return { remove: () => this._commands.next(this._commands.getValue().filter(x => x !== cmd)) };
+    }
+    get(name) {
+        return this._commands.getValue().find(x => x.name === name);
+    }
+    call(name, ...args) {
+        const cmd = this.get(name);
+        if (!cmd) {
+            console.log(`[command-registry] Command [${name}] not registered!`);
+            return;
+        }
+        return cmd.exec(...args);
+    }
+    all() {
+        return this._commands.getValue();
+    }
+    // Returns commands that handle a given file extension, sorted specific-first.
+    forExtension(ext) {
+        var _a, _b, _c;
+        const seen = new Set();
+        const results = [];
+        const dotExt = ext.startsWith('.') ? ext.toLowerCase() : `.${ext}`.toLowerCase();
+        for (const cmd of this._commands.getValue()) {
+            if (seen.has(cmd.name))
+                continue;
+            const exts = (_a = cmd.meta) === null || _a === void 0 ? void 0 : _a.fileExtensions;
+            if (!exts || !Array.isArray(exts))
+                continue;
+            seen.add(cmd.name);
+            const isWild = exts.includes('*');
+            const isMatch = isWild || exts.some(e => (e.startsWith('.') ? e : `.${e}`).toLowerCase() === dotExt);
+            if (isMatch) {
+                results.push({
+                    name: cmd.name,
+                    title: ((_b = cmd.meta) === null || _b === void 0 ? void 0 : _b.title) || cmd.name,
+                    icon: ((_c = cmd.meta) === null || _c === void 0 ? void 0 : _c.icon) || 'apps',
+                    wildcard: isWild,
+                });
+            }
+        }
+        return results.sort((a, b) => a.wildcard === b.wildcard ? a.title.localeCompare(b.title) : a.wildcard ? 1 : -1);
+    }
+}
+CommandRegistry._instance = null;
+
+
+/***/ }),
+
+/***/ "./src/platform/namespace.ts":
+/*!***********************************!*\
+  !*** ./src/platform/namespace.ts ***!
+  \***********************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   Namespace: () => (/* binding */ Namespace)
+/* harmony export */ });
+// Ring 1 — Namespace
+// Per-app context. Each spawned process gets one Namespace that defines its
+// identity (pid, id) and its access control list for VFS paths.
+class Namespace {
+    constructor(opts) {
+        var _a, _b;
+        this.pid = opts.pid;
+        this.id = opts.id;
+        this.appDir = (_a = opts.appDir) !== null && _a !== void 0 ? _a : `/opt/apps/${opts.id}`;
+        // Default ACL: read+write own app dir and user data dir.
+        // System paths (/tmp, /var/log) are readable + writable.
+        // Everything else is read-only by default.
+        this.acl = [
+            { path: this.appDir, read: true, write: true },
+            { path: `/home/user1/.local/share/${opts.id}`, read: true, write: true },
+            { path: '/tmp', read: true, write: true },
+            { path: '/var/log', read: true, write: true },
+            { path: '/', read: true, write: false },
+            ...((_b = opts.extraAcl) !== null && _b !== void 0 ? _b : []),
+        ];
+    }
+    bestMatch(path) {
+        // Find the most-specific ACL entry whose path is a prefix of the target path.
+        return this.acl
+            .filter(e => path === e.path || path.startsWith(e.path + '/'))
+            .sort((a, b) => b.path.length - a.path.length)[0];
+    }
+    checkRead(path) {
+        const match = this.bestMatch(path);
+        if (!match || !match.read) {
+            throw new Error(`[acl] read denied: pid=${this.pid} id=${this.id} path=${path}`);
+        }
+    }
+    checkWrite(path) {
+        const match = this.bestMatch(path);
+        if (!match || !match.write) {
+            throw new Error(`[acl] write denied: pid=${this.pid} id=${this.id} path=${path}`);
+        }
+    }
+    canRead(path) {
+        try {
+            this.checkRead(path);
+            return true;
+        }
+        catch (_) {
+            return false;
+        }
+    }
+    canWrite(path) {
+        try {
+            this.checkWrite(path);
+            return true;
+        }
+        catch (_) {
+            return false;
+        }
+    }
+}
+
+
+/***/ }),
+
+/***/ "./src/platform/process-manager.ts":
+/*!*****************************************!*\
+  !*** ./src/platform/process-manager.ts ***!
+  \*****************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   ProcessManager: () => (/* binding */ ProcessManager)
+/* harmony export */ });
+/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/BehaviorSubject.js");
+/* harmony import */ var _namespace__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./namespace */ "./src/platform/namespace.ts");
+// Ring 1 — Process Manager
+// Owns PID assignment and Namespace lifecycle.
+// The only place where Namespaces are created or destroyed.
+
+
+class ProcessManager {
+    constructor() {
+        this._pidCounter = 1;
+        this._processes = new Map();
+        this._processes$ = new rxjs__WEBPACK_IMPORTED_MODULE_1__.BehaviorSubject([]);
+        this.processes$ = this._processes$.asObservable();
+    }
+    // Shared across all bundles (layout + remote) via the top-level window.
+    // Each bundle has its own module scope so a plain static _instance would
+    // be duplicated; storing on window.top ensures both bundles share one instance.
+    static getInstance() {
+        var _a;
+        const shared = (_a = window.top) === null || _a === void 0 ? void 0 : _a.__wosProcessManager;
+        if (shared)
+            return shared;
+        if (!ProcessManager._instance) {
+            ProcessManager._instance = new ProcessManager();
+            try {
+                window.top.__wosProcessManager = ProcessManager._instance;
+            }
+            catch (_) { }
+        }
+        return ProcessManager._instance;
+    }
+    spawn(id, opts = {}) {
+        const pid = this._pidCounter++;
+        const ns = new _namespace__WEBPACK_IMPORTED_MODULE_0__.Namespace({ pid, id, appDir: opts.appDir, extraAcl: opts.extraAcl });
+        const record = {
+            pid,
+            id,
+            appDir: ns.appDir,
+            namespace: ns,
+            startedAt: Date.now(),
+            label: opts.label,
+        };
+        this._processes.set(pid, record);
+        this._processes$.next(Array.from(this._processes.values()));
+        return ns;
+    }
+    kill(pid) {
+        this._processes.delete(pid);
+        this._processes$.next(Array.from(this._processes.values()));
+    }
+    get(pid) {
+        return this._processes.get(pid);
+    }
+    list() {
+        return Array.from(this._processes.values());
+    }
+    reset() {
+        this._pidCounter = 1;
+        this._processes.clear();
+        this._processes$.next([]);
+    }
+}
+ProcessManager._instance = null;
+
+
+/***/ }),
+
+/***/ "./src/platform/proxy-fs.ts":
+/*!**********************************!*\
+  !*** ./src/platform/proxy-fs.ts ***!
+  \**********************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   ProxyFS: () => (/* binding */ ProxyFS)
+/* harmony export */ });
+/* harmony import */ var _kernel_vfs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ../kernel/vfs */ "./src/kernel/vfs.ts");
+// Ring 1 — ProxyFS
+// Wraps the raw kernel VFS with per-namespace ACL enforcement.
+// Apps receive a ProxyFS instance — they never touch the raw fs directly.
+
+class ProxyFS {
+    constructor(fs, ns) {
+        this.fs = fs;
+        this.ns = ns;
+    }
+    // --- Read operations ---
+    readFileSync(path, encoding) {
+        this.ns.checkRead(path);
+        return encoding ? this.fs.readFileSync(path, encoding) : this.fs.readFileSync(path);
+    }
+    readText(path) {
+        try {
+            this.ns.checkRead(path);
+            return Promise.resolve(this.fs.readFileSync(path, 'utf8'));
+        }
+        catch (e) {
+            return Promise.reject(e);
+        }
+    }
+    readBinary(path) {
+        try {
+            this.ns.checkRead(path);
+            return Promise.resolve(this.fs.readFileSync(path));
+        }
+        catch (e) {
+            return Promise.reject(e);
+        }
+    }
+    existsSync(path) {
+        this.ns.checkRead(path);
+        return this.fs.existsSync(path);
+    }
+    exists(path) {
+        try {
+            this.ns.checkRead(path);
+            return Promise.resolve(this.fs.existsSync(path));
+        }
+        catch (e) {
+            return Promise.reject(e);
+        }
+    }
+    readdirSync(path) {
+        this.ns.checkRead(path);
+        return this.fs.readdirSync(path);
+    }
+    list(path) {
+        try {
+            this.ns.checkRead(path);
+            return Promise.resolve(this.fs.readdirSync(path));
+        }
+        catch (e) {
+            return Promise.reject(e);
+        }
+    }
+    statSync(path) {
+        this.ns.checkRead(path);
+        return this.fs.statSync(path);
+    }
+    stat(path) {
+        try {
+            this.ns.checkRead(path);
+            const s = this.fs.statSync(path);
+            return Promise.resolve({ isDirectory: s.isDirectory(), isFile: s.isFile(), size: s.size });
+        }
+        catch (e) {
+            return Promise.reject(e);
+        }
+    }
+    // --- Write operations ---
+    writeFileSync(path, data) {
+        this.ns.checkWrite(path);
+        this.fs.writeFileSync(path, data);
+    }
+    writeText(path, content) {
+        try {
+            this.ns.checkWrite(path);
+            // Auto-create parent dirs (BrowserFS doesn't support recursive)
+            const dir = path.slice(0, path.lastIndexOf('/')) || '/';
+            if (dir && !this.fs.existsSync(dir))
+                (0,_kernel_vfs__WEBPACK_IMPORTED_MODULE_0__.mkdirRecursive)(this.fs, dir);
+            this.fs.writeFileSync(path, content);
+            return Promise.resolve(true);
+        }
+        catch (e) {
+            return Promise.reject(e);
+        }
+    }
+    mkdirSync(path) {
+        this.ns.checkWrite(path);
+        this.fs.mkdirSync(path);
+    }
+    mkdir(path) {
+        try {
+            this.ns.checkWrite(path);
+            (0,_kernel_vfs__WEBPACK_IMPORTED_MODULE_0__.mkdirRecursive)(this.fs, path);
+            return Promise.resolve(true);
+        }
+        catch (e) {
+            return Promise.reject(e);
+        }
+    }
+    // mkdirRecursive exposed for convenience — checks write on each segment
+    mkdirRecursive(path) {
+        this.ns.checkWrite(path);
+        (0,_kernel_vfs__WEBPACK_IMPORTED_MODULE_0__.mkdirRecursive)(this.fs, path);
+    }
+    unlinkSync(path) {
+        this.ns.checkWrite(path);
+        this.fs.unlinkSync(path);
+    }
+    remove(path) {
+        try {
+            this.ns.checkWrite(path);
+            this.fs.unlinkSync(path);
+            return Promise.resolve(true);
+        }
+        catch (e) {
+            return Promise.reject(e);
+        }
+    }
+    renameSync(from, to) {
+        this.ns.checkWrite(from);
+        this.ns.checkWrite(to);
+        this.fs.renameSync(from, to);
+    }
+    rename(from, to) {
+        try {
+            this.ns.checkWrite(from);
+            this.ns.checkWrite(to);
+            this.fs.renameSync(from, to);
+            return Promise.resolve(true);
+        }
+        catch (e) {
+            return Promise.reject(e);
+        }
+    }
+    // --- AppSDK-compatible shape (injected into app iframes) ---
+    // Returns an object with the promise-based API that app HTML files expect.
+    toAppSDK(opts = {}) {
+        return {
+            readText: (p) => this.readText(p),
+            readBinary: (p) => this.readBinary(p),
+            writeText: (p, c) => this.writeText(p, c),
+            mkdir: (p) => this.mkdir(p),
+            remove: (p) => this.remove(p),
+            list: (p) => this.list(p),
+            exists: (p) => this.exists(p),
+            stat: (p) => this.stat(p),
+            rename: (f, t) => this.rename(f, t),
+            setTitle: (t) => { var _a; (_a = opts.setTitle) === null || _a === void 0 ? void 0 : _a.call(opts, t); return Promise.resolve(true); },
+            log: (v) => { console.log('[app]', v); return Promise.resolve(true); },
+        };
+    }
+}
+
+
+/***/ }),
+
 /***/ "./src/shared/constants.ts":
 /*!*********************************!*\
   !*** ./src/shared/constants.ts ***!
@@ -30825,8 +31419,14 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   Host: () => (/* binding */ Host),
 /* harmony export */   Platform: () => (/* binding */ Platform)
 /* harmony export */ });
-/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/BehaviorSubject.js");
-/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/Subject.js");
+/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/BehaviorSubject.js");
+/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/Subject.js");
+/* harmony import */ var _platform_command_registry__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ../platform/command-registry */ "./src/platform/command-registry.ts");
+/* harmony import */ var _platform_process_manager__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../platform/process-manager */ "./src/platform/process-manager.ts");
+/* harmony import */ var _platform_proxy_fs__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../platform/proxy-fs */ "./src/platform/proxy-fs.ts");
+
+
+
 
 const Babel = __webpack_require__(/*! ./babel.js */ "./src/shared/babel.js");
 const babelOpts = (filename, cwd) => ({
@@ -30836,7 +31436,7 @@ const babelOpts = (filename, cwd) => ({
     cwd,
 });
 class Host {
-    constructor(window, platform, commands, widgets = new rxjs__WEBPACK_IMPORTED_MODULE_0__.BehaviorSubject([]), modulesMap = new Map(), settingsSections = new rxjs__WEBPACK_IMPORTED_MODULE_0__.BehaviorSubject([]), widgetTypes = new Map()) {
+    constructor(window, platform, commands, widgets = new rxjs__WEBPACK_IMPORTED_MODULE_3__.BehaviorSubject([]), modulesMap = new Map(), settingsSections = new rxjs__WEBPACK_IMPORTED_MODULE_3__.BehaviorSubject([]), widgetTypes = new Map()) {
         this.window = window;
         this.platform = platform;
         this.commands = commands;
@@ -30886,11 +31486,27 @@ class Host {
             meta,
         });
         this.commands.next([newCommandObject, ...this.commands.getValue()]);
+        // Mirror into Ring 1 CommandRegistry so system/platform code can reach commands
+        // without going through the Host BehaviorSubject.
+        const regHandle = _platform_command_registry__WEBPACK_IMPORTED_MODULE_0__.CommandRegistry.getInstance().register(command_name, callback, meta, this.platform.name);
         return {
             remove: () => {
                 this.commands.next(this.commands.getValue().filter((x) => x !== newCommandObject));
+                regHandle.remove();
             },
         };
+    }
+    // Ring 1 accessors — used by system layer (window-manager, etc.) to reach
+    // platform services without going through Host's private internals.
+    getProcessManager() {
+        return _platform_process_manager__WEBPACK_IMPORTED_MODULE_1__.ProcessManager.getInstance();
+    }
+    getProxyFs(pid) {
+        var _a;
+        const ns = (_a = _platform_process_manager__WEBPACK_IMPORTED_MODULE_1__.ProcessManager.getInstance().get(pid)) === null || _a === void 0 ? void 0 : _a.namespace;
+        if (!ns)
+            return undefined;
+        return new _platform_proxy_fs__WEBPACK_IMPORTED_MODULE_2__.ProxyFS(this.getFS(), ns);
     }
     registerWidget(widget_name, render, meta = {}) {
         const newWidget = Object.freeze({
@@ -30997,7 +31613,7 @@ class Host {
             program.map.sources = ['babel://' + filenameAlias];
             const base64SourceMap = btoa(unescape(encodeURIComponent(JSON.stringify(program.map))));
             const codeWithSourceMap = `${program.code}\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,${base64SourceMap}`;
-            const platformEventEmitter = new rxjs__WEBPACK_IMPORTED_MODULE_1__.Subject();
+            const platformEventEmitter = new rxjs__WEBPACK_IMPORTED_MODULE_4__.Subject();
             const lastSlash = filenameAlias.lastIndexOf('/');
             const pwd = lastSlash > -1 ? filenameAlias.slice(0, lastSlash) || "/" : "/";
             let newPlatform = _platform ? _platform : new Platform(platformEventEmitter, filenameAlias, pwd);
@@ -31353,6 +31969,217 @@ const mountLocalDirectory = (fs, dirHandle, targetPath) => __awaiter(void 0, voi
         finally { if (e_1) throw e_1.error; }
     }
 });
+
+
+/***/ }),
+
+/***/ "./src/system/desktop-manager.ts":
+/*!***************************************!*\
+  !*** ./src/system/desktop-manager.ts ***!
+  \***************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   DesktopManager: () => (/* binding */ DesktopManager)
+/* harmony export */ });
+/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/BehaviorSubject.js");
+// Ring 2 — Desktop Manager
+// Owns desktop icon list, wallpaper application, and desktop-level events.
+// React (layout/index.tsx) subscribes and renders; no DOM manipulation here.
+
+class DesktopManager {
+    constructor() {
+        this._icons$ = new rxjs__WEBPACK_IMPORTED_MODULE_0__.BehaviorSubject([]);
+        this._wallpaper$ = new rxjs__WEBPACK_IMPORTED_MODULE_0__.BehaviorSubject('');
+        this.icons$ = this._icons$.asObservable();
+        this.wallpaper$ = this._wallpaper$.asObservable();
+    }
+    static getInstance() {
+        if (!DesktopManager._instance)
+            DesktopManager._instance = new DesktopManager();
+        return DesktopManager._instance;
+    }
+    setIcons(icons) {
+        this._icons$.next(icons);
+    }
+    setWallpaper(url, fs, prefsPath = '/user-preferences.json') {
+        this._wallpaper$.next(url);
+        if (!fs)
+            return;
+        try {
+            let prefs = {};
+            if (fs.existsSync(prefsPath)) {
+                prefs = JSON.parse(fs.readFileSync(prefsPath, 'utf8'));
+            }
+            prefs.wallpaper = url;
+            fs.writeFileSync(prefsPath, JSON.stringify(prefs, null, 2));
+        }
+        catch (_) { }
+    }
+    getWallpaper() {
+        return this._wallpaper$.getValue();
+    }
+    loadWallpaper(fs, prefsPath = '/user-preferences.json') {
+        try {
+            const prefs = JSON.parse(fs.readFileSync(prefsPath, 'utf8'));
+            if (prefs.wallpaper)
+                this._wallpaper$.next(prefs.wallpaper);
+        }
+        catch (_) { }
+    }
+}
+DesktopManager._instance = null;
+
+
+/***/ }),
+
+/***/ "./src/system/layout-manager.ts":
+/*!**************************************!*\
+  !*** ./src/system/layout-manager.ts ***!
+  \**************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   LayoutManager: () => (/* binding */ LayoutManager)
+/* harmony export */ });
+/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/BehaviorSubject.js");
+// Ring 2 — Layout Manager
+// Extracted from src/core/layout/index.tsx.
+// Owns layout config load/switch and the active layout observable.
+// No React dependency — pure state management.
+
+const DEFAULT_LAYOUTS = [
+    {
+        id: 'default',
+        name: 'Classic',
+        grid: {
+            areas: `"header header" "content-area content-area" "footer footer"`,
+            columns: '1fr',
+            rows: 'auto 1fr auto',
+        },
+    },
+    {
+        id: 'no-header',
+        name: 'No Header',
+        grid: {
+            areas: `"content-area" "footer"`,
+            columns: '1fr',
+            rows: '1fr auto',
+        },
+    },
+];
+const LAYOUTS_PATH = '/etc/wm/layouts.json';
+const CONFIG_PATH = '/etc/wm/config.json';
+class LayoutManager {
+    constructor() {
+        this._layouts = DEFAULT_LAYOUTS;
+        this._active$ = new rxjs__WEBPACK_IMPORTED_MODULE_0__.BehaviorSubject(DEFAULT_LAYOUTS[0]);
+        this.active$ = this._active$.asObservable();
+    }
+    static getInstance() {
+        if (!LayoutManager._instance)
+            LayoutManager._instance = new LayoutManager();
+        return LayoutManager._instance;
+    }
+    init(fs) {
+        try {
+            const raw = fs.readFileSync(LAYOUTS_PATH, 'utf8');
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) && parsed.length)
+                this._layouts = parsed;
+        }
+        catch (_) { }
+        try {
+            const cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+            const found = this._layouts.find(l => l.id === cfg.layout);
+            if (found)
+                this._active$.next(found);
+        }
+        catch (_) { }
+    }
+    getLayouts() {
+        return this._layouts;
+    }
+    getActive() {
+        return this._active$.getValue();
+    }
+    setLayout(id, fs) {
+        const found = this._layouts.find(l => l.id === id);
+        if (!found)
+            return;
+        this._active$.next(found);
+        try {
+            fs.writeFileSync(CONFIG_PATH, JSON.stringify({ layout: id }));
+        }
+        catch (_) { }
+    }
+}
+LayoutManager._instance = null;
+
+
+/***/ }),
+
+/***/ "./src/system/window-manager.ts":
+/*!**************************************!*\
+  !*** ./src/system/window-manager.ts ***!
+  \**************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   WindowManager: () => (/* binding */ WindowManager)
+/* harmony export */ });
+/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/BehaviorSubject.js");
+// Ring 2 — Window Manager
+// Manages the lifecycle of open windows (open, close, minimize, focus).
+// Each window is tied to a namespace pid from the ProcessManager.
+// React rendering (the actual DOM) stays in src/core/layout/index.tsx — this
+// module is pure state; layout subscribes and renders.
+
+class WindowManager {
+    constructor() {
+        this._windows = new rxjs__WEBPACK_IMPORTED_MODULE_0__.BehaviorSubject([]);
+        this.windows$ = this._windows.asObservable();
+    }
+    static getInstance() {
+        if (!WindowManager._instance)
+            WindowManager._instance = new WindowManager();
+        return WindowManager._instance;
+    }
+    register(record) {
+        const current = this._windows.getValue();
+        // Deactivate all, activate new one
+        this._windows.next([...current.map(w => (Object.assign(Object.assign({}, w), { active: false }))), Object.assign(Object.assign({}, record), { active: true })]);
+        return () => this.unregister(record.pid);
+    }
+    unregister(pid) {
+        this._windows.next(this._windows.getValue().filter(w => w.pid !== pid));
+    }
+    focus(pid) {
+        this._windows.next(this._windows.getValue().map(w => (Object.assign(Object.assign({}, w), { active: w.pid === pid }))));
+    }
+    minimize(pid) {
+        this._windows.next(this._windows.getValue().map(w => w.pid === pid ? Object.assign(Object.assign({}, w), { minimized: !w.minimized, active: !w.minimized }) : w));
+    }
+    setTitle(pid, title) {
+        this._windows.next(this._windows.getValue().map(w => w.pid === pid ? Object.assign(Object.assign({}, w), { title }) : w));
+    }
+    updateRecord(pid, patch) {
+        this._windows.next(this._windows.getValue().map(w => w.pid === pid ? Object.assign(Object.assign({}, w), patch) : w));
+    }
+    getAll() {
+        return this._windows.getValue();
+    }
+    get(pid) {
+        return this._windows.getValue().find(w => w.pid === pid);
+    }
+}
+WindowManager._instance = null;
 
 
 /***/ }),
@@ -156715,8 +157542,8 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   render: () => (/* binding */ render)
 /* harmony export */ });
-/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_17__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/BehaviorSubject.js");
-/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_18__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/operators/filter.js");
+/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_19__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/BehaviorSubject.js");
+/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_20__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/operators/filter.js");
 /* harmony import */ var _shared_index__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @shared/index */ "./src/shared/index.ts");
 /* harmony import */ var _shared_fs_utils__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! @shared/fs-utils */ "./src/shared/fs-utils.ts");
 /* harmony import */ var _shared_constants__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! @shared/constants */ "./src/shared/constants.ts");
@@ -156727,14 +157554,18 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _contextmenu__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ./contextmenu */ "./src/core/layout/contextmenu.tsx");
 /* harmony import */ var _window_manager__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ../window-manager */ "./src/core/window-manager.ts");
 /* harmony import */ var _ipc__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! ../ipc */ "./src/core/ipc.ts");
-/* harmony import */ var _apps_file_explorer_desktop__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! ../../apps/file-explorer/desktop */ "./src/apps/file-explorer/desktop.tsx");
-/* harmony import */ var _styles_base__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(/*! ./styles/base */ "./src/core/layout/styles/base.ts");
-/* harmony import */ var _styles_layout__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(/*! ./styles/layout */ "./src/core/layout/styles/layout.ts");
-/* harmony import */ var _styles_window__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(/*! ./styles/window */ "./src/core/layout/styles/window.ts");
-/* harmony import */ var _styles_taskbar__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(/*! ./styles/taskbar */ "./src/core/layout/styles/taskbar.ts");
-/* harmony import */ var _styles_widgets__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(/*! ./styles/widgets */ "./src/core/layout/styles/widgets.ts");
-/* harmony import */ var _styles_contextmenu__WEBPACK_IMPORTED_MODULE_15__ = __webpack_require__(/*! ./styles/contextmenu */ "./src/core/layout/styles/contextmenu.ts");
-/* harmony import */ var _styles_desktop_env__WEBPACK_IMPORTED_MODULE_16__ = __webpack_require__(/*! ./styles/desktop-env */ "./src/core/layout/styles/desktop-env.ts");
+/* harmony import */ var _system_layout_manager__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! ../../system/layout-manager */ "./src/system/layout-manager.ts");
+/* harmony import */ var _system_desktop_manager__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(/*! ../../system/desktop-manager */ "./src/system/desktop-manager.ts");
+/* harmony import */ var _apps_file_explorer_desktop__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(/*! ../../apps/file-explorer/desktop */ "./src/apps/file-explorer/desktop.tsx");
+/* harmony import */ var _styles_base__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(/*! ./styles/base */ "./src/core/layout/styles/base.ts");
+/* harmony import */ var _styles_layout__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(/*! ./styles/layout */ "./src/core/layout/styles/layout.ts");
+/* harmony import */ var _styles_window__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(/*! ./styles/window */ "./src/core/layout/styles/window.ts");
+/* harmony import */ var _styles_taskbar__WEBPACK_IMPORTED_MODULE_15__ = __webpack_require__(/*! ./styles/taskbar */ "./src/core/layout/styles/taskbar.ts");
+/* harmony import */ var _styles_widgets__WEBPACK_IMPORTED_MODULE_16__ = __webpack_require__(/*! ./styles/widgets */ "./src/core/layout/styles/widgets.ts");
+/* harmony import */ var _styles_contextmenu__WEBPACK_IMPORTED_MODULE_17__ = __webpack_require__(/*! ./styles/contextmenu */ "./src/core/layout/styles/contextmenu.ts");
+/* harmony import */ var _styles_desktop_env__WEBPACK_IMPORTED_MODULE_18__ = __webpack_require__(/*! ./styles/desktop-env */ "./src/core/layout/styles/desktop-env.ts");
+
+
 
 
 
@@ -156929,7 +157760,7 @@ const readCurrentLayoutId = () => {
 const writeCurrentLayoutId = (layoutId) => {
     (0,_shared_fs_utils__WEBPACK_IMPORTED_MODULE_1__.writeJsonFile)(platform.host.getFS(), _shared_constants__WEBPACK_IMPORTED_MODULE_2__.LAYOUT_CONFIG_PATH, { layout: layoutId }, true);
 };
-const layoutSubject = new rxjs__WEBPACK_IMPORTED_MODULE_17__.BehaviorSubject(readCurrentLayoutId());
+const layoutSubject = new rxjs__WEBPACK_IMPORTED_MODULE_19__.BehaviorSubject(readCurrentLayoutId());
 const getCurrentLayout = () => {
     const layouts = readLayouts();
     return layouts.find(l => l.id === layoutSubject.getValue()) || layouts[0] || DEFAULT_LAYOUTS[0];
@@ -156971,19 +157802,26 @@ const resolveWallpaperUrl = (wallpaper) => {
 const applyCss = ({ wallpaper, grid }) => {
     const wallpaperUrl = resolveWallpaperUrl(wallpaper);
     styles.replace([
-        _styles_base__WEBPACK_IMPORTED_MODULE_10__.RESET_CSS,
-        _styles_base__WEBPACK_IMPORTED_MODULE_10__.MATERIAL_SYMBOLS_CSS,
-        (0,_styles_layout__WEBPACK_IMPORTED_MODULE_11__.layoutCss)(grid, wallpaperUrl),
-        _styles_widgets__WEBPACK_IMPORTED_MODULE_14__.WIDGETS_CSS,
-        _styles_window__WEBPACK_IMPORTED_MODULE_12__.WINDOW_CSS,
-        _styles_taskbar__WEBPACK_IMPORTED_MODULE_13__.TASKBAR_CSS,
-        _styles_contextmenu__WEBPACK_IMPORTED_MODULE_15__.CONTEXTMENU_CSS,
-        _styles_desktop_env__WEBPACK_IMPORTED_MODULE_16__.DESKTOP_ENV_CSS,
+        _styles_base__WEBPACK_IMPORTED_MODULE_12__.RESET_CSS,
+        _styles_base__WEBPACK_IMPORTED_MODULE_12__.MATERIAL_SYMBOLS_CSS,
+        (0,_styles_layout__WEBPACK_IMPORTED_MODULE_13__.layoutCss)(grid, wallpaperUrl),
+        _styles_widgets__WEBPACK_IMPORTED_MODULE_16__.WIDGETS_CSS,
+        _styles_window__WEBPACK_IMPORTED_MODULE_14__.WINDOW_CSS,
+        _styles_taskbar__WEBPACK_IMPORTED_MODULE_15__.TASKBAR_CSS,
+        _styles_contextmenu__WEBPACK_IMPORTED_MODULE_17__.CONTEXTMENU_CSS,
+        _styles_desktop_env__WEBPACK_IMPORTED_MODULE_18__.DESKTOP_ENV_CSS,
     ].join('\n'));
 };
 const userPrefWallpaper = platform.userPref.getWallpaper();
 applyCss({ wallpaper: userPrefWallpaper || '/public/wp-11.jpg', grid: getCurrentLayout().grid });
 applyWmSettings(readWmSettings());
+// Init Ring 2 managers so they mirror the current system state
+try {
+    _system_layout_manager__WEBPACK_IMPORTED_MODULE_9__.LayoutManager.getInstance().init(platform.host.getFS());
+    if (userPrefWallpaper)
+        _system_desktop_manager__WEBPACK_IMPORTED_MODULE_10__.DesktopManager.getInstance().setWallpaper(userPrefWallpaper);
+}
+catch (_) { }
 const applyWindowManagerSettings = (settings) => {
     writeWmCurrent(settings);
     applyWmSettings(settings);
@@ -156997,6 +157835,7 @@ platform.host.registerCommand('get-window-manager-themes', readThemes);
 platform.register('set-wallpaper', (wallpaperUrl) => {
     applyCss({ wallpaper: wallpaperUrl, grid: getCurrentLayout().grid });
     platform.userPref.setWallpaper(wallpaperUrl);
+    _system_desktop_manager__WEBPACK_IMPORTED_MODULE_10__.DesktopManager.getInstance().setWallpaper(wallpaperUrl);
 });
 platform.register('add-wallpaper', (wallpaperUrl) => {
     platform.userPref.addWallpaper(wallpaperUrl);
@@ -157004,6 +157843,7 @@ platform.register('add-wallpaper', (wallpaperUrl) => {
 platform.host.registerCommand('set-wallpaper', (wallpaperUrl) => {
     applyCss({ wallpaper: wallpaperUrl, grid: getCurrentLayout().grid });
     platform.userPref.setWallpaper(wallpaperUrl);
+    _system_desktop_manager__WEBPACK_IMPORTED_MODULE_10__.DesktopManager.getInstance().setWallpaper(wallpaperUrl);
 });
 platform.host.registerCommand('add-wallpaper', (wallpaperUrl) => {
     platform.userPref.addWallpaper(wallpaperUrl);
@@ -157028,6 +157868,8 @@ const applyLayout = (layoutId) => {
     writeCurrentLayoutId(layoutId);
     layoutSubject.next(layoutId);
     applyCss({ wallpaper: platform.userPref.getWallpaper() || '/public/wp-11.jpg', grid: getCurrentLayout().grid });
+    // Sync Ring 2 LayoutManager
+    _system_layout_manager__WEBPACK_IMPORTED_MODULE_9__.LayoutManager.getInstance().setLayout(layoutId, platform.host.getFS());
 };
 platform.register('set-layout', applyLayout);
 platform.host.registerCommand('set-layout', applyLayout);
@@ -157163,7 +158005,7 @@ const readEnabledWidgets = () => {
         return cfg.enabled;
     return null;
 };
-const enabledWidgetsSubject = new rxjs__WEBPACK_IMPORTED_MODULE_17__.BehaviorSubject(readEnabledWidgets());
+const enabledWidgetsSubject = new rxjs__WEBPACK_IMPORTED_MODULE_19__.BehaviorSubject(readEnabledWidgets());
 const setEnabledWidgets = (enabled) => {
     try {
         (0,_shared_fs_utils__WEBPACK_IMPORTED_MODULE_1__.writeJsonFile)(platform.host.getFS(), _shared_constants__WEBPACK_IMPORTED_MODULE_2__.WIDGETS_CONFIG_PATH, { enabled }, true);
@@ -157403,7 +158245,7 @@ const DesktopMount = ({ openFile, showFileActionsHandler }) => {
         }
         // Fallback: compile-time ListDirComponent
         const root = (0,react_dom_client__WEBPACK_IMPORTED_MODULE_3__.createRoot)(container);
-        root.render(react__WEBPACK_IMPORTED_MODULE_4___default().createElement(_apps_file_explorer_desktop__WEBPACK_IMPORTED_MODULE_9__.ListDirComponent, { openFile: openFile, showFileActions: showFileActionsHandler, customClass: 'desktop-icons' }));
+        root.render(react__WEBPACK_IMPORTED_MODULE_4___default().createElement(_apps_file_explorer_desktop__WEBPACK_IMPORTED_MODULE_11__.ListDirComponent, { openFile: openFile, showFileActions: showFileActionsHandler, customClass: 'desktop-icons' }));
         return () => setTimeout(() => root.unmount(), 0);
     }, []);
     return react__WEBPACK_IMPORTED_MODULE_4___default().createElement("div", { ref: ref, style: { width: '100%', height: '100%' } });
@@ -157752,13 +158594,13 @@ const registerContextMenu = (container, ref) => {
         }
     });
 };
-platform.events$.pipe((0,rxjs__WEBPACK_IMPORTED_MODULE_18__.filter)(x => x.type === 'loaded')).subscribe(event => {
+platform.events$.pipe((0,rxjs__WEBPACK_IMPORTED_MODULE_20__.filter)(x => x.type === 'loaded')).subscribe(event => {
     const container = platform.window.document.createElement('div');
     container.classList.add('layout-default');
     platform.host.appendDomElement(container);
     render(container);
 });
-platform.events$.pipe((0,rxjs__WEBPACK_IMPORTED_MODULE_18__.filter)(x => x.type === 'exit')).subscribe(event => {
+platform.events$.pipe((0,rxjs__WEBPACK_IMPORTED_MODULE_20__.filter)(x => x.type === 'exit')).subscribe(event => {
     console.log(event);
 });
 

@@ -8,6 +8,8 @@ import { Taskbar } from './commands'
 import { ContextMenu, ContextMenuItem } from './contextmenu'
 import { DESKTOP_CONTAINER_CLASS, WINDOWS_CONTAINER_CLASS, WindowManager, desktopsSubject, windowsSubject } from '../window-manager'
 import { broadcastIpcEvent, registerWindowIpcHandlers } from '../ipc'
+import { LayoutManager } from '../../system/layout-manager'
+import { DesktopManager } from '../../system/desktop-manager'
 import { FileType } from '../../shared/types'
 import { ListDirComponent } from '../../apps/file-explorer/desktop'
 import { Header } from './header'
@@ -304,6 +306,12 @@ const userPrefWallpaper = platform.userPref.getWallpaper()
 applyCss({wallpaper: userPrefWallpaper || '/public/wp-11.jpg', grid: getCurrentLayout().grid})
 applyWmSettings(readWmSettings())
 
+// Init Ring 2 managers so they mirror the current system state
+try {
+    LayoutManager.getInstance().init(platform.host.getFS())
+    if (userPrefWallpaper) DesktopManager.getInstance().setWallpaper(userPrefWallpaper)
+} catch (_) {}
+
 const applyWindowManagerSettings = (settings: WmSettings) => {
     writeWmCurrent(settings)
     applyWmSettings(settings)
@@ -321,6 +329,7 @@ platform.host.registerCommand('get-window-manager-themes', readThemes)
 platform.register('set-wallpaper', (wallpaperUrl: string) => {
     applyCss({wallpaper: wallpaperUrl, grid: getCurrentLayout().grid});
     platform.userPref.setWallpaper(wallpaperUrl);
+    DesktopManager.getInstance().setWallpaper(wallpaperUrl);
 })
 
 platform.register('add-wallpaper', (wallpaperUrl: string) => {
@@ -330,6 +339,7 @@ platform.register('add-wallpaper', (wallpaperUrl: string) => {
 platform.host.registerCommand('set-wallpaper', (wallpaperUrl: string) => {
     applyCss({wallpaper: wallpaperUrl, grid: getCurrentLayout().grid});
     platform.userPref.setWallpaper(wallpaperUrl);
+    DesktopManager.getInstance().setWallpaper(wallpaperUrl);
 })
 
 platform.host.registerCommand('add-wallpaper', (wallpaperUrl: string) => {
@@ -358,6 +368,8 @@ const applyLayout = (layoutId: string) => {
     writeCurrentLayoutId(layoutId)
     layoutSubject.next(layoutId)
     applyCss({wallpaper: platform.userPref.getWallpaper() || '/public/wp-11.jpg', grid: getCurrentLayout().grid})
+    // Sync Ring 2 LayoutManager
+    LayoutManager.getInstance().setLayout(layoutId, platform.host.getFS())
 }
 
 platform.register('set-layout', applyLayout)

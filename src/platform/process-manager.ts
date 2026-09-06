@@ -14,6 +14,10 @@ export type ProcessRecord = {
     label?: string  // human-readable title (e.g. 'Model Builder')
 }
 
+declare global {
+    interface Window { __wosProcessManager?: ProcessManager }
+}
+
 export class ProcessManager {
     private static _instance: ProcessManager | null = null
 
@@ -23,8 +27,16 @@ export class ProcessManager {
 
     public readonly processes$: Observable<ProcessRecord[]> = this._processes$.asObservable()
 
+    // Shared across all bundles (layout + remote) via the top-level window.
+    // Each bundle has its own module scope so a plain static _instance would
+    // be duplicated; storing on window.top ensures both bundles share one instance.
     static getInstance(): ProcessManager {
-        if (!ProcessManager._instance) ProcessManager._instance = new ProcessManager()
+        const shared = (window.top as any)?.__wosProcessManager
+        if (shared) return shared
+        if (!ProcessManager._instance) {
+            ProcessManager._instance = new ProcessManager()
+            try { (window.top as any).__wosProcessManager = ProcessManager._instance } catch (_) {}
+        }
         return ProcessManager._instance
     }
 

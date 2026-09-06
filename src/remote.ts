@@ -146,6 +146,8 @@ const settingsSections = new BehaviorSubject<Array<SettingsSectionDef>>([]);
 const widgetTypes = new Map<string, import('@shared/index').WidgetTypeRenderer>();
 const host = new Host(window, hostPlatform, commands, widgets, modulesMap, settingsSections, widgetTypes);
 hostPlatform.setHost(host);
+// Expose for ExecEngine's lazy _getHost() accessor (avoids circular import)
+(window as any).__wosHost = host;
 
 modulesMap.set('root', {platform} as any)
 

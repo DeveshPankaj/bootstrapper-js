@@ -28285,6 +28285,687 @@ if (false) {} else {
 
 /***/ }),
 
+/***/ "./src/kernel/ipc-bus.ts":
+/*!*******************************!*\
+  !*** ./src/kernel/ipc-bus.ts ***!
+  \*******************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   broadcastIpcEvent: () => (/* binding */ broadcastIpcEvent),
+/* harmony export */   initIpcBus: () => (/* binding */ initIpcBus),
+/* harmony export */   registerIpcHandler: () => (/* binding */ registerIpcHandler),
+/* harmony export */   registerWmBridge: () => (/* binding */ registerWmBridge)
+/* harmony export */ });
+// Ring 0 — IPC bus kernel module
+// Raw postMessage router. All inter-process messaging goes through here.
+// Platform (Ring 1) builds higher-level MessageBus on top of this.
+var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+const handlers = new Map();
+function registerIpcHandler(event, handler) {
+    handlers.set(event, handler);
+}
+function broadcastIpcEvent(event, data, targetDoc = document) {
+    targetDoc.querySelectorAll('iframe').forEach(f => {
+        var _a;
+        try {
+            (_a = f.contentWindow) === null || _a === void 0 ? void 0 : _a.postMessage({ type: 'wos-ipc-event', event, data }, '*');
+        }
+        catch (_) { }
+    });
+}
+function registerWmBridge(getWindows, toggleWindow, mainWindow = window, getLaunchItems) {
+    mainWindow.__wosWmBridge = {
+        getWindows,
+        toggleWindow,
+        getLaunchItems: getLaunchItems !== null && getLaunchItems !== void 0 ? getLaunchItems : (() => []),
+    };
+}
+function initIpcBus(fs) {
+    if (!window.__wosIpcInit) {
+        window.__wosIpcInit = true;
+        window.addEventListener('message', (e) => __awaiter(this, void 0, void 0, function* () {
+            if (!e.data || e.data.type !== 'wos-ipc')
+                return;
+            const { id, event, data } = e.data;
+            const source = e.source;
+            if (!source)
+                return;
+            const handler = handlers.get(event);
+            if (!handler) {
+                source.postMessage({ type: 'wos-ipc-response', id, error: `Unknown IPC event: ${event}` }, '*');
+                return;
+            }
+            try {
+                const result = yield handler(data, source);
+                source.postMessage({ type: 'wos-ipc-response', id, result: result !== null && result !== void 0 ? result : null }, '*');
+            }
+            catch (err) {
+                source.postMessage({ type: 'wos-ipc-response', id, error: String(err) }, '*');
+            }
+        }));
+    }
+    // Window manager bridge handlers
+    registerIpcHandler('wm.getWindows', () => { var _a, _b; return (_b = (_a = window.__wosWmBridge) === null || _a === void 0 ? void 0 : _a.getWindows()) !== null && _b !== void 0 ? _b : []; });
+    registerIpcHandler('wm.toggleWindow', (d) => { var _a; (_a = window.__wosWmBridge) === null || _a === void 0 ? void 0 : _a.toggleWindow(Number(d.pid)); return true; });
+    registerIpcHandler('wm.getLaunchItems', () => { var _a, _b; return (_b = (_a = window.__wosWmBridge) === null || _a === void 0 ? void 0 : _a.getLaunchItems()) !== null && _b !== void 0 ? _b : []; });
+    registerIpcHandler('wm.launch', (d) => { var _a, _b; (_b = (_a = window.__wosWmBridge) === null || _a === void 0 ? void 0 : _a.launch) === null || _b === void 0 ? void 0 : _b.call(_a, String(d.name)); return true; });
+    // Dock bridge handlers
+    registerIpcHandler('dock.registerSettings', (d) => {
+        var _a, _b, _c, _d;
+        if (window.__wosDockBridge) {
+            window.__wosDockBridge.schema = (_a = d.schema) !== null && _a !== void 0 ? _a : [];
+            window.__wosDockBridge.dockId = (_b = d.dockId) !== null && _b !== void 0 ? _b : '';
+        }
+        else {
+            window.__wosDockBridge = { schema: (_c = d.schema) !== null && _c !== void 0 ? _c : [], dockId: (_d = d.dockId) !== null && _d !== void 0 ? _d : '', set: () => { } };
+        }
+        broadcastIpcEvent('dock.schemaChanged', { schema: window.__wosDockBridge.schema, dockId: window.__wosDockBridge.dockId });
+        return true;
+    });
+    registerIpcHandler('dock.getSchema', () => window.__wosDockBridge
+        ? { schema: window.__wosDockBridge.schema, dockId: window.__wosDockBridge.dockId }
+        : { schema: [], dockId: '' });
+    registerIpcHandler('dock.setSetting', (d) => {
+        if (!window.__wosDockBridge)
+            return false;
+        const entry = window.__wosDockBridge.schema.find(e => e.key === d.key);
+        if (entry)
+            entry.value = d.value;
+        broadcastIpcEvent('dock.settingChanged', { key: d.key, value: d.value });
+        return true;
+    });
+    registerIpcHandler('dock.getSettings', () => window.__wosDockBridge
+        ? window.__wosDockBridge.schema.reduce((acc, e) => { acc[e.key] = e.value; return acc; }, {})
+        : {});
+    // FS handlers — accessed through platform's ProxyFS in Ring 1;
+    // these raw handlers remain for trusted system callers (SW bridge, dock, etc.)
+    registerIpcHandler('fs.read', (d) => Array.from(fs.readFileSync(d.path)));
+    registerIpcHandler('fs.readText', (d) => fs.readFileSync(d.path, 'utf8'));
+    registerIpcHandler('fs.write', (d) => {
+        const c = d.content;
+        if (typeof c === 'string')
+            fs.writeFileSync(d.path, c);
+        else
+            fs.writeFileSync(d.path, Buffer.from(c));
+        return true;
+    });
+    registerIpcHandler('fs.list', (d) => fs.readdirSync(d.path));
+    registerIpcHandler('fs.exists', (d) => fs.existsSync(d.path));
+    registerIpcHandler('fs.mkdir', (d) => { fs.mkdirSync(d.path); return true; });
+    registerIpcHandler('fs.rm', (d) => { fs.unlinkSync(d.path); return true; });
+    registerIpcHandler('fs.stat', (d) => {
+        var _a;
+        const s = fs.statSync(d.path);
+        return { isDirectory: s.isDirectory(), size: (_a = s.size) !== null && _a !== void 0 ? _a : 0 };
+    });
+}
+
+
+/***/ }),
+
+/***/ "./src/kernel/vfs.ts":
+/*!***************************!*\
+  !*** ./src/kernel/vfs.ts ***!
+  \***************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   FS_BACKEND_QUERY_PARAM: () => (/* binding */ FS_BACKEND_QUERY_PARAM),
+/* harmony export */   FS_BACKEND_STORAGE_KEY: () => (/* binding */ FS_BACKEND_STORAGE_KEY),
+/* harmony export */   initVFS: () => (/* binding */ initVFS),
+/* harmony export */   mkdirRecursive: () => (/* binding */ mkdirRecursive),
+/* harmony export */   resolveFsBackend: () => (/* binding */ resolveFsBackend)
+/* harmony export */ });
+/* harmony import */ var _ipc_bus__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./ipc-bus */ "./src/kernel/ipc-bus.ts");
+// Ring 0 — VFS kernel module
+// Owns BrowserFS mount, path bootstrap from meta.json, and segment-safe mkdir.
+// No business logic. Called once at boot from src/index.ts.
+var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+
+const FS_BACKEND_STORAGE_KEY = '__app_fs_backend__';
+const FS_BACKEND_QUERY_PARAM = 'fsBackend';
+function resolveFsBackend() {
+    const fromQuery = new URLSearchParams(window.location.search).get(FS_BACKEND_QUERY_PARAM);
+    if (fromQuery === 'indexeddb' || fromQuery === 'localstorage') {
+        localStorage.setItem(FS_BACKEND_STORAGE_KEY, fromQuery);
+        return fromQuery;
+    }
+    return localStorage.getItem(FS_BACKEND_STORAGE_KEY) === 'localstorage' ? 'localstorage' : 'indexeddb';
+}
+// BrowserFS ignores { recursive: true } — create each segment individually.
+function mkdirRecursive(fs, path) {
+    const segments = path.replace(/^\//, '').split('/');
+    let cur = '';
+    for (const seg of segments) {
+        cur += '/' + seg;
+        try {
+            fs.mkdirSync(cur);
+        }
+        catch (e) {
+            if (e.code !== 'EEXIST')
+                throw e;
+        }
+    }
+}
+const DEFAULT_DIRS = [
+    '/home', '/home/user1', '/home/user1/apps', '/home/user1/tools',
+    '/home/user1/projects', '/home/user1/quotes',
+    '/mnt', '/usr', '/usr/bin', '/usr/lib', '/usr/local',
+    '/usr/share', '/usr/share/icons',
+    '/bin', '/etc', '/etc/wm', '/etc/pkg',
+    '/opt', '/opt/apps',
+    '/proc', '/srv', '/sys', '/tmp',
+    '/var', '/var/log', '/var/spool',
+];
+const createBackend = (Ctor, opts) => new Promise((resolve, reject) => Ctor.Create(opts, (err, fs) => err ? reject(err) : resolve(fs)));
+const createIndexedDBMirror = (Backend, storeName) => __awaiter(void 0, void 0, void 0, function* () {
+    const idbFS = yield createBackend(Backend.IndexedDB, { storeName });
+    yield new Promise((resolve, reject) => idbFS.makeRootDirectory((err) => err ? reject(err) : resolve()));
+    const memFS = yield createBackend(Backend.InMemory, {});
+    return createBackend(Backend.AsyncMirror, { sync: memFS, async: idbFS });
+});
+function initVFS(bootLog) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const t0 = Date.now();
+        window.BrowserFS.install(window);
+        const Backend = window.BrowserFS.FileSystem;
+        const fsBackend = resolveFsBackend();
+        let mfs;
+        if (fsBackend === 'localstorage') {
+            const rootFS = yield createBackend(Backend.LocalStorage, {});
+            const tmpFS = yield createBackend(Backend.InMemory, {});
+            const mntFS = yield createBackend(Backend.InMemory, {});
+            mfs = yield createBackend(Backend.MountableFileSystem, { '/': rootFS, '/tmp': tmpFS, '/mnt': mntFS });
+        }
+        else {
+            const rootFS = yield createIndexedDBMirror(Backend, 'fs');
+            const tmpFS = yield createIndexedDBMirror(Backend, 'tmp');
+            const mntFS = yield createIndexedDBMirror(Backend, 'mnt');
+            mfs = yield createBackend(Backend.MountableFileSystem, { '/': rootFS, '/tmp': tmpFS, '/mnt': mntFS });
+        }
+        window.BrowserFS.initialize(mfs);
+        bootLog(`VFS init (${fsBackend})`, t0);
+        const fs = window.require('fs');
+        window.fs = fs;
+        // Wire IPC fs handlers so service worker / iframes can call fs via postMessage
+        (0,_ipc_bus__WEBPACK_IMPORTED_MODULE_0__.initIpcBus)(fs);
+        DEFAULT_DIRS.forEach(dir => {
+            if (!fs.existsSync(dir))
+                fs.mkdirSync(dir);
+        });
+        yield bootstrapMetaFiles(fs, bootLog);
+        return fs;
+    });
+}
+function bootstrapMetaFiles(fs, bootLog) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const t1 = Date.now();
+        const metaFilePath = '/meta.json';
+        const metaFileServerPath = '/public/mount/meta.json';
+        let defaultFiles = [];
+        if (fs.existsSync(metaFilePath)) {
+            defaultFiles = JSON.parse(fs.readFileSync(metaFilePath).toString());
+        }
+        const ignoreMetaReload = defaultFiles.find(item => item.path === metaFilePath && item.force_reload === false);
+        if (!ignoreMetaReload)
+            defaultFiles = yield (yield fetch(metaFileServerPath)).json();
+        let fileCount = 0;
+        yield Promise.all(defaultFiles.map((item) => __awaiter(this, void 0, void 0, function* () {
+            if (fs.existsSync(item.path) && !item.force_reload)
+                return;
+            const serverPath = item.file.startsWith('http')
+                ? item.file
+                : `/public/mount${item.file.startsWith('/') ? '' : '/'}${item.file}`;
+            const fileData = yield (yield fetch(serverPath)).arrayBuffer();
+            const dir = item.path.slice(0, item.path.lastIndexOf('/')) || '/';
+            if (!fs.existsSync(dir))
+                mkdirRecursive(fs, dir);
+            fs.writeFileSync(item.path, Buffer.from(fileData));
+            fileCount++;
+        })));
+        bootLog(`meta.json bootstrap (${fileCount} files written)`, t1);
+    });
+}
+
+
+/***/ }),
+
+/***/ "./src/platform/command-registry.ts":
+/*!******************************************!*\
+  !*** ./src/platform/command-registry.ts ***!
+  \******************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   CommandRegistry: () => (/* binding */ CommandRegistry)
+/* harmony export */ });
+/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/BehaviorSubject.js");
+// Ring 1 — Command Registry
+// Extracted from Host in src/shared/index.ts.
+// Manages named commands (launch actions registered by apps/system services).
+
+class CommandRegistry {
+    constructor() {
+        this._commands = new rxjs__WEBPACK_IMPORTED_MODULE_0__.BehaviorSubject([]);
+        this.commands$ = this._commands.asObservable();
+    }
+    static getInstance() {
+        var _a;
+        const shared = (_a = window.top) === null || _a === void 0 ? void 0 : _a.__wosCommandRegistry;
+        if (shared)
+            return shared;
+        if (!CommandRegistry._instance) {
+            CommandRegistry._instance = new CommandRegistry();
+            try {
+                window.top.__wosCommandRegistry = CommandRegistry._instance;
+            }
+            catch (_) { }
+        }
+        return CommandRegistry._instance;
+    }
+    register(name, exec, meta = {}, platformName = 'unknown') {
+        const existing = this._commands.getValue().find(x => x.name === name);
+        if (existing) {
+            console.warn(`[command-registry] '${name}' already registered — new registration takes precedence`);
+        }
+        const cmd = Object.freeze({ name, exec, servicePlatformName: platformName, meta });
+        this._commands.next([cmd, ...this._commands.getValue()]);
+        return { remove: () => this._commands.next(this._commands.getValue().filter(x => x !== cmd)) };
+    }
+    get(name) {
+        return this._commands.getValue().find(x => x.name === name);
+    }
+    call(name, ...args) {
+        const cmd = this.get(name);
+        if (!cmd) {
+            console.log(`[command-registry] Command [${name}] not registered!`);
+            return;
+        }
+        return cmd.exec(...args);
+    }
+    all() {
+        return this._commands.getValue();
+    }
+    // Returns commands that handle a given file extension, sorted specific-first.
+    forExtension(ext) {
+        var _a, _b, _c;
+        const seen = new Set();
+        const results = [];
+        const dotExt = ext.startsWith('.') ? ext.toLowerCase() : `.${ext}`.toLowerCase();
+        for (const cmd of this._commands.getValue()) {
+            if (seen.has(cmd.name))
+                continue;
+            const exts = (_a = cmd.meta) === null || _a === void 0 ? void 0 : _a.fileExtensions;
+            if (!exts || !Array.isArray(exts))
+                continue;
+            seen.add(cmd.name);
+            const isWild = exts.includes('*');
+            const isMatch = isWild || exts.some(e => (e.startsWith('.') ? e : `.${e}`).toLowerCase() === dotExt);
+            if (isMatch) {
+                results.push({
+                    name: cmd.name,
+                    title: ((_b = cmd.meta) === null || _b === void 0 ? void 0 : _b.title) || cmd.name,
+                    icon: ((_c = cmd.meta) === null || _c === void 0 ? void 0 : _c.icon) || 'apps',
+                    wildcard: isWild,
+                });
+            }
+        }
+        return results.sort((a, b) => a.wildcard === b.wildcard ? a.title.localeCompare(b.title) : a.wildcard ? 1 : -1);
+    }
+}
+CommandRegistry._instance = null;
+
+
+/***/ }),
+
+/***/ "./src/platform/namespace.ts":
+/*!***********************************!*\
+  !*** ./src/platform/namespace.ts ***!
+  \***********************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   Namespace: () => (/* binding */ Namespace)
+/* harmony export */ });
+// Ring 1 — Namespace
+// Per-app context. Each spawned process gets one Namespace that defines its
+// identity (pid, id) and its access control list for VFS paths.
+class Namespace {
+    constructor(opts) {
+        var _a, _b;
+        this.pid = opts.pid;
+        this.id = opts.id;
+        this.appDir = (_a = opts.appDir) !== null && _a !== void 0 ? _a : `/opt/apps/${opts.id}`;
+        // Default ACL: read+write own app dir and user data dir.
+        // System paths (/tmp, /var/log) are readable + writable.
+        // Everything else is read-only by default.
+        this.acl = [
+            { path: this.appDir, read: true, write: true },
+            { path: `/home/user1/.local/share/${opts.id}`, read: true, write: true },
+            { path: '/tmp', read: true, write: true },
+            { path: '/var/log', read: true, write: true },
+            { path: '/', read: true, write: false },
+            ...((_b = opts.extraAcl) !== null && _b !== void 0 ? _b : []),
+        ];
+    }
+    bestMatch(path) {
+        // Find the most-specific ACL entry whose path is a prefix of the target path.
+        return this.acl
+            .filter(e => path === e.path || path.startsWith(e.path + '/'))
+            .sort((a, b) => b.path.length - a.path.length)[0];
+    }
+    checkRead(path) {
+        const match = this.bestMatch(path);
+        if (!match || !match.read) {
+            throw new Error(`[acl] read denied: pid=${this.pid} id=${this.id} path=${path}`);
+        }
+    }
+    checkWrite(path) {
+        const match = this.bestMatch(path);
+        if (!match || !match.write) {
+            throw new Error(`[acl] write denied: pid=${this.pid} id=${this.id} path=${path}`);
+        }
+    }
+    canRead(path) {
+        try {
+            this.checkRead(path);
+            return true;
+        }
+        catch (_) {
+            return false;
+        }
+    }
+    canWrite(path) {
+        try {
+            this.checkWrite(path);
+            return true;
+        }
+        catch (_) {
+            return false;
+        }
+    }
+}
+
+
+/***/ }),
+
+/***/ "./src/platform/process-manager.ts":
+/*!*****************************************!*\
+  !*** ./src/platform/process-manager.ts ***!
+  \*****************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   ProcessManager: () => (/* binding */ ProcessManager)
+/* harmony export */ });
+/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/BehaviorSubject.js");
+/* harmony import */ var _namespace__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./namespace */ "./src/platform/namespace.ts");
+// Ring 1 — Process Manager
+// Owns PID assignment and Namespace lifecycle.
+// The only place where Namespaces are created or destroyed.
+
+
+class ProcessManager {
+    constructor() {
+        this._pidCounter = 1;
+        this._processes = new Map();
+        this._processes$ = new rxjs__WEBPACK_IMPORTED_MODULE_1__.BehaviorSubject([]);
+        this.processes$ = this._processes$.asObservable();
+    }
+    // Shared across all bundles (layout + remote) via the top-level window.
+    // Each bundle has its own module scope so a plain static _instance would
+    // be duplicated; storing on window.top ensures both bundles share one instance.
+    static getInstance() {
+        var _a;
+        const shared = (_a = window.top) === null || _a === void 0 ? void 0 : _a.__wosProcessManager;
+        if (shared)
+            return shared;
+        if (!ProcessManager._instance) {
+            ProcessManager._instance = new ProcessManager();
+            try {
+                window.top.__wosProcessManager = ProcessManager._instance;
+            }
+            catch (_) { }
+        }
+        return ProcessManager._instance;
+    }
+    spawn(id, opts = {}) {
+        const pid = this._pidCounter++;
+        const ns = new _namespace__WEBPACK_IMPORTED_MODULE_0__.Namespace({ pid, id, appDir: opts.appDir, extraAcl: opts.extraAcl });
+        const record = {
+            pid,
+            id,
+            appDir: ns.appDir,
+            namespace: ns,
+            startedAt: Date.now(),
+            label: opts.label,
+        };
+        this._processes.set(pid, record);
+        this._processes$.next(Array.from(this._processes.values()));
+        return ns;
+    }
+    kill(pid) {
+        this._processes.delete(pid);
+        this._processes$.next(Array.from(this._processes.values()));
+    }
+    get(pid) {
+        return this._processes.get(pid);
+    }
+    list() {
+        return Array.from(this._processes.values());
+    }
+    reset() {
+        this._pidCounter = 1;
+        this._processes.clear();
+        this._processes$.next([]);
+    }
+}
+ProcessManager._instance = null;
+
+
+/***/ }),
+
+/***/ "./src/platform/proxy-fs.ts":
+/*!**********************************!*\
+  !*** ./src/platform/proxy-fs.ts ***!
+  \**********************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   ProxyFS: () => (/* binding */ ProxyFS)
+/* harmony export */ });
+/* harmony import */ var _kernel_vfs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ../kernel/vfs */ "./src/kernel/vfs.ts");
+// Ring 1 — ProxyFS
+// Wraps the raw kernel VFS with per-namespace ACL enforcement.
+// Apps receive a ProxyFS instance — they never touch the raw fs directly.
+
+class ProxyFS {
+    constructor(fs, ns) {
+        this.fs = fs;
+        this.ns = ns;
+    }
+    // --- Read operations ---
+    readFileSync(path, encoding) {
+        this.ns.checkRead(path);
+        return encoding ? this.fs.readFileSync(path, encoding) : this.fs.readFileSync(path);
+    }
+    readText(path) {
+        try {
+            this.ns.checkRead(path);
+            return Promise.resolve(this.fs.readFileSync(path, 'utf8'));
+        }
+        catch (e) {
+            return Promise.reject(e);
+        }
+    }
+    readBinary(path) {
+        try {
+            this.ns.checkRead(path);
+            return Promise.resolve(this.fs.readFileSync(path));
+        }
+        catch (e) {
+            return Promise.reject(e);
+        }
+    }
+    existsSync(path) {
+        this.ns.checkRead(path);
+        return this.fs.existsSync(path);
+    }
+    exists(path) {
+        try {
+            this.ns.checkRead(path);
+            return Promise.resolve(this.fs.existsSync(path));
+        }
+        catch (e) {
+            return Promise.reject(e);
+        }
+    }
+    readdirSync(path) {
+        this.ns.checkRead(path);
+        return this.fs.readdirSync(path);
+    }
+    list(path) {
+        try {
+            this.ns.checkRead(path);
+            return Promise.resolve(this.fs.readdirSync(path));
+        }
+        catch (e) {
+            return Promise.reject(e);
+        }
+    }
+    statSync(path) {
+        this.ns.checkRead(path);
+        return this.fs.statSync(path);
+    }
+    stat(path) {
+        try {
+            this.ns.checkRead(path);
+            const s = this.fs.statSync(path);
+            return Promise.resolve({ isDirectory: s.isDirectory(), isFile: s.isFile(), size: s.size });
+        }
+        catch (e) {
+            return Promise.reject(e);
+        }
+    }
+    // --- Write operations ---
+    writeFileSync(path, data) {
+        this.ns.checkWrite(path);
+        this.fs.writeFileSync(path, data);
+    }
+    writeText(path, content) {
+        try {
+            this.ns.checkWrite(path);
+            // Auto-create parent dirs (BrowserFS doesn't support recursive)
+            const dir = path.slice(0, path.lastIndexOf('/')) || '/';
+            if (dir && !this.fs.existsSync(dir))
+                (0,_kernel_vfs__WEBPACK_IMPORTED_MODULE_0__.mkdirRecursive)(this.fs, dir);
+            this.fs.writeFileSync(path, content);
+            return Promise.resolve(true);
+        }
+        catch (e) {
+            return Promise.reject(e);
+        }
+    }
+    mkdirSync(path) {
+        this.ns.checkWrite(path);
+        this.fs.mkdirSync(path);
+    }
+    mkdir(path) {
+        try {
+            this.ns.checkWrite(path);
+            (0,_kernel_vfs__WEBPACK_IMPORTED_MODULE_0__.mkdirRecursive)(this.fs, path);
+            return Promise.resolve(true);
+        }
+        catch (e) {
+            return Promise.reject(e);
+        }
+    }
+    // mkdirRecursive exposed for convenience — checks write on each segment
+    mkdirRecursive(path) {
+        this.ns.checkWrite(path);
+        (0,_kernel_vfs__WEBPACK_IMPORTED_MODULE_0__.mkdirRecursive)(this.fs, path);
+    }
+    unlinkSync(path) {
+        this.ns.checkWrite(path);
+        this.fs.unlinkSync(path);
+    }
+    remove(path) {
+        try {
+            this.ns.checkWrite(path);
+            this.fs.unlinkSync(path);
+            return Promise.resolve(true);
+        }
+        catch (e) {
+            return Promise.reject(e);
+        }
+    }
+    renameSync(from, to) {
+        this.ns.checkWrite(from);
+        this.ns.checkWrite(to);
+        this.fs.renameSync(from, to);
+    }
+    rename(from, to) {
+        try {
+            this.ns.checkWrite(from);
+            this.ns.checkWrite(to);
+            this.fs.renameSync(from, to);
+            return Promise.resolve(true);
+        }
+        catch (e) {
+            return Promise.reject(e);
+        }
+    }
+    // --- AppSDK-compatible shape (injected into app iframes) ---
+    // Returns an object with the promise-based API that app HTML files expect.
+    toAppSDK(opts = {}) {
+        return {
+            readText: (p) => this.readText(p),
+            readBinary: (p) => this.readBinary(p),
+            writeText: (p, c) => this.writeText(p, c),
+            mkdir: (p) => this.mkdir(p),
+            remove: (p) => this.remove(p),
+            list: (p) => this.list(p),
+            exists: (p) => this.exists(p),
+            stat: (p) => this.stat(p),
+            rename: (f, t) => this.rename(f, t),
+            setTitle: (t) => { var _a; (_a = opts.setTitle) === null || _a === void 0 ? void 0 : _a.call(opts, t); return Promise.resolve(true); },
+            log: (v) => { console.log('[app]', v); return Promise.resolve(true); },
+        };
+    }
+}
+
+
+/***/ }),
+
 /***/ "./src/shared/index.ts":
 /*!*****************************!*\
   !*** ./src/shared/index.ts ***!
@@ -28297,8 +28978,14 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   Host: () => (/* binding */ Host),
 /* harmony export */   Platform: () => (/* binding */ Platform)
 /* harmony export */ });
-/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/BehaviorSubject.js");
-/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/Subject.js");
+/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/BehaviorSubject.js");
+/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/Subject.js");
+/* harmony import */ var _platform_command_registry__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ../platform/command-registry */ "./src/platform/command-registry.ts");
+/* harmony import */ var _platform_process_manager__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../platform/process-manager */ "./src/platform/process-manager.ts");
+/* harmony import */ var _platform_proxy_fs__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../platform/proxy-fs */ "./src/platform/proxy-fs.ts");
+
+
+
 
 const Babel = __webpack_require__(/*! ./babel.js */ "./src/shared/babel.js");
 const babelOpts = (filename, cwd) => ({
@@ -28308,7 +28995,7 @@ const babelOpts = (filename, cwd) => ({
     cwd,
 });
 class Host {
-    constructor(window, platform, commands, widgets = new rxjs__WEBPACK_IMPORTED_MODULE_0__.BehaviorSubject([]), modulesMap = new Map(), settingsSections = new rxjs__WEBPACK_IMPORTED_MODULE_0__.BehaviorSubject([]), widgetTypes = new Map()) {
+    constructor(window, platform, commands, widgets = new rxjs__WEBPACK_IMPORTED_MODULE_3__.BehaviorSubject([]), modulesMap = new Map(), settingsSections = new rxjs__WEBPACK_IMPORTED_MODULE_3__.BehaviorSubject([]), widgetTypes = new Map()) {
         this.window = window;
         this.platform = platform;
         this.commands = commands;
@@ -28358,11 +29045,27 @@ class Host {
             meta,
         });
         this.commands.next([newCommandObject, ...this.commands.getValue()]);
+        // Mirror into Ring 1 CommandRegistry so system/platform code can reach commands
+        // without going through the Host BehaviorSubject.
+        const regHandle = _platform_command_registry__WEBPACK_IMPORTED_MODULE_0__.CommandRegistry.getInstance().register(command_name, callback, meta, this.platform.name);
         return {
             remove: () => {
                 this.commands.next(this.commands.getValue().filter((x) => x !== newCommandObject));
+                regHandle.remove();
             },
         };
+    }
+    // Ring 1 accessors — used by system layer (window-manager, etc.) to reach
+    // platform services without going through Host's private internals.
+    getProcessManager() {
+        return _platform_process_manager__WEBPACK_IMPORTED_MODULE_1__.ProcessManager.getInstance();
+    }
+    getProxyFs(pid) {
+        var _a;
+        const ns = (_a = _platform_process_manager__WEBPACK_IMPORTED_MODULE_1__.ProcessManager.getInstance().get(pid)) === null || _a === void 0 ? void 0 : _a.namespace;
+        if (!ns)
+            return undefined;
+        return new _platform_proxy_fs__WEBPACK_IMPORTED_MODULE_2__.ProxyFS(this.getFS(), ns);
     }
     registerWidget(widget_name, render, meta = {}) {
         const newWidget = Object.freeze({
@@ -28469,7 +29172,7 @@ class Host {
             program.map.sources = ['babel://' + filenameAlias];
             const base64SourceMap = btoa(unescape(encodeURIComponent(JSON.stringify(program.map))));
             const codeWithSourceMap = `${program.code}\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,${base64SourceMap}`;
-            const platformEventEmitter = new rxjs__WEBPACK_IMPORTED_MODULE_1__.Subject();
+            const platformEventEmitter = new rxjs__WEBPACK_IMPORTED_MODULE_4__.Subject();
             const lastSlash = filenameAlias.lastIndexOf('/');
             const pwd = lastSlash > -1 ? filenameAlias.slice(0, lastSlash) || "/" : "/";
             let newPlatform = _platform ? _platform : new Platform(platformEventEmitter, filenameAlias, pwd);

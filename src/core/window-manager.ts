@@ -3,6 +3,10 @@ import { Command, Platform } from "@shared/index";
 import { removeRecursive, readJsonFile, writeJsonFile, ensureDir } from "@shared/fs-utils";
 import { DESKTOPS_CONFIG_PATH, PROC_DIR, WINDOW_MANAGER_MODULE_PATH, WM_DIR } from "@shared/constants";
 import { BehaviorSubject, Subject } from "rxjs";
+import { ProcessManager } from "../platform/process-manager";
+import { ProxyFS } from "../platform/proxy-fs";
+import { WindowManager as Wm2 } from "../system/window-manager";
+import { LayoutManager } from "../system/layout-manager";
 const platform = Platform.getInstance();
 
 export const WINDOWS_CONTAINER_CLASS = "windows";
@@ -22,6 +26,26 @@ export type TaskbarWindowInfo = {
 };
 
 export const windowsSubject = new BehaviorSubject<TaskbarWindowInfo[]>([]);
+
+// Mirror windowsSubject into Ring 2 WindowManager so external consumers
+// (task-manager, spotlight, etc.) can subscribe to Wm2.getInstance().windows$.
+windowsSubject.subscribe(wins => {
+  const wm2 = Wm2.getInstance();
+  const current = new Set(wm2.getAll().map(w => w.pid));
+  const next = new Set(wins.map(w => w.pid));
+  // Unregister closed windows
+  for (const pid of current) {
+    if (!next.has(pid)) wm2.unregister(pid);
+  }
+  // Update or register open windows
+  for (const w of wins) {
+    if (current.has(w.pid)) {
+      wm2.updateRecord(w.pid, { title: w.title, minimized: w.minimized, active: w.active });
+    } else {
+      wm2.register({ pid: w.pid, command: w.name, title: w.title, icon: w.icon, minimized: w.minimized, active: w.active });
+    }
+  }
+});
 
 // Multiple virtual desktops ("Spaces"): every window belongs to exactly one
 // desktop (tagged via `desktopId`); only the active desktop's windows are
@@ -85,8 +109,6 @@ export const removeDesktop = (id: string) => {
   writeDesktopsConfig(updated, newActive);
 };
 
-let nextPid = 1;
-
 // One entry per running window/process, keyed by pid. Backs the
 // `process.*` commands (kill, send-message, list) so any script - a `/bin`
 // command, a widget, the task manager, etc. - can interact with a running
@@ -97,6 +119,7 @@ type ProcessEntry = {
   messages$: Subject<unknown>;
   servicePlatformName: string;
   startedAt: number;
+  proxyFs?: ProxyFS;   // ACL-scoped VFS proxy for this process
 };
 const processRegistry = new Map<number, ProcessEntry>();
 
@@ -261,7 +284,18 @@ export class WindowManager {
       throw `Command not found [${command_name}]`;
     }
 
-    const pid = nextPid++;
+    // Ring 1: spawn a namespace for this process — assigns pid + ACL
+    const ns = ProcessManager.getInstance().spawn(command_name, {
+      label: (command.meta?.title as string) || command_name,
+    });
+    const pid = ns.pid;
+
+    // Build a ProxyFS scoped to this namespace — passed to app loaders via props
+    let proxyFs: ProxyFS | undefined;
+    try {
+      const rawFs = platform.host.getFS();
+      proxyFs = new ProxyFS(rawFs, ns);
+    } catch (_) {}
 
     // Load the VFS window-manager module once at the top so its hooks
     // (createContainer, createHeader, setupWindow) are all available.
@@ -402,6 +436,7 @@ export class WindowManager {
       messages$,
       servicePlatformName: command.servicePlatformName,
       startedAt: Date.now(),
+      proxyFs,
     });
 
     iframe.onload = () => {
@@ -425,6 +460,9 @@ export class WindowManager {
           // `/proc/<pid>/...`, and use it as the target for `process.kill`
           // and `process.send-message` from other scripts.
           pid,
+          // Ring 1: scoped VFS proxy — app loaders use this instead of host.getFS()
+          proxyFs,
+          namespace: ns,
           close: closeFunction,
           onMessage: (cb: (message: unknown) => void) => {
             const subscription = messages$.subscribe(cb);
@@ -515,6 +553,7 @@ export class WindowManager {
     removeRecursive(platform.host.getFS(), `${PROC_DIR}/${windowRef.pid}`);
     processRegistry.get(windowRef.pid)?.messages$.complete();
     processRegistry.delete(windowRef.pid);
+    ProcessManager.getInstance().kill(windowRef.pid);
     windowsSubject.next(windowsSubject.getValue().filter(w => w.pid !== windowRef.pid));
   }
 

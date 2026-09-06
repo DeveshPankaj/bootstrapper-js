@@ -11,6 +11,10 @@ export type Command = {
     meta: Record<string, unknown>
 }
 
+declare global {
+    interface Window { __wosCommandRegistry?: CommandRegistry }
+}
+
 export class CommandRegistry {
     private static _instance: CommandRegistry | null = null
 
@@ -18,7 +22,12 @@ export class CommandRegistry {
     public readonly commands$: Observable<Command[]> = this._commands.asObservable()
 
     static getInstance(): CommandRegistry {
-        if (!CommandRegistry._instance) CommandRegistry._instance = new CommandRegistry()
+        const shared = (window.top as any)?.__wosCommandRegistry
+        if (shared) return shared
+        if (!CommandRegistry._instance) {
+            CommandRegistry._instance = new CommandRegistry()
+            try { (window.top as any).__wosCommandRegistry = CommandRegistry._instance } catch (_) {}
+        }
         return CommandRegistry._instance
     }
 
