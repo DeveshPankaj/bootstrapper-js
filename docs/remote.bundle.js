@@ -28416,8 +28416,10 @@ const handlers = new Map();
 function registerIpcHandler(event, handler) {
     handlers.set(event, handler);
 }
-function broadcastIpcEvent(event, data) {
-    document.querySelectorAll('iframe').forEach(f => {
+// targetDoc defaults to `document` so existing call sites work unchanged.
+// The layout bundle (which runs in a hidden iframe) passes platform.window.document.
+function broadcastIpcEvent(event, data, targetDoc = document) {
+    targetDoc.querySelectorAll('iframe').forEach(f => {
         var _a;
         try {
             (_a = f.contentWindow) === null || _a === void 0 ? void 0 : _a.postMessage({ type: 'wos-ipc-event', event, data }, '*');
@@ -28425,13 +28427,8 @@ function broadcastIpcEvent(event, data) {
         catch (_) { }
     });
 }
-let _getWindowsFn = null;
-let _toggleWindowFn = null;
-function registerWindowIpcHandlers(getWindows, toggleWindow) {
-    _getWindowsFn = getWindows;
-    _toggleWindowFn = toggleWindow;
-    registerIpcHandler('wm.getWindows', () => { var _a; return (_a = _getWindowsFn === null || _getWindowsFn === void 0 ? void 0 : _getWindowsFn()) !== null && _a !== void 0 ? _a : []; });
-    registerIpcHandler('wm.toggleWindow', (d) => { _toggleWindowFn === null || _toggleWindowFn === void 0 ? void 0 : _toggleWindowFn(Number(d.pid)); return true; });
+function registerWindowIpcHandlers(getWindows, toggleWindow, mainWindow = window) {
+    mainWindow.__wosWmBridge = { getWindows, toggleWindow };
 }
 function initIpc(fs) {
     window.addEventListener('message', (e) => __awaiter(this, void 0, void 0, function* () {
@@ -28454,6 +28451,9 @@ function initIpc(fs) {
             source.postMessage({ type: 'wos-ipc-response', id, error: String(err) }, '*');
         }
     }));
+    // WM handlers delegate to the bridge set by the layout bundle on the main window.
+    registerIpcHandler('wm.getWindows', () => { var _a, _b; return (_b = (_a = window.__wosWmBridge) === null || _a === void 0 ? void 0 : _a.getWindows()) !== null && _b !== void 0 ? _b : []; });
+    registerIpcHandler('wm.toggleWindow', (d) => { var _a; (_a = window.__wosWmBridge) === null || _a === void 0 ? void 0 : _a.toggleWindow(Number(d.pid)); return true; });
     registerIpcHandler('fs.read', (d) => Array.from(fs.readFileSync(d.path)));
     registerIpcHandler('fs.readText', (d) => fs.readFileSync(d.path, 'utf8'));
     registerIpcHandler('fs.write', (d) => {

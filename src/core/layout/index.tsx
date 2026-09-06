@@ -887,7 +887,9 @@ export const render = (container: HTMLElement) => {
         windowManager.createWindow(command.name, ...args)
     }
 
-    // Register IPC handlers so sandboxed dock/panel apps can query windows.
+    // Bridge WM handlers onto platform.window (the main window) so the remote
+    // bundle's IPC listener — which runs in a different module instance — can
+    // serve wm.getWindows / wm.toggleWindow requests from sandboxed dock iframes.
     registerWindowIpcHandlers(
       () => windowsSubject.getValue().map(w => ({
         pid: w.pid, name: w.name, title: w.title,
@@ -897,13 +899,16 @@ export const render = (container: HTMLElement) => {
         const win = windowsSubject.getValue().find(w => w.pid === pid);
         win?.toggle();
       },
+      platform.window,
     );
-    // Broadcast every window-list change to all sandboxed iframes.
+    // Broadcast window-list changes to all iframes in the main document.
+    // Pass platform.window.document explicitly — bare `document` inside the
+    // layout bundle resolves to the hidden-iframe document (no child iframes).
     windowsSubject.subscribe(wins => {
       broadcastIpcEvent('wm.windowsChanged', wins.map(w => ({
         pid: w.pid, name: w.name, title: w.title,
         icon: w.icon, minimized: w.minimized, active: w.active,
-      })));
+      })), platform.window.document);
     });
 
     platform.register('open-window', onCommandClick)

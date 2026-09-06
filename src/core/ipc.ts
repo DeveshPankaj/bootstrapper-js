@@ -8,26 +8,29 @@ export function registerIpcHandler(event: string, handler: IpcHandler) {
   handlers.set(event, handler);
 }
 
-export function broadcastIpcEvent(event: string, data: unknown) {
-  document.querySelectorAll('iframe').forEach(f => {
+// targetDoc defaults to `document` so existing call sites work unchanged.
+// The layout bundle (which runs in a hidden iframe) passes platform.window.document.
+export function broadcastIpcEvent(event: string, data: unknown, targetDoc: Document = document) {
+  targetDoc.querySelectorAll('iframe').forEach(f => {
     try { f.contentWindow?.postMessage({ type: 'wos-ipc-event', event, data }, '*'); } catch (_) {}
   });
 }
 
-// Registered by the layout bundle once windowsSubject is available.
-// Lets sandboxed dock/panel apps query or react to running windows via IPC.
-type WindowSnapshot = { pid: number; name: string; title: string; icon: string; minimized: boolean; active: boolean };
-let _getWindowsFn: (() => WindowSnapshot[]) | null = null;
-let _toggleWindowFn: ((pid: number) => void) | null = null;
+// The layout bundle runs in a hidden iframe — its module instances are isolated
+// from the remote bundle that owns the message listener. WM handlers are bridged
+// via a plain object on the shared main window so the remote bundle can reach them.
+export type WmBridge = {
+  getWindows: () => { pid: number; name: string; title: string; icon: string; minimized: boolean; active: boolean }[];
+  toggleWindow: (pid: number) => void;
+};
+declare global { interface Window { __wosWmBridge?: WmBridge } }
 
 export function registerWindowIpcHandlers(
-  getWindows: () => WindowSnapshot[],
-  toggleWindow: (pid: number) => void,
+  getWindows: WmBridge['getWindows'],
+  toggleWindow: WmBridge['toggleWindow'],
+  mainWindow: Window = window,
 ) {
-  _getWindowsFn = getWindows;
-  _toggleWindowFn = toggleWindow;
-  registerIpcHandler('wm.getWindows', () => _getWindowsFn?.() ?? []);
-  registerIpcHandler('wm.toggleWindow', (d: any) => { _toggleWindowFn?.(Number(d.pid)); return true; });
+  mainWindow.__wosWmBridge = { getWindows, toggleWindow };
 }
 
 export function initIpc(fs: any) {
@@ -48,6 +51,10 @@ export function initIpc(fs: any) {
       source.postMessage({ type: 'wos-ipc-response', id, error: String(err) }, '*');
     }
   });
+
+  // WM handlers delegate to the bridge set by the layout bundle on the main window.
+  registerIpcHandler('wm.getWindows', () => window.__wosWmBridge?.getWindows() ?? []);
+  registerIpcHandler('wm.toggleWindow', (d: any) => { window.__wosWmBridge?.toggleWindow(Number(d.pid)); return true; });
 
   registerIpcHandler('fs.read', (d: any) => Array.from(fs.readFileSync(d.path) as Buffer));
   registerIpcHandler('fs.readText', (d: any) => fs.readFileSync(d.path, 'utf8') as string);
