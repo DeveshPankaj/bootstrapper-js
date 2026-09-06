@@ -827,6 +827,16 @@
     "force_reload": false
   },
   {
+    "path": "/opt/apps/dock/windows.html",
+    "file": "/opt/apps/dock/windows.html",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/dock/gnome.html",
+    "file": "/opt/apps/dock/gnome.html",
+    "force_reload": true
+  },
+  {
     "path": "/opt/desktop/manager.js",
     "file": "/opt/desktop/manager.js",
     "force_reload": false
