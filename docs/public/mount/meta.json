@@ -839,7 +839,7 @@
   {
     "path": "/opt/desktop/manager.js",
     "file": "/opt/desktop/manager.js",
-    "force_reload": false
+    "force_reload": true
   },
   {
     "path": "/etc/contextmenu.json",

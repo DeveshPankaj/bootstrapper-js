@@ -72,9 +72,59 @@ const readDir = () => {
     } catch (_) { return [] }
 }
 
+const ORDER_PATH = `${DESKTOP_DIR}/.desktop-order.json`
+
+const readOrder = () => {
+    try { return JSON.parse(platform.host.getFS().readFileSync(ORDER_PATH, 'utf-8')) } catch { return [] }
+}
+
+const saveOrder = (names) => {
+    try { platform.host.getFS().writeFileSync(ORDER_PATH, JSON.stringify(names)) } catch {}
+}
+
 const DesktopIcons = ({ onOpen, onContextMenu }) => {
     const [files, setFiles] = React.useState(readDir)
     const [selected, setSelected] = React.useState(null)
+    const [order, setOrder] = React.useState(readOrder)
+    const [dragOver, setDragOver] = React.useState(null)
+    const dragSrc = React.useRef(null)
+
+    const sortedFiles = React.useMemo(() => {
+        if (!order.length) return files
+        return [...files].sort((a, b) => {
+            const ia = order.indexOf(a.name), ib = order.indexOf(b.name)
+            if (ia === -1 && ib === -1) return 0
+            if (ia === -1) return 1
+            if (ib === -1) return -1
+            return ia - ib
+        })
+    }, [files, order])
+
+    const onDragStart = (e, name) => {
+        dragSrc.current = name
+        e.dataTransfer.setData('application/x-desktop-reorder', name)
+        e.dataTransfer.effectAllowed = 'move'
+    }
+    const onDragOver = (e, name) => {
+        if (!e.dataTransfer.types.includes('application/x-desktop-reorder')) return
+        e.preventDefault()
+        e.dataTransfer.dropEffect = 'move'
+        setDragOver(name)
+    }
+    const onDrop = (e, targetName) => {
+        e.preventDefault()
+        setDragOver(null)
+        const src = dragSrc.current
+        if (!src || src === targetName) return
+        const names = sortedFiles.map(f => f.name)
+        const from = names.indexOf(src), to = names.indexOf(targetName)
+        if (from === -1 || to === -1) return
+        names.splice(from, 1)
+        names.splice(to, 0, src)
+        saveOrder(names)
+        setOrder(names)
+    }
+    const onDragEnd = () => { dragSrc.current = null; setDragOver(null) }
 
     return React.createElement('div', {
         className: 'vfs-desktop-icons',
@@ -82,10 +132,18 @@ const DesktopIcons = ({ onOpen, onContextMenu }) => {
             if (e.target.classList.contains('vfs-desktop-icons')) setSelected(null)
         },
     },
-        files.map(file =>
+        sortedFiles.map(file =>
             React.createElement('div', {
                 key: file.path,
-                className: 'vfs-desktop-icon' + (selected === file.path ? ' selected' : ''),
+                className: 'vfs-desktop-icon' +
+                    (selected === file.path ? ' selected' : '') +
+                    (dragOver === file.name ? ' drag-over' : ''),
+                draggable: true,
+                onDragStart: (e) => onDragStart(e, file.name),
+                onDragOver: (e) => onDragOver(e, file.name),
+                onDragLeave: () => setDragOver(null),
+                onDrop: (e) => onDrop(e, file.name),
+                onDragEnd,
                 onClick: (e) => { e.stopPropagation(); setSelected(file.path) },
                 onDoubleClick: (e) => { e.stopPropagation(); setSelected(null); onOpen(file) },
                 onContextMenu: (e) => { e.preventDefault(); e.stopPropagation(); onContextMenu(file, e) },
@@ -132,13 +190,14 @@ const DESKTOP_CSS = `
 }
 .vfs-desktop-icon:hover { background: rgba(255,255,255,0.12); }
 .vfs-desktop-icon.selected { background: rgba(10,132,255,0.25); outline: 1.5px solid rgba(10,132,255,0.6); }
+.vfs-desktop-icon.drag-over { outline: 2px dashed rgba(10,132,255,0.7); border-radius: 6px; background: rgba(10,132,255,0.12); }
 .vfs-desktop-icon-img {
     width: 48px;
     height: 48px;
     flex-shrink: 0;
 }
 .vfs-desktop-icon-label {
-    color: #fff;
+    // color: #fff;
     font-size: 11px;
     text-align: center;
     word-break: break-all;
@@ -148,7 +207,7 @@ const DESKTOP_CSS = `
     -webkit-box-orient: vertical;
     line-height: 1.2;
     max-width: 68px;
-    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+    // text-shadow: 0 1px 3px rgba(0,0,0,0.8);
     mix-blend-mode: normal;
 }
 `
