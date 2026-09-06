@@ -21,7 +21,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   // Try right-clicking desktop to find settings
   await page.mouse.click(700, 400, { button: 'right' });
   await page.waitForTimeout(1000);
-  await page.screenshot({ path: '/private/tmp/claude-501/-Users-pankajdevesh-Desktop-Gitea-Workspaces-bootstrapper-js/c0cedca3-4725-445d-be45-549cc7b04f40/scratchpad/01-initial.png' });
+  await page.screenshot({ path: 'testing/screenshots/01-initial.png' });
   await page.keyboard.press('Escape');
   await page.waitForTimeout(500);
 
@@ -44,7 +44,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   // Reload to apply canvas WM
   await page.reload({ waitUntil: 'networkidle' });
   await page.waitForTimeout(4000);
-  await page.screenshot({ path: '/private/tmp/claude-501/-Users-pankajdevesh-Desktop-Gitea-Workspaces-bootstrapper-js/c0cedca3-4725-445d-be45-549cc7b04f40/scratchpad/02-canvas-wm.png' });
+  await page.screenshot({ path: 'testing/screenshots/02-canvas-wm.png' });
 
   // Find layout iframe
   const getLayoutFrame = async () => {
@@ -89,7 +89,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   }
 
   await page.waitForTimeout(3000);
-  await page.screenshot({ path: '/private/tmp/claude-501/-Users-pankajdevesh-Desktop-Gitea-Workspaces-bootstrapper-js/c0cedca3-4725-445d-be45-549cc7b04f40/scratchpad/03-files-open.png' });
+  await page.screenshot({ path: 'testing/screenshots/03-files-open.png' });
 
   // Find the window header to drag
   console.log('Looking for window header...');
@@ -113,7 +113,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
   if (await header.count() === 0) {
     console.log('No window header found!');
-    await page.screenshot({ path: '/private/tmp/claude-501/-Users-pankajdevesh-Desktop-Gitea-Workspaces-bootstrapper-js/c0cedca3-4725-445d-be45-549cc7b04f40/scratchpad/04-no-header.png' });
+    await page.screenshot({ path: 'testing/screenshots/04-no-header.png' });
     await browser.close();
     return;
   }
@@ -150,7 +150,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
                           Math.abs(scrollAfterDown.left - scrollBefore.left) > 5;
     console.log('SCROLL CHANGED ON MOUSEDOWN:', scrollChanged, '(BUG if true)');
 
-    await page.screenshot({ path: '/private/tmp/claude-501/-Users-pankajdevesh-Desktop-Gitea-Workspaces-bootstrapper-js/c0cedca3-4725-445d-be45-549cc7b04f40/scratchpad/05-after-mousedown.png' });
+    await page.screenshot({ path: 'testing/screenshots/05-after-mousedown.png' });
 
     // Now try dragging
     await page.mouse.move(headerCenterX, headerCenterY + 100, { steps: 10 });
@@ -159,7 +159,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
     const scrollAfterDrag = await getScrollPos();
     console.log('Scroll after drag down:', scrollAfterDrag);
-    await page.screenshot({ path: '/private/tmp/claude-501/-Users-pankajdevesh-Desktop-Gitea-Workspaces-bootstrapper-js/c0cedca3-4725-445d-be45-549cc7b04f40/scratchpad/06-after-drag.png' });
+    await page.screenshot({ path: 'testing/screenshots/06-after-drag.png' });
 
     // Now manually scroll down
     console.log('Scrolling canvas down...');
@@ -186,7 +186,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
       console.log('SCROLL CHANGED ON 2ND CLICK:', scrollChangedAgain, '(BUG if true)');
 
       await page.mouse.up();
-      await page.screenshot({ path: '/private/tmp/claude-501/-Users-pankajdevesh-Desktop-Gitea-Workspaces-bootstrapper-js/c0cedca3-4725-445d-be45-549cc7b04f40/scratchpad/07-after-2nd-click.png' });
+      await page.screenshot({ path: 'testing/screenshots/07-after-2nd-click.png' });
     }
   }
 
