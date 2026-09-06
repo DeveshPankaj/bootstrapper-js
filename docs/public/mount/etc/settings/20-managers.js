@@ -299,6 +299,24 @@ const ManagersSettings = () => {
             onSelect: (id) => { update({ dockManager: id }); openDock(id) },
         }),
 
+        cfg.dockManager && cfg.dockManager !== 'none' && React.createElement('div', {
+            style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', borderRadius: 6, background: 'rgba(128,128,128,0.05)', marginTop: 6 },
+        },
+            React.createElement('div', null,
+                React.createElement('div', { style: { fontSize: 12, fontWeight: 500 } }, 'Occupy bottom space'),
+                React.createElement('div', { style: { fontSize: 11, opacity: 0.55, marginTop: 2 } }, 'Reserve dock height so windows never go behind the dock. Disable for overlay/transparent docks.'),
+            ),
+            React.createElement('input', {
+                type: 'checkbox',
+                checked: cfg.occupyBottom !== false,
+                onChange: e => {
+                    update({ occupyBottom: e.target.checked })
+                    platform.host.callCommand('set-dock-occupy', e.target.checked)
+                },
+                style: { width: 16, height: 16, cursor: 'pointer', flexShrink: 0 },
+            }),
+        ),
+
         // ── Active dock settings ──
         React.createElement('p', { className: 'muted-small', style: { margin: '16px 0 4px' } }, 'DOCK SETTINGS'),
         React.createElement(DockSettingsPanel),

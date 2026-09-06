@@ -35,4 +35,8 @@ export const layoutCss = (grid: { columns: string, rows: string, areas: string }
     .toolbar {
         display: none;
     }
+    body.vfs-dock-occupy .layout-default {
+        box-sizing: border-box;
+        padding-bottom: var(--vfs-dock-height, 0px);
+    }
 `

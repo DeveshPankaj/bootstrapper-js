@@ -985,6 +985,8 @@ export const render = (container: HTMLElement) => {
         const existing = doc.getElementById('vfs-dock-iframe')
         if (existing) existing.remove()
         doc.body.classList.remove('vfs-dock-active')
+        doc.body.classList.remove('vfs-dock-occupy')
+        doc.documentElement.style.removeProperty('--vfs-dock-height')
 
         if (!id || id === 'none') return
 
@@ -1012,13 +1014,40 @@ export const render = (container: HTMLElement) => {
             iframe.style.cssText = `position:fixed;bottom:0;left:0;width:100%;height:${h}px;border:none;background:transparent;z-index:9000;pointer-events:auto;`
             doc.body.appendChild(iframe)
             doc.body.classList.add('vfs-dock-active')
+
+            // Reserve bottom space so windows don't go behind the dock.
+            // Reads occupyBottom from /etc/managers.json; defaults to true.
+            doc.documentElement.style.setProperty('--vfs-dock-height', `${h}px`)
+            let occupyBottom = true
+            try {
+                const cfg = JSON.parse(fs.readFileSync('/etc/managers.json', 'utf-8') as string)
+                if (cfg.occupyBottom === false) occupyBottom = false
+            } catch (_) {}
+            if (occupyBottom) doc.body.classList.add('vfs-dock-occupy')
         } catch (err) {
             console.error('[dock-manager] Failed to open dock:', err)
         }
     }
 
+    // Toggle whether the dock reserves bottom space (shrinks content-area).
+    const setDockOccupy = (occupy: boolean) => {
+        const doc = platform.window.document
+        const fs = platform.host.getFS()
+        try {
+            const cfg = fs.existsSync('/etc/managers.json')
+                ? JSON.parse(fs.readFileSync('/etc/managers.json', 'utf-8') as string) : {}
+            cfg.occupyBottom = occupy
+            fs.writeFileSync('/etc/managers.json', JSON.stringify(cfg, null, 2))
+        } catch (_) {}
+        const h = doc.documentElement.style.getPropertyValue('--vfs-dock-height')
+        if (occupy && h) doc.body.classList.add('vfs-dock-occupy')
+        else doc.body.classList.remove('vfs-dock-occupy')
+    }
+
     platform.register('open-vfs-dock', openVfsDock)
     platform.host.registerCommand('open-vfs-dock', openVfsDock)
+    platform.register('set-dock-occupy', setDockOccupy)
+    platform.host.registerCommand('set-dock-occupy', setDockOccupy)
 
     // Restore dock from persisted config on layout boot.
     // Default to 'default' VFS dock when no config exists — the compiled taskbar is hidden.
