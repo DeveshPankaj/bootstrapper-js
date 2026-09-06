@@ -557,13 +557,23 @@
     "force_reload": true
   },
   {
-    "path": "/opt/apps/nn-ide/main.js",
-    "file": "/opt/apps/nn-ide/main.js",
+    "path": "/opt/apps/nn-ide/main.html",
+    "file": "/opt/apps/nn-ide/main.html",
     "force_reload": true
   },
   {
-    "path": "/opt/apps/nn-ide/nn-ide.html",
-    "file": "/opt/apps/nn-ide/nn-ide.html",
+    "path": "/opt/apps/model-builder/main.html",
+    "file": "/opt/apps/model-builder/main.html",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/model-builder/mnist-data.json",
+    "file": "/opt/apps/model-builder/mnist-data.json",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/model-builder/fashion-data.json",
+    "file": "/opt/apps/model-builder/fashion-data.json",
     "force_reload": true
   },
   {
@@ -772,13 +782,8 @@
     "force_reload": true
   },
   {
-    "path": "/opt/apps/trainboard/main.js",
-    "file": "/opt/apps/trainboard/main.js",
-    "force_reload": true
-  },
-  {
-    "path": "/opt/apps/trainboard/board.html",
-    "file": "/opt/apps/trainboard/board.html",
+    "path": "/opt/apps/trainboard/main.html",
+    "file": "/opt/apps/trainboard/main.html",
     "force_reload": true
   },
   {

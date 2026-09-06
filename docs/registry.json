@@ -272,20 +272,40 @@
       "description": "Neural network IDE for designing and training models visually in the browser.",
       "version": "1.0.0",
       "icon": "hub",
-      "category": "Dev",
+      "category": "AI",
       "author": "bootstrapper-js",
       "commandName": "ui.nn-ide",
       "files": [
         {
-          "dest": "main.js",
-          "src": "/public/mount/opt/apps/nn-ide/main.js"
-        },
-        {
-          "dest": "nn-ide.html",
-          "src": "/public/mount/opt/apps/nn-ide/nn-ide.html"
+          "dest": "main.html",
+          "src": "/public/mount/opt/apps/nn-ide/main.html"
         }
       ],
-      "main": "main.js"
+      "main": "main.html"
+    },
+    {
+      "id": "model-builder",
+      "name": "Model Builder",
+      "description": "Visual neural network model builder. Assemble layers, pick datasets (MNIST, Fashion-MNIST), and train in-browser with live loss charts.",
+      "version": "1.0.0",
+      "icon": "schema",
+      "category": "AI",
+      "author": "bootstrapper-js",
+      "files": [
+        {
+          "dest": "main.html",
+          "src": "/public/mount/opt/apps/model-builder/main.html"
+        },
+        {
+          "dest": "mnist-data.json",
+          "src": "/public/mount/opt/apps/model-builder/mnist-data.json"
+        },
+        {
+          "dest": "fashion-data.json",
+          "src": "/public/mount/opt/apps/model-builder/fashion-data.json"
+        }
+      ],
+      "main": "main.html"
     },
     {
       "id": "markdown-reader",
@@ -720,14 +740,13 @@
       "description": "TensorBoard-style metrics dashboard. Log loss, accuracy and any scalar from Python; line charts update live with smoothing and multi-run support.",
       "version": "1.0.0",
       "icon": "monitoring",
-      "category": "Development",
+      "category": "AI",
       "author": "bootstrapper-js",
       "commandName": "ui.trainboard",
       "files": [
-        { "dest": "main.js",     "src": "/public/mount/opt/apps/trainboard/main.js" },
-        { "dest": "board.html",  "src": "/public/mount/opt/apps/trainboard/board.html" }
+        { "dest": "main.html", "src": "/public/mount/opt/apps/trainboard/main.html" }
       ],
-      "main": "main.js"
+      "main": "main.html"
     },
     {
       "id": "python-demo",

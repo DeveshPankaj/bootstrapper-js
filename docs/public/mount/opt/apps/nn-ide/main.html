@@ -1,0 +1,584 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  body { margin: 0; display: flex; height: 100vh; box-sizing: border-box; font-family: -apple-system, sans-serif; font-size: 13px; background: #1e1e22; color: #eee; }
+  .panel { width: 260px; flex-shrink: 0; padding: 12px; box-sizing: border-box; background: #26262c; border-right: 1px solid #37373f; overflow-y: auto; }
+  .panel h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: #999; margin: 14px 0 6px; }
+  .panel h2:first-child { margin-top: 0; }
+  label { display: block; font-size: 11px; color: #aaa; margin: 8px 0 3px; }
+  input, select { width: 100%; box-sizing: border-box; background: #1a1a1e; border: 1px solid #3d3d46; color: #eee; border-radius: 4px; padding: 5px 6px; font-size: 12px; font-family: inherit; }
+  button { border: none; background: #3d7fff; color: #fff; border-radius: 6px; padding: 7px 12px; cursor: pointer; font-size: 12px; width: 100%; margin-top: 10px; }
+  button:disabled { background: #444; cursor: default; }
+  button.secondary { background: #3d3d46; }
+  .main { flex: 1; display: flex; flex-direction: column; padding: 14px; box-sizing: border-box; overflow-y: auto; gap: 12px; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .card { background: #26262c; border: 1px solid #37373f; border-radius: 8px; padding: 12px; }
+  .card h3 { margin: 0 0 8px; font-size: 12px; color: #999; text-transform: uppercase; letter-spacing: 0.04em; }
+  #stats { font-variant-numeric: tabular-nums; line-height: 1.7; }
+  #stats b { color: #fff; }
+  canvas { display: block; background: #16161a; border-radius: 6px; }
+  #lossChart { width: 100%; height: 90px; }
+  #plot { width: 260px; height: 260px; }
+  .testRow { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+  .testRow input { width: 70px; }
+  #testResult { margin-top: 10px; font-size: 13px; }
+  #testResult b { font-size: 16px; }
+  .hint { color: #888; font-size: 11px; margin-top: 4px; line-height: 1.5; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; background: #3d3d46; }
+  .badge.ok { background: #1f5c37; color: #6fe396; }
+  .legend { display: flex; gap: 10px; font-size: 11px; color: #aaa; margin-top: 6px; }
+  .legend span { display: inline-flex; align-items: center; gap: 4px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+</style>
+</head>
+<body>
+  <div class="panel">
+    <h2>Task</h2>
+    <select id="task">
+      <optgroup label="Logic gates">
+        <option value="and">AND gate</option>
+        <option value="or">OR gate</option>
+        <option value="nand">NAND gate</option>
+        <option value="xor">XOR gate</option>
+      </optgroup>
+      <optgroup label="2D classification">
+        <option value="classify">Above / below a line</option>
+        <option value="circle">Inside / outside a circle</option>
+        <option value="quadrants">Quadrants (generalized XOR)</option>
+        <option value="sine">Above / below a sine wave</option>
+        <option value="spirals">Two spirals</option>
+      </optgroup>
+    </select>
+    <div class="hint" id="taskHint"></div>
+
+    <h2>Architecture</h2>
+    <label>Hidden layer sizes (comma-separated)</label>
+    <input id="hidden" value="6,4" />
+    <label>Activation function (hidden layers)</label>
+    <select id="activation">
+      <option value="tanh">tanh</option>
+      <option value="sigmoid">Sigmoid</option>
+      <option value="relu">ReLU</option>
+      <option value="leakyRelu">Leaky ReLU</option>
+      <option value="linear">Linear (identity)</option>
+    </select>
+    <div class="hint">Input/output size are fixed by the task. Output layer always stays sigmoid — that's what the class-0/class-1 threshold below assumes. MSE loss.</div>
+
+    <h2>Training</h2>
+    <label>Optimizer</label>
+    <select id="optimizer">
+      <option value="sgd">SGD</option>
+      <option value="momentum">Momentum</option>
+      <option value="rmsprop">RMSProp</option>
+      <option value="adam">Adam</option>
+    </select>
+    <div class="hint" id="optimizerHint"></div>
+    <label>Learning rate</label>
+    <input id="lr" type="number" value="0.6" step="0.05" min="0.001" />
+    <label>Epochs</label>
+    <input id="epochs" type="number" value="1500" step="100" min="1" />
+    <button id="trainBtn">Train</button>
+    <button id="resetBtn" class="secondary">Reset network</button>
+
+    <h2>Run</h2>
+    <div class="hint" id="runId">not started</div>
+  </div>
+
+  <div class="main">
+    <div class="row">
+      <div class="card" style="flex:1; min-width: 260px;">
+        <h3>Live status</h3>
+        <div id="stats">
+          Epoch: <b id="statEpoch">0</b> / <span id="statTotal">0</span><br/>
+          Loss: <b id="statLoss">—</b><br/>
+          Status: <span class="badge" id="statBadge">idle</span>
+        </div>
+        <canvas id="lossChart"></canvas>
+      </div>
+      <div class="card">
+        <h3>Training data / decision surface</h3>
+        <canvas id="plot" width="260" height="260"></canvas>
+        <div class="legend">
+          <span><span class="dot" style="background:#3d7fff"></span>class 0</span>
+          <span><span class="dot" style="background:#ff5f7e"></span>class 1</span>
+          <span><span class="dot" style="background:#ffd23d;width:10px;height:10px;border-radius:2px;"></span>test point</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Test the trained network</h3>
+      <div id="testInputs" class="testRow"></div>
+      <button id="predictBtn" class="secondary" style="width:auto;" disabled>Predict</button>
+      <div id="testResult"></div>
+    </div>
+  </div>
+
+<script>
+const LOG_PATH = '/home/user1/.local/share/trainboard/log.jsonl';
+const LOG_DIR = '/home/user1/.local/share/trainboard';
+let logBuffer = [];
+let flushing = false;
+
+async function flushLog(force) {
+  if (!logBuffer.length) return;
+  if (flushing && !force) return;
+  flushing = true;
+  const batch = logBuffer.splice(0, logBuffer.length);
+  try {
+    await AppSDK.mkdir(LOG_DIR).catch(() => {});
+    let existing = '';
+    try { existing = await AppSDK.readText(LOG_PATH); } catch (e) { existing = ''; }
+    const sep = existing && !existing.endsWith('\n') ? '\n' : '';
+    const lines = batch.map(r => JSON.stringify(r)).join('\n');
+    await AppSDK.writeText(LOG_PATH, existing + sep + lines + '\n');
+  } catch (err) {
+    console.error('trainboard log write failed', err);
+  } finally {
+    flushing = false;
+  }
+}
+
+function logMetric(run, step, metric, value) {
+  logBuffer.push({ run, step, metric, value });
+}
+
+// ---------- network ----------
+function sigmoid(x) { return 1 / (1 + Math.exp(-x)); }
+
+// Every entry's deriv is expressed in terms of the activation's own OUTPUT
+// value (not its pre-activation input) — the standard trick that lets
+// backprop below reuse the already-computed forward-pass activations
+// instead of caching a second array of raw z values. That's valid for all
+// four of these (ReLU's sign is fully recoverable from its own output: a=0
+// iff z<=0), not just tanh/sigmoid.
+const ACTIVATIONS = {
+  tanh: { fn: Math.tanh, deriv: a => 1 - a * a },
+  sigmoid: { fn: sigmoid, deriv: a => a * (1 - a) },
+  relu: { fn: x => Math.max(0, x), deriv: a => (a > 0 ? 1 : 0) },
+  leakyRelu: { fn: x => (x > 0 ? x : 0.01 * x), deriv: a => (a > 0 ? 1 : 0.01) },
+  linear: { fn: x => x, deriv: () => 1 },
+};
+
+function makeNetwork(sizes, hiddenActivation, optimizer) {
+  const layers = [];
+  for (let i = 1; i < sizes.length; i++) {
+    const inSize = sizes[i - 1], outSize = sizes[i];
+    const scale = Math.sqrt(1 / inSize);
+    const W = Array.from({ length: outSize }, () => Array.from({ length: inSize }, () => (Math.random() * 2 - 1) * scale));
+    const b = new Array(outSize).fill(0);
+    // Per-parameter optimizer state (momentum/RMSProp/Adam) — unused by
+    // plain SGD, but always allocated so switching optimizers mid-session
+    // (after Reset) just works with no extra branching at update time.
+    const mW = Array.from({ length: outSize }, () => new Array(inSize).fill(0));
+    const vW = Array.from({ length: outSize }, () => new Array(inSize).fill(0));
+    const mb = new Array(outSize).fill(0);
+    const vb = new Array(outSize).fill(0);
+    layers.push({ W, b, mW, vW, mb, vb });
+  }
+  return { sizes, layers, hiddenActivation, optimizer, t: 0 };
+}
+
+function forward(net, input) {
+  const activations = [input];
+  const n = net.layers.length;
+  const hiddenAct = ACTIVATIONS[net.hiddenActivation] || ACTIVATIONS.tanh;
+  for (let li = 0; li < n; li++) {
+    const { W, b } = net.layers[li];
+    const prev = activations[li];
+    const isOutput = li === n - 1;
+    const out = new Array(W.length);
+    for (let o = 0; o < W.length; o++) {
+      let z = b[o];
+      const row = W[o];
+      for (let i = 0; i < prev.length; i++) z += row[i] * prev[i];
+      out[o] = isOutput ? sigmoid(z) : hiddenAct.fn(z);
+    }
+    activations.push(out);
+  }
+  return activations;
+}
+
+const ADAM_BETA1 = 0.9, ADAM_BETA2 = 0.999, ADAM_EPS = 1e-8;
+
+// Returns the actual step to subtract from a parameter, and updates that
+// parameter's m/v optimizer state in place. `m`/`v` are the whole layer's
+// moment arrays (matrix for weights, vector for biases); `oi`/`ii` locate
+// this one scalar within them (ii omitted — pass null — for a bias).
+function optimizerStep(optimizer, m, v, oi, ii, grad, lr, t) {
+  const mRow = ii === null ? m : m[oi];
+  const vRow = ii === null ? v : v[oi];
+  const idx = ii === null ? oi : ii;
+  switch (optimizer) {
+    case 'momentum':
+      mRow[idx] = ADAM_BETA1 * mRow[idx] + (1 - ADAM_BETA1) * grad;
+      return lr * mRow[idx];
+    case 'rmsprop':
+      vRow[idx] = ADAM_BETA2 * vRow[idx] + (1 - ADAM_BETA2) * grad * grad;
+      return (lr * grad) / (Math.sqrt(vRow[idx]) + ADAM_EPS);
+    case 'adam': {
+      mRow[idx] = ADAM_BETA1 * mRow[idx] + (1 - ADAM_BETA1) * grad;
+      vRow[idx] = ADAM_BETA2 * vRow[idx] + (1 - ADAM_BETA2) * grad * grad;
+      const mHat = mRow[idx] / (1 - Math.pow(ADAM_BETA1, t));
+      const vHat = vRow[idx] / (1 - Math.pow(ADAM_BETA2, t));
+      return (lr * mHat) / (Math.sqrt(vHat) + ADAM_EPS);
+    }
+    default: // sgd
+      return lr * grad;
+  }
+}
+
+function trainStep(net, input, target, lr) {
+  const activations = forward(net, input);
+  const n = net.layers.length;
+  const deltas = new Array(n);
+  const output = activations[n];
+  const outDelta = new Array(output.length);
+  let loss = 0;
+  for (let o = 0; o < output.length; o++) {
+    const err = output[o] - target[o];
+    loss += err * err;
+    outDelta[o] = err * output[o] * (1 - output[o]); // dMSE/dz via sigmoid' — output stays sigmoid regardless of hiddenActivation
+  }
+  deltas[n - 1] = outDelta;
+  const hiddenDeriv = (ACTIVATIONS[net.hiddenActivation] || ACTIVATIONS.tanh).deriv;
+  for (let li = n - 2; li >= 0; li--) {
+    const nextLayer = net.layers[li + 1];
+    const nextDelta = deltas[li + 1];
+    const act = activations[li + 1];
+    const delta = new Array(net.layers[li].W.length).fill(0);
+    for (let i = 0; i < delta.length; i++) {
+      let sum = 0;
+      for (let o = 0; o < nextDelta.length; o++) sum += nextLayer.W[o][i] * nextDelta[o];
+      delta[i] = sum * hiddenDeriv(act[i]);
+    }
+    deltas[li] = delta;
+  }
+  net.t++;
+  for (let li = 0; li < n; li++) {
+    const layer = net.layers[li];
+    const prevAct = activations[li];
+    const delta = deltas[li];
+    for (let o = 0; o < layer.W.length; o++) {
+      const row = layer.W[o];
+      const d = delta[o];
+      for (let i = 0; i < prevAct.length; i++) {
+        row[i] -= optimizerStep(net.optimizer, layer.mW, layer.vW, o, i, d * prevAct[i], lr, net.t);
+      }
+      layer.b[o] -= optimizerStep(net.optimizer, layer.mb, layer.vb, o, null, d, lr, net.t);
+    }
+  }
+  return loss / output.length;
+}
+
+// ---------- tasks ----------
+function xorData() {
+  return [
+    { x: [0, 0], y: [0] },
+    { x: [0, 1], y: [1] },
+    { x: [1, 0], y: [1] },
+    { x: [1, 1], y: [0] },
+  ];
+}
+
+function andData() { return [{ x: [0, 0], y: [0] }, { x: [0, 1], y: [0] }, { x: [1, 0], y: [0] }, { x: [1, 1], y: [1] }]; }
+function orData() { return [{ x: [0, 0], y: [0] }, { x: [0, 1], y: [1] }, { x: [1, 0], y: [1] }, { x: [1, 1], y: [1] }]; }
+function nandData() { return [{ x: [0, 0], y: [1] }, { x: [0, 1], y: [1] }, { x: [1, 0], y: [1] }, { x: [1, 1], y: [0] }]; }
+
+const CLASSIFY_SLOPE = 0.6, CLASSIFY_INTERCEPT = -0.1;
+function classifyData(n) {
+  const data = [];
+  for (let i = 0; i < n; i++) {
+    const x1 = Math.random() * 2 - 1;
+    const x2 = Math.random() * 2 - 1;
+    const label = x2 > CLASSIFY_SLOPE * x1 + CLASSIFY_INTERCEPT ? 1 : 0;
+    data.push({ x: [x1, x2], y: [label] });
+  }
+  return data;
+}
+
+function circleData(n, r) {
+  const data = [];
+  for (let i = 0; i < n; i++) {
+    const x1 = Math.random() * 2 - 1;
+    const x2 = Math.random() * 2 - 1;
+    const label = x1 * x1 + x2 * x2 < r * r ? 1 : 0;
+    data.push({ x: [x1, x2], y: [label] });
+  }
+  return data;
+}
+
+function quadrantsData(n) {
+  const data = [];
+  for (let i = 0; i < n; i++) {
+    const x1 = Math.random() * 2 - 1;
+    const x2 = Math.random() * 2 - 1;
+    const label = x1 * x2 > 0 ? 1 : 0;
+    data.push({ x: [x1, x2], y: [label] });
+  }
+  return data;
+}
+
+function sineData(n) {
+  const data = [];
+  for (let i = 0; i < n; i++) {
+    const x1 = Math.random() * 2 - 1;
+    const x2 = Math.random() * 2 - 1;
+    const label = x2 > 0.5 * Math.sin(3 * Math.PI * x1) ? 1 : 0;
+    data.push({ x: [x1, x2], y: [label] });
+  }
+  return data;
+}
+
+// Classic two-interleaved-spirals benchmark — genuinely hard for a small
+// net; a couple hundred hidden units of headroom (see the spirals task's
+// suggested architecture below) and several thousand epochs are usually
+// needed before the decision surface fully separates the two arms.
+function spiralsData(pointsPerClass) {
+  const data = [];
+  for (let c = 0; c < 2; c++) {
+    for (let i = 0; i < pointsPerClass; i++) {
+      const r = i / pointsPerClass;
+      const t = (1.75 * i) / pointsPerClass * 2 * Math.PI + c * Math.PI;
+      const jitter = () => (Math.random() - 0.5) * 0.06;
+      const x1 = r * Math.sin(t) + jitter();
+      const x2 = r * Math.cos(t) + jitter();
+      data.push({ x: [x1, x2], y: [c] });
+    }
+  }
+  return data;
+}
+
+// Each task carries its own suggested architecture/training defaults —
+// applied to the sidebar fields on task switch (see refreshTask()) so a
+// harder task (spirals) doesn't inherit XOR's tiny 6,4 net and undertrain.
+const TASKS = {
+  and: { inputSize: 2, outputSize: 1, hint: 'Logic AND — linearly separable, so even a network with no hidden layer at all can learn it.', gen: () => andData(), hidden: '', lr: 0.8, epochs: 300 },
+  or: { inputSize: 2, outputSize: 1, hint: 'Logic OR — also linearly separable, same as AND.', gen: () => orData(), hidden: '', lr: 0.8, epochs: 300 },
+  nand: { inputSize: 2, outputSize: 1, hint: 'Logic NAND — linearly separable (it\'s just AND with the output flipped).', gen: () => nandData(), hidden: '', lr: 0.8, epochs: 300 },
+  xor: { inputSize: 2, outputSize: 1, hint: 'Classic XOR: 4 fixed examples, not linearly separable — needs a hidden layer.', gen: () => xorData(), hidden: '6,4', lr: 0.6, epochs: 1500 },
+  classify: { inputSize: 2, outputSize: 1, hint: 'Synthetic points labeled by whether they fall above or below a line.', gen: () => classifyData(200), hidden: '4', lr: 0.5, epochs: 800 },
+  circle: { inputSize: 2, outputSize: 1, hint: 'Points inside vs. outside a circle — a curved, non-linear boundary.', gen: () => circleData(240, 0.6), hidden: '8,6', lr: 0.5, epochs: 2000 },
+  quadrants: { inputSize: 2, outputSize: 1, hint: 'Generalized XOR: label is 1 when x1 and x2 share a sign — four alternating quadrants.', gen: () => quadrantsData(240), hidden: '8,6', lr: 0.5, epochs: 2000 },
+  sine: { inputSize: 2, outputSize: 1, hint: 'A wavy sine-curve boundary — needs enough hidden units to bend through multiple oscillations.', gen: () => sineData(300), hidden: '12,8', lr: 0.4, epochs: 3000 },
+  spirals: { inputSize: 2, outputSize: 1, hint: 'Two interleaved spirals — a classic hard benchmark; small networks often fail to fully separate it.', gen: () => spiralsData(120), hidden: '16,16,8', lr: 0.3, epochs: 4000 },
+};
+
+// ---------- UI state ----------
+const taskSel = document.getElementById('task');
+const taskHint = document.getElementById('taskHint');
+const hiddenInput = document.getElementById('hidden');
+const activationSel = document.getElementById('activation');
+const optimizerSel = document.getElementById('optimizer');
+const optimizerHint = document.getElementById('optimizerHint');
+const lrInput = document.getElementById('lr');
+const epochsInput = document.getElementById('epochs');
+const trainBtn = document.getElementById('trainBtn');
+const resetBtn = document.getElementById('resetBtn');
+const predictBtn = document.getElementById('predictBtn');
+const testInputsEl = document.getElementById('testInputs');
+const testResultEl = document.getElementById('testResult');
+const runIdEl = document.getElementById('runId');
+const statEpoch = document.getElementById('statEpoch');
+const statTotal = document.getElementById('statTotal');
+const statLoss = document.getElementById('statLoss');
+const statBadge = document.getElementById('statBadge');
+const lossCanvas = document.getElementById('lossChart');
+const plotCanvas = document.getElementById('plot');
+
+let net = null;
+let trainData = [];
+let lossHistory = [];
+let currentRun = null;
+let training = false;
+
+function currentTask() { return TASKS[taskSel.value]; }
+
+function parseHidden() {
+  return hiddenInput.value.split(',').map(s => parseInt(s.trim(), 10)).filter(n => Number.isFinite(n) && n > 0);
+}
+
+const OPTIMIZER_HINTS = {
+  sgd: 'Plain stochastic gradient descent — the classic, and what every task\'s suggested learning rate above is tuned for.',
+  momentum: 'Averages recent gradients so training keeps moving through small bumps — usually tolerates similar learning rates to SGD.',
+  rmsprop: 'Scales each weight\'s step by its recent gradient magnitude. Wants a smaller learning rate than SGD — try ~0.01–0.05.',
+  adam: 'Momentum + RMSProp combined, with bias correction for the first few steps. Also wants a smaller learning rate — try ~0.01–0.05.',
+};
+
+function updateOptimizerHint() {
+  optimizerHint.textContent = OPTIMIZER_HINTS[optimizerSel.value] || '';
+}
+
+function buildNetwork() {
+  const task = currentTask();
+  const sizes = [task.inputSize, ...parseHidden(), task.outputSize];
+  net = makeNetwork(sizes, activationSel.value, optimizerSel.value);
+  trainData = task.gen();
+  lossHistory = [];
+  drawLossChart();
+  drawPlot();
+  statEpoch.textContent = '0';
+  statLoss.textContent = '—';
+  statBadge.textContent = 'idle';
+  statBadge.className = 'badge';
+  predictBtn.disabled = true;
+  testResultEl.textContent = '';
+}
+
+function buildTestInputs() {
+  const task = currentTask();
+  testInputsEl.innerHTML = '';
+  for (let i = 0; i < task.inputSize; i++) {
+    const inp = document.createElement('input');
+    inp.type = 'number';
+    inp.step = '0.1';
+    inp.value = '0';
+    inp.dataset.idx = i;
+    testInputsEl.appendChild(inp);
+  }
+}
+
+function refreshTask() {
+  const task = currentTask();
+  taskHint.textContent = task.hint;
+  hiddenInput.value = task.hidden;
+  lrInput.value = task.lr;
+  epochsInput.value = task.epochs;
+  buildTestInputs();
+  buildNetwork();
+}
+
+function drawLossChart() {
+  const ctx = lossCanvas.getContext('2d');
+  const w = lossCanvas.width = lossCanvas.clientWidth * devicePixelRatio;
+  const h = lossCanvas.height = lossCanvas.clientHeight * devicePixelRatio;
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = '#16161a';
+  ctx.fillRect(0, 0, w, h);
+  if (lossHistory.length < 2) return;
+  const maxLoss = Math.max(...lossHistory, 0.001);
+  ctx.strokeStyle = '#3d7fff';
+  ctx.lineWidth = 2 * devicePixelRatio;
+  ctx.beginPath();
+  lossHistory.forEach((l, i) => {
+    const x = (i / (lossHistory.length - 1)) * w;
+    const y = h - (l / maxLoss) * (h - 6) - 3;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+}
+
+function drawPlot() {
+  const ctx = plotCanvas.getContext('2d');
+  const w = plotCanvas.width, h = plotCanvas.height;
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = '#16161a';
+  ctx.fillRect(0, 0, w, h);
+  const toPx = (x1, x2) => [((x1 + 1) / 2) * w, h - ((x2 + 1) / 2) * h];
+
+  if (net && currentTask() === TASKS[taskSel.value] && TASKS[taskSel.value].inputSize === 2) {
+    const cell = 8;
+    for (let py = 0; py < h; py += cell) {
+      for (let px = 0; px < w; px += cell) {
+        const x1 = (px / w) * 2 - 1;
+        const x2 = ((h - py) / h) * 2 - 1;
+        const out = forward(net, [x1, x2])[net.layers.length][0];
+        const c = out > 0.5 ? [255, 95, 126] : [61, 127, 255];
+        const alpha = Math.abs(out - 0.5) * 0.5;
+        ctx.fillStyle = `rgba(${c[0]},${c[1]},${c[2]},${alpha})`;
+        ctx.fillRect(px, py, cell, cell);
+      }
+    }
+  }
+
+  trainData.forEach(d => {
+    const [px, py] = toPx(d.x[0], d.x[1]);
+    ctx.fillStyle = d.y[0] > 0.5 ? '#ff5f7e' : '#3d7fff';
+    ctx.beginPath();
+    ctx.arc(px, py, 3, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  if (lastTestPoint) {
+    const [px, py] = toPx(lastTestPoint[0], lastTestPoint[1]);
+    ctx.fillStyle = '#ffd23d';
+    ctx.fillRect(px - 4, py - 4, 8, 8);
+  }
+}
+
+let lastTestPoint = null;
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function train() {
+  if (training) return;
+  training = true;
+  trainBtn.disabled = true;
+  resetBtn.disabled = true;
+  statBadge.textContent = 'training';
+  statBadge.className = 'badge';
+
+  const lr = parseFloat(lrInput.value) || 0.1;
+  const epochs = Math.max(1, parseInt(epochsInput.value, 10) || 1);
+  currentRun = `nn-ide-${Date.now()}`;
+  runIdEl.textContent = `run: ${currentRun}`;
+  statTotal.textContent = String(epochs);
+  lossHistory = [];
+
+  const logEvery = Math.max(1, Math.floor(epochs / 60));
+  const chunkSize = 25;
+
+  for (let epoch = 1; epoch <= epochs; epoch++) {
+    let epochLoss = 0;
+    for (const sample of trainData) epochLoss += trainStep(net, sample.x, sample.y, lr);
+    epochLoss /= trainData.length;
+
+    if (epoch % logEvery === 0 || epoch === epochs) {
+      lossHistory.push(epochLoss);
+      logMetric(currentRun, epoch, 'loss', epochLoss);
+      statEpoch.textContent = String(epoch);
+      statLoss.textContent = epochLoss.toFixed(5);
+      drawLossChart();
+      drawPlot();
+      if (logBuffer.length >= 5 || epoch === epochs) await flushLog();
+    }
+
+    if (epoch % chunkSize === 0) await sleep(0);
+  }
+
+  await flushLog(true);
+  statBadge.textContent = 'done';
+  statBadge.className = 'badge ok';
+  training = false;
+  trainBtn.disabled = false;
+  resetBtn.disabled = false;
+  predictBtn.disabled = false;
+}
+
+predictBtn.onclick = () => {
+  if (!net) return;
+  const inputs = Array.from(testInputsEl.querySelectorAll('input')).map(i => parseFloat(i.value) || 0);
+  lastTestPoint = inputs.length === 2 ? inputs : null;
+  const activations = forward(net, inputs);
+  const output = activations[activations.length - 1];
+  const cls = output[0] > 0.5 ? 1 : 0;
+  testResultEl.innerHTML = `Output: <b>${output.map(v => v.toFixed(4)).join(', ')}</b> &nbsp; → class <b>${cls}</b>`;
+  drawPlot();
+};
+
+taskSel.onchange = refreshTask;
+trainBtn.onclick = train;
+resetBtn.onclick = buildNetwork;
+hiddenInput.onchange = buildNetwork;
+activationSel.onchange = buildNetwork;
+optimizerSel.onchange = () => { updateOptimizerHint(); buildNetwork(); };
+updateOptimizerHint();
+
+window.addEventListener('resize', () => { drawLossChart(); });
+
+refreshTask();
+</script>
+</body>
+</html>

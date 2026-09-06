@@ -1,0 +1,1341 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  body { margin: 0; display: flex; flex-direction: column; height: 100vh; box-sizing: border-box; font-family: -apple-system, sans-serif; font-size: 13px; background: #1e1e22; color: #eee; }
+  * { box-sizing: border-box; }
+  .toolbar { display: flex; gap: 8px; align-items: center; padding: 8px 10px; background: #26262c; border-bottom: 1px solid #37373f; flex-shrink: 0; flex-wrap: wrap; }
+  .toolbar select { background: #1a1a1e; border: 1px solid #3d3d46; color: #eee; border-radius: 4px; padding: 5px 6px; font-size: 12px; font-family: inherit; }
+  .toolbar button { border: none; background: #3d3d46; color: #eee; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 12px; }
+  .toolbar button.primary { background: #3d7fff; color: #fff; font-weight: 600; }
+  .toolbar button:disabled { opacity: 0.5; cursor: default; }
+  .toolbar .spacer { flex: 1; }
+  .hint { padding: 5px 10px; font-size: 11px; color: #999; background: #232327; border-bottom: 1px solid #303036; line-height: 1.5; }
+
+  .main { flex: 1; min-height: 0; display: flex; }
+
+  .canvas-wrap { flex: 1; min-width: 0; position: relative; overflow: auto; background: #17171b; background-image: radial-gradient(#2a2a30 1px, transparent 1px); background-size: 18px 18px; }
+  .canvas-inner { position: relative; width: 1100px; height: 900px; }
+  #edgesSvg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+  #edgesSvg path { pointer-events: stroke; cursor: pointer; }
+  #edgesSvg path.temp { pointer-events: none; }
+
+  .node { position: absolute; width: 168px; background: #26262c; border: 1px solid #3d3d46; border-radius: 8px; box-shadow: 0 4px 14px rgba(0,0,0,0.35); user-select: none; }
+  .node.fixed .node-header { background: #30303a; }
+  .node-header { display: flex; align-items: center; gap: 6px; padding: 6px 8px; background: #2c2c34; border-radius: 8px 8px 0 0; cursor: grab; font-weight: 600; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.03em; color: #bbb; }
+  .node-header:active { cursor: grabbing; }
+  .node-header .close { margin-left: auto; cursor: pointer; color: #888; font-weight: 400; text-transform: none; }
+  .node-header .close:hover { color: #ff6b6b; }
+  .node-body { padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+  .node-body label { font-size: 10px; color: #999; }
+  .node-body input, .node-body select { width: 100%; background: #1a1a1e; border: 1px solid #3d3d46; color: #eee; border-radius: 4px; padding: 4px 5px; font-size: 11.5px; font-family: inherit; }
+  .node-body .static { font-size: 12px; color: #ddd; }
+
+  .port { position: absolute; top: 50%; width: 14px; height: 14px; margin-top: -7px; border-radius: 50%; background: #555; border: 2px solid #1e1e22; cursor: crosshair; z-index: 2; }
+  .port:hover { background: #3d7fff; }
+  .port-in { left: -7px; }
+  .port-out { right: -7px; }
+
+  .side { width: 270px; flex-shrink: 0; border-left: 1px solid #37373f; display: flex; flex-direction: column; overflow-y: auto; }
+  .card { padding: 10px 12px; border-bottom: 1px solid #37373f; }
+  .card h3 { margin: 0 0 8px; font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 0.04em; }
+  #stats { font-variant-numeric: tabular-nums; line-height: 1.7; font-size: 12px; }
+  #stats b { color: #fff; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; background: #3d3d46; }
+  .badge.ok { background: #1f5c37; color: #6fe396; }
+  .badge.err { background: #5c1f1f; color: #ff9d9d; }
+  canvas { display: block; background: #16161a; border-radius: 6px; }
+  #lossChart { width: 100%; height: 60px; }
+  #plot { width: 200px; height: 200px; }
+  .legend { display: flex; gap: 8px; font-size: 10.5px; color: #aaa; margin-top: 6px; flex-wrap: wrap; }
+  .legend span { display: inline-flex; align-items: center; gap: 3px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+  .testRow { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; align-items: flex-start; }
+  .testRow input { width: 100%; background: #1a1a1e; border: 1px solid #3d3d46; color: #eee; border-radius: 4px; padding: 4px 5px; font-size: 11.5px; }
+  #testResult { margin-top: 8px; font-size: 12px; line-height: 1.6; }
+  #testResult b { font-size: 14px; }
+  #sampleCanvas { border: 1px solid #3d3d46; border-radius: 4px; }
+  #confusionWrap table { border-collapse: collapse; font-size: 10px; font-variant-numeric: tabular-nums; }
+  #confusionWrap td { padding: 3px 6px; text-align: center; border: 1px solid #303036; white-space: nowrap; }
+  #confusionWrap td.hdr { color: #999; border: none; padding: 3px; }
+
+  .status { padding: 5px 10px; font-size: 11.5px; color: #999; border-top: 1px solid #37373f; min-height: 16px; flex-shrink: 0; }
+  .status.error { color: #ff8080; }
+</style>
+</head>
+<body>
+  <div class="toolbar">
+    <select id="task"></select>
+    <select id="nodeTypeSel">
+      <option value="dense">Dense</option>
+      <option value="conv2d">Conv2D</option>
+      <option value="conv3d">Conv3D</option>
+      <option value="skip">Skip Connection</option>
+    </select>
+    <button id="addLayer">+ Add Node</button>
+    <button id="clearGraph">Clear Graph</button>
+    <label style="display:flex;align-items:center;gap:5px;color:#999;font-size:11px;white-space:nowrap;">
+      Epochs
+      <input id="epochInput" type="number" min="1" step="1" style="width:72px;" />
+    </label>
+    <div class="spacer"></div>
+    <button id="build" class="primary">Build &amp; Train</button>
+  </div>
+  <div class="hint">
+    Drag a node by its header to move it. Drag from the dot on a node's right edge to the dot on another node's left edge to connect them; click an edge to delete it. A trainable model needs an unbroken chain: Input → Dense/Conv2D/Conv3D/Skip layer(s) → Output → Loss → Optimizer.
+    Conv2D/Conv3D need a same-shape tensor flowing in (the image tasks below provide one — a flat-vector task still "works" with Conv layers, just degenerately, since there's nothing to slide the kernel over). A Skip layer adds an earlier node's output back in — its dropdown only accepts a source whose shape matches the point it's added at.
+  </div>
+  <div class="main">
+    <div class="canvas-wrap" id="canvasWrap">
+      <div class="canvas-inner" id="canvasInner">
+        <svg id="edgesSvg"></svg>
+        <div id="nodesLayer"></div>
+      </div>
+    </div>
+    <div class="side">
+      <div class="card">
+        <h3>Training</h3>
+        <div id="stats">
+          Epoch: <b id="statEpoch">0</b> / <span id="statTotal">0</span><br/>
+          Loss: <b id="statLoss">—</b><br/>
+          Status: <span class="badge" id="statBadge">idle</span>
+        </div>
+        <canvas id="lossChart"></canvas>
+      </div>
+      <div class="card">
+        <h3 id="plotCardTitle">Decision surface</h3>
+        <canvas id="plot" width="200" height="200"></canvas>
+        <div id="plotLegend" class="legend">
+          <span><span class="dot" style="background:#3d7fff"></span>class 0</span>
+          <span><span class="dot" style="background:#ff5f7e"></span>class 1</span>
+          <span><span class="dot" style="background:#ffd23d;border-radius:2px;"></span>test</span>
+        </div>
+        <div id="confusionWrap" style="display:none;overflow-x:auto;"></div>
+        <div id="plotNote" class="legend"></div>
+      </div>
+      <div class="card">
+        <h3>Test the trained model</h3>
+        <div id="testInputs" class="testRow"></div>
+        <button id="predictBtn" disabled style="margin-top:6px;width:100%;">Predict</button>
+        <div id="testResult"></div>
+      </div>
+    </div>
+  </div>
+  <div class="status" id="status">Add layers, wire the chain, then Build &amp; Train.</div>
+
+<script>
+// ============================== numeric engine ==============================
+// Same hand-rolled backprop family as nn-ide/snake-cnn3d (no ML library, no
+// execString — see CLAUDE.md's security model). Every value flowing through
+// the graph is a small 4D tensor {data, D, H, W, C} (channels-LAST layout:
+// index = ((d*H+h)*W+w)*C+c — matching snake-cnn3d's own conv3d convention,
+// whose forward/backward pass this reuses near-verbatim). A flat-vector task
+// (the original 2D-point tasks, IRIS, house price) is just the degenerate
+// case D=H=W=1, C=featureCount — Dense already only ever sees a flat array
+// (t.data), so it doesn't care whether that array came from a "real" image
+// tensor or a degenerate one.
+const ACTIVATIONS = {
+  tanh: { fn: Math.tanh, deriv: a => 1 - a * a },
+  sigmoid: { fn: x => 1 / (1 + Math.exp(-x)), deriv: a => a * (1 - a) },
+  relu: { fn: x => Math.max(0, x), deriv: a => (a > 0 ? 1 : 0) },
+  leakyRelu: { fn: x => (x > 0 ? x : 0.01 * x), deriv: a => (a > 0 ? 1 : 0.01) },
+  linear: { fn: x => x, deriv: () => 1 },
+};
+
+// `dLoss_dp` is the derivative of the loss wrt the RAW output value p — it
+// does NOT bake in any output-activation derivative (unlike the original
+// version of this file, which hardcoded the sigmoid-composed shortcut).
+// trainStep below multiplies it by the actual output layer's own activation
+// derivative, so linear-output regression (house price) and sigmoid-output
+// classification both fall out of the same general chain-rule code. For MSE
+// this intentionally keeps the original file's "half-MSE" gradient
+// convention (dLoss_dp = p-y, not 2*(p-y)) — the displayed loss value is
+// still the un-halved (p-y)^2, only the gradient scale is halved, exactly
+// matching this app's original numeric behavior so existing tasks/graphs
+// train identically to before this rewrite.
+const LOSSES = {
+  mse: {
+    label: 'Mean Squared Error',
+    loss: (p, y) => (p - y) * (p - y),
+    dLoss_dp: (p, y) => p - y,
+  },
+  bce: {
+    label: 'Binary Cross-Entropy',
+    loss: (p, y) => {
+      const eps = 1e-7, pc = Math.min(Math.max(p, eps), 1 - eps);
+      return -(y * Math.log(pc) + (1 - y) * Math.log(1 - pc));
+    },
+    // Only sensible with a sigmoid (bounded [0,1]) output — with THAT
+    // activation's derivative multiplied in by trainStep, this reproduces
+    // the original file's analytically-simplified `p - y` exactly.
+    dLoss_dp: (p, y) => {
+      const eps = 1e-7, pc = Math.min(Math.max(p, eps), 1 - eps);
+      return (pc - y) / (pc * (1 - pc));
+    },
+  },
+};
+
+const ADAM_BETA1 = 0.9, ADAM_BETA2 = 0.999, ADAM_EPS = 1e-8;
+
+function optimizerStep(optimizer, mArr, vArr, idx, grad, lr, t) {
+  switch (optimizer) {
+    case 'momentum':
+      mArr[idx] = ADAM_BETA1 * mArr[idx] + (1 - ADAM_BETA1) * grad;
+      return lr * mArr[idx];
+    case 'rmsprop':
+      vArr[idx] = ADAM_BETA2 * vArr[idx] + (1 - ADAM_BETA2) * grad * grad;
+      return (lr * grad) / (Math.sqrt(vArr[idx]) + ADAM_EPS);
+    case 'adam': {
+      mArr[idx] = ADAM_BETA1 * mArr[idx] + (1 - ADAM_BETA1) * grad;
+      vArr[idx] = ADAM_BETA2 * vArr[idx] + (1 - ADAM_BETA2) * grad * grad;
+      const mHat = mArr[idx] / (1 - Math.pow(ADAM_BETA1, t));
+      const vHat = vArr[idx] / (1 - Math.pow(ADAM_BETA2, t));
+      return (lr * mHat) / (Math.sqrt(vHat) + ADAM_EPS);
+    }
+    default:
+      return lr * grad;
+  }
+}
+
+// ---------- parameterized layer factory ----------
+// Every Dense/Conv2D/Conv3D layer shares one shape: flat Float64Array
+// weights/biases, matching moment buffers (mW/vW/mb/vb) for the adaptive
+// optimizers, and dWeights/dBiases scratch accumulators zeroed each
+// trainStep. Conv2D and Conv3D are the SAME `kind: 'conv'` layer, differing
+// only in `kd` (the kernel's depth extent: 1 for Conv2D, equal to the
+// spatial kernel size for Conv3D) — see convForward/convBackward below,
+// adapted from snake-cnn3d's own real 3D-convolution implementation.
+function makeParamLayer(kind, extra, fanIn, weightCount, biasCount) {
+  const scale = Math.sqrt(1 / Math.max(1, fanIn));
+  const weights = new Float64Array(weightCount);
+  for (let i = 0; i < weightCount; i++) weights[i] = (Math.random() * 2 - 1) * scale;
+  return Object.assign(
+    {
+      kind,
+      weights,
+      biases: new Float64Array(biasCount),
+      mW: new Float64Array(weightCount),
+      vW: new Float64Array(weightCount),
+      mb: new Float64Array(biasCount),
+      vb: new Float64Array(biasCount),
+      dWeights: new Float64Array(weightCount),
+      dBiases: new Float64Array(biasCount),
+    },
+    extra
+  );
+}
+
+function denseForwardFlat(input, layer) {
+  const inSize = input.length;
+  const out = new Float64Array(layer.units);
+  const act = ACTIVATIONS[layer.activation] || ACTIVATIONS.linear;
+  for (let u = 0; u < layer.units; u++) {
+    let sum = layer.biases[u];
+    const base = u * inSize;
+    for (let i = 0; i < inSize; i++) sum += layer.weights[base + i] * input[i];
+    out[u] = act.fn(sum);
+  }
+  return out;
+}
+function denseBackwardFlat(cache, dOut, layer) {
+  const { input, output } = cache;
+  const inSize = input.length;
+  const deriv = (ACTIVATIONS[layer.activation] || ACTIVATIONS.linear).deriv;
+  const dInput = new Float64Array(inSize);
+  for (let u = 0; u < layer.units; u++) {
+    const dz = dOut[u] * deriv(output[u]);
+    layer.dBiases[u] += dz;
+    const base = u * inSize;
+    for (let i = 0; i < inSize; i++) {
+      layer.dWeights[base + i] += dz * input[i];
+      dInput[i] += dz * layer.weights[base + i];
+    }
+  }
+  return dInput;
+}
+
+// True convolution: kernel slides over (depth, height, width) with
+// same-padding on every axis it actually spans (kd=1 for Conv2D means the
+// depth axis is a size-1 no-op, not padded away — every input position
+// still contributes). Weight layout: [outC][kd][khw][khw][inC], channels
+// last — same convention as the tensor data itself, and as snake-cnn3d's
+// own conv3dForward/conv3dBackward, which this is adapted from.
+function convForward(t, layer) {
+  const { data, D, H, W, C: cin } = t;
+  const { filters: cout, kd, khw, activation } = layer;
+  const padD = Math.floor(kd / 2), padHW = Math.floor(khw / 2);
+  const act = ACTIVATIONS[activation] || ACTIVATIONS.relu;
+  const out = new Float64Array(D * H * W * cout);
+  for (let d = 0; d < D; d++) {
+    for (let h = 0; h < H; h++) {
+      for (let w = 0; w < W; w++) {
+        for (let co = 0; co < cout; co++) {
+          let sum = layer.biases[co];
+          for (let kdI = 0; kdI < kd; kdI++) {
+            const id = d + kdI - padD;
+            if (id < 0 || id >= D) continue;
+            for (let khI = 0; khI < khw; khI++) {
+              const ih = h + khI - padHW;
+              if (ih < 0 || ih >= H) continue;
+              for (let kwI = 0; kwI < khw; kwI++) {
+                const iw = w + kwI - padHW;
+                if (iw < 0 || iw >= W) continue;
+                const inBase = ((id * H + ih) * W + iw) * cin;
+                const wBase = (((co * kd + kdI) * khw + khI) * khw + kwI) * cin;
+                for (let ci = 0; ci < cin; ci++) sum += data[inBase + ci] * layer.weights[wBase + ci];
+              }
+            }
+          }
+          out[((d * H + h) * W + w) * cout + co] = act.fn(sum);
+        }
+      }
+    }
+  }
+  const outTensor = { data: out, D, H, W, C: cout };
+  return { out: outTensor, cache: { input: t, output: outTensor } };
+}
+
+// Gradient of a true convolution: dWeights via correlating the cached input
+// with the (activation-corrected) output gradient, dInput via scattering
+// weight*dz back into every input position each output voxel's receptive
+// field touched — the SAME nested loops as the forward pass, accumulating
+// into different targets instead of summing into one output value. Same
+// derivation snake-cnn3d's conv3dBackward uses.
+function convBackward(cache, dOutFlat, layer) {
+  const { input, output } = cache;
+  const { data: inData, D, H, W, C: cin } = input;
+  const { filters: cout, kd, khw, activation } = layer;
+  const padD = Math.floor(kd / 2), padHW = Math.floor(khw / 2);
+  const deriv = (ACTIVATIONS[activation] || ACTIVATIONS.relu).deriv;
+  const outData = output.data;
+  const dInput = new Float64Array(D * H * W * cin);
+  for (let d = 0; d < D; d++) {
+    for (let h = 0; h < H; h++) {
+      for (let w = 0; w < W; w++) {
+        for (let co = 0; co < cout; co++) {
+          const outIdx = ((d * H + h) * W + w) * cout + co;
+          const dz = dOutFlat[outIdx] * deriv(outData[outIdx]);
+          if (dz === 0) continue;
+          layer.dBiases[co] += dz;
+          for (let kdI = 0; kdI < kd; kdI++) {
+            const id = d + kdI - padD;
+            if (id < 0 || id >= D) continue;
+            for (let khI = 0; khI < khw; khI++) {
+              const ih = h + khI - padHW;
+              if (ih < 0 || ih >= H) continue;
+              for (let kwI = 0; kwI < khw; kwI++) {
+                const iw = w + kwI - padHW;
+                if (iw < 0 || iw >= W) continue;
+                const inBase = ((id * H + ih) * W + iw) * cin;
+                const wBase = (((co * kd + kdI) * khw + khI) * khw + kwI) * cin;
+                for (let ci = 0; ci < cin; ci++) {
+                  layer.dWeights[wBase + ci] += dz * inData[inBase + ci];
+                  dInput[inBase + ci] += dz * layer.weights[wBase + ci];
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return dInput;
+}
+
+// ---------- compiling the graph into a runnable chain ----------
+// The chain stays a linear walk (Input -> middle nodes -> Output), same as
+// the original file — a Skip node does NOT introduce a second visual edge;
+// it has one normal "main path" in-port like Dense/Conv, plus a dropdown
+// naming an EARLIER node in the same walk whose cached output tensor gets
+// added in. That keeps the port/drag-connect model completely unchanged
+// while still giving a real, working skip connection: the compiled chain
+// tracks each visited node's output SHAPE (for a build-time mismatch error)
+// and, at train time, each node's output TENSOR (for the skip's actual add).
+function shapeSize(s) { return s.D * s.H * s.W * s.C; }
+function shapesEqual(a, b) { return a.D === b.D && a.H === b.H && a.W === b.W && a.C === b.C; }
+function shapeLabel(s) { return `${s.C}×${s.D}×${s.H}×${s.W} (C×D×H×W)`; }
+
+function compileChain(task, inputNode, middleNodes, outputActivation, optimizer) {
+  let shape = { ...task.inputShape };
+  const shapeByNodeId = new Map([[inputNode.id, shape]]);
+  const middle = [];
+  for (const node of middleNodes) {
+    if (node.type === 'dense') {
+      const fanIn = shapeSize(shape);
+      const layer = makeParamLayer('dense', { nodeId: node.id, units: node.units, activation: node.activation }, fanIn, node.units * fanIn, node.units);
+      middle.push(layer);
+      shape = { D: 1, H: 1, W: 1, C: node.units };
+    } else if (node.type === 'conv2d' || node.type === 'conv3d') {
+      const kd = node.type === 'conv3d' ? node.kernel : 1;
+      const khw = node.kernel;
+      const cin = shape.C;
+      const fanIn = cin * kd * khw * khw;
+      const weightCount = node.filters * kd * khw * khw * cin;
+      const layer = makeParamLayer('conv', { nodeId: node.id, filters: node.filters, kd, khw, activation: node.activation }, fanIn, weightCount, node.filters);
+      middle.push(layer);
+      shape = { D: shape.D, H: shape.H, W: shape.W, C: node.filters };
+    } else if (node.type === 'skip') {
+      if (!node.skipFrom) throw new Error(`"${labelFor(node)}" has no skip source selected.`);
+      const srcShape = shapeByNodeId.get(node.skipFrom);
+      if (!srcShape) throw new Error(`"${labelFor(node)}"'s skip source must be a node earlier in the chain.`);
+      if (!shapesEqual(srcShape, shape)) {
+        throw new Error(`"${labelFor(node)}" shape mismatch: the main path here is ${shapeLabel(shape)} but its skip source is ${shapeLabel(srcShape)}.`);
+      }
+      middle.push({ kind: 'skip', nodeId: node.id, skipFromId: node.skipFrom });
+      // shape passes through unchanged
+    } else {
+      throw new Error(`Unknown node type "${node.type}".`);
+    }
+    shapeByNodeId.set(node.id, shape);
+  }
+  const finalFanIn = shapeSize(shape);
+  const outputLayer = makeParamLayer('dense', { units: task.outputSize, activation: outputActivation }, finalFanIn, task.outputSize * finalFanIn, task.outputSize);
+  return {
+    inputNodeId: inputNode.id,
+    middle,
+    outputLayer,
+    allLayers: [...middle.filter(l => l.kind !== 'skip'), outputLayer],
+    optimizer,
+    t: 0,
+  };
+}
+
+function runForward(compiled, inputTensor) {
+  const caches = [];
+  const tensorByNodeId = new Map([[compiled.inputNodeId, inputTensor]]);
+  let t = inputTensor;
+  for (const layer of compiled.middle) {
+    let out, cache;
+    if (layer.kind === 'dense') {
+      const flatIn = t.data;
+      const z = denseForwardFlat(flatIn, layer);
+      out = { data: z, D: 1, H: 1, W: 1, C: layer.units };
+      cache = { input: flatIn, output: z };
+    } else if (layer.kind === 'conv') {
+      const res = convForward(t, layer);
+      out = res.out;
+      cache = res.cache;
+    } else {
+      // skip
+      const src = tensorByNodeId.get(layer.skipFromId);
+      const data = new Float64Array(t.data.length);
+      for (let i = 0; i < data.length; i++) data[i] = t.data[i] + src.data[i];
+      out = { data, D: t.D, H: t.H, W: t.W, C: t.C };
+      cache = null;
+    }
+    caches.push(cache);
+    tensorByNodeId.set(layer.nodeId, out);
+    t = out;
+  }
+  const finalZ = denseForwardFlat(t.data, compiled.outputLayer);
+  caches.push({ input: t.data, output: finalZ });
+  return { output: finalZ, caches };
+}
+
+// Reverse walk over the SAME linear order, with a side accumulator for
+// skip-connection gradients: a Skip node passes its incoming gradient
+// through unchanged to its main-path predecessor (d(a+b)/da = 1) AND
+// accumulates that same gradient against its skip source's node id. Since
+// a skip source is always EARLIER in the walk (enforced at compile time),
+// by the time the reverse walk reaches that source's own position the
+// accumulated contribution is already registered — no separate topological
+// sort needed, the existing linear order already visits things in the
+// right sequence for this.
+function runBackward(compiled, caches, dOutput) {
+  let dNext = denseBackwardFlat(caches[caches.length - 1], dOutput, compiled.outputLayer);
+  const skipExtra = new Map();
+  for (let li = compiled.middle.length - 1; li >= 0; li--) {
+    const layer = compiled.middle[li];
+    const cache = caches[li];
+    if (skipExtra.has(layer.nodeId)) {
+      const extra = skipExtra.get(layer.nodeId);
+      for (let i = 0; i < dNext.length; i++) dNext[i] += extra[i];
+    }
+    if (layer.kind === 'dense') {
+      dNext = denseBackwardFlat(cache, dNext, layer);
+    } else if (layer.kind === 'conv') {
+      dNext = convBackward(cache, dNext, layer);
+    } else {
+      // skip: identity to the main path, ALSO accumulate onto the source
+      if (!skipExtra.has(layer.skipFromId)) skipExtra.set(layer.skipFromId, new Float64Array(dNext.length));
+      const acc = skipExtra.get(layer.skipFromId);
+      for (let i = 0; i < dNext.length; i++) acc[i] += dNext[i];
+    }
+  }
+}
+
+function zeroGrads(compiled) {
+  for (const layer of compiled.allLayers) {
+    layer.dWeights.fill(0);
+    layer.dBiases.fill(0);
+  }
+}
+function applyOptimizer(compiled, lr) {
+  for (const layer of compiled.allLayers) {
+    for (let i = 0; i < layer.weights.length; i++) layer.weights[i] -= optimizerStep(compiled.optimizer, layer.mW, layer.vW, i, layer.dWeights[i], lr, compiled.t);
+    for (let i = 0; i < layer.biases.length; i++) layer.biases[i] -= optimizerStep(compiled.optimizer, layer.mb, layer.vb, i, layer.dBiases[i], lr, compiled.t);
+  }
+}
+
+function trainStep(compiled, xTensor, target, lr, lossType) {
+  const { output, caches } = runForward(compiled, xTensor);
+  const lossFns = LOSSES[lossType] || LOSSES.mse;
+  const outAct = ACTIVATIONS[compiled.outputLayer.activation] || ACTIVATIONS.sigmoid;
+  const dOutput = new Float64Array(output.length);
+  let loss = 0;
+  for (let o = 0; o < output.length; o++) {
+    loss += lossFns.loss(output[o], target[o]);
+    dOutput[o] = lossFns.dLoss_dp(output[o], target[o]) * outAct.deriv(output[o]);
+  }
+  zeroGrads(compiled);
+  runBackward(compiled, caches, dOutput);
+  compiled.t++;
+  applyOptimizer(compiled, lr);
+  return loss / output.length;
+}
+
+function toInputTensor(task, x) {
+  if (x && x.data && typeof x.D === 'number') return x;
+  const s = task.inputShape;
+  return { data: Float64Array.from(x), D: s.D, H: s.H, W: s.W, C: s.C };
+}
+
+// ============================== tasks / datasets ==============================
+// The original 2D-point tasks, unchanged (kept as an independent copy — no
+// shared modules across sandboxed apps, see CLAUDE.md).
+function xorData() { return [{ x: [0, 0], y: [0] }, { x: [0, 1], y: [1] }, { x: [1, 0], y: [1] }, { x: [1, 1], y: [0] }]; }
+function andData() { return [{ x: [0, 0], y: [0] }, { x: [0, 1], y: [0] }, { x: [1, 0], y: [0] }, { x: [1, 1], y: [1] }]; }
+function orData() { return [{ x: [0, 0], y: [0] }, { x: [0, 1], y: [1] }, { x: [1, 0], y: [1] }, { x: [1, 1], y: [1] }]; }
+const CLASSIFY_SLOPE = 0.6, CLASSIFY_INTERCEPT = -0.1;
+function classifyData(n) {
+  const data = [];
+  for (let i = 0; i < n; i++) {
+    const x1 = Math.random() * 2 - 1, x2 = Math.random() * 2 - 1;
+    data.push({ x: [x1, x2], y: [x2 > CLASSIFY_SLOPE * x1 + CLASSIFY_INTERCEPT ? 1 : 0] });
+  }
+  return data;
+}
+function circleData(n, r) {
+  const data = [];
+  for (let i = 0; i < n; i++) {
+    const x1 = Math.random() * 2 - 1, x2 = Math.random() * 2 - 1;
+    data.push({ x: [x1, x2], y: [x1 * x1 + x2 * x2 < r * r ? 1 : 0] });
+  }
+  return data;
+}
+function spiralsData(pointsPerClass) {
+  const data = [];
+  for (let c = 0; c < 2; c++) {
+    for (let i = 0; i < pointsPerClass; i++) {
+      const r = i / pointsPerClass;
+      const t = (1.75 * i) / pointsPerClass * 2 * Math.PI + c * Math.PI;
+      const jitter = () => (Math.random() - 0.5) * 0.06;
+      data.push({ x: [r * Math.sin(t) + jitter(), r * Math.cos(t) + jitter()], y: [c] });
+    }
+  }
+  return data;
+}
+
+// ---------- IRIS ----------
+// Sampled from Fisher's Iris dataset's real, well-known approximate
+// per-species feature statistics (mean/std of sepal/petal length & width in
+// cm) — NOT a literal copy of the 150-row dataset, which risks silent
+// transcription errors if hand-typed row by row. This keeps the same
+// classification character the real dataset has (Setosa cleanly separable,
+// Versicolor/Virginica overlapping) at demo scale.
+function gaussianSample(mean, std) {
+  let u = 0, v = 0;
+  while (u === 0) u = Math.random();
+  while (v === 0) v = Math.random();
+  return mean + std * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+const IRIS_SPECIES = [
+  { name: 'Setosa', mean: [5.0, 3.4, 1.5, 0.25], std: [0.35, 0.38, 0.17, 0.11] },
+  { name: 'Versicolor', mean: [5.9, 2.8, 4.3, 1.3], std: [0.52, 0.31, 0.47, 0.2] },
+  { name: 'Virginica', mean: [6.6, 3.0, 5.6, 2.0], std: [0.64, 0.32, 0.55, 0.27] },
+];
+function irisData(perClass) {
+  const raw = [];
+  IRIS_SPECIES.forEach((sp, ci) => {
+    for (let i = 0; i < perClass; i++) raw.push({ feats: sp.mean.map((m, fi) => gaussianSample(m, sp.std[fi])), cls: ci });
+  });
+  const mins = [Infinity, Infinity, Infinity, Infinity], maxs = [-Infinity, -Infinity, -Infinity, -Infinity];
+  raw.forEach(r => r.feats.forEach((v, i) => { mins[i] = Math.min(mins[i], v); maxs[i] = Math.max(maxs[i], v); }));
+  return raw.map(r => {
+    const x = r.feats.map((v, i) => (maxs[i] > mins[i] ? ((v - mins[i]) / (maxs[i] - mins[i])) * 2 - 1 : 0));
+    const y = [0, 0, 0];
+    y[r.cls] = 1;
+    return { x, y, classIndex: r.cls };
+  });
+}
+
+// ---------- House price (synthetic regression — not a real dataset) ----------
+function housePriceData(n) {
+  const raw = [];
+  for (let i = 0; i < n; i++) {
+    const sqft = 500 + Math.random() * 3000;
+    const bedrooms = 1 + Math.floor(Math.random() * 5);
+    const age = Math.random() * 50;
+    const dist = Math.random() * 30;
+    const price = 40000 + sqft * 120 + bedrooms * 8000 - age * 600 - dist * 1500 + (Math.random() - 0.5) * 20000;
+    raw.push({ feats: [sqft, bedrooms, age, dist], price });
+  }
+  const mins = [Infinity, Infinity, Infinity, Infinity], maxs = [-Infinity, -Infinity, -Infinity, -Infinity];
+  raw.forEach(r => r.feats.forEach((v, i) => { mins[i] = Math.min(mins[i], v); maxs[i] = Math.max(maxs[i], v); }));
+  let pMin = Infinity, pMax = -Infinity;
+  raw.forEach(r => { pMin = Math.min(pMin, r.price); pMax = Math.max(pMax, r.price); });
+  return raw.map(r => ({
+    x: r.feats.map((v, i) => ((v - mins[i]) / (maxs[i] - mins[i])) * 2 - 1),
+    y: [((r.price - pMin) / (pMax - pMin)) * 2 - 1],
+    rawPrice: r.price,
+  }));
+}
+
+// ---------- MNIST / Fashion-MNIST (real data) ----------
+// A real, class-balanced subset (25 samples/class, 250 total) of each
+// dataset's own test split, downsampled from 28x28 to 14x14 via a clean 2x2
+// box-filter average — built once at BUILD time (scripts/build-mnist-data.mjs
+// downloads the official gzipped IDX files and writes the subset as JSON
+// into this app's own install dir) rather than fetched by the running app,
+// since a sandboxed app can't assume outbound internet at runtime (see
+// CLAUDE.md's speed-test scope note) — this app only ever reads its own
+// already-seeded `mnist-data.json`/`fashion-data.json` from the vfs, via the
+// same no-prompt "read own install dir" auto-grant every app already gets,
+// no different from reading its own `manifest.json`. Full 28x28 (or the
+// full 60k-image training set) is more data than plain per-sample JS
+// backprop can train on at interactive speed, hence the downsample and the
+// small per-class subset — real images throughout, just fewer of them and
+// at lower resolution, not synthetic content.
+const IMG_CLASSES = 10;
+const MNIST_CLASSES = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+const FASHION_CLASSES = ['T-shirt/top', 'Trouser', 'Pullover', 'Dress', 'Coat', 'Sandal', 'Shirt', 'Sneaker', 'Bag', 'Ankle boot'];
+const imageDatasetCache = new Map();
+
+async function loadImageDataset(path) {
+  if (imageDatasetCache.has(path)) return imageDatasetCache.get(path);
+  const raw = JSON.parse(await AppSDK.readText(path));
+  const { grid, pixels, labels } = raw;
+  const data = pixels.map((px, i) => {
+    const y = new Array(IMG_CLASSES).fill(0);
+    y[labels[i]] = 1;
+    const tdata = new Float64Array(grid * grid);
+    for (let p = 0; p < px.length; p++) tdata[p] = px[p] / 255;
+    return { x: { data: tdata, D: 1, H: grid, W: grid, C: 1 }, y, classIndex: labels[i] };
+  });
+  imageDatasetCache.set(path, { grid, data });
+  return { grid, data };
+}
+
+const TASKS = {
+  xor: { inputSize: 2, outputSize: 1, inputShape: { D: 1, H: 1, W: 1, C: 2 }, outputActivation: 'sigmoid', plot2D: true, hint: 'Classic XOR — not linearly separable, needs a hidden layer.', gen: () => xorData() },
+  and: { inputSize: 2, outputSize: 1, inputShape: { D: 1, H: 1, W: 1, C: 2 }, outputActivation: 'sigmoid', plot2D: true, hint: 'Logic AND — linearly separable.', gen: () => andData() },
+  or: { inputSize: 2, outputSize: 1, inputShape: { D: 1, H: 1, W: 1, C: 2 }, outputActivation: 'sigmoid', plot2D: true, hint: 'Logic OR — linearly separable.', gen: () => orData() },
+  classify: { inputSize: 2, outputSize: 1, inputShape: { D: 1, H: 1, W: 1, C: 2 }, outputActivation: 'sigmoid', plot2D: true, hint: 'Points above/below a line.', gen: () => classifyData(200) },
+  circle: { inputSize: 2, outputSize: 1, inputShape: { D: 1, H: 1, W: 1, C: 2 }, outputActivation: 'sigmoid', plot2D: true, hint: 'Points inside/outside a circle — a curved boundary.', gen: () => circleData(240, 0.6) },
+  spirals: { inputSize: 2, outputSize: 1, inputShape: { D: 1, H: 1, W: 1, C: 2 }, outputActivation: 'sigmoid', plot2D: true, hint: 'Two interleaved spirals — a hard benchmark.', gen: () => spiralsData(120) },
+  iris: {
+    inputSize: 4, outputSize: 3, inputShape: { D: 1, H: 1, W: 1, C: 4 }, outputActivation: 'sigmoid', plot2D: false,
+    classNames: ['Setosa', 'Versicolor', 'Virginica'], epochs: 700,
+    hint: "Iris flowers — 4 measurements → 3 species. Sampled from the real dataset's approximate per-species statistics, not the literal 150-row dataset (see the app's own comment for why).",
+    gen: () => irisData(50),
+  },
+  housePrice: {
+    inputSize: 4, outputSize: 1, inputShape: { D: 1, H: 1, W: 1, C: 4 }, outputActivation: 'linear', plot2D: false,
+    isRegression: true, epochs: 700,
+    hint: 'House price regression — size / bedrooms / age / distance → price. Fully synthetic data, not a real housing dataset. Use MSE loss (linear output isn’t bounded [0,1], so BCE won’t behave sensibly here).',
+    gen: () => housePriceData(300),
+  },
+  mnist: {
+    inputSize: 14 * 14, outputSize: 10, inputShape: { D: 1, H: 14, W: 14, C: 1 }, outputActivation: 'sigmoid', plot2D: false,
+    isImage: true, classNames: MNIST_CLASSES, epochs: 80,
+    hint: 'MNIST digit classification — a real, class-balanced 250-image subset of the actual dataset (25 per digit), downsampled from 28×28 to 14×14 so plain JS backprop trains it at interactive speed. See the app’s own comment for how it’s built.',
+    gen: () => loadImageDataset('/opt/apps/model-builder/mnist-data.json').then(r => r.data),
+  },
+  fashionMnist: {
+    inputSize: 14 * 14, outputSize: 10, inputShape: { D: 1, H: 14, W: 14, C: 1 }, outputActivation: 'sigmoid', plot2D: false,
+    isImage: true, classNames: FASHION_CLASSES, epochs: 80,
+    hint: 'Fashion-MNIST garment classification — the same real-subset/downsample approach as the digit dataset above, just Zalando’s Fashion-MNIST instead of the original digits.',
+    gen: () => loadImageDataset('/opt/apps/model-builder/fashion-data.json').then(r => r.data),
+  },
+};
+
+// ============================== graph state ==============================
+const MIDDLE_TYPES = new Set(['dense', 'conv2d', 'conv3d', 'skip']);
+let nodes = [];
+let edges = []; // { from: nodeId, to: nodeId }
+let nextNodeId = 1;
+
+function addNode(type, x, y, extra) {
+  const node = Object.assign({ id: 'n' + nextNodeId++, type, x, y }, extra);
+  nodes.push(node);
+  return node;
+}
+
+function resetGraph() {
+  nodes = [];
+  edges = [];
+  const input = addNode('input', 40, 160, {});
+  const dense = addNode('dense', 250, 160, { units: 6, activation: 'tanh' });
+  const output = addNode('output', 460, 160, {});
+  const loss = addNode('loss', 670, 160, { lossType: 'mse' });
+  const optimizer = addNode('optimizer', 880, 160, { optimizer: 'sgd', lr: 0.5 });
+  edges.push({ from: input.id, to: dense.id }, { from: dense.id, to: output.id }, { from: output.id, to: loss.id }, { from: loss.id, to: optimizer.id });
+}
+
+function nodeById(id) { return nodes.find(n => n.id === id); }
+function outgoingEdge(id) { return edges.find(e => e.from === id); }
+function incomingEdge(id) { return edges.find(e => e.to === id); }
+
+function removeNode(id) {
+  nodes = nodes.filter(n => n.id !== id);
+  edges = edges.filter(e => e.from !== id && e.to !== id);
+  for (const n of nodes) if (n.type === 'skip' && n.skipFrom === id) n.skipFrom = null;
+}
+
+function connect(fromId, toId) {
+  if (fromId === toId) return;
+  edges = edges.filter(e => e.from !== fromId && e.to !== toId);
+  edges.push({ from: fromId, to: toId });
+}
+
+// Walks Input -> [Dense/Conv2D/Conv3D/Skip]* -> Output -> Loss -> Optimizer.
+// Throws a human-readable Error naming exactly what's missing/wrong, since
+// this is the one place a user directly feels whether their wiring is
+// valid. Still a strict single-path walk — see compileChain's own comment
+// for why a Skip node doesn't need a second visual edge/port to work.
+function extractChain() {
+  const input = nodes.find(n => n.type === 'input');
+  const output = nodes.find(n => n.type === 'output');
+  const loss = nodes.find(n => n.type === 'loss');
+  const optimizer = nodes.find(n => n.type === 'optimizer');
+
+  const middle = [];
+  let cur = input.id;
+  const visited = new Set([cur]);
+  while (true) {
+    const edge = outgoingEdge(cur);
+    if (!edge) throw new Error(`"${labelFor(nodeById(cur))}" isn't connected to anything yet.`);
+    if (visited.has(edge.to)) throw new Error('The chain loops back on itself — remove the cycle.');
+    const next = nodeById(edge.to);
+    if (!next) throw new Error('Dangling connection — reconnect that edge.');
+    if (next.type === 'output') { cur = next.id; break; }
+    if (!MIDDLE_TYPES.has(next.type)) throw new Error(`Expected a Dense/Conv2D/Conv3D/Skip layer or the Output node after "${labelFor(nodeById(cur))}", found "${labelFor(next)}".`);
+    middle.push(next);
+    visited.add(next.id);
+    cur = next.id;
+    if (middle.length > 30) throw new Error('Chain too long.');
+  }
+  const outToLoss = outgoingEdge(output.id);
+  if (!outToLoss || outToLoss.to !== loss.id) throw new Error('Connect Output → Loss.');
+  const lossToOpt = outgoingEdge(loss.id);
+  if (!lossToOpt || lossToOpt.to !== optimizer.id) throw new Error('Connect Loss → Optimizer.');
+  return { input, middle, output, loss, optimizer };
+}
+
+function shortLabel(node) {
+  if (!node) return '?';
+  if (node.type === 'input') return 'Input';
+  if (node.type === 'dense') return `Dense(${node.units})`;
+  if (node.type === 'conv2d') return `Conv2D(${node.filters})`;
+  if (node.type === 'conv3d') return `Conv3D(${node.filters})`;
+  if (node.type === 'skip') return 'Skip';
+  return node.type;
+}
+function labelFor(node) {
+  if (node.type === 'input') return 'Input';
+  if (node.type === 'output') return 'Output';
+  if (node.type === 'loss') return 'Loss';
+  if (node.type === 'optimizer') return 'Optimizer';
+  if (node.type === 'conv2d') return `Conv2D(${node.filters})`;
+  if (node.type === 'conv3d') return `Conv3D(${node.filters})`;
+  if (node.type === 'skip') return `Skip(→${shortLabel(nodeById(node.skipFrom))})`;
+  return `Dense(${node.units})`;
+}
+
+// ============================== rendering ==============================
+const taskSel = document.getElementById('task');
+const nodeTypeSel = document.getElementById('nodeTypeSel');
+const nodesLayer = document.getElementById('nodesLayer');
+const edgesSvg = document.getElementById('edgesSvg');
+const canvasInner = document.getElementById('canvasInner');
+const statusEl = document.getElementById('status');
+const addLayerBtn = document.getElementById('addLayer');
+const clearGraphBtn = document.getElementById('clearGraph');
+const epochInput = document.getElementById('epochInput');
+const buildBtn = document.getElementById('build');
+const predictBtn = document.getElementById('predictBtn');
+const testInputsEl = document.getElementById('testInputs');
+const testResultEl = document.getElementById('testResult');
+const statEpoch = document.getElementById('statEpoch');
+const statTotal = document.getElementById('statTotal');
+const statLoss = document.getElementById('statLoss');
+const statBadge = document.getElementById('statBadge');
+const lossCanvas = document.getElementById('lossChart');
+const plotCanvas = document.getElementById('plot');
+const plotNoteEl = document.getElementById('plotNote');
+
+for (const id of Object.keys(TASKS)) {
+  const opt = document.createElement('option');
+  opt.value = id;
+  opt.textContent = id[0].toUpperCase() + id.slice(1);
+  taskSel.appendChild(opt);
+}
+
+function setStatus(text, isError) {
+  statusEl.textContent = text;
+  statusEl.className = 'status' + (isError ? ' error' : '');
+}
+
+function currentTask() { return TASKS[taskSel.value]; }
+
+function portPos(nodeId, side) {
+  const el = nodesLayer.querySelector(`[data-node-id="${nodeId}"] .port-${side}`);
+  if (!el) return { x: 0, y: 0 };
+  const innerRect = canvasInner.getBoundingClientRect();
+  const r = el.getBoundingClientRect();
+  return { x: r.left + r.width / 2 - innerRect.left, y: r.top + r.height / 2 - innerRect.top };
+}
+
+function edgePath(from, to) {
+  const dx = Math.max(40, (to.x - from.x) / 2);
+  return `M ${from.x} ${from.y} C ${from.x + dx} ${from.y}, ${to.x - dx} ${to.y}, ${to.x} ${to.y}`;
+}
+
+function renderEdges() {
+  edgesSvg.querySelectorAll('path:not(.temp)').forEach(p => p.remove());
+  for (const edge of edges) {
+    const from = portPos(edge.from, 'out');
+    const to = portPos(edge.to, 'in');
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', edgePath(from, to));
+    path.setAttribute('stroke', '#5b8dff');
+    path.setAttribute('stroke-width', '2');
+    path.setAttribute('fill', 'none');
+    path.onclick = () => { edges = edges.filter(e => e !== edge); render(); };
+    edgesSvg.insertBefore(path, edgesSvg.firstChild);
+  }
+}
+
+function nodeConfigHtml(node) {
+  if (node.type === 'input') {
+    const task = currentTask();
+    const s = task.inputShape;
+    const desc = task.isImage ? `image ${shapeLabel(s)}` : `${s.C} value(s)`;
+    return `<div class="static">Input — ${desc}</div>`;
+  }
+  if (node.type === 'output') return `<div class="static">Output — ${currentTask().outputSize} value(s), ${currentTask().outputActivation}</div>`;
+  if (node.type === 'dense') {
+    return `
+      <label>Units</label>
+      <input type="number" min="1" class="units" value="${node.units}" />
+      <label>Activation</label>
+      <select class="activation">
+        ${Object.keys(ACTIVATIONS).map(a => `<option value="${a}" ${a === node.activation ? 'selected' : ''}>${a}</option>`).join('')}
+      </select>`;
+  }
+  if (node.type === 'conv2d' || node.type === 'conv3d') {
+    return `
+      <label>Filters</label>
+      <input type="number" min="1" class="filters" value="${node.filters}" />
+      <label>Kernel size (odd)</label>
+      <input type="number" min="1" step="2" class="kernel" value="${node.kernel}" />
+      <label>Activation</label>
+      <select class="activation">
+        ${Object.keys(ACTIVATIONS).map(a => `<option value="${a}" ${a === node.activation ? 'selected' : ''}>${a}</option>`).join('')}
+      </select>`;
+  }
+  if (node.type === 'skip') {
+    const others = nodes.filter(n => n.id !== node.id && (n.type === 'input' || MIDDLE_TYPES.has(n.type)));
+    return `<label>Skip from</label>
+      <select class="skipFrom">
+        <option value="">— choose —</option>
+        ${others.map(n => `<option value="${n.id}" ${n.id === node.skipFrom ? 'selected' : ''}>${shortLabel(n)} (${n.id})</option>`).join('')}
+      </select>`;
+  }
+  if (node.type === 'loss') {
+    return `<label>Loss function</label>
+      <select class="lossType">
+        ${Object.entries(LOSSES).map(([k, v]) => `<option value="${k}" ${k === node.lossType ? 'selected' : ''}>${v.label}</option>`).join('')}
+      </select>`;
+  }
+  if (node.type === 'optimizer') {
+    return `
+      <label>Optimizer</label>
+      <select class="optimizerType">
+        ${['sgd', 'momentum', 'rmsprop', 'adam'].map(o => `<option value="${o}" ${o === node.optimizer ? 'selected' : ''}>${o}</option>`).join('')}
+      </select>
+      <label>Learning rate</label>
+      <input type="number" step="0.01" min="0.0001" class="lr" value="${node.lr}" />`;
+  }
+  return '';
+}
+
+function render() {
+  nodesLayer.innerHTML = '';
+  for (const node of nodes) {
+    const isFixed = !MIDDLE_TYPES.has(node.type);
+    const el = document.createElement('div');
+    el.className = 'node' + (isFixed ? ' fixed' : '');
+    el.style.left = node.x + 'px';
+    el.style.top = node.y + 'px';
+    el.dataset.nodeId = node.id;
+
+    const header = document.createElement('div');
+    header.className = 'node-header';
+    header.innerHTML = `<span>${labelFor(node)}</span>` + (!isFixed ? '<span class="close">✕</span>' : '');
+    header.onpointerdown = e => { if (!e.target.classList.contains('close')) startNodeDrag(e, node); };
+    const closeBtn = header.querySelector('.close');
+    if (closeBtn) closeBtn.onclick = () => { removeNode(node.id); render(); };
+    el.appendChild(header);
+
+    const body = document.createElement('div');
+    body.className = 'node-body';
+    body.innerHTML = nodeConfigHtml(node);
+    el.appendChild(body);
+
+    const unitsInput = body.querySelector('.units');
+    if (unitsInput) unitsInput.oninput = () => { node.units = Math.max(1, parseInt(unitsInput.value, 10) || 1); header.querySelector('span').textContent = labelFor(node); };
+    const filtersInput = body.querySelector('.filters');
+    if (filtersInput) filtersInput.oninput = () => { node.filters = Math.max(1, parseInt(filtersInput.value, 10) || 1); header.querySelector('span').textContent = labelFor(node); };
+    const kernelInput = body.querySelector('.kernel');
+    if (kernelInput) kernelInput.oninput = () => { let v = parseInt(kernelInput.value, 10) || 1; if (v % 2 === 0) v += 1; node.kernel = Math.max(1, v); kernelInput.value = node.kernel; };
+    const skipSel = body.querySelector('.skipFrom');
+    if (skipSel) skipSel.onchange = () => { node.skipFrom = skipSel.value || null; header.querySelector('span').textContent = labelFor(node); };
+    const actSel = body.querySelector('.activation');
+    if (actSel) actSel.onchange = () => { node.activation = actSel.value; };
+    const lossSel = body.querySelector('.lossType');
+    if (lossSel) lossSel.onchange = () => { node.lossType = lossSel.value; };
+    const optSel = body.querySelector('.optimizerType');
+    if (optSel) optSel.onchange = () => { node.optimizer = optSel.value; };
+    const lrInput = body.querySelector('.lr');
+    if (lrInput) lrInput.oninput = () => { node.lr = parseFloat(lrInput.value) || 0.01; };
+
+    if (node.type !== 'input') {
+      const portIn = document.createElement('div');
+      portIn.className = 'port port-in';
+      portIn.onpointerdown = e => startEdgeDrag(e, node.id, 'in');
+      el.appendChild(portIn);
+    }
+    if (node.type !== 'optimizer') {
+      const portOut = document.createElement('div');
+      portOut.className = 'port port-out';
+      portOut.onpointerdown = e => startEdgeDrag(e, node.id, 'out');
+      el.appendChild(portOut);
+    }
+
+    nodesLayer.appendChild(el);
+  }
+  renderEdges();
+}
+
+// ---------- node dragging ----------
+function startNodeDrag(e, node) {
+  if (e.button !== 0) return;
+  const el = nodesLayer.querySelector(`[data-node-id="${node.id}"]`);
+  const startX = e.clientX, startY = e.clientY, startLeft = node.x, startTop = node.y;
+  el.querySelector('.node-header').setPointerCapture(e.pointerId);
+
+  function onMove(ev) {
+    node.x = Math.max(0, startLeft + (ev.clientX - startX));
+    node.y = Math.max(0, startTop + (ev.clientY - startY));
+    el.style.left = node.x + 'px';
+    el.style.top = node.y + 'px';
+    renderEdges();
+  }
+  function onUp() {
+    el.querySelector('.node-header').removeEventListener('pointermove', onMove);
+    el.querySelector('.node-header').removeEventListener('pointerup', onUp);
+  }
+  el.querySelector('.node-header').addEventListener('pointermove', onMove);
+  el.querySelector('.node-header').addEventListener('pointerup', onUp);
+}
+
+// ---------- edge dragging ----------
+function startEdgeDrag(e, nodeId, side) {
+  e.stopPropagation();
+  if (e.button !== 0) return;
+  const startPos = portPos(nodeId, side);
+  const tempPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  tempPath.setAttribute('class', 'temp');
+  tempPath.setAttribute('stroke', '#ffd23d');
+  tempPath.setAttribute('stroke-width', '2');
+  tempPath.setAttribute('fill', 'none');
+  tempPath.setAttribute('stroke-dasharray', '5,4');
+  edgesSvg.appendChild(tempPath);
+  const target = e.currentTarget;
+  target.setPointerCapture(e.pointerId);
+
+  function onMove(ev) {
+    const innerRect = canvasInner.getBoundingClientRect();
+    const pointer = { x: ev.clientX - innerRect.left, y: ev.clientY - innerRect.top };
+    tempPath.setAttribute('d', side === 'out' ? edgePath(startPos, pointer) : edgePath(pointer, startPos));
+  }
+  function onUp(ev) {
+    target.removeEventListener('pointermove', onMove);
+    target.removeEventListener('pointerup', onUp);
+    tempPath.remove();
+    const el = document.elementFromPoint(ev.clientX, ev.clientY);
+    const portEl = el && el.closest('.port');
+    if (portEl) {
+      const otherId = portEl.closest('[data-node-id]').dataset.nodeId;
+      const otherIsIn = portEl.classList.contains('port-in');
+      if (side === 'out' && otherIsIn) connect(nodeId, otherId);
+      else if (side === 'in' && !otherIsIn) connect(otherId, nodeId);
+    }
+    render();
+  }
+  target.addEventListener('pointermove', onMove);
+  target.addEventListener('pointerup', onUp);
+}
+
+addLayerBtn.onclick = () => {
+  const type = nodeTypeSel.value;
+  const middleCount = nodes.filter(n => MIDDLE_TYPES.has(n.type)).length;
+  const y = 320 + middleCount * 150;
+  if (type === 'dense') addNode('dense', 250, y, { units: 4, activation: 'tanh' });
+  else if (type === 'conv2d') addNode('conv2d', 250, y, { filters: 4, kernel: 3, activation: 'relu' });
+  else if (type === 'conv3d') addNode('conv3d', 250, y, { filters: 4, kernel: 3, activation: 'relu' });
+  else if (type === 'skip') addNode('skip', 250, y, { skipFrom: null });
+  render();
+};
+clearGraphBtn.onclick = () => { resetGraph(); render(); buildTestInputs(); };
+function syncEpochInput() { epochInput.value = currentTask().epochs || 1500; }
+taskSel.onchange = () => { syncEpochInput(); buildTestInputs(); drawPlot(); render(); };
+
+// ============================== trainboard logging ==============================
+// Same shared-log convention as nn-ide/snake-lstm/snake-qlearning: append to
+// trainboard's own data dir (not this app's — see CLAUDE.md's "shared log"
+// note) so TrainBoard picks up model-builder runs alongside the others.
+const LOG_PATH = '/home/user1/.local/share/trainboard/log.jsonl';
+const LOG_DIR = '/home/user1/.local/share/trainboard';
+let logBuffer = [];
+let flushing = false;
+
+async function flushLog(force) {
+  if (!logBuffer.length) return;
+  if (flushing && !force) return;
+  flushing = true;
+  const batch = logBuffer.splice(0, logBuffer.length);
+  try {
+    await AppSDK.mkdir(LOG_DIR).catch(() => {});
+    let existing = '';
+    try { existing = await AppSDK.readText(LOG_PATH); } catch (e) { existing = ''; }
+    const sep = existing && !existing.endsWith('\n') ? '\n' : '';
+    const lines = batch.map(r => JSON.stringify(r)).join('\n');
+    await AppSDK.writeText(LOG_PATH, existing + sep + lines + '\n');
+  } catch (err) {
+    console.error('trainboard log write failed', err);
+  } finally {
+    flushing = false;
+  }
+}
+
+function logMetric(run, step, metric, value) {
+  logBuffer.push({ run, step, metric, value });
+}
+
+// ============================== training ==============================
+let net = null;
+let trainData = [];
+let lossHistory = [];
+let lossTypeForTraining = 'mse';
+let currentRun = null;
+let training = false;
+let lastTestPoint = null;
+let pendingImageSample = null;
+
+function buildTestInputs() {
+  testInputsEl.innerHTML = '';
+  pendingImageSample = null;
+  const task = currentTask();
+  if (task.isImage) {
+    const btn = document.createElement('button');
+    btn.textContent = 'Random Test Sample';
+    btn.type = 'button';
+    btn.onclick = () => pickRandomSample();
+    testInputsEl.appendChild(btn);
+    const canvas = document.createElement('canvas');
+    canvas.id = 'sampleCanvas';
+    canvas.width = 220;
+    canvas.height = 220;
+    canvas.style.imageRendering = 'pixelated';
+    canvas.style.width = '100%';
+    canvas.style.maxWidth = '220px';
+    testInputsEl.appendChild(canvas);
+    return;
+  }
+  for (let i = 0; i < task.inputSize; i++) {
+    const inp = document.createElement('input');
+    inp.type = 'number';
+    inp.step = '0.1';
+    inp.value = '0';
+    testInputsEl.appendChild(inp);
+  }
+}
+
+function pickRandomSample() {
+  if (!trainData.length) return;
+  pendingImageSample = trainData[Math.floor(Math.random() * trainData.length)];
+  const canvas = document.getElementById('sampleCanvas');
+  if (!canvas) return;
+  const t = pendingImageSample.x;
+  const tmp = document.createElement('canvas');
+  tmp.width = t.W;
+  tmp.height = t.H;
+  const tctx = tmp.getContext('2d');
+  const img = tctx.createImageData(t.W, t.H);
+  for (let p = 0; p < t.W * t.H; p++) {
+    const v = Math.round(Math.max(0, Math.min(1, t.data[p])) * 255); // first depth slice
+    img.data[p * 4] = v; img.data[p * 4 + 1] = v; img.data[p * 4 + 2] = v; img.data[p * 4 + 3] = 255;
+  }
+  tctx.putImageData(img, 0, 0);
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(tmp, 0, 0, canvas.width, canvas.height);
+  predictBtn.disabled = !net;
+}
+
+function drawLossChart() {
+  const ctx = lossCanvas.getContext('2d');
+  const w = (lossCanvas.width = lossCanvas.clientWidth * devicePixelRatio);
+  const h = (lossCanvas.height = lossCanvas.clientHeight * devicePixelRatio);
+  ctx.fillStyle = '#16161a';
+  ctx.fillRect(0, 0, w, h);
+  if (lossHistory.length < 2) return;
+  const maxLoss = Math.max(...lossHistory, 0.001);
+  ctx.strokeStyle = '#3d7fff';
+  ctx.lineWidth = 2 * devicePixelRatio;
+  ctx.beginPath();
+  lossHistory.forEach((l, i) => {
+    const x = (i / (lossHistory.length - 1)) * w;
+    const y = h - (l / maxLoss) * (h - 6) - 3;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+}
+
+// For any task whose input isn't 2D (so the decision-surface heatmap has no
+// two axes to paint), show a confusion matrix instead once a model exists —
+// still a real evaluation of the trained model against its own training
+// data, just a form that works for >2 input features instead of needing a
+// plottable 2D surface. Regression tasks (house price) have no discrete
+// classes, so neither visualization applies there; a plain note explains why.
+function computeConfusionMatrix(task, compiled, data) {
+  const classNames = task.classNames || ['0', '1'];
+  const n = classNames.length;
+  const matrix = Array.from({ length: n }, () => new Array(n).fill(0));
+  for (const sample of data) {
+    const { output } = runForward(compiled, toInputTensor(task, sample.x));
+    const actual = sample.classIndex !== undefined ? sample.classIndex : (sample.y[0] > 0.5 ? 1 : 0);
+    const predicted = output.length > 1 ? output.indexOf(Math.max(...output)) : (output[0] > 0.5 ? 1 : 0);
+    if (actual >= 0 && actual < n) matrix[actual][predicted >= 0 && predicted < n ? predicted : 0]++;
+  }
+  return { classNames, matrix };
+}
+
+function renderConfusionMatrix(task, compiled, data) {
+  const { classNames, matrix } = computeConfusionMatrix(task, compiled, data);
+  const n = classNames.length;
+  let total = 0, correct = 0;
+  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) { total += matrix[i][j]; if (i === j) correct += matrix[i][j]; }
+  let html = '<table><tr><td class="hdr"></td>';
+  for (let j = 0; j < n; j++) html += `<td class="hdr">${classNames[j]}</td>`;
+  html += '</tr>';
+  for (let i = 0; i < n; i++) {
+    html += `<tr><td class="hdr">${classNames[i]}</td>`;
+    for (let j = 0; j < n; j++) {
+      const v = matrix[i][j];
+      const isDiag = i === j;
+      const bg = v === 0 ? 'transparent' : isDiag ? 'rgba(111,227,150,0.28)' : 'rgba(255,157,157,0.22)';
+      html += `<td style="background:${bg}">${v}</td>`;
+    }
+    html += '</tr>';
+  }
+  html += '</table>';
+  html += `<div style="font-size:10px;color:#888;margin-top:5px;">rows = actual, columns = predicted — ${correct}/${total} correct (${total ? ((correct / total) * 100).toFixed(1) : '0'}%)</div>`;
+  return html;
+}
+
+function drawPlot() {
+  const task = currentTask();
+  const confusionWrap = document.getElementById('confusionWrap');
+  const plotLegend = document.getElementById('plotLegend');
+  const plotTitle = document.getElementById('plotCardTitle');
+
+  if (task.plot2D) {
+    plotTitle.textContent = 'Decision surface';
+    plotCanvas.style.display = '';
+    plotLegend.style.display = '';
+    confusionWrap.style.display = 'none';
+    plotNoteEl.textContent = '';
+
+    const ctx = plotCanvas.getContext('2d');
+    const w = plotCanvas.width, h = plotCanvas.height;
+    ctx.fillStyle = '#16161a';
+    ctx.fillRect(0, 0, w, h);
+    const toPx = (x1, x2) => [((x1 + 1) / 2) * w, h - ((x2 + 1) / 2) * h];
+
+    if (net) {
+      const cell = 8;
+      for (let py = 0; py < h; py += cell) {
+        for (let px = 0; px < w; px += cell) {
+          const x1 = (px / w) * 2 - 1, x2 = ((h - py) / h) * 2 - 1;
+          const out = runForward(net, toInputTensor(task, [x1, x2])).output;
+          const o = out[0];
+          const c = o > 0.5 ? [255, 95, 126] : [61, 127, 255];
+          ctx.fillStyle = `rgba(${c[0]},${c[1]},${c[2]},${Math.abs(o - 0.5) * 0.5})`;
+          ctx.fillRect(px, py, cell, cell);
+        }
+      }
+    }
+    trainData.forEach(d => {
+      const [px, py] = toPx(d.x[0], d.x[1]);
+      ctx.fillStyle = d.y[0] > 0.5 ? '#ff5f7e' : '#3d7fff';
+      ctx.beginPath();
+      ctx.arc(px, py, 3, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    if (lastTestPoint) {
+      const [px, py] = toPx(lastTestPoint[0], lastTestPoint[1]);
+      ctx.fillStyle = '#ffd23d';
+      ctx.fillRect(px - 4, py - 4, 8, 8);
+    }
+    return;
+  }
+
+  plotCanvas.style.display = 'none';
+  plotLegend.style.display = 'none';
+  if (task.isRegression) {
+    plotTitle.textContent = 'Decision surface';
+    confusionWrap.style.display = 'none';
+    plotNoteEl.textContent = 'Not shown for regression tasks (no discrete classes to confuse).';
+  } else if (net && trainData.length) {
+    plotTitle.textContent = 'Confusion matrix';
+    confusionWrap.style.display = '';
+    plotNoteEl.textContent = '';
+    confusionWrap.innerHTML = renderConfusionMatrix(task, net, trainData);
+  } else {
+    plotTitle.textContent = 'Confusion matrix';
+    confusionWrap.style.display = 'none';
+    plotNoteEl.textContent = 'Train the model to see a confusion matrix (input isn’t 2D, so there’s no decision surface to draw instead).';
+  }
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function buildAndTrain() {
+  if (training) return;
+  let chain;
+  try {
+    chain = extractChain();
+  } catch (err) {
+    setStatus(err.message, true);
+    statBadge.textContent = 'invalid graph';
+    statBadge.className = 'badge err';
+    return;
+  }
+
+  const task = currentTask();
+  let compiled;
+  try {
+    compiled = compileChain(task, chain.input, chain.middle, task.outputActivation, chain.optimizer.optimizer);
+  } catch (err) {
+    setStatus(err.message, true);
+    statBadge.textContent = 'invalid graph';
+    statBadge.className = 'badge err';
+    return;
+  }
+
+  training = true;
+  buildBtn.disabled = true;
+  addLayerBtn.disabled = true;
+  clearGraphBtn.disabled = true;
+  predictBtn.disabled = true;
+  statBadge.textContent = 'training';
+  statBadge.className = 'badge';
+  setStatus('Loading dataset…');
+
+  net = compiled;
+  trainData = await task.gen();
+  setStatus('Training…');
+  lossHistory = [];
+  lossTypeForTraining = chain.loss.lossType;
+  currentRun = `model-builder-${Date.now()}`;
+  const lr = chain.optimizer.lr;
+  const epochs = Math.max(1, parseInt(epochInput.value, 10) || task.epochs || 1500);
+  statTotal.textContent = String(epochs);
+  const logEvery = Math.max(1, Math.floor(epochs / 60));
+
+  for (let epoch = 1; epoch <= epochs; epoch++) {
+    let epochLoss = 0;
+    for (const sample of trainData) epochLoss += trainStep(net, toInputTensor(task, sample.x), sample.y, lr, lossTypeForTraining);
+    epochLoss /= trainData.length;
+    if (epoch % logEvery === 0 || epoch === epochs) {
+      lossHistory.push(epochLoss);
+      logMetric(currentRun, epoch, 'loss', epochLoss);
+      statEpoch.textContent = String(epoch);
+      statLoss.textContent = epochLoss.toFixed(5);
+      drawLossChart();
+      drawPlot();
+      if (logBuffer.length >= 5 || epoch === epochs) await flushLog();
+    }
+    if (epoch % 10 === 0) await sleep(0);
+  }
+
+  await flushLog(true);
+  statBadge.textContent = 'done';
+  statBadge.className = 'badge ok';
+  setStatus(`Trained ${chain.middle.length} layer(s), ${chain.loss.lossType.toUpperCase()} loss, ${chain.optimizer.optimizer} optimizer.`);
+  training = false;
+  buildBtn.disabled = false;
+  addLayerBtn.disabled = false;
+  clearGraphBtn.disabled = false;
+  predictBtn.disabled = false;
+  if (task.isImage) pickRandomSample();
+}
+
+predictBtn.onclick = () => {
+  if (!net) return;
+  const task = currentTask();
+  let inputTensor, actualClass = null;
+  if (task.isImage) {
+    if (!pendingImageSample) pickRandomSample();
+    if (!pendingImageSample) return;
+    inputTensor = pendingImageSample.x;
+    actualClass = pendingImageSample.classIndex;
+  } else {
+    const inputs = Array.from(testInputsEl.querySelectorAll('input')).map(i => parseFloat(i.value) || 0);
+    lastTestPoint = inputs.length === 2 ? inputs : null;
+    inputTensor = toInputTensor(task, inputs);
+  }
+  const { output } = runForward(net, inputTensor);
+  if (task.isRegression) {
+    testResultEl.innerHTML = `Predicted (normalized): <b>${output[0].toFixed(4)}</b>`;
+  } else if (task.classNames) {
+    const maxIdx = output.indexOf(Math.max(...output));
+    const rows = task.classNames.map((name, i) => `${name}: ${(output[i] * 100).toFixed(1)}%`).join('<br/>');
+    testResultEl.innerHTML =
+      `Predicted: <b>${task.classNames[maxIdx]}</b>` +
+      (actualClass !== null ? ` (actual: ${task.classNames[actualClass]})` : '') +
+      `<br/><span style="font-size:11px;color:#999">${rows}</span>`;
+  } else {
+    const cls = output[0] > 0.5 ? 1 : 0;
+    testResultEl.innerHTML = `Output: <b>${output.map(v => v.toFixed(4)).join(', ')}</b> → class <b>${cls}</b>`;
+  }
+  drawPlot();
+};
+
+buildBtn.onclick = buildAndTrain;
+window.addEventListener('resize', drawLossChart);
+
+resetGraph();
+render();
+syncEpochInput();
+buildTestInputs();
+drawLossChart();
+drawPlot();
+</script>
+</body>
+</html>

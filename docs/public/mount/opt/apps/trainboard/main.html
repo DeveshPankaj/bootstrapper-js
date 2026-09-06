@@ -1,0 +1,260 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  body { margin: 0; font-family: -apple-system, sans-serif; font-size: 13px; color: #1d1d1f; background: #fafafa; }
+  .bar { display: flex; align-items: center; gap: 10px; padding: 8px 14px; background: #f5f5f7; border-bottom: 1px solid #d8d8dc; }
+  .bar label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #666; }
+  .charts { padding: 14px; display: flex; flex-direction: column; gap: 18px; }
+  .chart-card { background: #fff; border: 1px solid #e5e5e5; border-radius: 10px; padding: 10px 14px; }
+  .chart-card h3 { margin: 0 0 8px; font-size: 13px; }
+  .legend { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 6px; font-size: 11px; color: #666; }
+  .legend span.swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+  .empty { padding: 40px; text-align: center; color: #999; }
+  .bar button { border: none; background: #e4e4e8; border-radius: 6px; padding: 5px 10px; cursor: pointer; font-size: 11.5px; }
+  .bar button.danger { color: #c0392b; }
+  .bar .spacer { flex: 1; }
+  .runs { padding: 8px 14px; display: flex; flex-wrap: wrap; gap: 6px; background: #f5f5f7; border-bottom: 1px solid #d8d8dc; }
+  .runs .empty-runs { color: #999; font-size: 11.5px; }
+  .run-pill { display: flex; align-items: center; gap: 6px; background: #fff; border: 1px solid #e0e0e0; border-radius: 12px; padding: 3px 6px 3px 10px; font-size: 11px; }
+  .run-pill .swatch { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+  .run-pill button { border: none; background: none; color: #999; cursor: pointer; font-size: 13px; line-height: 1; padding: 2px; border-radius: 50%; }
+  .run-pill button:hover { background: #fdeaea; color: #c0392b; }
+</style>
+</head>
+<body>
+  <div class="bar">
+    <strong>TrainBoard</strong>
+    <label>Smoothing <input id="smoothing" type="range" min="0" max="99" value="60" /></label>
+    <div class="spacer"></div>
+    <button id="clearAll" class="danger">Clear All Logs</button>
+    <span id="status" style="color:#999;font-size:11px;"></span>
+  </div>
+  <div class="runs" id="runs"></div>
+  <div class="charts" id="charts"></div>
+
+<script>
+const LOG_PATH = '/home/user1/.local/share/trainboard/log.jsonl';
+const COLORS = ['#0a84ff', '#ff9f0a', '#30d158', '#bf5af2', '#ff453a', '#64d2ff', '#ffd60a'];
+const colorFor = (() => {
+  const assigned = new Map();
+  let i = 0;
+  return run => {
+    if (!assigned.has(run)) assigned.set(run, COLORS[i++ % COLORS.length]);
+    return assigned.get(run);
+  };
+})();
+
+function ema(values, alpha) {
+  let acc = null;
+  return values.map(v => {
+    acc = acc === null ? v : alpha * acc + (1 - alpha) * v;
+    return acc;
+  });
+}
+
+function buildPath(points, xScale, yScale) {
+  return points.map((p, i) => `${i === 0 ? 'M' : 'L'}${xScale(p.step).toFixed(1)},${yScale(p.value).toFixed(1)}`).join(' ');
+}
+
+function fmtValue(v) {
+  if (Number.isInteger(v)) return String(v);
+  return Number(v.toFixed(4)).toString();
+}
+
+function renderChart(metric, seriesByRun) {
+  const width = 760, height = 220, pad = 30;
+  const allPoints = Object.values(seriesByRun).flat();
+  const minStep = Math.min(...allPoints.map(p => p.step));
+  const maxStep = Math.max(...allPoints.map(p => p.step));
+  const minVal = Math.min(...allPoints.map(p => p.value));
+  const maxVal = Math.max(...allPoints.map(p => p.value));
+  const xScale = s => pad + ((s - minStep) / (maxStep - minStep || 1)) * (width - 2 * pad);
+  const yScale = v => height - pad - ((v - minVal) / (maxVal - minVal || 1)) * (height - 2 * pad);
+  const alpha = Number(document.getElementById('smoothing').value) / 100;
+
+  const card = document.createElement('div');
+  card.className = 'chart-card';
+  const title = document.createElement('h3');
+  title.textContent = metric;
+  card.appendChild(title);
+
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('width', width);
+  svg.setAttribute('height', height);
+  svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+
+  const axis = document.createElementNS(svg.namespaceURI, 'line');
+  axis.setAttribute('x1', pad); axis.setAttribute('y1', height - pad);
+  axis.setAttribute('x2', width - pad); axis.setAttribute('y2', height - pad);
+  axis.setAttribute('stroke', '#ddd');
+  svg.appendChild(axis);
+
+  const legend = document.createElement('div');
+  legend.className = 'legend';
+
+  for (const [run, points] of Object.entries(seriesByRun)) {
+    const sorted = [...points].sort((a, b) => a.step - b.step);
+    const color = colorFor(run);
+
+    const rawPath = document.createElementNS(svg.namespaceURI, 'path');
+    rawPath.setAttribute('d', buildPath(sorted, xScale, yScale));
+    rawPath.setAttribute('fill', 'none');
+    rawPath.setAttribute('stroke', color);
+    rawPath.setAttribute('stroke-opacity', '0.25');
+    rawPath.setAttribute('stroke-width', '1.5');
+    svg.appendChild(rawPath);
+
+    if (alpha > 0) {
+      const smoothed = ema(sorted.map(p => p.value), alpha);
+      const smoothPath = document.createElementNS(svg.namespaceURI, 'path');
+      smoothPath.setAttribute('d', buildPath(sorted.map((p, i) => ({ step: p.step, value: smoothed[i] })), xScale, yScale));
+      smoothPath.setAttribute('fill', 'none');
+      smoothPath.setAttribute('stroke', color);
+      smoothPath.setAttribute('stroke-width', '2');
+      svg.appendChild(smoothPath);
+    }
+
+    // one small marker per raw data point (always the actual logged value,
+    // regardless of the smoothing setting), each with a native <title> so
+    // hovering shows "run — step N: value" without any custom tooltip
+    // positioning logic to get wrong
+    for (const p of sorted) {
+      const cx = xScale(p.step), cy = yScale(p.value);
+      const dot = document.createElementNS(svg.namespaceURI, 'circle');
+      dot.setAttribute('cx', cx.toFixed(1));
+      dot.setAttribute('cy', cy.toFixed(1));
+      dot.setAttribute('r', '2.5');
+      dot.setAttribute('fill', color);
+      dot.setAttribute('stroke', '#fff');
+      dot.setAttribute('stroke-width', '1');
+      svg.appendChild(dot);
+
+      // a larger invisible hit target layered on top, so the hover doesn't
+      // have to be pixel-precise on the tiny visible dot
+      const hit = document.createElementNS(svg.namespaceURI, 'circle');
+      hit.setAttribute('cx', cx.toFixed(1));
+      hit.setAttribute('cy', cy.toFixed(1));
+      hit.setAttribute('r', '7');
+      hit.setAttribute('fill', 'transparent');
+      // fill="transparent" isn't reliably treated as "painted" under SVG's
+      // default pointer-events:visiblePainted, so an invisible hit target
+      // needs this explicitly or it silently never receives hover at all —
+      // confirmed this was why the <title> tooltip wasn't firing.
+      hit.setAttribute('pointer-events', 'all');
+      const title = document.createElementNS(svg.namespaceURI, 'title');
+      title.textContent = `${run} — step ${p.step}: ${fmtValue(p.value)}`;
+      hit.appendChild(title);
+      svg.appendChild(hit);
+    }
+
+    const item = document.createElement('span');
+    item.innerHTML = `<span class="swatch" style="background:${color}"></span>${run}`;
+    legend.appendChild(item);
+  }
+
+  card.appendChild(svg);
+  card.appendChild(legend);
+  return card;
+}
+
+async function readRows() {
+  const text = await AppSDK.readText(LOG_PATH);
+  return text.split('\n').filter(Boolean).map(line => {
+    try { return JSON.parse(line); } catch (_) { return null; }
+  }).filter(Boolean);
+}
+
+async function writeRows(rows) {
+  if (rows.length === 0) {
+    // No point keeping an empty log file around — matches "Clear All"'s
+    // own end state, so a run-by-run deletion down to zero rows and a
+    // one-shot Clear All leave the exact same thing behind.
+    await AppSDK.remove(LOG_PATH).catch(() => {});
+    return;
+  }
+  await AppSDK.writeText(LOG_PATH, rows.map(r => JSON.stringify(r)).join('\n') + '\n');
+}
+
+async function deleteRun(runId) {
+  if (!confirm(`Delete all logged data for run "${runId}"? This cannot be undone.`)) return;
+  try {
+    const rows = await readRows();
+    await writeRows(rows.filter(r => r.run !== runId));
+    refresh();
+  } catch (err) {
+    document.getElementById('status').textContent = 'Delete failed: ' + ((err && err.message) || err);
+  }
+}
+
+async function clearAllLogs() {
+  if (!confirm('Delete ALL logged training data? This cannot be undone.')) return;
+  try {
+    await AppSDK.remove(LOG_PATH);
+  } catch (err) {
+    // remove() throwing because the file is already gone is fine — the
+    // end state (no log) is exactly what "clear all" wants either way.
+  }
+  refresh();
+}
+
+function renderRuns(rows) {
+  const runsEl = document.getElementById('runs');
+  runsEl.innerHTML = '';
+  const seen = new Set();
+  const runIds = rows.map(r => r.run).filter(id => (seen.has(id) ? false : seen.add(id)));
+  if (runIds.length === 0) {
+    runsEl.innerHTML = '<span class="empty-runs">No runs logged yet.</span>';
+    return;
+  }
+  for (const runId of runIds) {
+    const pill = document.createElement('span');
+    pill.className = 'run-pill';
+    pill.innerHTML = `<span class="swatch" style="background:${colorFor(runId)}"></span>${runId}`;
+    const del = document.createElement('button');
+    del.textContent = '✕';
+    del.title = `Delete "${runId}"`;
+    del.onclick = () => deleteRun(runId);
+    pill.appendChild(del);
+    runsEl.appendChild(pill);
+  }
+}
+
+async function refresh() {
+  const status = document.getElementById('status');
+  const container = document.getElementById('charts');
+  try {
+    const rows = await readRows();
+    renderRuns(rows);
+
+    if (rows.length === 0) {
+      container.innerHTML = '<div class="empty">No metrics logged yet. Run nn-ide, Snake AI (LSTM), or Snake AI (Q-Learning) to generate data.</div>';
+      status.textContent = '';
+      return;
+    }
+
+    const byMetric = {};
+    for (const row of rows) {
+      byMetric[row.metric] ??= {};
+      (byMetric[row.metric][row.run] ??= []).push({ step: row.step, value: row.value });
+    }
+
+    container.innerHTML = '';
+    Object.entries(byMetric).forEach(([metric, seriesByRun]) => container.appendChild(renderChart(metric, seriesByRun)));
+    status.textContent = `${rows.length} points · updated ${new Date().toLocaleTimeString()}`;
+  } catch (err) {
+    renderRuns([]);
+    container.innerHTML = '<div class="empty">No metrics logged yet. Run nn-ide, Snake AI (LSTM), or Snake AI (Q-Learning) to generate data.</div>';
+    status.textContent = '';
+  }
+}
+
+document.getElementById('smoothing').oninput = refresh;
+document.getElementById('clearAll').onclick = clearAllLogs;
+AppSDK.setTitle('TrainBoard');
+refresh();
+setInterval(refresh, 3000);
+</script>
+</body>
+</html>
