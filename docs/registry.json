@@ -277,11 +277,15 @@
       "commandName": "ui.nn-ide",
       "files": [
         {
+          "dest": "main.js",
+          "src": "/public/mount/opt/apps/nn-ide/main.js"
+        },
+        {
           "dest": "main.html",
           "src": "/public/mount/opt/apps/nn-ide/main.html"
         }
       ],
-      "main": "main.html"
+      "main": "main.js"
     },
     {
       "id": "model-builder",
@@ -291,7 +295,12 @@
       "icon": "schema",
       "category": "AI",
       "author": "bootstrapper-js",
+      "commandName": "ui.model-builder",
       "files": [
+        {
+          "dest": "main.js",
+          "src": "/public/mount/opt/apps/model-builder/main.js"
+        },
         {
           "dest": "main.html",
           "src": "/public/mount/opt/apps/model-builder/main.html"
@@ -305,7 +314,7 @@
           "src": "/public/mount/opt/apps/model-builder/fashion-data.json"
         }
       ],
-      "main": "main.html"
+      "main": "main.js"
     },
     {
       "id": "markdown-reader",
@@ -744,9 +753,10 @@
       "author": "bootstrapper-js",
       "commandName": "ui.trainboard",
       "files": [
+        { "dest": "main.js",   "src": "/public/mount/opt/apps/trainboard/main.js" },
         { "dest": "main.html", "src": "/public/mount/opt/apps/trainboard/main.html" }
       ],
-      "main": "main.html"
+      "main": "main.js"
     },
     {
       "id": "python-demo",

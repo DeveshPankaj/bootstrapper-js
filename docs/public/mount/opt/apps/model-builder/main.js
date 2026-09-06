@@ -73,25 +73,25 @@ function attachFsBridge(iframe, props) {
   if (iframe.parentElement) obs.observe(iframe.parentElement, { childList: true });
 }
 
-platform.host.registerCommand('ui.nn-ide', (body, props) => {
+platform.host.registerCommand('ui.model-builder', (body, props) => {
   if (!body) {
     platform.host.execCommand(
-      "service('001-core.layout', 'open-window') (command('ui.nn-ide'))",
+      "service('001-core.layout', 'open-window') (command('ui.model-builder'))",
       platform
     );
     return;
   }
 
   const iframe = document.createElement('iframe');
-  iframe.src = '/(sw)/opt/apps/nn-ide/main.html';
+  iframe.src = '/(sw)/opt/apps/model-builder/main.html';
   iframe.style.cssText = 'width:100%;height:100%;border:none;display:block;background:#1a1a1e;';
   body.appendChild(iframe);
 
   if (props && props.setWindowView) props.setWindowView(true);
   attachFsBridge(iframe, props);
 }, {
-  title: 'NN IDE',
-  icon: 'hub',
-  description: 'Neural network IDE for designing and training models visually in the browser.',
+  title: 'Model Builder',
+  icon: 'schema',
+  description: 'Visual neural network model builder — assemble layers, pick datasets, train in-browser.',
   callable: true,
 });

@@ -557,8 +557,18 @@
     "force_reload": true
   },
   {
+    "path": "/opt/apps/nn-ide/main.js",
+    "file": "/opt/apps/nn-ide/main.js",
+    "force_reload": true
+  },
+  {
     "path": "/opt/apps/nn-ide/main.html",
     "file": "/opt/apps/nn-ide/main.html",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/model-builder/main.js",
+    "file": "/opt/apps/model-builder/main.js",
     "force_reload": true
   },
   {
@@ -779,6 +789,11 @@
   {
     "path": "/opt/apps/colleps/colleps.html",
     "file": "/opt/apps/colleps/colleps.html",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/trainboard/main.js",
+    "file": "/opt/apps/trainboard/main.js",
     "force_reload": true
   },
   {

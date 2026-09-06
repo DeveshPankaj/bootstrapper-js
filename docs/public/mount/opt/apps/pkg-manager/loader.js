@@ -27,6 +27,8 @@ const CORE_APPS = [
   { id: 'audio-player',   appDir: '/opt/apps/audio-player',   mainFile: '/opt/apps/audio-player/main.js' },
   { id: 'colleps',        appDir: '/opt/apps/colleps',        mainFile: '/opt/apps/colleps/main.js' },
   { id: 'trainboard',     appDir: '/opt/apps/trainboard',     mainFile: '/opt/apps/trainboard/main.js' },
+  { id: 'nn-ide',         appDir: '/opt/apps/nn-ide',         mainFile: '/opt/apps/nn-ide/main.js' },
+  { id: 'model-builder',  appDir: '/opt/apps/model-builder',  mainFile: '/opt/apps/model-builder/main.js' },
   { id: 'app-launcher',   appDir: '/opt/apps/app-launcher',   mainFile: '/opt/apps/app-launcher/main.js' },
   // python-demo is not a core app — install via App Manager
 ];
