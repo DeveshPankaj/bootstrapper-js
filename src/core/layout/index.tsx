@@ -1016,12 +1016,12 @@ export const render = (container: HTMLElement) => {
             doc.body.classList.add('vfs-dock-active')
 
             // Reserve bottom space so windows don't go behind the dock.
-            // Reads occupyBottom from /etc/managers.json; defaults to true.
+            // Reads occupyBottom from /etc/managers.json; defaults to false.
             doc.documentElement.style.setProperty('--vfs-dock-height', `${h}px`)
-            let occupyBottom = true
+            let occupyBottom = false
             try {
                 const cfg = JSON.parse(fs.readFileSync('/etc/managers.json', 'utf-8') as string)
-                if (cfg.occupyBottom === false) occupyBottom = false
+                if (cfg.occupyBottom === true) occupyBottom = true
             } catch (_) {}
             if (occupyBottom) doc.body.classList.add('vfs-dock-occupy')
         } catch (err) {

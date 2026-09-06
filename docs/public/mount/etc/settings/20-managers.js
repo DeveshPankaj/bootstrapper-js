@@ -308,7 +308,7 @@ const ManagersSettings = () => {
             ),
             React.createElement('input', {
                 type: 'checkbox',
-                checked: cfg.occupyBottom !== false,
+                checked: cfg.occupyBottom === true,
                 onChange: e => {
                     update({ occupyBottom: e.target.checked })
                     platform.host.callCommand('set-dock-occupy', e.target.checked)
