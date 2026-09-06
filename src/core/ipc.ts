@@ -25,7 +25,30 @@ export type WmBridge = {
   getLaunchItems: () => { name: string; label: string; icon: string; cmd: string }[];
   launch?: (name: string) => void;
 };
-declare global { interface Window { __wosWmBridge?: WmBridge } }
+
+// Dock settings schema registered by the active dock iframe.
+// Schema entries: { key, label, type, value, options?, min?, max?, step? }
+export type DockSettingEntry = {
+  key: string;
+  label: string;
+  type: 'toggle' | 'color' | 'range' | 'select' | 'app-list';
+  value: unknown;
+  options?: string[];
+  min?: number;
+  max?: number;
+  step?: number;
+};
+export type DockBridge = {
+  schema: DockSettingEntry[];
+  dockId: string;
+  set: (key: string, value: unknown) => void;
+};
+declare global {
+  interface Window {
+    __wosWmBridge?: WmBridge;
+    __wosDockBridge?: DockBridge;
+  }
+}
 
 export function registerWindowIpcHandlers(
   getWindows: WmBridge['getWindows'],
@@ -64,6 +87,34 @@ export function initIpc(fs: any) {
   registerIpcHandler('wm.toggleWindow', (d: any) => { window.__wosWmBridge?.toggleWindow(Number(d.pid)); return true; });
   registerIpcHandler('wm.getLaunchItems', () => window.__wosWmBridge?.getLaunchItems() ?? []);
   registerIpcHandler('wm.launch', (d: any) => { window.__wosWmBridge?.launch?.(String(d.name)); return true; });
+
+  // Dock settings — active dock iframe registers its schema; settings UI reads and mutates it.
+  registerIpcHandler('dock.registerSettings', (d: any) => {
+    if (window.__wosDockBridge) {
+      window.__wosDockBridge.schema = d.schema ?? [];
+      window.__wosDockBridge.dockId = d.dockId ?? '';
+    } else {
+      window.__wosDockBridge = { schema: d.schema ?? [], dockId: d.dockId ?? '', set: () => {} };
+    }
+    // Notify settings UI that dock schema changed.
+    broadcastIpcEvent('dock.schemaChanged', { schema: window.__wosDockBridge.schema, dockId: window.__wosDockBridge.dockId });
+    return true;
+  });
+  registerIpcHandler('dock.getSchema', () => window.__wosDockBridge
+    ? { schema: window.__wosDockBridge.schema, dockId: window.__wosDockBridge.dockId }
+    : { schema: [], dockId: '' }
+  );
+  registerIpcHandler('dock.setSetting', (d: any, source) => {
+    if (!window.__wosDockBridge) return false;
+    const entry = window.__wosDockBridge.schema.find(e => e.key === d.key);
+    if (entry) entry.value = d.value;
+    // Forward the change to the dock iframe.
+    broadcastIpcEvent('dock.settingChanged', { key: d.key, value: d.value });
+    return true;
+  });
+  registerIpcHandler('dock.getSettings', () =>
+    window.__wosDockBridge ? window.__wosDockBridge.schema.reduce((acc: any, e) => { acc[e.key] = e.value; return acc; }, {}) : {}
+  );
 
   registerIpcHandler('fs.read', (d: any) => Array.from(fs.readFileSync(d.path) as Buffer));
   registerIpcHandler('fs.readText', (d: any) => fs.readFileSync(d.path, 'utf8') as string);

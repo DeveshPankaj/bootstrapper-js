@@ -28660,6 +28660,34 @@ function initIpc(fs) {
     registerIpcHandler('wm.toggleWindow', (d) => { var _a; (_a = window.__wosWmBridge) === null || _a === void 0 ? void 0 : _a.toggleWindow(Number(d.pid)); return true; });
     registerIpcHandler('wm.getLaunchItems', () => { var _a, _b; return (_b = (_a = window.__wosWmBridge) === null || _a === void 0 ? void 0 : _a.getLaunchItems()) !== null && _b !== void 0 ? _b : []; });
     registerIpcHandler('wm.launch', (d) => { var _a, _b; (_b = (_a = window.__wosWmBridge) === null || _a === void 0 ? void 0 : _a.launch) === null || _b === void 0 ? void 0 : _b.call(_a, String(d.name)); return true; });
+    // Dock settings — active dock iframe registers its schema; settings UI reads and mutates it.
+    registerIpcHandler('dock.registerSettings', (d) => {
+        var _a, _b, _c, _d;
+        if (window.__wosDockBridge) {
+            window.__wosDockBridge.schema = (_a = d.schema) !== null && _a !== void 0 ? _a : [];
+            window.__wosDockBridge.dockId = (_b = d.dockId) !== null && _b !== void 0 ? _b : '';
+        }
+        else {
+            window.__wosDockBridge = { schema: (_c = d.schema) !== null && _c !== void 0 ? _c : [], dockId: (_d = d.dockId) !== null && _d !== void 0 ? _d : '', set: () => { } };
+        }
+        // Notify settings UI that dock schema changed.
+        broadcastIpcEvent('dock.schemaChanged', { schema: window.__wosDockBridge.schema, dockId: window.__wosDockBridge.dockId });
+        return true;
+    });
+    registerIpcHandler('dock.getSchema', () => window.__wosDockBridge
+        ? { schema: window.__wosDockBridge.schema, dockId: window.__wosDockBridge.dockId }
+        : { schema: [], dockId: '' });
+    registerIpcHandler('dock.setSetting', (d, source) => {
+        if (!window.__wosDockBridge)
+            return false;
+        const entry = window.__wosDockBridge.schema.find(e => e.key === d.key);
+        if (entry)
+            entry.value = d.value;
+        // Forward the change to the dock iframe.
+        broadcastIpcEvent('dock.settingChanged', { key: d.key, value: d.value });
+        return true;
+    });
+    registerIpcHandler('dock.getSettings', () => window.__wosDockBridge ? window.__wosDockBridge.schema.reduce((acc, e) => { acc[e.key] = e.value; return acc; }, {}) : {});
     registerIpcHandler('fs.read', (d) => Array.from(fs.readFileSync(d.path)));
     registerIpcHandler('fs.readText', (d) => fs.readFileSync(d.path, 'utf8'));
     registerIpcHandler('fs.write', (d) => {
@@ -28721,7 +28749,7 @@ const Commands = ({ onCommandClick, vertical, align = 'start' }) => {
             }
         }
         catch (_) { }
-        return ['explorer', 'ui.vs-code', 'ui.notepad', 'webamp', 'ui.task-manager'];
+        return ['ui.app-drawer', 'explorer', 'ui.notepad', 'ui.terminal', 'ui.pkg-manager', 'ui.settings'];
     };
     react__WEBPACK_IMPORTED_MODULE_1___default().useEffect(() => {
         const defaultCommands = readPinnedCommands();
@@ -157018,7 +157046,7 @@ const writeWidgetPosition = (name, top, left) => {
 // Widgets hidden by default until the user enables them from Settings ->
 // Widgets, even though their script is loaded/registered at boot.
 // Only clock, memory, shortcuts are shown by default.
-const DEFAULT_HIDDEN_WIDGETS = ['toolbar', 'public-ip', 'sticky-notes', 'rss'];
+const DEFAULT_HIDDEN_WIDGETS = ['toolbar', 'public-ip', 'sticky-notes', 'rss', 'shortcuts'];
 const readEnabledWidgets = () => {
     const cfg = readJsonFileLocal(_shared_constants__WEBPACK_IMPORTED_MODULE_2__.WIDGETS_CONFIG_PATH);
     if (cfg && Array.isArray(cfg.enabled))
@@ -157313,7 +157341,7 @@ const render = (container) => {
     const DEFAULT_ICON = {
         'explorer': 'folder', 'ui.file-explorer': 'folder',
         'ui.vs-code': 'data_object', 'ui.notepad': 'edit_note',
-        'ui.task-manager': 'monitoring', 'webamp': 'music_note',
+        'ui.task-manager': 'monitoring',
         'ui.terminal': 'terminal', 'ui.settings': 'settings',
         'ui.pkg-manager': 'package_2', 'ui.app-drawer': 'apps',
     };
@@ -157323,7 +157351,7 @@ const render = (container) => {
             const fs = platform.host.getFS();
             const pinned = fs.existsSync('/etc/taskbar.json')
                 ? (_a = JSON.parse(fs.readFileSync('/etc/taskbar.json', 'utf-8')).pinned) !== null && _a !== void 0 ? _a : []
-                : ['explorer', 'ui.vs-code', 'ui.notepad', 'ui.terminal', 'webamp', 'ui.task-manager', 'ui.settings'];
+                : ['ui.app-drawer', 'explorer', 'ui.notepad', 'ui.terminal', 'ui.pkg-manager', 'ui.settings'];
             return pinned.map(name => {
                 var _a, _b, _c, _d;
                 const cmd = platform.host.getCommand(name);
@@ -157362,6 +157390,39 @@ const render = (container) => {
         })), platform.window.document);
     });
     platform.register('open-window', onCommandClick);
+    // Dock settings commands — read/write dock schema and persist to /etc/dock/{id}.json.
+    const getDockSchema = () => {
+        const bridge = platform.window.__wosDockBridge;
+        return bridge ? { schema: bridge.schema, dockId: bridge.dockId } : { schema: [], dockId: '' };
+    };
+    const setDockSetting = (data) => {
+        const bridge = platform.window.__wosDockBridge;
+        if (!bridge)
+            return false;
+        const entry = bridge.schema.find((e) => e.key === data.key);
+        if (entry)
+            entry.value = data.value;
+        try {
+            const fs = platform.host.getFS();
+            const settingsPath = `/etc/dock/${bridge.dockId}.json`;
+            let current = {};
+            try {
+                current = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+            }
+            catch (_) { }
+            current[data.key] = data.value;
+            if (!fs.existsSync('/etc/dock'))
+                fs.mkdirSync('/etc/dock', { recursive: true });
+            fs.writeFileSync(settingsPath, JSON.stringify(current, null, 2));
+        }
+        catch (_) { }
+        (0,_ipc__WEBPACK_IMPORTED_MODULE_8__.broadcastIpcEvent)('dock.settingChanged', { key: data.key, value: data.value }, platform.window.document);
+        return true;
+    };
+    platform.register('get-dock-schema', getDockSchema);
+    platform.host.registerCommand('get-dock-schema', getDockSchema);
+    platform.register('set-dock-setting', setDockSetting);
+    platform.host.registerCommand('set-dock-setting', setDockSetting);
     // Open a VFS dock HTML as a fixed-position frameless iframe in the layout.
     // Sandboxed (no same-origin), IPC SDK inlined so it can communicate.
     const openVfsDock = (id) => {

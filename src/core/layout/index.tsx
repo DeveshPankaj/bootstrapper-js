@@ -510,7 +510,7 @@ const writeWidgetPosition = (name: string, top: number, left: number) => {
 // Widgets hidden by default until the user enables them from Settings ->
 // Widgets, even though their script is loaded/registered at boot.
 // Only clock, memory, shortcuts are shown by default.
-const DEFAULT_HIDDEN_WIDGETS = ['toolbar', 'public-ip', 'sticky-notes', 'rss']
+const DEFAULT_HIDDEN_WIDGETS = ['toolbar', 'public-ip', 'sticky-notes', 'rss', 'shortcuts']
 
 const readEnabledWidgets = (): string[] | null => {
     const cfg = readJsonFileLocal(WIDGETS_CONFIG_PATH)
@@ -893,7 +893,7 @@ export const render = (container: HTMLElement) => {
     const DEFAULT_ICON: Record<string, string> = {
       'explorer': 'folder', 'ui.file-explorer': 'folder',
       'ui.vs-code': 'data_object', 'ui.notepad': 'edit_note',
-      'ui.task-manager': 'monitoring', 'webamp': 'music_note',
+      'ui.task-manager': 'monitoring',
       'ui.terminal': 'terminal', 'ui.settings': 'settings',
       'ui.pkg-manager': 'package_2', 'ui.app-drawer': 'apps',
     }
@@ -902,7 +902,7 @@ export const render = (container: HTMLElement) => {
         const fs = platform.host.getFS()
         const pinned: string[] = fs.existsSync('/etc/taskbar.json')
           ? JSON.parse(fs.readFileSync('/etc/taskbar.json', 'utf-8') as string).pinned ?? []
-          : ['explorer', 'ui.vs-code', 'ui.notepad', 'ui.terminal', 'webamp', 'ui.task-manager', 'ui.settings']
+          : ['ui.app-drawer', 'explorer', 'ui.notepad', 'ui.terminal', 'ui.pkg-manager', 'ui.settings']
         return pinned.map(name => {
           const cmd = platform.host.getCommand(name)
           const meta = (cmd as any)?.meta ?? {}
@@ -943,6 +943,33 @@ export const render = (container: HTMLElement) => {
     });
 
     platform.register('open-window', onCommandClick)
+
+    // Dock settings commands — read/write dock schema and persist to /etc/dock/{id}.json.
+    const getDockSchema = () => {
+        const bridge = platform.window.__wosDockBridge
+        return bridge ? { schema: bridge.schema, dockId: bridge.dockId } : { schema: [], dockId: '' }
+    }
+    const setDockSetting = (data: { key: string; value: unknown }) => {
+        const bridge = platform.window.__wosDockBridge
+        if (!bridge) return false
+        const entry = bridge.schema.find((e: any) => e.key === data.key)
+        if (entry) entry.value = data.value
+        try {
+            const fs = platform.host.getFS()
+            const settingsPath = `/etc/dock/${bridge.dockId}.json`
+            let current: Record<string, unknown> = {}
+            try { current = JSON.parse(fs.readFileSync(settingsPath, 'utf-8') as string) } catch (_) {}
+            current[data.key] = data.value
+            if (!fs.existsSync('/etc/dock')) fs.mkdirSync('/etc/dock', { recursive: true })
+            fs.writeFileSync(settingsPath, JSON.stringify(current, null, 2))
+        } catch (_) {}
+        broadcastIpcEvent('dock.settingChanged', { key: data.key, value: data.value }, platform.window.document)
+        return true
+    }
+    platform.register('get-dock-schema', getDockSchema)
+    platform.host.registerCommand('get-dock-schema', getDockSchema)
+    platform.register('set-dock-setting', setDockSetting)
+    platform.host.registerCommand('set-dock-setting', setDockSetting)
 
     // Open a VFS dock HTML as a fixed-position frameless iframe in the layout.
     // Sandboxed (no same-origin), IPC SDK inlined so it can communicate.

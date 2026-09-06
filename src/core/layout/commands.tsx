@@ -20,7 +20,7 @@ export const Commands = ({ onCommandClick, vertical, align = 'start' }: { onComm
                 if (Array.isArray(cfg.pinned) && cfg.pinned.length) return cfg.pinned
             }
         } catch (_) {}
-        return ['explorer', 'ui.vs-code', 'ui.notepad', 'webamp', 'ui.task-manager']
+        return ['ui.app-drawer', 'explorer', 'ui.notepad', 'ui.terminal', 'ui.pkg-manager', 'ui.settings']
     }
 
     React.useEffect(() => {

@@ -592,16 +592,6 @@
     "force_reload": true
   },
   {
-    "path": "/opt/apps/wamp-client/main.js",
-    "file": "/opt/apps/wamp-client/main.js",
-    "force_reload": true
-  },
-  {
-    "path": "/opt/apps/wamp-client/WAMP.html",
-    "file": "/opt/apps/wamp-client/WAMP.html",
-    "force_reload": true
-  },
-  {
     "path": "/opt/apps/webrtc/main.html",
     "file": "/opt/apps/webrtc/main.html",
     "force_reload": true

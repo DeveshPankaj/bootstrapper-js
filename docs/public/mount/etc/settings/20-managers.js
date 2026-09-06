@@ -1,5 +1,4 @@
 // Settings > Managers — window manager style, dock manager, desktop environment.
-// Merged from 04b-desktop-env.js; that section is now empty.
 const React = platform.getService('React')
 const ReactDOM = platform.getService('ReactDOM')
 const { utils } = platform.getService('settings')
@@ -21,13 +20,15 @@ const WM_OPTIONS = [
 
 const DOCK_OPTIONS = [
     { id: 'none',    label: 'None (built-in)', icon: 'indeterminate_check_box', desc: 'Use the compiled taskbar — always visible, not sandboxed.' },
-    { id: 'default', label: 'Default',         icon: 'dock_to_bottom',          desc: 'Dark blur-glass bar — sandboxed, IPC-only.' },
-    { id: 'macos',   label: 'macOS Style',     icon: 'dock',                    desc: 'Frosted floating pill with icon magnification.' },
+    { id: 'default', label: 'Default',         icon: 'dock_to_bottom',          desc: 'Dark floating pill — sandboxed, IPC-only.' },
+    { id: 'macos',   label: 'macOS Style',     icon: 'dock',                    desc: 'Frosted full-width bar with icon magnification and labels.' },
+    { id: 'windows', label: 'Windows 11',      icon: 'desktop_windows',         desc: 'Dark centered icon bar — Windows 11 taskbar look.' },
+    { id: 'gnome',   label: 'GNOME',           icon: 'apps',                    desc: 'Dark full-width bar, left-aligned, active-app label.' },
 ]
 
 const readManagers = () => {
     try { return JSON.parse(fs.readFileSync(MANAGERS_PATH, 'utf-8')) }
-    catch (_) { return { windowManager: 'default', dockManager: 'none' } }
+    catch (_) { return { windowManager: 'default', dockManager: 'default' } }
 }
 
 const writeManagers = (cfg) => {
@@ -36,7 +37,6 @@ const writeManagers = (cfg) => {
 }
 
 const openDock = (id) => {
-    // Delegates to the compiled open-vfs-dock command which injects a fixed iframe.
     platform.host.callCommand('open-vfs-dock', id)
 }
 
@@ -74,86 +74,79 @@ const OptionList = ({ options, activeId, onSelect }) =>
         )
     )
 
-// ─── Desktop Environment picker ───────────────────────────────────────────────
+// ─── Dock settings panel ───────────────────────────────────────────────────────
 
-const DE_PREVIEWS = {
-    macos:   { icon: 'laptop_mac',      gradient: 'linear-gradient(135deg,#667eea,#764ba2)', taskbar: 'bottom-center', buttons: 'left-circles' },
-    windows: { icon: 'desktop_windows', gradient: 'linear-gradient(135deg,#0078d4,#005a9e)', taskbar: 'bottom-full',   buttons: 'right-icons'  },
-    linux:   { icon: 'terminal',        gradient: 'linear-gradient(135deg,#3584e4,#1c71d8)', taskbar: 'top-full',      buttons: 'right-circles' },
-}
+const DockSettingsPanel = () => {
+    const [schema, setSchema] = React.useState([])
+    const [dockId, setDockId] = React.useState('')
 
-const PreviewCard = ({ de, isActive, onClick }) => {
-    const p = DE_PREVIEWS[de.id] || DE_PREVIEWS.macos
-    const circle = (c) => React.createElement('div', { style: { width: 5, height: 5, borderRadius: '50%', background: c } })
-    const square = () => React.createElement('div', { style: { width: 6, height: 6, borderRadius: de.id === 'linux' ? '50%' : '1px', background: 'rgba(255,255,255,0.3)' } })
+    const refreshSchema = () => {
+        try {
+            const result = platform.host.callCommand('get-dock-schema')
+            if (result && result.schema && result.schema.length) {
+                setSchema(result.schema)
+                setDockId(result.dockId)
+            }
+        } catch (_) {}
+    }
 
-    return React.createElement('div', {
-        onClick,
-        style: {
-            cursor: 'pointer', borderRadius: 12,
-            border: isActive ? '2px solid #0a84ff' : '2px solid rgba(255,255,255,0.08)',
-            overflow: 'hidden', background: '#1a1a1a', transition: 'border-color .2s',
-        },
-    },
-        React.createElement('div', {
-            style: { height: 120, background: p.gradient, position: 'relative', display: 'flex', flexDirection: 'column', padding: 8 },
-        },
-            p.taskbar === 'top-full' && React.createElement('div', {
-                style: { height: 14, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', padding: '0 6px', gap: 3, fontSize: 7, color: 'rgba(255,255,255,0.7)' },
-            }, 'Activities', React.createElement('span', { style: { flex: 1 } })),
-            React.createElement('div', { style: { flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: 8 } },
-                React.createElement('div', {
-                    style: { width: '70%', height: '80%', background: 'rgba(255,255,255,0.15)', borderRadius: de.id === 'linux' ? 8 : de.id === 'windows' ? 4 : 6, overflow: 'hidden', display: 'flex', flexDirection: 'column' },
-                },
-                    React.createElement('div', {
-                        style: { height: 14, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', padding: '0 4px', justifyContent: p.buttons === 'left-circles' ? 'flex-start' : 'flex-end', gap: 2 },
-                    }, p.buttons === 'left-circles' ? [circle('#ff5f57'), circle('#febc2e'), circle('#28c840')] : [square(), square(), square()])
-                )
-            ),
-            (p.taskbar === 'bottom-center' || p.taskbar === 'bottom-full') && React.createElement('div', {
-                style: { height: 16, background: 'rgba(0,0,0,0.4)', borderRadius: p.taskbar === 'bottom-center' ? 8 : 0, margin: p.taskbar === 'bottom-center' ? '0 auto' : 0, width: p.taskbar === 'bottom-center' ? '50%' : '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '0 6px' },
-            }, [1,2,3,4].map(i => React.createElement('div', { key: i, style: { width: 8, height: 8, borderRadius: 2, background: 'rgba(255,255,255,0.4)' } }))),
-        ),
-        React.createElement('div', { style: { padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 10 } },
-            React.createElement('span', { className: 'material-symbols-outlined', style: { fontSize: 20, background: p.gradient, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' } }, p.icon),
-            React.createElement('div', {},
-                React.createElement('div', { style: { fontWeight: 600, fontSize: '0.85rem' } }, de.name),
-                React.createElement('div', { style: { fontSize: '0.72rem', opacity: 0.5, marginTop: 2 } }, de.description),
-            ),
-            isActive && React.createElement('span', { className: 'material-symbols-outlined', style: { marginLeft: 'auto', color: '#0a84ff', fontSize: 18 } }, 'check_circle'),
-        ),
-    )
-}
+    React.useEffect(() => {
+        refreshSchema()
+        // Re-read when dock changes its schema registration.
+        const tid = setInterval(refreshSchema, 2000)
+        return () => clearInterval(tid)
+    }, [])
 
-// ─── Layout picker ─────────────────────────────────────────────────────────────
+    if (!schema.length) {
+        return React.createElement('p', { className: 'hint', style: { margin: '6px 0' } },
+            'No active dock or dock has no configurable settings.'
+        )
+    }
 
-const LayoutSection = () => {
-    const readLayouts = () => { try { return JSON.parse(fs.readFileSync('/etc/wm/layouts.json', 'utf-8')).layouts ?? [] } catch (_) { return [] } }
-    const readCurrentLayout = () => { try { return JSON.parse(fs.readFileSync('/etc/wm/config.json', 'utf-8')).layout ?? 'default' } catch (_) { return 'default' } }
-    const [layouts] = React.useState(readLayouts)
-    const [currentLayout, setCurrentLayout] = React.useState(readCurrentLayout)
+    const setSetting = (key, value) => {
+        setSchema(prev => prev.map(e => e.key === key ? { ...e, value } : e))
+        platform.host.callCommand('set-dock-setting', { key, value })
+    }
 
-    const onSelectLayout = (id) => { setCurrentLayout(id); platform.host.callCommand('set-layout', id) }
-
-    return React.createElement(React.Fragment, null,
-        React.createElement('p', { className: 'muted-small', style: { margin: '16px 0 6px' } }, 'LAYOUT'),
-        React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 4 } },
-            layouts.map(layout =>
-                React.createElement('div', {
-                    key: layout.id,
-                    style: {
-                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        padding: '8px 12px', borderRadius: 6, cursor: 'pointer',
-                        background: layout.id === currentLayout ? 'color-mix(in srgb,#0a84ff 12%,transparent)' : 'rgba(128,128,128,0.08)',
-                        border: layout.id === currentLayout ? '1.5px solid #0a84ff' : '1.5px solid transparent',
-                    },
-                    onClick: () => onSelectLayout(layout.id),
-                },
-                    React.createElement('span', { style: { fontSize: 13 } }, layout.name),
-                    layout.id === currentLayout && React.createElement('span', { className: 'material-symbols-outlined', style: { fontSize: 16, color: '#0a84ff' } }, 'check_circle'),
-                )
-            ),
-        ),
+    return React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 4 } },
+        schema.map(entry =>
+            React.createElement('div', {
+                key: entry.key,
+                style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 12px', borderRadius: 6, background: 'rgba(128,128,128,0.05)' },
+            },
+                React.createElement('span', { style: { fontSize: 12, opacity: 0.8 } }, entry.label),
+                entry.type === 'color'
+                    ? React.createElement('input', {
+                        type: 'color',
+                        value: entry.value,
+                        onChange: e => setSetting(entry.key, e.target.value),
+                    })
+                    : entry.type === 'toggle'
+                    ? React.createElement('input', {
+                        type: 'checkbox',
+                        checked: !!entry.value,
+                        onChange: e => setSetting(entry.key, e.target.checked),
+                    })
+                    : entry.type === 'range'
+                    ? React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 6 } },
+                        React.createElement('input', {
+                            type: 'range',
+                            min: entry.min ?? 0, max: entry.max ?? 1, step: entry.step ?? 0.1,
+                            value: entry.value,
+                            onChange: e => setSetting(entry.key, Number(e.target.value)),
+                            style: { width: 100 },
+                        }),
+                        React.createElement('span', { style: { fontSize: 11, minWidth: 28, textAlign: 'right', opacity: 0.6 } }, entry.value),
+                    )
+                    : entry.type === 'select'
+                    ? React.createElement('select', {
+                        value: entry.value,
+                        onChange: e => setSetting(entry.key, e.target.value),
+                        style: { fontSize: 12 },
+                    }, (entry.options || []).map(o => React.createElement('option', { key: o, value: o }, o)))
+                    : null
+            )
+        )
     )
 }
 
@@ -260,10 +253,6 @@ const ManagersSettings = () => {
         writeManagers(next)
     }
 
-    // DE state
-    const envs = platform.host.callCommand('get-desktop-envs') || []
-    const [currentEnv, setCurrentEnv] = React.useState(() => platform.host.callCommand('get-current-desktop-env'))
-
     // WM appearance state
     const readWmSettings = () => {
         try {
@@ -272,12 +261,6 @@ const ManagersSettings = () => {
         } catch (_) { return DEFAULT_WM_SETTINGS }
     }
     const [wmSettings, setWmSettings] = React.useState(readWmSettings)
-
-    const onSelectDE = (envId) => {
-        setCurrentEnv(envId)
-        platform.host.callCommand('set-desktop-env', envId)
-        setWmSettings(readWmSettings())
-    }
 
     const persistWm = (next) => {
         setWmSettings(next)
@@ -290,17 +273,6 @@ const ManagersSettings = () => {
     const resetToDefaults = () => persistWm(DEFAULT_WM_SETTINGS)
 
     return React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 8 } },
-
-        // ── Desktop Environment ──
-        React.createElement('p', { className: 'hint', style: { margin: '0 0 6px' } },
-            'Pick a desktop environment preset, then fine-tune layout, theme, and window style below.'
-        ),
-        React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 12, marginBottom: 8 } },
-            envs.map(de => React.createElement(PreviewCard, { key: de.id, de, isActive: de.id === currentEnv, onClick: () => onSelectDE(de.id) }))
-        ),
-
-        // ── Layout ──
-        React.createElement(LayoutSection),
 
         // ── Theme + Appearance ──
         React.createElement(AppearanceSection, { settings: wmSettings, setAppearance, setBehavior, resetToDefaults }),
@@ -326,6 +298,10 @@ const ManagersSettings = () => {
             activeId: cfg.dockManager,
             onSelect: (id) => { update({ dockManager: id }); openDock(id) },
         }),
+
+        // ── Active dock settings ──
+        React.createElement('p', { className: 'muted-small', style: { margin: '16px 0 4px' } }, 'DOCK SETTINGS'),
+        React.createElement(DockSettingsPanel),
 
         // ── VFS config files ──
         React.createElement('p', { className: 'muted-small', style: { margin: '20px 0 6px' } }, 'VFS CONFIGURATION FILES'),

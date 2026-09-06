@@ -1,3 +1,3 @@
 {
-    "pinned": ["explorer", "ui.vs-code", "ui.notepad", "ui.terminal", "webamp", "ui.task-manager", "ui.settings"]
+    "pinned": ["ui.app-drawer", "explorer", "ui.notepad", "ui.terminal", "ui.pkg-manager", "ui.settings"]
 }

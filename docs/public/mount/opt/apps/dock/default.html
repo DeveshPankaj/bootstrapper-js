@@ -99,9 +99,43 @@ html, body {
     }
   };
 
+  var DOCK_ID = 'default';
+  var SCHEMA = [
+    { key: 'bg-color', label: 'Background color', type: 'color', value: 'rgba(20,20,22,0.78)' },
+    { key: 'border-radius', label: 'Border radius', type: 'range', value: 18, min: 0, max: 30, step: 1 },
+    { key: 'opacity', label: 'Opacity', type: 'range', value: 1, min: 0.2, max: 1, step: 0.05 },
+  ];
+
   var dock = document.getElementById('dock');
   var launchItems = [];   // [{name, label, icon, cmd}]
   var openWindows  = [];  // [{pid, name, title, icon, minimized, active}]
+  var launching = {};     // cooldown map to prevent double-open on rapid clicks
+
+  function applySettings() {
+    var bg = SCHEMA.find(function(e){return e.key==='bg-color';}).value;
+    var r = SCHEMA.find(function(e){return e.key==='border-radius';}).value;
+    var op = SCHEMA.find(function(e){return e.key==='opacity';}).value;
+    dock.style.background = bg;
+    dock.style.borderRadius = r + 'px';
+    dock.style.opacity = op;
+  }
+
+  ipc.on('dock.settingChanged', function(d) {
+    var entry = SCHEMA.find(function(e){return e.key===d.key;});
+    if (entry) entry.value = d.value;
+    applySettings();
+  });
+
+  ipc.call('fs.readText', { path: '/etc/dock/' + DOCK_ID + '.json' })
+    .then(function(txt) {
+      var saved = JSON.parse(txt);
+      SCHEMA.forEach(function(e) { if (saved[e.key] !== undefined) e.value = saved[e.key]; });
+    })
+    .catch(function() {})
+    .then(function() {
+      applySettings();
+      ipc.call('dock.registerSettings', { dockId: DOCK_ID, schema: SCHEMA }).catch(function(){});
+    });
 
   function render() {
     dock.innerHTML = '';
@@ -114,8 +148,11 @@ html, body {
       el.title = item.label;
       el.innerHTML = '<span class="icon">' + item.icon + '</span><span class="dot"></span>';
       el.onclick = function() {
-        if (win) ipc.call('wm.toggleWindow', { pid: win.pid });
-        else ipc.call('wm.launch', { name: item.name });
+        if (win) { ipc.call('wm.toggleWindow', { pid: win.pid }); return; }
+        var now = Date.now();
+        if (launching[item.name] && now - launching[item.name] < 1200) return;
+        launching[item.name] = now;
+        ipc.call('wm.launch', { name: item.name });
       };
       dock.appendChild(el);
     });
