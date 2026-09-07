@@ -2,21 +2,22 @@
 /******/ 	"use strict";
 /******/ 	var __webpack_modules__ = ({
 
-/***/ "./src/core/ipc.ts":
-/*!*************************!*\
-  !*** ./src/core/ipc.ts ***!
-  \*************************/
+/***/ "./src/kernel/ipc-bus.ts":
+/*!*******************************!*\
+  !*** ./src/kernel/ipc-bus.ts ***!
+  \*******************************/
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   broadcastIpcEvent: () => (/* binding */ broadcastIpcEvent),
-/* harmony export */   initIpc: () => (/* binding */ initIpc),
+/* harmony export */   initIpcBus: () => (/* binding */ initIpcBus),
 /* harmony export */   registerIpcHandler: () => (/* binding */ registerIpcHandler),
-/* harmony export */   registerWindowIpcHandlers: () => (/* binding */ registerWindowIpcHandlers)
+/* harmony export */   registerWmBridge: () => (/* binding */ registerWmBridge)
 /* harmony export */ });
-// Host-side IPC router — handles postMessage calls from sandboxed iframes.
-// Pairs with /usr/lib/ipc.js (VFS client library).
+// Ring 0 — IPC bus kernel module
+// Raw postMessage router. All inter-process messaging goes through here.
+// Platform (Ring 1) builds higher-level MessageBus on top of this.
 var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -30,8 +31,6 @@ const handlers = new Map();
 function registerIpcHandler(event, handler) {
     handlers.set(event, handler);
 }
-// targetDoc defaults to `document` so existing call sites work unchanged.
-// The layout bundle (which runs in a hidden iframe) passes platform.window.document.
 function broadcastIpcEvent(event, data, targetDoc = document) {
     targetDoc.querySelectorAll('iframe').forEach(f => {
         var _a;
@@ -41,18 +40,14 @@ function broadcastIpcEvent(event, data, targetDoc = document) {
         catch (_) { }
     });
 }
-function registerWindowIpcHandlers(getWindows, toggleWindow, mainWindow = window, getLaunchItems) {
+function registerWmBridge(getWindows, toggleWindow, mainWindow = window, getLaunchItems) {
     mainWindow.__wosWmBridge = {
         getWindows,
         toggleWindow,
         getLaunchItems: getLaunchItems !== null && getLaunchItems !== void 0 ? getLaunchItems : (() => []),
     };
 }
-function initIpc(fs) {
-    // Both bootstrapper.bundle and remote.bundle call initIpc in the same window.
-    // Each bundle has its own module scope, so a module-level flag would be
-    // duplicated. Use window.__wosIpcInit (shared across all scripts) to ensure
-    // only one message listener is ever added.
+function initIpcBus(fs) {
     if (!window.__wosIpcInit) {
         window.__wosIpcInit = true;
         window.addEventListener('message', (e) => __awaiter(this, void 0, void 0, function* () {
@@ -76,12 +71,12 @@ function initIpc(fs) {
             }
         }));
     }
-    // WM handlers delegate to the bridge set by the layout bundle on the main window.
+    // Window manager bridge handlers
     registerIpcHandler('wm.getWindows', () => { var _a, _b; return (_b = (_a = window.__wosWmBridge) === null || _a === void 0 ? void 0 : _a.getWindows()) !== null && _b !== void 0 ? _b : []; });
     registerIpcHandler('wm.toggleWindow', (d) => { var _a; (_a = window.__wosWmBridge) === null || _a === void 0 ? void 0 : _a.toggleWindow(Number(d.pid)); return true; });
     registerIpcHandler('wm.getLaunchItems', () => { var _a, _b; return (_b = (_a = window.__wosWmBridge) === null || _a === void 0 ? void 0 : _a.getLaunchItems()) !== null && _b !== void 0 ? _b : []; });
     registerIpcHandler('wm.launch', (d) => { var _a, _b; (_b = (_a = window.__wosWmBridge) === null || _a === void 0 ? void 0 : _a.launch) === null || _b === void 0 ? void 0 : _b.call(_a, String(d.name)); return true; });
-    // Dock settings — active dock iframe registers its schema; settings UI reads and mutates it.
+    // Dock bridge handlers
     registerIpcHandler('dock.registerSettings', (d) => {
         var _a, _b, _c, _d;
         if (window.__wosDockBridge) {
@@ -91,42 +86,240 @@ function initIpc(fs) {
         else {
             window.__wosDockBridge = { schema: (_c = d.schema) !== null && _c !== void 0 ? _c : [], dockId: (_d = d.dockId) !== null && _d !== void 0 ? _d : '', set: () => { } };
         }
-        // Notify settings UI that dock schema changed.
         broadcastIpcEvent('dock.schemaChanged', { schema: window.__wosDockBridge.schema, dockId: window.__wosDockBridge.dockId });
         return true;
     });
     registerIpcHandler('dock.getSchema', () => window.__wosDockBridge
         ? { schema: window.__wosDockBridge.schema, dockId: window.__wosDockBridge.dockId }
         : { schema: [], dockId: '' });
-    registerIpcHandler('dock.setSetting', (d, source) => {
+    registerIpcHandler('dock.setSetting', (d) => {
         if (!window.__wosDockBridge)
             return false;
         const entry = window.__wosDockBridge.schema.find(e => e.key === d.key);
         if (entry)
             entry.value = d.value;
-        // Forward the change to the dock iframe.
         broadcastIpcEvent('dock.settingChanged', { key: d.key, value: d.value });
         return true;
     });
-    registerIpcHandler('dock.getSettings', () => window.__wosDockBridge ? window.__wosDockBridge.schema.reduce((acc, e) => { acc[e.key] = e.value; return acc; }, {}) : {});
+    registerIpcHandler('dock.getSettings', () => window.__wosDockBridge
+        ? window.__wosDockBridge.schema.reduce((acc, e) => { acc[e.key] = e.value; return acc; }, {})
+        : {});
+    // FS handlers — accessed through platform's ProxyFS in Ring 1;
+    // these raw handlers remain for trusted system callers (SW bridge, dock, etc.)
     registerIpcHandler('fs.read', (d) => Array.from(fs.readFileSync(d.path)));
     registerIpcHandler('fs.readText', (d) => fs.readFileSync(d.path, 'utf8'));
     registerIpcHandler('fs.write', (d) => {
-        const content = d.content;
-        if (typeof content === 'string')
-            fs.writeFileSync(d.path, content);
+        const c = d.content;
+        if (typeof c === 'string')
+            fs.writeFileSync(d.path, c);
         else
-            fs.writeFileSync(d.path, Buffer.from(content));
+            fs.writeFileSync(d.path, Buffer.from(c));
         return true;
     });
     registerIpcHandler('fs.list', (d) => fs.readdirSync(d.path));
     registerIpcHandler('fs.exists', (d) => fs.existsSync(d.path));
-    registerIpcHandler('fs.mkdir', (d) => { fs.mkdirSync(d.path, { recursive: true }); return true; });
+    registerIpcHandler('fs.mkdir', (d) => { fs.mkdirSync(d.path); return true; });
     registerIpcHandler('fs.rm', (d) => { fs.unlinkSync(d.path); return true; });
     registerIpcHandler('fs.stat', (d) => {
         var _a;
         const s = fs.statSync(d.path);
         return { isDirectory: s.isDirectory(), size: (_a = s.size) !== null && _a !== void 0 ? _a : 0 };
+    });
+}
+
+
+/***/ }),
+
+/***/ "./src/kernel/sw-bridge.ts":
+/*!*********************************!*\
+  !*** ./src/kernel/sw-bridge.ts ***!
+  \*********************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   initSwBridge: () => (/* binding */ initSwBridge)
+/* harmony export */ });
+// Ring 0 — Service worker bridge
+// Registers the SW and routes /(sw)/<path> file requests back to the VFS.
+function initSwBridge(fs) {
+    if (!navigator.serviceWorker)
+        return;
+    navigator.serviceWorker
+        .register('/sw.bundle.js', { scope: '/' })
+        .then(reg => {
+        if (reg.active)
+            console.log('[sw-bridge] service worker active');
+        const worker = reg.installing || reg.waiting;
+        if (worker) {
+            worker.addEventListener('statechange', () => {
+                if (worker.state === 'activated')
+                    location.reload();
+            });
+        }
+        navigator.serviceWorker.addEventListener('message', event => {
+            var _a, _b, _c, _d;
+            const { type, payload } = (_a = event.data) !== null && _a !== void 0 ? _a : {};
+            if (type !== 'fs/file-request')
+                return;
+            const { path, request_id } = payload !== null && payload !== void 0 ? payload : {};
+            if (!window.fs) {
+                (_b = navigator.serviceWorker.controller) === null || _b === void 0 ? void 0 : _b.postMessage({
+                    type: 'fs/reply',
+                    payload: { data: 'File system not mounted!', error: 'File system not mounted!', request_id },
+                });
+                return;
+            }
+            if (fs.existsSync(path)) {
+                (_c = navigator.serviceWorker.controller) === null || _c === void 0 ? void 0 : _c.postMessage({
+                    type: 'fs/reply',
+                    payload: { data: fs.readFileSync(path), error: '', request_id },
+                });
+            }
+            else {
+                (_d = navigator.serviceWorker.controller) === null || _d === void 0 ? void 0 : _d.postMessage({
+                    type: 'fs/reply',
+                    payload: { data: `File not found! ${path}`, error: 'File not found!', request_id },
+                });
+            }
+        });
+    })
+        .catch(err => console.error('[sw-bridge] registration failed:', err));
+}
+
+
+/***/ }),
+
+/***/ "./src/kernel/vfs.ts":
+/*!***************************!*\
+  !*** ./src/kernel/vfs.ts ***!
+  \***************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   FS_BACKEND_QUERY_PARAM: () => (/* binding */ FS_BACKEND_QUERY_PARAM),
+/* harmony export */   FS_BACKEND_STORAGE_KEY: () => (/* binding */ FS_BACKEND_STORAGE_KEY),
+/* harmony export */   initVFS: () => (/* binding */ initVFS),
+/* harmony export */   mkdirRecursive: () => (/* binding */ mkdirRecursive),
+/* harmony export */   resolveFsBackend: () => (/* binding */ resolveFsBackend)
+/* harmony export */ });
+/* harmony import */ var _ipc_bus__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./ipc-bus */ "./src/kernel/ipc-bus.ts");
+// Ring 0 — VFS kernel module
+// Owns BrowserFS mount, path bootstrap from meta.json, and segment-safe mkdir.
+// No business logic. Called once at boot from src/index.ts.
+var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+
+const FS_BACKEND_STORAGE_KEY = '__app_fs_backend__';
+const FS_BACKEND_QUERY_PARAM = 'fsBackend';
+function resolveFsBackend() {
+    const fromQuery = new URLSearchParams(window.location.search).get(FS_BACKEND_QUERY_PARAM);
+    if (fromQuery === 'indexeddb' || fromQuery === 'localstorage') {
+        localStorage.setItem(FS_BACKEND_STORAGE_KEY, fromQuery);
+        return fromQuery;
+    }
+    return localStorage.getItem(FS_BACKEND_STORAGE_KEY) === 'localstorage' ? 'localstorage' : 'indexeddb';
+}
+// BrowserFS ignores { recursive: true } — create each segment individually.
+function mkdirRecursive(fs, path) {
+    const segments = path.replace(/^\//, '').split('/');
+    let cur = '';
+    for (const seg of segments) {
+        cur += '/' + seg;
+        try {
+            fs.mkdirSync(cur);
+        }
+        catch (e) {
+            if (e.code !== 'EEXIST')
+                throw e;
+        }
+    }
+}
+const DEFAULT_DIRS = [
+    '/home', '/home/user1', '/home/user1/apps', '/home/user1/tools',
+    '/home/user1/projects', '/home/user1/quotes',
+    '/mnt', '/usr', '/usr/bin', '/usr/lib', '/usr/local',
+    '/usr/share', '/usr/share/icons',
+    '/bin', '/etc', '/etc/wm', '/etc/pkg',
+    '/opt', '/opt/apps',
+    '/proc', '/srv', '/sys', '/tmp',
+    '/var', '/var/log', '/var/spool',
+];
+const createBackend = (Ctor, opts) => new Promise((resolve, reject) => Ctor.Create(opts, (err, fs) => err ? reject(err) : resolve(fs)));
+const createIndexedDBMirror = (Backend, storeName) => __awaiter(void 0, void 0, void 0, function* () {
+    const idbFS = yield createBackend(Backend.IndexedDB, { storeName });
+    yield new Promise((resolve, reject) => idbFS.makeRootDirectory((err) => err ? reject(err) : resolve()));
+    const memFS = yield createBackend(Backend.InMemory, {});
+    return createBackend(Backend.AsyncMirror, { sync: memFS, async: idbFS });
+});
+function initVFS(bootLog) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const t0 = Date.now();
+        window.BrowserFS.install(window);
+        const Backend = window.BrowserFS.FileSystem;
+        const fsBackend = resolveFsBackend();
+        let mfs;
+        if (fsBackend === 'localstorage') {
+            const rootFS = yield createBackend(Backend.LocalStorage, {});
+            const tmpFS = yield createBackend(Backend.InMemory, {});
+            const mntFS = yield createBackend(Backend.InMemory, {});
+            mfs = yield createBackend(Backend.MountableFileSystem, { '/': rootFS, '/tmp': tmpFS, '/mnt': mntFS });
+        }
+        else {
+            const rootFS = yield createIndexedDBMirror(Backend, 'fs');
+            const tmpFS = yield createIndexedDBMirror(Backend, 'tmp');
+            const mntFS = yield createIndexedDBMirror(Backend, 'mnt');
+            mfs = yield createBackend(Backend.MountableFileSystem, { '/': rootFS, '/tmp': tmpFS, '/mnt': mntFS });
+        }
+        window.BrowserFS.initialize(mfs);
+        bootLog(`VFS init (${fsBackend})`, t0);
+        const fs = window.require('fs');
+        window.fs = fs;
+        // Wire IPC fs handlers so service worker / iframes can call fs via postMessage
+        (0,_ipc_bus__WEBPACK_IMPORTED_MODULE_0__.initIpcBus)(fs);
+        DEFAULT_DIRS.forEach(dir => {
+            if (!fs.existsSync(dir))
+                fs.mkdirSync(dir);
+        });
+        yield bootstrapMetaFiles(fs, bootLog);
+        return fs;
+    });
+}
+function bootstrapMetaFiles(fs, bootLog) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const t1 = Date.now();
+        const metaFilePath = '/meta.json';
+        const metaFileServerPath = '/public/mount/meta.json';
+        let defaultFiles = [];
+        if (fs.existsSync(metaFilePath)) {
+            defaultFiles = JSON.parse(fs.readFileSync(metaFilePath).toString());
+        }
+        const ignoreMetaReload = defaultFiles.find(item => item.path === metaFilePath && item.force_reload === false);
+        if (!ignoreMetaReload)
+            defaultFiles = yield (yield fetch(metaFileServerPath)).json();
+        let fileCount = 0;
+        yield Promise.all(defaultFiles.map((item) => __awaiter(this, void 0, void 0, function* () {
+            if (fs.existsSync(item.path) && !item.force_reload)
+                return;
+            const serverPath = item.file.startsWith('http')
+                ? item.file
+                : `/public/mount${item.file.startsWith('/') ? '' : '/'}${item.file}`;
+            const fileData = yield (yield fetch(serverPath)).arrayBuffer();
+            const dir = item.path.slice(0, item.path.lastIndexOf('/')) || '/';
+            if (!fs.existsSync(dir))
+                mkdirRecursive(fs, dir);
+            fs.writeFileSync(item.path, Buffer.from(fileData));
+            fileCount++;
+        })));
+        bootLog(`meta.json bootstrap (${fileCount} files written)`, t1);
     });
 }
 
@@ -196,7 +389,8 @@ var __webpack_exports__ = {};
   !*** ./src/index.ts ***!
   \**********************/
 __webpack_require__.r(__webpack_exports__);
-/* harmony import */ var _core_ipc__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./core/ipc */ "./src/core/ipc.ts");
+/* harmony import */ var _kernel_vfs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./kernel/vfs */ "./src/kernel/vfs.ts");
+/* harmony import */ var _kernel_sw_bridge__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./kernel/sw-bridge */ "./src/kernel/sw-bridge.ts");
 var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -206,204 +400,29 @@ var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _argume
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
+//@ts-nocheck
+
 
 const __BOOTSTRAP_SCRIPT_PATH_KEY__ = '__BOOTSTRAP_SCRIPT_PATH__';
-// Which storage backend the virtual filesystem persists to: 'indexeddb' (default,
-// GB-scale) or 'localstorage' (~5-10MB, used by older versions of this app). The
-// choice is read from this localStorage key, and can be overridden (and persisted)
-// via the `?fsBackend=indexeddb|localstorage` query param. Settings.html's "Storage"
-// page reads/writes the same key/param names.
-const FS_BACKEND_STORAGE_KEY = '__app_fs_backend__';
-const FS_BACKEND_QUERY_PARAM = 'fsBackend';
-const resolveFsBackend = () => {
-    const fromQuery = new URLSearchParams(window.location.search).get(FS_BACKEND_QUERY_PARAM);
-    if (fromQuery === 'indexeddb' || fromQuery === 'localstorage') {
-        localStorage.setItem(FS_BACKEND_STORAGE_KEY, fromQuery);
-        return fromQuery;
-    }
-    return localStorage.getItem(FS_BACKEND_STORAGE_KEY) === 'localstorage' ? 'localstorage' : 'indexeddb';
-};
 const loadBootstrapScript = (storage) => {
-    const bootstrap_script_path = storage.getItem(__BOOTSTRAP_SCRIPT_PATH_KEY__) || "/remote.bundle.js";
-    if (!bootstrap_script_path)
+    const path = storage.getItem(__BOOTSTRAP_SCRIPT_PATH_KEY__) || '/remote.bundle.js';
+    if (!path)
         return;
     const script = window.document.createElement('script');
-    script.src = bootstrap_script_path;
+    script.src = path;
     window.document.head.appendChild(script);
 };
-const initWindow = () => {
-    // Boot log — phases are pushed here; readable from Settings > Boot Log via window.__bootLog.
-    // @ts-ignore
+window.addEventListener('load', () => __awaiter(void 0, void 0, void 0, function* () {
+    // Boot log — phases pushed here; readable from Settings > Boot Log.
     window.__bootLog = [];
     const bootLog = (label, startMs, error) => {
-        // @ts-ignore
         window.__bootLog.push({ label, durationMs: Date.now() - startMs, error });
     };
-    // @ts-ignore
-    window.BrowserFS.install(window);
-    const defaultDirs = [
-        '/home',
-        '/home/user1',
-        '/home/user1/apps',
-        '/home/user1/tools',
-        '/home/user1/projects',
-        '/home/user1/quotes',
-        '/mnt',
-        // '/home/user1/projects/Snake.html', // Specific project file (not a directory, but included for completeness)
-        // '/home/user1/projects/WebGL.html', // Specific project file (not a directory, but included for completeness)
-        // '/home/user1/projects/WebGL-Earth.html', // Specific project file (not a directory, but included for completeness)
-        '/usr',
-        '/usr/bin',
-        '/usr/lib',
-        '/usr/local',
-        '/usr/share/',
-        '/usr/share/icons/',
-        '/bin',
-        // '/root',
-        // '/media',
-        '/etc',
-        '/etc/wm',
-        '/etc/pkg',
-        '/opt',
-        '/opt/apps',
-        '/proc',
-        // '/lib',                        // Existing system directories
-        // '/mnt',
-        // '/run',
-        '/srv',
-        '/sys',
-        '/tmp',
-        '/var',
-        '/var/log',
-        '/var/spool'
-    ];
-    // LocalStorage has a ~5-10MB quota, far too small for this app's filesystem
-    // (and for mounted local folders). Use IndexedDB (often GB-scale) for everything
-    // instead. IndexedDB is async-only, so mirror it behind an InMemory filesystem
-    // to keep the synchronous `fs` API working.
-    const createBackend = (Ctor, opts) => new Promise((resolve, reject) => Ctor.Create(opts, (err, fs) => err ? reject(err) : resolve(fs)));
-    // Creates an IndexedDB-backed filesystem mirrored behind an InMemory filesystem,
-    // so it can be used synchronously while being persisted to IndexedDB (storeName).
-    const createIndexedDBMirror = (Backend, storeName) => __awaiter(void 0, void 0, void 0, function* () {
-        const idbFS = yield createBackend(Backend.IndexedDB, { storeName });
-        yield new Promise((resolve, reject) => idbFS.makeRootDirectory((err) => err ? reject(err) : resolve()));
-        const memFS = yield createBackend(Backend.InMemory, {});
-        return createBackend(Backend.AsyncMirror, { sync: memFS, async: idbFS });
-    });
-    const fsReady = (() => __awaiter(void 0, void 0, void 0, function* () {
-        const t0 = Date.now();
-        try {
-            // @ts-ignore
-            const Backend = window.BrowserFS.FileSystem;
-            const fsBackend = resolveFsBackend();
-            let mfs;
-            if (fsBackend === 'localstorage') {
-                // LocalStorage is a single global synchronous key-value store (no
-                // namespacing), so only '/' is backed by it; '/tmp' and '/mnt' are
-                // in-memory (ephemeral) to avoid key collisions.
-                const rootFS = yield createBackend(Backend.LocalStorage, {});
-                const tmpFS = yield createBackend(Backend.InMemory, {});
-                const mntFS = yield createBackend(Backend.InMemory, {});
-                mfs = yield createBackend(Backend.MountableFileSystem, { '/': rootFS, '/tmp': tmpFS, '/mnt': mntFS });
-            }
-            else {
-                const rootFS = yield createIndexedDBMirror(Backend, 'fs');
-                const tmpFS = yield createIndexedDBMirror(Backend, 'tmp');
-                const mntFS = yield createIndexedDBMirror(Backend, 'mnt');
-                mfs = yield createBackend(Backend.MountableFileSystem, { '/': rootFS, '/tmp': tmpFS, '/mnt': mntFS });
-            }
-            // @ts-ignore
-            window.BrowserFS.initialize(mfs);
-            bootLog(`VFS init (${fsBackend})`, t0);
-            const fs = window.require('fs');
-            // @ts-ignore
-            window.fs = fs;
-            (0,_core_ipc__WEBPACK_IMPORTED_MODULE_0__.initIpc)(fs);
-            defaultDirs.forEach(dir => {
-                if (!fs.existsSync(dir)) {
-                    fs.mkdirSync(dir);
-                }
-            });
-            const metaFilePath = '/meta.json';
-            const metaFileServerPath = '/public/mount/meta.json';
-            const isMetaFileExist = fs.existsSync(metaFilePath);
-            let defaultFiles = [];
-            if (isMetaFileExist) {
-                const metaFileRawContent = fs.readFileSync(metaFilePath);
-                defaultFiles = JSON.parse(metaFileRawContent);
-            }
-            const ignoreMetaReload = defaultFiles.find(item => item.path === metaFilePath && item.force_reload === false);
-            if (!ignoreMetaReload)
-                defaultFiles = yield (yield fetch(metaFileServerPath)).json();
-            const t1 = Date.now();
-            let fileCount = 0;
-            defaultFiles.forEach((item) => __awaiter(void 0, void 0, void 0, function* () {
-                if (fs.existsSync(item.path) && !item.force_reload)
-                    return;
-                const path = item.file.startsWith('http') ? item.file : `/public/mount${item.file.startsWith('/') ? '' : '/'}${item.file}`;
-                const fileData = yield (yield fetch(path)).arrayBuffer();
-                const dir = item.path.slice(0, item.path.lastIndexOf('/')) || "/";
-                if (!fs.existsSync(dir)) {
-                    const parts = dir.split('/').filter(Boolean);
-                    let cur = '';
-                    for (const part of parts) {
-                        cur += '/' + part;
-                        try {
-                            fs.mkdirSync(cur);
-                        }
-                        catch (e) {
-                            if (e.code !== 'EEXIST')
-                                throw e;
-                        }
-                    }
-                }
-                fs.writeFileSync(item.path, Buffer.from(fileData));
-                fileCount++;
-                // navigator.serviceWorker.controller?.postMessage({type: 'fs/file-added', payload: {file: item.path}});
-            }));
-            bootLog(`meta.json bootstrap (${fileCount} files written)`, t1);
-        }
-        catch (err) {
-            bootLog('VFS error', t0, String(err));
-            alert(err);
-        }
-    }))();
-    if (navigator.serviceWorker) {
-        navigator.serviceWorker.register('/sw.bundle.js', { scope: '/' }).then(function (reg) {
-            if (reg.active)
-                console.log('serviceworker installed');
-            // On first install the SW isn't controlling the page yet — reload once it activates.
-            const worker = reg.installing || reg.waiting;
-            if (worker) {
-                worker.addEventListener('statechange', () => {
-                    if (worker.state === 'activated')
-                        location.reload();
-                });
-            }
-            navigator.serviceWorker.addEventListener('message', event => {
-                // console.log(event.data)
-                var _a, _b, _c;
-                //@ts-ignore
-                const fs = window.fs;
-                if (!fs) {
-                    (_a = navigator.serviceWorker.controller) === null || _a === void 0 ? void 0 : _a.postMessage({ type: 'fs/reply', payload: { data: "File system not mounted!", error: "File system not mounted!", request_id: event.data.payload.request_id } });
-                }
-                else if (fs.existsSync(event.data.payload.path)) {
-                    (_b = navigator.serviceWorker.controller) === null || _b === void 0 ? void 0 : _b.postMessage({ type: 'fs/reply', payload: { data: fs.readFileSync(event.data.payload.path), error: "", request_id: event.data.payload.request_id } });
-                }
-                else {
-                    (_c = navigator.serviceWorker.controller) === null || _c === void 0 ? void 0 : _c.postMessage({ type: 'fs/reply', payload: { data: `File not found! ${event.data.payload.path}`, error: "File not found!", request_id: event.data.payload.request_id } });
-                }
-            });
-        })
-            .catch(function (err) {
-            console.log('registration failed: ' + err);
-        });
-    }
-    return fsReady;
-};
-window.addEventListener('load', () => __awaiter(void 0, void 0, void 0, function* () {
-    yield initWindow();
+    // Ring 0: bring up VFS + IPC bus
+    const fs = yield (0,_kernel_vfs__WEBPACK_IMPORTED_MODULE_0__.initVFS)(bootLog);
+    // Ring 0: register service worker + VFS file bridge
+    (0,_kernel_sw_bridge__WEBPACK_IMPORTED_MODULE_1__.initSwBridge)(fs);
+    // Load the main app bundle (remote.bundle.js → Platform + Layout)
     loadBootstrapScript(localStorage);
 }));
 
