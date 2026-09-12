@@ -1,0 +1,641 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Vector Store</title>
+<style>
+:root{--bg:#0f1117;--s1:#161922;--s2:#1d2130;--s3:#252a3d;--bd:#2d3148;--tx:#dde1f5;--mu:#7880a0;--ac:#6366f1;--gr:#22c55e;--yw:#eab308;--rd:#ef4444;--ab:rgba(99,102,241,.15);font-size:13px;color-scheme:dark}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--tx);height:100vh;display:flex;flex-direction:column;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+input,textarea,select,button{font-family:inherit;font-size:13px}
+/* Top bar */
+.tb{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--s1);border-bottom:1px solid var(--bd);flex-shrink:0}
+.tb h1{font-size:14px;font-weight:700;color:var(--ac);flex-shrink:0}
+.tb-space{flex:1}
+.btn{padding:5px 12px;background:var(--ac);color:#fff;border:none;border-radius:6px;font-weight:600;cursor:pointer;transition:opacity .15s;white-space:nowrap}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn:not(:disabled):hover{opacity:.8}
+.btn-sm{padding:3px 9px;font-size:11px}
+.btn-ghost{background:var(--s3);color:var(--tx)}
+.btn-danger{background:var(--rd)}
+/* Status */
+.sb{padding:3px 12px;background:var(--s1);border-bottom:1px solid var(--bd);font-size:11px;color:var(--mu);display:flex;align-items:center;gap:6px;flex-shrink:0}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--mu);flex-shrink:0}
+.dot.ok{background:var(--gr)} .dot.busy{background:var(--yw);animation:pulse 1s infinite} .dot.err{background:var(--rd)}
+.pb{flex:1;max-width:180px;height:3px;background:var(--s3);border-radius:2px;overflow:hidden;display:none}
+.pf{height:100%;background:var(--ac);border-radius:2px;transition:width .2s;width:0}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+/* Layout */
+.layout{display:flex;flex:1;overflow:hidden}
+/* Sidebar */
+.sidebar{width:200px;flex-shrink:0;background:var(--s1);border-right:1px solid var(--bd);display:flex;flex-direction:column;overflow:hidden}
+.sh{padding:8px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--mu);border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:6px}
+.sh button{margin-left:auto;background:var(--s3);border:1px solid var(--bd);color:var(--tx);border-radius:4px;padding:2px 7px;cursor:pointer;font-size:11px}
+.sh button:hover{background:var(--ac);border-color:var(--ac);color:#fff}
+.proj-list{flex:1;overflow-y:auto;padding:6px}
+.proj-item{padding:7px 9px;border-radius:6px;cursor:pointer;display:flex;flex-direction:column;gap:2px;border:1px solid transparent;transition:background .12s,border-color .12s}
+.proj-item:hover{background:var(--s2)} .proj-item.active{background:var(--ab);border-color:var(--ac)}
+.proj-name{font-weight:600;font-size:12px} .proj-meta{font-size:10px;color:var(--mu)}
+.proj-empty{padding:20px 12px;text-align:center;color:var(--mu);font-size:11px}
+/* Main */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.no-proj{flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;color:var(--mu);font-size:13px}
+.no-proj span{font-size:32px}
+/* Project header */
+.ph{padding:10px 14px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:8px;flex-shrink:0;background:var(--s1)}
+.proj-title-input{background:none;border:none;color:var(--tx);font-size:15px;font-weight:700;flex:1;outline:none;padding:2px 4px;border-radius:4px}
+.proj-title-input:focus{background:var(--s2)}
+/* Tabs */
+.tabs{display:flex;border-bottom:1px solid var(--bd);flex-shrink:0;background:var(--s1);padding:0 14px;gap:0}
+.tab{padding:7px 14px;font-size:12px;font-weight:600;color:var(--mu);cursor:pointer;border-bottom:2px solid transparent;transition:color .12s}
+.tab.active{color:var(--ac);border-bottom-color:var(--ac)}
+.tab:hover:not(.active){color:var(--tx)}
+/* Tab panels */
+.panel{flex:1;overflow:hidden;display:none;flex-direction:column}
+.panel.active{display:flex}
+/* Data tab */
+.data-bar{display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--bd);flex-shrink:0;flex-wrap:wrap}
+.model-sel{background:var(--s2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:5px 8px;cursor:pointer;font-size:12px;outline:none}
+.model-sel:focus{border-color:var(--ac)}
+.data-table-wrap{flex:1;overflow-y:auto}
+table{width:100%;border-collapse:collapse}
+th{position:sticky;top:0;background:var(--s2);padding:7px 10px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--mu);border-bottom:1px solid var(--bd);white-space:nowrap;z-index:1}
+td{padding:7px 10px;border-bottom:1px solid rgba(45,49,72,.5);vertical-align:top;font-size:12px}
+tr:hover td{background:rgba(255,255,255,.02)}
+.vec-badge{font-size:10px;padding:1px 6px;border-radius:10px;font-weight:600}
+.vec-badge.ok{background:rgba(34,197,94,.15);color:var(--gr)}
+.vec-badge.pending{background:rgba(234,179,8,.1);color:var(--yw)}
+.txt-cell{max-width:320px;word-break:break-word;white-space:pre-wrap;line-height:1.4}
+.row-del{background:none;border:none;color:var(--mu);cursor:pointer;padding:2px 5px;border-radius:4px;font-size:14px;line-height:1}
+.row-del:hover{color:var(--rd);background:rgba(239,68,68,.1)}
+/* Add row form */
+.add-row-form{padding:10px 14px;border-top:1px solid var(--bd);flex-shrink:0;display:none;flex-direction:column;gap:6px;background:var(--s1)}
+.add-row-form.open{display:flex}
+.ar-ta{width:100%;background:var(--s2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:7px 10px;resize:vertical;min-height:70px;outline:none}
+.ar-ta:focus{border-color:var(--ac)}
+.ar-row{display:flex;gap:6px}
+/* Import modal */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:100}
+.modal-bg.open{display:flex}
+.modal{background:var(--s1);border:1px solid var(--bd);border-radius:12px;padding:20px;width:480px;max-width:90vw;display:flex;flex-direction:column;gap:10px}
+.modal h3{font-size:14px;margin-bottom:2px}
+.modal p{font-size:11px;color:var(--mu)}
+.modal textarea{width:100%;background:var(--s2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:8px;resize:vertical;height:160px;font-family:'Cascadia Code',monospace;font-size:11px;outline:none}
+.modal textarea:focus{border-color:var(--ac)}
+.modal-foot{display:flex;gap:8px;justify-content:flex-end}
+/* 3D panel */
+.canvas-wrap{flex:1;position:relative;overflow:hidden}
+#c3d{display:block;width:100%;height:100%;cursor:grab}
+#c3d:active{cursor:grabbing}
+.c3d-info{position:absolute;top:10px;left:10px;background:rgba(15,17,23,.8);padding:6px 10px;border-radius:6px;font-size:11px;color:var(--mu);border:1px solid var(--bd);pointer-events:none}
+.c3d-tooltip{position:absolute;background:var(--s1);border:1px solid var(--bd);border-radius:6px;padding:6px 9px;font-size:11px;max-width:200px;word-break:break-word;pointer-events:none;display:none}
+.c3d-bar{padding:8px 14px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:8px;flex-shrink:0;font-size:12px}
+/* Query panel */
+.query-panel{padding:14px;display:flex;flex-direction:column;gap:12px;overflow-y:auto}
+.qrow{display:flex;gap:8px;align-items:center}
+.q-input{flex:1;background:var(--s2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:7px 10px;outline:none}
+.q-input:focus{border-color:var(--ac)}
+label{font-size:11px;color:var(--mu);white-space:nowrap}
+input[type=range]{accent-color:var(--ac)}
+.q-results{display:flex;flex-direction:column;gap:6px}
+.q-result{background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:10px}
+.q-result-top{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.q-result-rank{font-size:10px;font-weight:700;color:var(--ac)}
+.q-result-score{font-size:11px;color:var(--mu);margin-left:auto}
+.score-bar{height:3px;background:var(--bd);border-radius:2px;overflow:hidden;margin-bottom:4px}
+.score-fill{height:100%;background:linear-gradient(90deg,var(--ac),#a78bfa);border-radius:2px}
+.q-result-text{font-size:12px;color:var(--tx);line-height:1.4;word-break:break-word}
+/* Scroll */
+::-webkit-scrollbar{width:5px;height:5px} ::-webkit-scrollbar-track{background:transparent} ::-webkit-scrollbar-thumb{background:var(--bd);border-radius:3px}
+</style>
+</head>
+<body>
+
+<div class="tb">
+  <h1>⬡ Vector Store</h1>
+  <div class="tb-space"></div>
+  <button class="btn btn-ghost btn-sm" id="exportBtn" style="display:none">Export JSON</button>
+</div>
+<div class="sb">
+  <div class="dot" id="dot"></div>
+  <span id="stTxt">Ready</span>
+  <div class="pb" id="pb"><div class="pf" id="pf"></div></div>
+</div>
+
+<div class="layout">
+  <div class="sidebar">
+    <div class="sh">Projects <button id="newProjBtn" title="New project">+</button></div>
+    <div class="proj-list" id="projList">
+      <div class="proj-empty">No projects yet.<br>Click + to create one.</div>
+    </div>
+  </div>
+
+  <div class="main" id="mainArea">
+    <div class="no-proj" id="noProj">
+      <span>🗄️</span>
+      Select or create a project to get started.
+    </div>
+
+    <div id="projView" style="display:none;flex:1;display:none;flex-direction:column;overflow:hidden">
+      <div class="ph">
+        <input class="proj-title-input" id="projTitle" placeholder="Project name" />
+        <button class="btn btn-sm" id="embedAllBtn">Embed All</button>
+        <button class="btn btn-sm btn-ghost" id="importBtn">Import</button>
+        <button class="btn btn-sm btn-ghost" id="addRowBtn">+ Add Row</button>
+        <button class="btn btn-sm btn-danger" id="delProjBtn">Delete</button>
+      </div>
+
+      <div class="tabs">
+        <div class="tab active" data-tab="data">Data</div>
+        <div class="tab" data-tab="view3d">3D View</div>
+        <div class="tab" data-tab="query">Query</div>
+      </div>
+
+      <!-- Data panel -->
+      <div class="panel active" id="panel-data">
+        <div class="data-bar">
+          <label>Model:</label>
+          <select class="model-sel" id="modelSel">
+            <option value="Xenova/all-MiniLM-L6-v2">all-MiniLM-L6-v2 (fast, 384d)</option>
+            <option value="Xenova/all-mpnet-base-v2">all-mpnet-base-v2 (accurate, 768d)</option>
+            <option value="Xenova/bge-small-en-v1.5">bge-small-en-v1.5 (small, 384d)</option>
+          </select>
+          <span id="rowCount" style="color:var(--mu);font-size:11px;margin-left:auto"></span>
+        </div>
+        <div class="data-table-wrap">
+          <table>
+            <thead><tr><th>#</th><th>Text</th><th>Vector</th><th></th></tr></thead>
+            <tbody id="rowsBody"></tbody>
+          </table>
+        </div>
+        <div class="add-row-form" id="addRowForm">
+          <textarea class="ar-ta" id="newRowText" placeholder="Enter text for this row…"></textarea>
+          <div class="ar-row">
+            <button class="btn btn-sm" id="saveRowBtn">Save Row</button>
+            <button class="btn btn-sm btn-ghost" id="cancelRowBtn">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3D View panel -->
+      <div class="panel" id="panel-view3d">
+        <div class="c3d-bar">
+          <button class="btn btn-sm" id="computePcaBtn">Compute 3D Layout (PCA)</button>
+          <span id="pcaStatus" style="color:var(--mu);font-size:11px"></span>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="c3d"></canvas>
+          <div class="c3d-info">Drag to rotate · Scroll to zoom</div>
+          <div class="c3d-tooltip" id="c3dTip"></div>
+        </div>
+      </div>
+
+      <!-- Query panel -->
+      <div class="panel" id="panel-query">
+        <div class="query-panel">
+          <div class="qrow">
+            <input class="q-input" id="qInput" placeholder="Enter search query…" />
+            <label>K:</label>
+            <input type="range" id="topK" min="1" max="20" value="5" style="width:80px">
+            <span id="kVal" style="font-size:11px;color:var(--mu);width:18px">5</span>
+            <button class="btn btn-sm" id="searchBtn">Search</button>
+          </div>
+          <div class="q-results" id="qResults"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Import modal -->
+<div class="modal-bg" id="importModal">
+  <div class="modal">
+    <h3>Import Rows</h3>
+    <p>One text per line — or JSON array of strings / objects with a "text" field.</p>
+    <textarea id="importTa" placeholder='One sentence per line&#10;— or JSON: ["row1","row2"]&#10;— or [{&quot;text&quot;:"row1",&quot;label&quot;:"A"}]'></textarea>
+    <div class="modal-foot">
+      <button class="btn btn-ghost btn-sm" id="importCancel">Cancel</button>
+      <button class="btn btn-sm" id="importConfirm">Import</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── AppSDK bridge (may be injected by SW; fallback is no-op) ─────────────────
+const SDK = window.AppSDK || {
+  readText: () => Promise.reject(new Error('no SDK')),
+  writeText: () => Promise.reject(new Error('no SDK')),
+  mkdir: () => Promise.resolve(),
+  exists: () => Promise.resolve(false),
+  list: () => Promise.resolve([]),
+};
+
+// ── State ────────────────────────────────────────────────────────────────────
+const STORE_DIR = '/home/user1/.local/share/vector-store';
+let projects = [];     // { slug, name, model, rows:[{id,text,vector}], ... }
+let curIdx = -1;       // index into projects[]
+let model = null;
+let modelName = '';
+
+// ── Utility ──────────────────────────────────────────────────────────────────
+function slug(name) { return name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') || 'project'; }
+function uid() { return Math.random().toString(36).slice(2,10); }
+function cosineSim(a,b){let d=0,na=0,nb=0;for(let i=0;i<a.length;i++){d+=a[i]*b[i];na+=a[i]*a[i];nb+=b[i]*b[i]}return d/(Math.sqrt(na)*Math.sqrt(nb)||1)}
+function setStatus(state, msg, pct=-1){
+  document.getElementById('dot').className='dot '+(state==='ok'?'ok':state==='busy'?'busy':state==='err'?'err':'');
+  document.getElementById('stTxt').textContent=msg;
+  const pb=document.getElementById('pb'), pf=document.getElementById('pf');
+  if(pct>=0){pb.style.display='';pf.style.width=pct+'%'}else{pb.style.display='none'}
+}
+
+// ── VFS persistence ──────────────────────────────────────────────────────────
+async function loadProjects() {
+  try {
+    await SDK.mkdir(STORE_DIR);
+    const files = await SDK.list(STORE_DIR);
+    const jsonFiles = files.filter(f=>f.name.endsWith('.json'));
+    projects=[];
+    for(const f of jsonFiles){
+      try{
+        const raw=await SDK.readText(STORE_DIR+'/'+f.name);
+        projects.push(JSON.parse(raw));
+      }catch(_){}
+    }
+    projects.sort((a,b)=>a.name.localeCompare(b.name));
+  } catch(e) {
+    projects=[];
+  }
+  renderProjList();
+}
+
+async function saveProject(proj){
+  try{
+    await SDK.mkdir(STORE_DIR);
+    await SDK.writeText(STORE_DIR+'/'+proj.slug+'.json', JSON.stringify(proj,null,2));
+  }catch(e){ console.warn('save failed',e); }
+}
+
+// ── Project list ─────────────────────────────────────────────────────────────
+function renderProjList(){
+  const list=document.getElementById('projList');
+  if(!projects.length){list.innerHTML='<div class="proj-empty">No projects yet.<br>Click + to create one.</div>';return}
+  list.innerHTML=projects.map((p,i)=>`
+    <div class="proj-item${i===curIdx?' active':''}" data-i="${i}">
+      <div class="proj-name">${p.name}</div>
+      <div class="proj-meta">${p.rows.length} rows · ${p.rows.filter(r=>r.vector).length} embedded</div>
+    </div>`).join('');
+  list.querySelectorAll('.proj-item').forEach(el=>el.addEventListener('click',()=>openProject(+el.dataset.i)));
+}
+
+function openProject(i){
+  curIdx=i;
+  renderProjList();
+  const p=projects[i];
+  document.getElementById('noProj').style.display='none';
+  const pv=document.getElementById('projView');
+  pv.style.display='flex';
+  pv.style.flexDirection='column';
+  pv.style.overflow='hidden';
+  pv.style.flex='1';
+  document.getElementById('projTitle').value=p.name;
+  document.getElementById('modelSel').value=p.model||'Xenova/all-MiniLM-L6-v2';
+  document.getElementById('exportBtn').style.display='';
+  renderRows();
+  clearPca();
+}
+
+async function createProject(){
+  const name=prompt('Project name:','New Project');
+  if(!name) return;
+  const p={slug:slug(name)+'-'+uid(),name,model:'Xenova/all-MiniLM-L6-v2',rows:[],created:new Date().toISOString(),updated:new Date().toISOString()};
+  projects.push(p);
+  await saveProject(p);
+  renderProjList();
+  openProject(projects.length-1);
+}
+
+// ── Rows ─────────────────────────────────────────────────────────────────────
+function renderRows(){
+  if(curIdx<0) return;
+  const p=projects[curIdx];
+  const tbody=document.getElementById('rowsBody');
+  document.getElementById('rowCount').textContent=`${p.rows.length} rows · ${p.rows.filter(r=>r.vector).length} embedded`;
+  tbody.innerHTML=p.rows.map((r,i)=>`
+    <tr data-rid="${r.id}">
+      <td style="color:var(--mu);width:30px;font-variant-numeric:tabular-nums">${i+1}</td>
+      <td class="txt-cell">${escHtml(r.text.length>200?r.text.slice(0,200)+'…':r.text)}</td>
+      <td><span class="vec-badge ${r.vector?'ok':'pending'}">${r.vector?r.vector.length+'d':'pending'}</span></td>
+      <td><button class="row-del" data-i="${i}" title="Delete row">×</button></td>
+    </tr>`).join('');
+  tbody.querySelectorAll('.row-del').forEach(b=>b.addEventListener('click',()=>deleteRow(+b.dataset.i)));
+}
+function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+
+async function deleteRow(i){
+  if(!confirm('Delete this row?')) return;
+  projects[curIdx].rows.splice(i,1);
+  projects[curIdx].updated=new Date().toISOString();
+  await saveProject(projects[curIdx]);
+  renderProjList();
+  renderRows();
+  clearPca();
+}
+
+// ── Embedding ────────────────────────────────────────────────────────────────
+async function ensureModel(name){
+  if(model && modelName===name) return model;
+  setStatus('busy','Loading Transformers.js…',0);
+  const {pipeline}=await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');
+  setStatus('busy',`Downloading ${name.split('/')[1]}…`,5);
+  model=await pipeline('feature-extraction',name,{
+    progress_callback(p){
+      if(p.status==='downloading'||p.status==='progress'){
+        const pct=p.progress||(p.total?Math.round(p.loaded/p.total*100):0);
+        setStatus('busy',`Downloading… ${Math.round(pct)}%`,5+pct*.9);
+      }
+    }
+  });
+  modelName=name;
+  setStatus('ok',`Model ready: ${name.split('/')[1]}`,-1);
+  return model;
+}
+
+async function embedAll(){
+  if(curIdx<0) return;
+  const p=projects[curIdx];
+  const pending=p.rows.filter(r=>!r.vector);
+  if(!pending.length){setStatus('ok','All rows already embedded',-1);return}
+  const mname=document.getElementById('modelSel').value;
+  const m=await ensureModel(mname);
+  p.model=mname;
+  setStatus('busy',`Embedding ${pending.length} rows…`,0);
+  const BATCH=8;
+  for(let i=0;i<pending.length;i+=BATCH){
+    const batch=pending.slice(i,i+BATCH);
+    setStatus('busy',`Embedding ${i+1}–${Math.min(i+BATCH,pending.length)} / ${pending.length}`,Math.round(i/pending.length*95));
+    const out=await m(batch.map(r=>r.text),{pooling:'mean',normalize:true});
+    const vecs=out.tolist();
+    batch.forEach((r,j)=>r.vector=vecs[j]);
+  }
+  p.updated=new Date().toISOString();
+  await saveProject(p);
+  renderRows();
+  renderProjList();
+  setStatus('ok',`Embedded ${pending.length} rows`,-1);
+  clearPca();
+}
+
+// ── Import ───────────────────────────────────────────────────────────────────
+function parseImport(raw){
+  raw=raw.trim();
+  if(raw.startsWith('[')){
+    const arr=JSON.parse(raw);
+    return arr.map(x=>typeof x==='string'?{id:uid(),text:x,vector:null}:{id:uid(),text:x.text||JSON.stringify(x),vector:null});
+  }
+  return raw.split('\n').map(l=>l.trim()).filter(l=>l).map(l=>({id:uid(),text:l,vector:null}));
+}
+
+// ── PCA 3D ───────────────────────────────────────────────────────────────────
+let pca3dPts=null;
+
+function clearPca(){pca3dPts=null;document.getElementById('pcaStatus').textContent='';renderCanvas()}
+
+function computePca(){
+  if(curIdx<0) return;
+  const p=projects[curIdx];
+  const embedded=p.rows.filter(r=>r.vector);
+  if(embedded.length<3){alert('Need at least 3 embedded rows for 3D view.');return}
+  setStatus('busy','Computing PCA…',-1);
+  const vectors=embedded.map(r=>r.vector);
+  pca3dPts=simplePca3(vectors).map((pt,i)=>({...pt,label:embedded[i].text.slice(0,60),idx:i}));
+  setStatus('ok','PCA computed',-1);
+  document.getElementById('pcaStatus').textContent=`${embedded.length} points`;
+  renderCanvas();
+}
+
+function simplePca3(vecs){
+  const n=vecs.length,d=vecs[0].length;
+  const mean=new Array(d).fill(0);
+  vecs.forEach(v=>v.forEach((x,i)=>mean[i]+=x/n));
+  const X=vecs.map(v=>v.map((x,i)=>x-mean[i]));
+  const comps=[];
+  let B=X.map(r=>[...r]);
+  for(let k=0;k<3;k++){
+    let u=new Array(d).fill(0).map(()=>Math.random()-.5);
+    let norm=Math.sqrt(u.reduce((s,x)=>s+x*x,0));u=u.map(x=>x/norm);
+    for(let it=0;it<40;it++){
+      const Xu=B.map(r=>r.reduce((s,x,j)=>s+x*u[j],0));
+      const XtXu=new Array(d).fill(0).map((_,j)=>B.reduce((s,r,i)=>s+r[j]*Xu[i],0));
+      norm=Math.sqrt(XtXu.reduce((s,x)=>s+x*x,0));
+      u=XtXu.map(x=>x/(norm||1));
+    }
+    comps.push(u);
+    const Bu=B.map(r=>r.reduce((s,x,j)=>s+x*u[j],0));
+    B=B.map((r,i)=>r.map((x,j)=>x-Bu[i]*u[j]));
+  }
+  const raw=X.map(row=>comps.map(c=>c.reduce((s,x,j)=>s+x*row[j],0)));
+  const mins=raw[0].map((_,k)=>Math.min(...raw.map(r=>r[k])));
+  const maxs=raw[0].map((_,k)=>Math.max(...raw.map(r=>r[k])));
+  return raw.map(r=>({x:(r[0]-mins[0])/(maxs[0]-mins[0]||1)*2-1,y:(r[1]-mins[1])/(maxs[1]-mins[1]||1)*2-1,z:(r[2]-mins[2])/(maxs[2]-mins[2]||1)*2-1}));
+}
+
+// ── Canvas 3D renderer ────────────────────────────────────────────────────────
+const COLORS=['#6366f1','#22c55e','#eab308','#ef4444','#a78bfa','#38bdf8','#fb923c','#f472b6','#34d399','#fbbf24'];
+let rotX=0.4,rotY=0.6,zoom=220,drag=null;
+
+function project3d(x,y,z){
+  const cx=Math.cos(rotX),sx=Math.sin(rotX);
+  const cy=Math.cos(rotY),sy=Math.sin(rotY);
+  let[x1,y1,z1]=[x,y*cx-z*sx,y*sx+z*cx];
+  let[x2,y2,z2]=[x1*cy+z1*sy,y1,-x1*sy+z1*cy];
+  const fov=4,sc=fov/(fov+z2+0.01);
+  return{sx:x2*sc*zoom,sy:-y2*sc*zoom,depth:z2};
+}
+
+function renderCanvas(){
+  const canvas=document.getElementById('c3d');
+  const ctx=canvas.getContext('2d');
+  const w=canvas.width,h=canvas.height;
+  ctx.clearRect(0,0,w,h);
+  if(!pca3dPts||!pca3dPts.length){
+    ctx.fillStyle='#3d4468';ctx.font='12px -apple-system,sans-serif';
+    ctx.textAlign='center';ctx.fillText('Click "Compute 3D Layout" to visualize embeddings',w/2,h/2);
+    return;
+  }
+  const cx=w/2,cy=h/2;
+  const pts=pca3dPts.map(p=>{const pr=project3d(p.x,p.y,p.z);return{...p,...pr}});
+  pts.sort((a,b)=>b.depth-a.depth);
+  for(const p of pts){
+    const sc=Math.max(0.5,Math.min(1,(p.depth+2)/4));
+    ctx.beginPath();
+    ctx.arc(cx+p.sx,cy+p.sy,5*sc,0,Math.PI*2);
+    ctx.fillStyle=COLORS[p.idx%COLORS.length];
+    ctx.globalAlpha=0.7+sc*0.3;
+    ctx.fill();
+    ctx.globalAlpha=1;
+  }
+}
+
+function resizeCanvas(){
+  const c=document.getElementById('c3d');
+  const wrap=c.parentElement;
+  c.width=wrap.clientWidth;c.height=wrap.clientHeight;
+  renderCanvas();
+}
+
+// Canvas mouse
+const c3d=document.getElementById('c3d');
+c3d.addEventListener('mousedown',e=>{drag={lx:e.clientX,ly:e.clientY}});
+c3d.addEventListener('mousemove',e=>{
+  if(drag){const dx=e.clientX-drag.lx,dy=e.clientY-drag.ly;rotY+=dx*.005;rotX+=dy*.005;drag={lx:e.clientX,ly:e.clientY};renderCanvas()}
+  // Tooltip
+  if(!pca3dPts) return;
+  const rect=c3d.getBoundingClientRect();
+  const mx=e.clientX-rect.left,my=e.clientY-rect.top;
+  const cx=c3d.width/2,cy=c3d.height/2;
+  const tip=document.getElementById('c3dTip');
+  let nearest=null,minD=900;
+  for(const p of pca3dPts){
+    const pr=project3d(p.x,p.y,p.z);
+    const dx=cx+pr.sx-mx,dy=cy+pr.sy-my;
+    const d=Math.sqrt(dx*dx+dy*dy);
+    if(d<minD){minD=d;nearest=p}
+  }
+  if(nearest&&minD<12){
+    tip.style.display='';tip.style.left=mx+12+'px';tip.style.top=my+4+'px';
+    tip.textContent=nearest.label;
+  }else{tip.style.display='none'}
+});
+c3d.addEventListener('mouseup',()=>drag=null);
+c3d.addEventListener('mouseleave',()=>{drag=null;document.getElementById('c3dTip').style.display='none'});
+c3d.addEventListener('wheel',e=>{zoom=Math.max(80,Math.min(500,zoom-e.deltaY*.3));renderCanvas();e.preventDefault()},{passive:false});
+window.addEventListener('resize',resizeCanvas);
+
+// ── KNN Query ────────────────────────────────────────────────────────────────
+async function runQuery(){
+  if(curIdx<0) return;
+  const p=projects[curIdx];
+  const embedded=p.rows.filter(r=>r.vector);
+  if(!embedded.length){setStatus('err','No embedded rows in this project',-1);return}
+  const q=document.getElementById('qInput').value.trim();
+  if(!q) return;
+  const k=+document.getElementById('topK').value;
+  const mname=p.model||'Xenova/all-MiniLM-L6-v2';
+  const m=await ensureModel(mname);
+  setStatus('busy','Embedding query…',-1);
+  const out=await m([q],{pooling:'mean',normalize:true});
+  const qvec=out.tolist()[0];
+  const scored=embedded.map(r=>({...r,score:cosineSim(qvec,r.vector)})).sort((a,b)=>b.score-a.score).slice(0,k);
+  setStatus('ok',`Top ${scored.length} results`,-1);
+  const div=document.getElementById('qResults');
+  div.innerHTML=scored.map((r,i)=>`
+    <div class="q-result">
+      <div class="q-result-top">
+        <span class="q-result-rank">#${i+1}</span>
+        <span style="font-size:10px;color:var(--mu)">${r.vector.length}d</span>
+        <span class="q-result-score">${(r.score*100).toFixed(1)}%</span>
+      </div>
+      <div class="score-bar"><div class="score-fill" style="width:${Math.round(r.score*100)}%"></div></div>
+      <div class="q-result-text">${escHtml(r.text.slice(0,300))}${r.text.length>300?'…':''}</div>
+    </div>`).join('');
+}
+
+// ── Event wiring ─────────────────────────────────────────────────────────────
+document.getElementById('newProjBtn').addEventListener('click',createProject);
+document.getElementById('projTitle').addEventListener('change',async function(){
+  if(curIdx<0) return;
+  projects[curIdx].name=this.value;
+  projects[curIdx].updated=new Date().toISOString();
+  await saveProject(projects[curIdx]);
+  renderProjList();
+});
+document.getElementById('modelSel').addEventListener('change',async function(){
+  if(curIdx<0) return;
+  projects[curIdx].model=this.value;
+  await saveProject(projects[curIdx]);
+});
+document.getElementById('embedAllBtn').addEventListener('click',embedAll);
+document.getElementById('addRowBtn').addEventListener('click',()=>{
+  const f=document.getElementById('addRowForm');
+  f.classList.toggle('open');
+  if(f.classList.contains('open')) document.getElementById('newRowText').focus();
+});
+document.getElementById('saveRowBtn').addEventListener('click',async()=>{
+  if(curIdx<0) return;
+  const text=document.getElementById('newRowText').value.trim();
+  if(!text) return;
+  projects[curIdx].rows.push({id:uid(),text,vector:null});
+  projects[curIdx].updated=new Date().toISOString();
+  document.getElementById('newRowText').value='';
+  document.getElementById('addRowForm').classList.remove('open');
+  await saveProject(projects[curIdx]);
+  renderRows();renderProjList();clearPca();
+});
+document.getElementById('cancelRowBtn').addEventListener('click',()=>{
+  document.getElementById('addRowForm').classList.remove('open');
+  document.getElementById('newRowText').value='';
+});
+document.getElementById('delProjBtn').addEventListener('click',async()=>{
+  if(curIdx<0) return;
+  const p=projects[curIdx];
+  if(!confirm(`Delete project "${p.name}"?`)) return;
+  try{ await SDK.readText(STORE_DIR+'/'+p.slug+'.json'); }catch(_){}
+  // Overwrite with tombstone is simplest; we can't delete via current AppSDK
+  // Use a remove call if available
+  try{ if(SDK.remove) await SDK.remove(STORE_DIR+'/'+p.slug+'.json'); }catch(_){}
+  projects.splice(curIdx,1);
+  curIdx=-1;
+  document.getElementById('noProj').style.display='';
+  document.getElementById('projView').style.display='none';
+  document.getElementById('exportBtn').style.display='none';
+  renderProjList();
+});
+document.getElementById('importBtn').addEventListener('click',()=>document.getElementById('importModal').classList.add('open'));
+document.getElementById('importCancel').addEventListener('click',()=>document.getElementById('importModal').classList.remove('open'));
+document.getElementById('importConfirm').addEventListener('click',async()=>{
+  if(curIdx<0) return;
+  const raw=document.getElementById('importTa').value.trim();
+  if(!raw) return;
+  try{
+    const rows=parseImport(raw);
+    projects[curIdx].rows.push(...rows);
+    projects[curIdx].updated=new Date().toISOString();
+    await saveProject(projects[curIdx]);
+    renderRows();renderProjList();clearPca();
+    document.getElementById('importTa').value='';
+    document.getElementById('importModal').classList.remove('open');
+    setStatus('ok',`Imported ${rows.length} rows`,-1);
+  }catch(e){alert('Parse error: '+e.message)}
+});
+document.getElementById('computePcaBtn').addEventListener('click',computePca);
+document.getElementById('searchBtn').addEventListener('click',runQuery);
+document.getElementById('qInput').addEventListener('keydown',e=>{if(e.key==='Enter')runQuery()});
+document.getElementById('topK').addEventListener('input',function(){document.getElementById('kVal').textContent=this.value});
+document.getElementById('exportBtn').addEventListener('click',()=>{
+  if(curIdx<0) return;
+  const data=JSON.stringify(projects[curIdx],null,2);
+  const a=document.createElement('a');
+  a.download=projects[curIdx].slug+'.json';
+  a.href='data:application/json,'+encodeURIComponent(data);
+  a.click();
+});
+
+// Tabs
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active');
+  const p=document.getElementById('panel-'+t.dataset.tab);
+  if(p) p.classList.add('active');
+  if(t.dataset.tab==='view3d'){setTimeout(()=>{resizeCanvas();renderCanvas()},50)}
+}));
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+(async()=>{
+  await loadProjects();
+  resizeCanvas();
+  setStatus('ok','Ready',-1);
+})();
+</script>
+</body>
+</html>

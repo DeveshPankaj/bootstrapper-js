@@ -34,6 +34,8 @@ const CORE_APPS = [
   { id: 'snake-qlearning',  appDir: '/opt/apps/snake-qlearning',  mainFile: '/opt/apps/snake-qlearning/main.js' },
   { id: 'snake-cnn3d',      appDir: '/opt/apps/snake-cnn3d',      mainFile: '/opt/apps/snake-cnn3d/main.js' },
   { id: 'app-launcher',   appDir: '/opt/apps/app-launcher',   mainFile: '/opt/apps/app-launcher/main.js' },
+  { id: 'vector-store',   appDir: '/opt/apps/vector-store',   mainFile: '/opt/apps/vector-store/main.js' },
+  { id: 'ai-dom-lens',    appDir: '/opt/apps/ai-dom-lens',    mainFile: '/opt/apps/ai-dom-lens/main.js' },
   // python-demo is not a core app — install via App Manager
 ];
 

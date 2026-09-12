@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AI DOM Lens</title>
+<style>
+:root{--bg:#0f1117;--s1:#161922;--s2:#1d2130;--s3:#252a3d;--bd:#2d3148;--tx:#dde1f5;--mu:#7880a0;--ac:#6366f1;--gr:#22c55e;--yw:#eab308;--rd:#ef4444;--ab:rgba(99,102,241,.15);font-size:13px;color-scheme:dark}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--tx);height:100vh;display:flex;flex-direction:column;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+input,select,button{font-family:inherit;font-size:13px}
+.tb{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--s1);border-bottom:1px solid var(--bd);flex-shrink:0}
+.tb h1{font-size:14px;font-weight:700;color:var(--ac);flex-shrink:0}
+.q-input{flex:1;background:var(--s2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 10px;outline:none;transition:border-color .15s}
+.q-input:focus{border-color:var(--ac)}
+.q-input::placeholder{color:var(--mu)}
+.btn{padding:5px 12px;background:var(--ac);color:#fff;border:none;border-radius:6px;font-weight:600;cursor:pointer;transition:opacity .15s;white-space:nowrap;font-size:12px}
+.btn:disabled{opacity:.45;cursor:not-allowed}.btn:not(:disabled):hover{opacity:.8}
+.btn-ghost{background:var(--s3);color:var(--tx)}
+.vs-sel{background:var(--s2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:5px 8px;cursor:pointer;font-size:11px;outline:none;max-width:160px}
+.vs-sel:focus{border-color:var(--ac)}
+.sb{padding:3px 12px;background:var(--s1);border-bottom:1px solid var(--bd);font-size:11px;color:var(--mu);display:flex;align-items:center;gap:6px;flex-shrink:0}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--mu);flex-shrink:0}.dot.ok{background:var(--gr)}.dot.busy{background:var(--yw);animation:pulse 1s infinite}.dot.err{background:var(--rd)}
+.pb{flex:1;max-width:180px;height:3px;background:var(--s3);border-radius:2px;overflow:hidden;display:none}.pf{height:100%;background:var(--ac);border-radius:2px;transition:width .2s;width:0}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.layout{display:flex;flex:1;overflow:hidden}
+/* Sidebar */
+.sidebar{width:260px;flex-shrink:0;background:var(--s1);border-right:1px solid var(--bd);display:flex;flex-direction:column;overflow:hidden}
+.sh{padding:8px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--mu);border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:4px}
+.results-list{flex:1;overflow-y:auto;padding:6px}
+.empty{padding:24px 12px;text-align:center;color:var(--mu);font-size:11px;line-height:1.6}
+.empty-icon{font-size:28px;display:block;margin-bottom:8px}
+.res-item{background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:9px;margin-bottom:5px;cursor:pointer;transition:border-color .12s,background .12s}
+.res-item:hover{border-color:var(--ac);background:rgba(99,102,241,.06)}
+.res-item.active{border-color:var(--ac);background:var(--ab)}
+.res-rank{font-size:10px;font-weight:700;color:var(--ac);margin-bottom:3px}
+.res-type{display:inline-block;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:rgba(99,102,241,.2);color:var(--ac);margin-bottom:3px}
+.res-sel{font-family:'Cascadia Code',monospace;font-size:9px;color:var(--gr);background:rgba(34,197,94,.08);padding:2px 5px;border-radius:3px;word-break:break-all;margin-bottom:3px;display:flex;gap:3px;align-items:flex-start}
+.copy-btn{background:none;border:none;color:var(--mu);cursor:pointer;font-size:10px;padding:0 2px;flex-shrink:0;opacity:.7;line-height:1}
+.copy-btn:hover{color:var(--ac);opacity:1}
+.res-score{font-size:11px;color:var(--mu);margin-bottom:3px}
+.sbar{height:3px;background:var(--bd);border-radius:2px;overflow:hidden;margin-bottom:3px}.sfill{height:100%;background:linear-gradient(90deg,var(--ac),#a78bfa);border-radius:2px}
+.res-snip{font-size:10px;color:var(--mu);line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.res-source{font-size:9px;color:rgba(99,102,241,.6);margin-bottom:2px}
+/* Content */
+.content{flex:1;overflow-y:auto;padding:16px}
+.section{margin-bottom:28px}
+.sec-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--mu);margin-bottom:10px;padding-bottom:7px;border-bottom:1px solid var(--bd)}
+/* Table */
+.dtable{width:100%;border-collapse:collapse;font-size:12px}
+.dtable th{text-align:left;padding:7px 10px;background:var(--s2);border:1px solid var(--bd);font-size:10px;color:var(--mu);font-weight:700;text-transform:uppercase;white-space:nowrap}
+.dtable td{padding:7px 10px;border:1px solid var(--bd);vertical-align:top}
+.dtable tr:nth-child(even) td{background:rgba(255,255,255,.02)}
+.dtable .desc{color:var(--mu);font-size:11px;max-width:240px}
+.badge{display:inline-block;padding:1px 7px;border-radius:10px;font-size:10px;font-weight:600;background:rgba(99,102,241,.12);color:var(--ac)}
+.price{font-variant-numeric:tabular-nums;font-weight:600}
+.rat{color:var(--yw);font-size:11px;white-space:nowrap}
+/* Cards */
+.card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+.card{background:var(--s2);border:1px solid var(--bd);border-radius:9px;padding:14px;transition:border-color .15s}
+.card-tag{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ac);margin-bottom:7px}
+.card h3{font-size:13px;font-weight:700;margin-bottom:6px}
+.card p{font-size:11px;color:var(--mu);line-height:1.5}
+/* Articles */
+.articles{display:flex;flex-direction:column;gap:10px}
+.art{background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:12px}
+.art h4{font-size:12px;margin-bottom:5px}
+.art p{font-size:11px;color:var(--mu);line-height:1.5}
+/* VS section */
+.vs-rows{display:flex;flex-direction:column;gap:6px;margin-top:8px;max-height:160px;overflow-y:auto}
+.vs-row-item{background:var(--s2);border:1px solid var(--bd);border-radius:6px;padding:8px;font-size:11px;color:var(--mu);line-height:1.4}
+/* Highlights */
+.ai-match{outline:2px solid var(--ac)!important;background:var(--ab)!important;border-radius:4px;animation:glow 2s ease-in-out infinite}
+.ai-match-top{outline:2px solid #a78bfa!important;background:rgba(167,139,250,.14)!important;border-radius:4px;animation:glow-top 2s ease-in-out infinite}
+@keyframes glow{0%,100%{box-shadow:0 0 0 0 rgba(99,102,241,0)}50%{box-shadow:0 0 0 4px rgba(99,102,241,.2)}}
+@keyframes glow-top{0%,100%{box-shadow:0 0 0 0 rgba(167,139,250,0)}50%{box-shadow:0 0 0 6px rgba(167,139,250,.28)}}
+::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--bd);border-radius:3px}
+</style>
+</head>
+<body>
+
+<div class="tb">
+  <h1>⬡ AI DOM Lens</h1>
+  <input class="q-input" id="qInput" type="text" placeholder="e.g. best laptop for video editing, budget smartphone, noise cancelling headphones…" autocomplete="off">
+  <select class="vs-sel" id="vsSel" title="Knowledge base: DOM only or a Vector Store project">
+    <option value="">DOM only</option>
+  </select>
+  <button class="btn" id="analyzeBtn">Analyze</button>
+</div>
+<div class="sb">
+  <div class="dot" id="dot"></div>
+  <span id="stTxt">Ready — type a query and click Analyze</span>
+  <div class="pb" id="pb"><div class="pf" id="pf"></div></div>
+</div>
+
+<div class="layout">
+  <div class="sidebar">
+    <div class="sh">Results <span id="matchCount" style="font-weight:400;text-transform:none;letter-spacing:0"></span></div>
+    <div class="results-list" id="resultsList">
+      <div class="empty"><span class="empty-icon">🔍</span>Query the page using natural language to find the most relevant DOM elements via semantic AI.</div>
+    </div>
+  </div>
+
+  <div class="content" id="demoContent">
+
+    <div class="section">
+      <div class="sec-title">Product Catalog — Table</div>
+      <div style="overflow-x:auto">
+        <table class="dtable" id="prodTable">
+          <thead><tr><th>#</th><th>Product</th><th>Category</th><th>Price</th><th>Rating</th><th>Description</th></tr></thead>
+          <tbody id="prodBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="sec-title">Featured Articles — Cards</div>
+      <div class="card-grid" id="cardGrid"></div>
+    </div>
+
+    <div class="section">
+      <div class="sec-title">Tech Insights — Blog</div>
+      <div class="articles" id="artList"></div>
+    </div>
+
+    <div class="section" id="vsSection" style="display:none">
+      <div class="sec-title">Vector Store — Knowledge Base</div>
+      <div class="vs-rows" id="vsRows"></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const SDK = window.AppSDK || { readText:()=>Promise.reject(new Error('no SDK')), list:()=>Promise.resolve([]) };
+const STORE_DIR = '/home/user1/.local/share/vector-store';
+
+// ── Demo data ─────────────────────────────────────────────────────────────────
+const PRODUCTS=[
+  {id:1,name:'MacBook Pro 14"',cat:'Laptop',price:'$1,999',rating:'★★★★★ 4.8',desc:'Apple M3 Pro chip, 12-core CPU. Exceptional for software development, video editing, 3D rendering. 18-hour battery, Liquid Retina XDR display.'},
+  {id:2,name:'Dell XPS 15',cat:'Laptop',price:'$1,249',rating:'★★★★☆ 4.4',desc:'Intel Core i7, OLED touch display. Great for content creation and programming. Thunderbolt 4, 16GB RAM, Windows 11 Pro.'},
+  {id:3,name:'ThinkPad X1 Carbon',cat:'Laptop',price:'$1,099',rating:'★★★★☆ 4.5',desc:'Ultra-lightweight 1.12kg business laptop. Military-grade durability, enterprise security, fingerprint + IR camera. Ideal for frequent travelers.'},
+  {id:4,name:'Samsung Galaxy S24 Ultra',cat:'Phone',price:'$1,199',rating:'★★★★☆ 4.6',desc:'Android flagship with built-in S Pen stylus. 200MP camera, 100× Space Zoom. Best for mobile photographers and note-takers.'},
+  {id:5,name:'iPhone 15 Pro',cat:'Phone',price:'$999',rating:'★★★★★ 4.7',desc:'Titanium design, A17 Pro chip — most powerful mobile GPU. ProMotion 120Hz, USB-C Thunderbolt. Excellent low-light photography.'},
+  {id:6,name:'Google Pixel 8a',cat:'Phone',price:'$499',rating:'★★★★☆ 4.3',desc:'Best-value Android phone. Google Tensor G3, 7 years OS updates, 64MP AI camera, clean stock Android. Great for budget shoppers.'},
+  {id:7,name:'iPad Air M2',cat:'Tablet',price:'$599',rating:'★★★★★ 4.7',desc:'Creative tablet with M2 chip, Apple Pencil Pro support, Magic Keyboard compatibility. Perfect for digital art and note-taking.'},
+  {id:8,name:'Sony WH-1000XM5',cat:'Headphones',price:'$380',rating:'★★★★★ 4.8',desc:'Industry-leading active noise cancellation. 30-hour battery, 8 mics, crystal-clear calls. Foldable, connects two devices simultaneously.'},
+  {id:9,name:'LG UltraFine 27" 4K',cat:'Monitor',price:'$649',rating:'★★★★☆ 4.4',desc:'IPS panel, 98% DCI-P3, factory calibrated. USB-C 96W charging, KVM switch. For photo/video professionals and color-accurate design.'},
+  {id:10,name:'Raspberry Pi 5',cat:'Mini PC',price:'$80',rating:'★★★★☆ 4.5',desc:'Quad-core Arm Cortex-A76 at 2.4GHz, 8GB RAM. Perfect for robotics, IoT, home servers, retro emulation, and learning Linux.'},
+  {id:11,name:'NVIDIA RTX 4060 Ti',cat:'GPU',price:'$399',rating:'★★★★☆ 4.2',desc:'Mid-range GPU with DLSS 3, ray tracing, AV1 encode. 16GB VRAM — great for 1440p gaming and local ML inference with CUDA.'},
+  {id:12,name:'Logitech MX Master 3S',cat:'Accessory',price:'$100',rating:'★★★★★ 4.8',desc:'Precision ergonomic mouse. MagSpeed electromagnetic scroll wheel, customizable buttons. Designed for designers and power users.'},
+];
+const CARDS=[
+  {tag:'AI & Edge Compute',title:'Running LLMs Locally',body:'Modern consumer hardware can run 7B-parameter models at usable speeds. With Ollama and llama.cpp, you can run Mistral, Llama 3, Phi-3 entirely offline — no data leaving the device. Ideal for privacy-sensitive applications.'},
+  {tag:'Productivity',title:'Ultimate Remote Work Setup 2025',body:'A 4K monitor with USB-C docking, a quality mechanical keyboard, and noise-cancelling headphones are the cornerstones of a productive home office. Add a laptop stand for ergonomics.'},
+  {tag:'Sustainability',title:'Choosing Long-Lasting Tech',body:'Devices with high repairability scores and long software support windows reduce e-waste. Framework Laptop and Fairphone lead with modular, user-serviceable designs and 7+ year support.'},
+  {tag:'Gaming',title:'PC Gaming on a Budget',body:'An RTX 4060 paired with Ryzen 5 7600 delivers 1080p gaming at ultra settings. Add 16GB DDR5 and a 144Hz monitor for a capable gaming rig under $900.'},
+];
+const ARTICLES=[
+  {title:'Why Battery Life Matters More Than Raw Speed',text:"As CPUs reach performance ceilings for most users, battery longevity separates good laptops from great ones. Apple's M-series chips set the benchmark with 18+ hours. Qualcomm's Snapdragon X Elite is the first credible Windows challenger."},
+  {title:'The Rise of AI-Accelerated Photography',text:"Computational photography has made mid-range smartphones competitive with traditional cameras. Google's Magic Eraser, Apple's Photonic Engine, and Samsung's Generative Edit can remove objects and recover low-light detail. Pixel 8a brings these to $500."},
+  {title:'Open Source Firmware and Hardware Longevity',text:"Devices running open-source firmware can receive community patches long after vendors drop support. Raspberry Pi 5 and Framework Laptop exemplify hardware designed to be tinkered with and kept alive for a decade or more."},
+];
+
+// ── Populate DOM ──────────────────────────────────────────────────────────────
+const tbody=document.getElementById('prodBody');
+PRODUCTS.forEach(p=>{
+  const tr=document.createElement('tr');
+  tr.dataset.type='table-row';tr.dataset.label=p.name;
+  tr.innerHTML=`<td style="color:var(--mu);font-variant-numeric:tabular-nums">${p.id}</td><td style="font-weight:600">${p.name}</td><td><span class="badge">${p.cat}</span></td><td class="price">${p.price}</td><td class="rat">${p.rating}</td><td class="desc">${p.desc}</td>`;
+  tbody.appendChild(tr);
+});
+const cgrid=document.getElementById('cardGrid');
+CARDS.forEach(c=>{
+  const el=document.createElement('div');el.className='card';el.dataset.type='card';el.dataset.label=c.title;
+  el.innerHTML=`<div class="card-tag">${c.tag}</div><h3>${c.title}</h3><p>${c.body}</p>`;cgrid.appendChild(el);
+});
+const alist=document.getElementById('artList');
+ARTICLES.forEach(a=>{
+  const el=document.createElement('div');el.className='art';el.dataset.type='article';el.dataset.label=a.title;
+  el.innerHTML=`<h4>${a.title}</h4><p>${a.text}</p>`;alist.appendChild(el);
+});
+
+// ── Utilities ─────────────────────────────────────────────────────────────────
+function cosineSim(a,b){let d=0,na=0,nb=0;for(let i=0;i<a.length;i++){d+=a[i]*b[i];na+=a[i]*a[i];nb+=b[i]*b[i]}return d/(Math.sqrt(na)*Math.sqrt(nb)||1)}
+function setStatus(state,msg,pct=-1){
+  document.getElementById('dot').className='dot '+(state==='ok'?'ok':state==='busy'?'busy':state==='err'?'err':'');
+  document.getElementById('stTxt').textContent=msg;
+  const pb=document.getElementById('pb'),pf=document.getElementById('pf');
+  if(pct>=0){pb.style.display='';pf.style.width=pct+'%'}else{pb.style.display='none'}
+}
+
+function getCssSelector(el){
+  const parts=[];let node=el;
+  while(node&&node.nodeType===1&&node!==document.documentElement){
+    let part=node.tagName.toLowerCase();
+    if(node.id){parts.unshift('#'+node.id);break}
+    const cls=Array.from(node.classList).filter(c=>c&&!c.startsWith('ai-')).slice(0,2).join('.');
+    if(cls) part+='.'+cls;
+    const parent=node.parentElement;
+    if(parent){
+      const sibs=Array.from(parent.children).filter(c=>c.tagName===node.tagName);
+      if(sibs.length>1) part+=`:nth-child(${Array.from(parent.children).indexOf(node)+1})`
+    }
+    parts.unshift(part);node=node.parentElement;
+  }
+  return parts.join(' > ');
+}
+
+function getNodes(){
+  const nodes=[];
+  document.querySelectorAll('#prodBody tr').forEach(tr=>nodes.push({el:tr,text:tr.innerText.replace(/\s+/g,' ').trim(),type:'Table Row',label:tr.dataset.label||''}));
+  document.querySelectorAll('.card').forEach(c=>nodes.push({el:c,text:c.innerText.replace(/\s+/g,' ').trim(),type:'Card',label:c.dataset.label||''}));
+  document.querySelectorAll('.art').forEach(a=>nodes.push({el:a,text:a.innerText.replace(/\s+/g,' ').trim(),type:'Article',label:a.dataset.label||''}));
+  return nodes;
+}
+
+// ── Model ─────────────────────────────────────────────────────────────────────
+let extractor=null,extModel='';
+async function ensureModel(name){
+  if(extractor&&extModel===name) return extractor;
+  setStatus('busy','Loading Transformers.js…',0);
+  const{pipeline}=await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');
+  setStatus('busy',`Downloading ${name.split('/')[1]}…`,5);
+  extractor=await pipeline('feature-extraction',name,{
+    progress_callback(p){
+      if(p.status==='downloading'||p.status==='progress'){
+        const pct=p.progress||(p.total?Math.round(p.loaded/p.total*100):0);
+        setStatus('busy',`Downloading… ${Math.round(pct)}%`,5+pct*.9);
+      }
+    }
+  });
+  extModel=name;
+  setStatus('ok',`Model ready: ${name.split('/')[1]}`,-1);
+  return extractor;
+}
+
+// ── Vector Store integration ──────────────────────────────────────────────────
+let vsProjects=[];
+async function loadVsProjects(){
+  try{
+    const files=await SDK.list(STORE_DIR);
+    const sel=document.getElementById('vsSel');
+    sel.innerHTML='<option value="">DOM only</option>';
+    vsProjects=[];
+    for(const f of files.filter(f=>f.name.endsWith('.json'))){
+      try{
+        const raw=await SDK.readText(STORE_DIR+'/'+f.name);
+        const p=JSON.parse(raw);
+        vsProjects.push(p);
+        const opt=document.createElement('option');opt.value=p.slug;opt.textContent=p.name+' ('+p.rows.filter(r=>r.vector).length+'v)';
+        sel.appendChild(opt);
+      }catch(_){}
+    }
+  }catch(_){}
+}
+
+// ── Analysis ──────────────────────────────────────────────────────────────────
+let highlights=[];
+function clearHighlights(){highlights.forEach(el=>el.classList.remove('ai-match','ai-match-top'));highlights=[]}
+
+async function analyze(){
+  const q=document.getElementById('qInput').value.trim();
+  if(!q) return;
+  const btn=document.getElementById('analyzeBtn');
+  btn.disabled=true;
+  clearHighlights();
+
+  try{
+    const vsSlug=document.getElementById('vsSel').value;
+    const vsProj=vsProjects.find(p=>p.slug===vsSlug);
+    const vsEmbedded=vsProj?vsProj.rows.filter(r=>r.vector):[];
+
+    const modelName=(vsProj&&vsProj.model)||'Xenova/all-MiniLM-L6-v2';
+    const m=await ensureModel(modelName);
+
+    const domNodes=getNodes();
+    setStatus('busy',`Embedding query + ${domNodes.length} DOM elements${vsEmbedded.length?` + ${vsEmbedded.length} KB rows`:''}…`,98);
+
+    const domTexts=domNodes.map(n=>n.text);
+    const allTexts=[q,...domTexts];
+    const out=await m(allTexts,{pooling:'mean',normalize:true});
+    const embeds=out.tolist();
+    const qvec=embeds[0];
+
+    // Score DOM nodes
+    const domScored=domNodes.map((n,i)=>({...n,score:cosineSim(qvec,embeds[i+1]),source:'DOM'})).sort((a,b)=>b.score-a.score);
+
+    // Score VS rows (vectors already computed, but we need to ensure compatible model)
+    let vsScored=[];
+    if(vsEmbedded.length){
+      // If VS vectors have same dim as our query embedding, use them
+      if(vsEmbedded[0].vector.length===qvec.length){
+        vsScored=vsEmbedded.map(r=>({el:null,text:r.text,type:'Knowledge Base',label:r.text.slice(0,60),score:cosineSim(qvec,r.vector),source:'VS'})).sort((a,b)=>b.score-a.score).slice(0,5);
+      }else{
+        // Need to re-embed VS rows with current model
+        setStatus('busy','Re-embedding knowledge base rows…',0);
+        const vsOut=await m(vsEmbedded.map(r=>r.text),{pooling:'mean',normalize:true});
+        const vsVecs=vsOut.tolist();
+        vsScored=vsEmbedded.map((r,i)=>({el:null,text:r.text,type:'Knowledge Base',label:r.text.slice(0,60),score:cosineSim(qvec,vsVecs[i]),source:'VS'})).sort((a,b)=>b.score-a.score).slice(0,5);
+      }
+    }
+
+    // Interleave: top 5 DOM + top 3 VS, re-sort
+    const combined=[...domScored.slice(0,5),...vsScored.slice(0,3)].sort((a,b)=>b.score-a.score).slice(0,8);
+
+    setStatus('ok',`${combined.length} matches for "${q}"`,-1);
+    renderResults(combined);
+    highlightNodes(combined.filter(r=>r.el));
+
+    // Show VS section if VS results present
+    const vsSection=document.getElementById('vsSection');
+    if(vsScored.length){
+      vsSection.style.display='';
+      document.getElementById('vsRows').innerHTML=vsScored.slice(0,5).map(r=>`<div class="vs-row-item"><span style="color:var(--ac);font-size:10px;font-weight:700">${(r.score*100).toFixed(1)}%</span> ${escHtml(r.text.slice(0,180))}${r.text.length>180?'…':''}</div>`).join('');
+    }else{vsSection.style.display='none'}
+
+  }catch(e){
+    console.error(e);setStatus('err','Error: '+e.message,-1);
+  }finally{btn.disabled=false}
+}
+
+function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+
+function renderResults(results){
+  const list=document.getElementById('resultsList');
+  document.getElementById('matchCount').textContent=results.length?`(${results.length})`:'';
+  if(!results.length){list.innerHTML='<div class="empty">No matches found.</div>';return}
+  list.innerHTML='';
+  results.forEach((r,i)=>{
+    const sel=r.el?getCssSelector(r.el):'(knowledge base)';
+    const pct=Math.round(r.score*100);
+    const item=document.createElement('div');
+    item.className='res-item'+(i===0?' active':'');
+    item.innerHTML=`
+      <div class="res-rank">#${i+1}${i===0?' — Best':''}</div>
+      ${r.source==='VS'?'<div class="res-source">📚 Vector Store</div>':''}
+      <div class="res-type">${r.type}</div>
+      <div class="res-sel"><span style="flex:1;word-break:break-all">${escHtml(sel)}</span>${r.el?`<button class="copy-btn" data-sel="${sel.replace(/"/g,'&quot;')}">⎘</button>`:''}</div>
+      <div class="res-score">Similarity: ${pct}%</div>
+      <div class="sbar"><div class="sfill" style="width:${pct}%"></div></div>
+      <div class="res-snip">${escHtml(r.label)}</div>`;
+    if(r.el){
+      item.addEventListener('click',()=>{
+        document.querySelectorAll('.res-item').forEach(x=>x.classList.remove('active'));
+        item.classList.add('active');
+        r.el.scrollIntoView({behavior:'smooth',block:'center'});
+      });
+    }
+    const cb=item.querySelector('.copy-btn');
+    if(cb) cb.addEventListener('click',e=>{e.stopPropagation();navigator.clipboard.writeText(e.target.dataset.sel).then(()=>{e.target.textContent='✓';setTimeout(()=>e.target.textContent='⎘',1400)})});
+    list.appendChild(item);
+  });
+}
+
+function highlightNodes(results){
+  results.forEach((r,i)=>{
+    if(!r.el) return;
+    r.el.classList.add(i===0?'ai-match-top':'ai-match');
+    highlights.push(r.el);
+  });
+  if(results[0]&&results[0].el) results[0].el.scrollIntoView({behavior:'smooth',block:'center'});
+}
+
+// ── Events ────────────────────────────────────────────────────────────────────
+document.getElementById('analyzeBtn').addEventListener('click',analyze);
+document.getElementById('qInput').addEventListener('keydown',e=>{if(e.key==='Enter')analyze()});
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+(async()=>{
+  await loadVsProjects();
+  setStatus('ok','Ready',-1);
+})();
+</script>
+</body>
+</html>
