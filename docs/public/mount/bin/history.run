@@ -4,7 +4,12 @@ const fs = platform.host.getFS();
 const write = terminal ? terminal.write.bind(terminal) : console.log;
 const [pwd, ...rest] = $args;
 
-const historyFile = `${pwd}/.bash_history`;  // History file path
+// Fixed at the home directory, like real bash's $HISTFILE - not cwd-relative
+// (this used to be `${pwd}/.bash_history`, which meant `cd`ing anywhere and
+// running `history` created/read a *different* .bash_history file in that
+// directory instead of the one the terminal app itself reads/appends to at
+// boot/exit, see HISTORY_FILE in /opt/apps/terminal/main.html).
+const historyFile = '/home/user1/.bash_history';
 
 // Ensure the history file exists
 if (!fs.existsSync(historyFile)) {
