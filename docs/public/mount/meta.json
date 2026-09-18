@@ -192,6 +192,11 @@
     "force_reload": true
   },
   {
+    "path": "/bin/systemctl.run",
+    "file": "/bin/systemctl.run",
+    "force_reload": true
+  },
+  {
     "path": "/home/user1/tools/speed-test.html",
     "file": "/home/user1/tools/speed-test.html",
     "force_reload": false
@@ -424,6 +429,31 @@
   {
     "path": "/opt/cron/check-public-ip.js",
     "file": "/opt/cron/check-public-ip.js",
+    "force_reload": false
+  },
+  {
+    "path": "/etc/systemd/system/heartbeat.service",
+    "file": "/etc/systemd/system/heartbeat.service",
+    "force_reload": false
+  },
+  {
+    "path": "/etc/systemd/system/disk-usage-logger.service",
+    "file": "/etc/systemd/system/disk-usage-logger.service",
+    "force_reload": false
+  },
+  {
+    "path": "/etc/systemd/enabled.json",
+    "file": "/etc/systemd/enabled.json",
+    "force_reload": false
+  },
+  {
+    "path": "/opt/systemd/heartbeat.js",
+    "file": "/opt/systemd/heartbeat.js",
+    "force_reload": false
+  },
+  {
+    "path": "/opt/systemd/disk-usage-logger.js",
+    "file": "/opt/systemd/disk-usage-logger.js",
     "force_reload": false
   },
   {
@@ -929,6 +959,11 @@
   {
     "path": "/etc/settings/21-architecture.js",
     "file": "/etc/settings/21-architecture.js",
+    "force_reload": true
+  },
+  {
+    "path": "/etc/settings/22-services.js",
+    "file": "/etc/settings/22-services.js",
     "force_reload": true
   },
   {

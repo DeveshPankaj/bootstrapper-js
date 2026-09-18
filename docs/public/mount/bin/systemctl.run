@@ -1,0 +1,82 @@
+const terminal = platform.getService('terminal')
+const write = terminal ? terminal.write.bind(terminal) : console.log
+const [pwd, subcommand, ...rest] = $args
+
+const usage = () => {
+  write('usage: systemctl <command> [unit]\r\n')
+  write('commands:\r\n')
+  write('  status [unit]      show status (and recent log) for one or all units\r\n')
+  write('  list-units         table of all units and their state\r\n')
+  write('  start <unit>       activate a unit now\r\n')
+  write('  stop <unit>        deactivate a unit now\r\n')
+  write('  restart <unit>     stop then start a unit\r\n')
+  write('  enable <unit>      autostart a unit at boot\r\n')
+  write('  disable <unit>     stop autostarting a unit at boot\r\n')
+  write('  daemon-reload      rescan /etc/systemd/system for unit file changes\r\n')
+}
+
+if (!subcommand) { usage(); return }
+
+const normalize = (name) => name.endsWith('.service') ? name : `${name}.service`
+
+const printStatus = (info) => {
+  const dot = info.status === 'active' ? '●' : info.status === 'failed' ? '×' : '○'
+  write(`${dot} ${info.name} - ${info.description || '(no description)'}\r\n`)
+  write(`     Loaded: loaded (${info.execStart})\r\n`)
+  write(`     Active: ${info.status}${info.mainPid ? ` (PID ${info.mainPid})` : ''}${info.startedAt ? ` since ${new Date(info.startedAt).toLocaleTimeString()}` : ''}\r\n`)
+  write(`    Restart: ${info.restart}${info.restartCount ? `, ${info.restartCount} restart(s)` : ''}\r\n`)
+  write(`    Enabled: ${info.enabled ? 'enabled' : 'disabled'}\r\n`)
+  if (info.lastError) write(`      Error: ${info.lastError}\r\n`)
+  const journal = platform.host.getCommand('systemd.journal')?.exec(info.name, 5) ?? []
+  if (journal.length) {
+    write('\r\n')
+    journal.forEach(line => write(`     ${line}\r\n`))
+  }
+}
+
+if (subcommand === 'list-units') {
+  const units = platform.host.getCommand('systemd.list')?.exec() ?? []
+  if (!units.length) { write('No units found in /etc/systemd/system.\r\n'); return }
+  const rows = units.map(u => [u.name, u.status, u.enabled ? 'enabled' : 'disabled', u.description || ''])
+  const header = ['UNIT', 'ACTIVE', 'ENABLED', 'DESCRIPTION']
+  const widths = header.map((h, i) => Math.max(h.length, ...rows.map(r => r[i].length)))
+  const formatRow = (cols) => cols.map((c, i) => c.padEnd(widths[i])).join('  ')
+  write(formatRow(header) + '\r\n')
+  rows.forEach(row => write(formatRow(row) + '\r\n'))
+  return
+}
+
+if (subcommand === 'daemon-reload') {
+  platform.host.getCommand('systemd.list')?.exec()
+  write('Reloaded unit files from /etc/systemd/system.\r\n')
+  return
+}
+
+if (subcommand === 'status') {
+  if (!rest[0]) {
+    const units = platform.host.getCommand('systemd.list')?.exec() ?? []
+    if (!units.length) { write('No units found in /etc/systemd/system.\r\n'); return }
+    units.forEach((u, i) => { if (i) write('\r\n'); printStatus(u) })
+    return
+  }
+  const info = platform.host.getCommand('systemd.status')?.exec(rest[0])
+  if (!info) { write(`Unit ${normalize(rest[0])} could not be found.\r\n`); return }
+  printStatus(info)
+  return
+}
+
+const unitCommands = {
+  start: 'systemd.start', stop: 'systemd.stop', restart: 'systemd.restart',
+  enable: 'systemd.enable', disable: 'systemd.disable',
+}
+
+if (unitCommands[subcommand]) {
+  if (!rest[0]) { write(`systemctl: ${subcommand} requires a unit name\r\n`); return }
+  platform.host.getCommand(unitCommands[subcommand])?.exec(rest[0])
+  const verbed = { start: 'Started', stop: 'Stopped', restart: 'Restarted', enable: 'Enabled', disable: 'Disabled' }[subcommand]
+  write(`${verbed} ${normalize(rest[0])}.\r\n`)
+  return
+}
+
+write(`systemctl: unknown command "${subcommand}"\r\n`)
+usage()

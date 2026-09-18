@@ -84,6 +84,20 @@ const NODES = [
       { k: 'Variants', v: '/opt/apps/dock/default.html (dark pill) · macos.html (glass bar)' },
     ],
   },
+  {
+    id: 'systemd', label: 'systemd', sub: 'core/systemd.ts',
+    icon: 'dns', color: '#ffd60a',
+    x: 290, y: 245, w: 165, h: 70,
+    info: [
+      { k: '/etc/systemd/system/*.service', v: 'Unit files: [Unit]/[Service]/[Install] ini sections' },
+      { k: '/etc/systemd/enabled.json', v: 'Autostart list — stand-in for WantedBy= target symlinks' },
+      { k: 'startSystemd()', v: 'Activates every enabled unit at boot (multi-user.target)' },
+      { k: 'activate(unit)', v: 'Runs ExecStart in an isolated Platform via execString/execCommand' },
+      { k: "platform.getService('systemd')", v: 'onStop(cb) / isStopRequested() / log(...) — per-activation context' },
+      { k: 'systemd.* commands', v: 'start / stop / restart / enable / disable / status / list / journal' },
+      { k: '/bin/systemctl.run · Settings > Services', v: 'Terminal command and GUI front ends over the same commands' },
+    ],
+  },
 ]
 
 const EDGES = [
@@ -93,6 +107,7 @@ const EDGES = [
   { from: 'platform', to: 'ipc',      fa: 's', ta: 'n', label: 'initIpc' },
   { from: 'layout',   to: 'ipc',      fa: 'e', ta: 'w', label: '__wosWmBridge' },
   { from: 'ipc',      to: 'dock',     fa: 's', ta: 'n', label: 'postMessage IPC' },
+  { from: 'platform', to: 'systemd',  fa: 's', ta: 'n', label: 'execString (isolated)' },
 ]
 
 function getAnchor(node, side) {

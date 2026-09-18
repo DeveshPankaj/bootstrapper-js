@@ -8,6 +8,7 @@ import { createRoot } from "react-dom/client";
 import * as utils from '@shared/utils'
 import { DESKTOP_CONTAINER_CLASS, WINDOWS_CONTAINER_CLASS } from './core/window-manager'
 import { startCronScheduler } from './core/cron'
+import { startSystemd, startUnit, stopUnit, restartUnit, enableUnit, disableUnit, getStatus as getUnitStatus, listUnits, readJournal } from './core/systemd'
 import { initIpc } from './core/ipc'
 
 class WindowService {
@@ -111,6 +112,7 @@ const runInitCommands = () => {
 
   loadWidgets();
   startCronScheduler();
+  startSystemd();
 }
 
 // Loads every `.js` file in `/etc/widgets/` and runs it via execString, so it
@@ -309,6 +311,18 @@ platform.host.registerCommand('notify', ({ title = '', body = '', duration = 400
   requestAnimationFrame(() => { toast.style.opacity = '1'; toast.style.transform = 'translateY(0)'; });
   setTimeout(dismiss, duration);
 });
+
+// systemctl-style service management commands, backing /bin/systemctl.run and
+// the Settings > Services page. See src/core/systemd.ts for the unit-file
+// parsing/activation/restart-policy logic these just expose as commands.
+platform.host.registerCommand('systemd.start', (name: string) => startUnit(name));
+platform.host.registerCommand('systemd.stop', (name: string) => stopUnit(name));
+platform.host.registerCommand('systemd.restart', (name: string) => restartUnit(name));
+platform.host.registerCommand('systemd.enable', (name: string) => enableUnit(name));
+platform.host.registerCommand('systemd.disable', (name: string) => disableUnit(name));
+platform.host.registerCommand('systemd.status', (name: string) => getUnitStatus(name));
+platform.host.registerCommand('systemd.list', () => listUnits());
+platform.host.registerCommand('systemd.journal', (name: string, lines?: number) => readJournal(name, lines));
 
 // Convenience commands for opening the terminal and settings via the keybinding
 // system, Spotlight, and the desktop context menu. These are proper app commands

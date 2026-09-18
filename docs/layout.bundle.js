@@ -29736,6 +29736,24 @@ const registerProcessCommands = () => {
         appendProcInbox(numericPid, message);
         (_a = processRegistry.get(numericPid)) === null || _a === void 0 ? void 0 : _a.messages$.next(message);
     });
+    // Best-effort per-window memory reading via the non-standard Chrome-only
+    // `performance.memory` API on the window's own app iframe (same-origin,
+    // so accessible from here). Note this reports the whole renderer's shared
+    // JS heap, not a true per-iframe figure - same-origin iframes typically
+    // share one process, so it commonly reads the same value for every
+    // window. Still useful as a rough "is memory growing" signal; returns
+    // `null` when the API isn't available (non-Chromium browsers) or the
+    // iframe hasn't loaded far enough to have a contentWindow yet.
+    const readWindowMemory = (pid) => {
+        var _a, _b, _c, _d;
+        try {
+            const mem = (_d = (_c = (_b = (_a = processRegistry.get(pid)) === null || _a === void 0 ? void 0 : _a.iframe) === null || _b === void 0 ? void 0 : _b.contentWindow) === null || _c === void 0 ? void 0 : _c.performance) === null || _d === void 0 ? void 0 : _d.memory;
+            return typeof (mem === null || mem === void 0 ? void 0 : mem.usedJSHeapSize) === 'number' ? mem.usedJSHeapSize : null;
+        }
+        catch (_e) {
+            return null;
+        }
+    };
     // `process.list()` - returns a snapshot of every running window/process,
     // including uptime and the services its platform has requested so far.
     // Used by `/bin/ps.run` and the task manager app.
@@ -29753,9 +29771,13 @@ const registerProcessCommands = () => {
                 active: win.active,
                 startedAt: (_a = entry === null || entry === void 0 ? void 0 : entry.startedAt) !== null && _a !== void 0 ? _a : Date.now(),
                 services: proc ? Array.from(proc.requestedServices) : [],
+                memory: readWindowMemory(win.pid),
             };
         });
     });
+    // `process.memory(pid)` - the same best-effort reading for a single pid,
+    // for callers that don't need a full `process.list()` snapshot.
+    platform.host.registerCommand("process.memory", (pid) => readWindowMemory(Number(pid)));
 };
 // Behavior (event wiring, etc.) for new windows lives in the virtual
 // filesystem so it can be edited (via the file explorer) and takes effect
@@ -29966,6 +29988,7 @@ class WindowManager {
             servicePlatformName: command.servicePlatformName,
             startedAt: Date.now(),
             proxyFs,
+            iframe,
         });
         iframe.onload = () => {
             var _a, _b, _c;
