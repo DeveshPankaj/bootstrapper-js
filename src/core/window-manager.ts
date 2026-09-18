@@ -57,6 +57,7 @@ type ProcessEntry = {
   servicePlatformName: string;
   startedAt: number;
   proxyFs?: ProxyFS;   // ACL-scoped VFS proxy for this process
+  iframe?: HTMLIFrameElement; // the window's app iframe, for a best-effort memory reading
 };
 const processRegistry = new Map<number, ProcessEntry>();
 
@@ -117,6 +118,23 @@ const registerProcessCommands = () => {
     processRegistry.get(numericPid)?.messages$.next(message);
   });
 
+  // Best-effort per-window memory reading via the non-standard Chrome-only
+  // `performance.memory` API on the window's own app iframe (same-origin,
+  // so accessible from here). Note this reports the whole renderer's shared
+  // JS heap, not a true per-iframe figure - same-origin iframes typically
+  // share one process, so it commonly reads the same value for every
+  // window. Still useful as a rough "is memory growing" signal; returns
+  // `null` when the API isn't available (non-Chromium browsers) or the
+  // iframe hasn't loaded far enough to have a contentWindow yet.
+  const readWindowMemory = (pid: number): number | null => {
+    try {
+      const mem = (processRegistry.get(pid)?.iframe?.contentWindow as any)?.performance?.memory;
+      return typeof mem?.usedJSHeapSize === 'number' ? mem.usedJSHeapSize : null;
+    } catch {
+      return null;
+    }
+  };
+
   // `process.list()` - returns a snapshot of every running window/process,
   // including uptime and the services its platform has requested so far.
   // Used by `/bin/ps.run` and the task manager app.
@@ -133,9 +151,14 @@ const registerProcessCommands = () => {
         active: win.active,
         startedAt: entry?.startedAt ?? Date.now(),
         services: proc ? Array.from(proc.requestedServices) : [],
+        memory: readWindowMemory(win.pid),
       };
     });
   });
+
+  // `process.memory(pid)` - the same best-effort reading for a single pid,
+  // for callers that don't need a full `process.list()` snapshot.
+  platform.host.registerCommand("process.memory", (pid: number | string) => readWindowMemory(Number(pid)));
 };
 
 // Behavior (event wiring, etc.) for new windows lives in the virtual
@@ -353,6 +376,7 @@ export class WindowManager {
       servicePlatformName: command.servicePlatformName,
       startedAt: Date.now(),
       proxyFs,
+      iframe,
     });
 
     iframe.onload = () => {

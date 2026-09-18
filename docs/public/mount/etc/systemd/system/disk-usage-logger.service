@@ -1,0 +1,12 @@
+# Sample unit - disabled by default. Enable it from Settings > Services or
+# `systemctl enable disk-usage-logger` to start logging storage usage.
+[Unit]
+Description=Logs browser storage quota/usage every minute
+
+[Service]
+ExecStart=/opt/systemd/disk-usage-logger.js
+Restart=on-failure
+RestartSec=15
+
+[Install]
+WantedBy=multi-user.target

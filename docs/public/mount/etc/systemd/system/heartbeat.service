@@ -1,0 +1,12 @@
+# Sample unit - periodic liveness log, demonstrates Restart=always. Enabled
+# by default (see /etc/systemd/enabled.json) so it's running out of the box.
+[Unit]
+Description=Heartbeat - periodic liveness log, demonstrates Restart=always
+
+[Service]
+ExecStart=/opt/systemd/heartbeat.js
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

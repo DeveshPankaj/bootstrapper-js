@@ -28409,6 +28409,320 @@ __webpack_require__.r(__webpack_exports__);
 
 /***/ }),
 
+/***/ "./src/core/systemd.ts":
+/*!*****************************!*\
+  !*** ./src/core/systemd.ts ***!
+  \*****************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   SYSTEMD_ENABLED_PATH: () => (/* binding */ SYSTEMD_ENABLED_PATH),
+/* harmony export */   SYSTEMD_LOG_DIR: () => (/* binding */ SYSTEMD_LOG_DIR),
+/* harmony export */   SYSTEMD_UNITS_DIR: () => (/* binding */ SYSTEMD_UNITS_DIR),
+/* harmony export */   disableUnit: () => (/* binding */ disableUnit),
+/* harmony export */   enableUnit: () => (/* binding */ enableUnit),
+/* harmony export */   getStatus: () => (/* binding */ getStatus),
+/* harmony export */   listUnitNames: () => (/* binding */ listUnitNames),
+/* harmony export */   listUnits: () => (/* binding */ listUnits),
+/* harmony export */   readJournal: () => (/* binding */ readJournal),
+/* harmony export */   restartUnit: () => (/* binding */ restartUnit),
+/* harmony export */   startSystemd: () => (/* binding */ startSystemd),
+/* harmony export */   startUnit: () => (/* binding */ startUnit),
+/* harmony export */   stopUnit: () => (/* binding */ stopUnit)
+/* harmony export */ });
+/* harmony import */ var _shared_index__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @shared/index */ "./src/shared/index.ts");
+/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/Subject.js");
+
+
+// A lightweight systemd/systemctl analog. Unit files are read from
+// SYSTEMD_UNITS_DIR (the FHS-lite equivalent of /etc/systemd/system/), each
+// service is executed as an isolated `Platform` (so its
+// `platform.getService('systemd')` context - `onStop`/`log` - is scoped to
+// that one activation), and enabled units autostart at boot (the analog of
+// reaching multi-user.target). See src/core/cron.ts for the sibling
+// scheduled-job system this mirrors conventions from.
+const SYSTEMD_UNITS_DIR = "/etc/systemd/system";
+const SYSTEMD_ENABLED_PATH = "/etc/systemd/enabled.json";
+const SYSTEMD_LOG_DIR = "/var/log/systemd";
+const runtime = new Map();
+let nextPid = 1000;
+const newRuntime = () => ({
+    status: "inactive",
+    mainPid: null,
+    startedAt: null,
+    restartCount: 0,
+    lastError: null,
+    restartTimer: null,
+    stopCallbacks: [],
+});
+const getRuntime = (name) => {
+    if (!runtime.has(name))
+        runtime.set(name, newRuntime());
+    return runtime.get(name);
+};
+const normalizeName = (name) => (name.endsWith(".service") ? name : `${name}.service`);
+// Parses the small ini-style subset real systemd unit files use: `[Section]`
+// headers and `Key=Value` lines. `#`/`;` line comments are ignored, matching
+// systemd's own unit file syntax.
+const parseUnitFile = (content) => {
+    let section = "";
+    const fields = {};
+    for (const rawLine of content.split("\n")) {
+        const line = rawLine.trim();
+        if (!line || line.startsWith("#") || line.startsWith(";"))
+            continue;
+        const sectionMatch = line.match(/^\[(.+)\]$/);
+        if (sectionMatch) {
+            section = sectionMatch[1];
+            continue;
+        }
+        const eq = line.indexOf("=");
+        if (eq === -1)
+            continue;
+        const key = line.slice(0, eq).trim();
+        const value = line.slice(eq + 1).trim();
+        fields[`${section}.${key}`] = value;
+    }
+    return {
+        description: fields["Unit.Description"] || "",
+        execStart: fields["Service.ExecStart"] || "",
+        restart: fields["Service.Restart"] || "no",
+        restartSec: Number(fields["Service.RestartSec"]) || 5,
+        wantedBy: fields["Install.WantedBy"] || "",
+    };
+};
+const readEnabled = () => {
+    const platform = _shared_index__WEBPACK_IMPORTED_MODULE_0__.Platform.getInstance();
+    try {
+        const fs = platform.host.getFS();
+        if (!fs.existsSync(SYSTEMD_ENABLED_PATH))
+            return [];
+        return JSON.parse(fs.readFileSync(SYSTEMD_ENABLED_PATH, "utf-8"));
+    }
+    catch (_a) {
+        return [];
+    }
+};
+const writeEnabled = (names) => {
+    const platform = _shared_index__WEBPACK_IMPORTED_MODULE_0__.Platform.getInstance();
+    const fs = platform.host.getFS();
+    const dir = SYSTEMD_ENABLED_PATH.slice(0, SYSTEMD_ENABLED_PATH.lastIndexOf("/"));
+    if (!fs.existsSync(dir))
+        fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(SYSTEMD_ENABLED_PATH, JSON.stringify(names, null, 2));
+};
+const appendJournal = (name, line) => {
+    const platform = _shared_index__WEBPACK_IMPORTED_MODULE_0__.Platform.getInstance();
+    try {
+        const fs = platform.host.getFS();
+        if (!fs.existsSync(SYSTEMD_LOG_DIR))
+            fs.mkdirSync(SYSTEMD_LOG_DIR, { recursive: true });
+        const path = `${SYSTEMD_LOG_DIR}/${name}.log`;
+        const existing = fs.existsSync(path) ? fs.readFileSync(path, "utf-8") : "";
+        fs.writeFileSync(path, `${existing}${new Date().toISOString()} ${line}\n`);
+    }
+    catch (err) {
+        console.error(`systemd: failed to write journal for ${name}`, err);
+    }
+};
+const readJournal = (name, lines = 50) => {
+    const unitName = normalizeName(name);
+    const platform = _shared_index__WEBPACK_IMPORTED_MODULE_0__.Platform.getInstance();
+    try {
+        const fs = platform.host.getFS();
+        const path = `${SYSTEMD_LOG_DIR}/${unitName}.log`;
+        if (!fs.existsSync(path))
+            return [];
+        const content = fs.readFileSync(path, "utf-8");
+        return content.split("\n").filter(Boolean).slice(-lines);
+    }
+    catch (_a) {
+        return [];
+    }
+};
+const listUnitNames = () => {
+    const platform = _shared_index__WEBPACK_IMPORTED_MODULE_0__.Platform.getInstance();
+    try {
+        const fs = platform.host.getFS();
+        if (!fs.existsSync(SYSTEMD_UNITS_DIR))
+            return [];
+        return fs.readdirSync(SYSTEMD_UNITS_DIR).filter((f) => f.endsWith(".service")).sort();
+    }
+    catch (_a) {
+        return [];
+    }
+};
+const readUnit = (name) => {
+    const platform = _shared_index__WEBPACK_IMPORTED_MODULE_0__.Platform.getInstance();
+    try {
+        const fs = platform.host.getFS();
+        const path = `${SYSTEMD_UNITS_DIR}/${name}`;
+        if (!fs.existsSync(path))
+            return null;
+        return parseUnitFile(fs.readFileSync(path, "utf-8"));
+    }
+    catch (_a) {
+        return null;
+    }
+};
+const getStatus = (name) => {
+    const unitName = normalizeName(name);
+    const unit = readUnit(unitName);
+    if (!unit)
+        return null;
+    const rt = getRuntime(unitName);
+    return {
+        name: unitName,
+        description: unit.description,
+        execStart: unit.execStart,
+        restart: unit.restart,
+        status: rt.status,
+        enabled: readEnabled().includes(unitName),
+        mainPid: rt.mainPid,
+        startedAt: rt.startedAt,
+        restartCount: rt.restartCount,
+        lastError: rt.lastError,
+    };
+};
+const listUnits = () => listUnitNames()
+    .map((name) => getStatus(name))
+    .filter((u) => !!u);
+const MAX_RESTARTS = 5;
+// Runs a unit's ExecStart, isolated in its own Platform so the script's
+// `platform.getService('systemd')` (`onStop`/`isStopRequested`/`log`) is
+// scoped to this one activation rather than shared with whatever's calling
+// `startUnit`/`activate` - mirrors a real service getting its own process.
+const activate = (name) => {
+    const rootPlatform = _shared_index__WEBPACK_IMPORTED_MODULE_0__.Platform.getInstance();
+    const unit = readUnit(name);
+    const rt = getRuntime(name);
+    if (rt.restartTimer !== null) {
+        window.clearTimeout(rt.restartTimer);
+        rt.restartTimer = null;
+    }
+    if (!unit || !unit.execStart) {
+        rt.status = "failed";
+        rt.lastError = "No ExecStart directive";
+        return;
+    }
+    rt.stopCallbacks = [];
+    rt.status = "activating";
+    rt.mainPid = nextPid++;
+    rt.startedAt = Date.now();
+    rt.lastError = null;
+    appendJournal(name, `Starting ${unit.description || name}...`);
+    const svcPlatform = new _shared_index__WEBPACK_IMPORTED_MODULE_0__.Platform(new rxjs__WEBPACK_IMPORTED_MODULE_1__.Subject(), `systemd:${name}:${rt.mainPid}`, "/");
+    svcPlatform.setHost(rootPlatform.host);
+    svcPlatform.register("systemd", {
+        unit: name,
+        onStop: (cb) => { rt.stopCallbacks.push(cb); },
+        isStopRequested: () => rt.status === "deactivating",
+        log: (...args) => appendJournal(name, args.map(String).join(" ")),
+    });
+    try {
+        const fs = rootPlatform.host.getFS();
+        const source = fs.readFileSync(unit.execStart, "utf-8");
+        if (unit.execStart.endsWith(".run")) {
+            rootPlatform.host.execCommand(source, svcPlatform);
+        }
+        else {
+            rootPlatform.host.execString(source, unit.execStart, svcPlatform);
+        }
+        rt.status = "active";
+        rt.restartCount = 0;
+        appendJournal(name, `Started ${unit.description || name}.`);
+    }
+    catch (err) {
+        rt.status = "failed";
+        rt.mainPid = null;
+        rt.lastError = err instanceof Error ? err.message : String(err);
+        appendJournal(name, `Failed: ${rt.lastError}`);
+        console.error(`systemd: unit ${name} failed`, err);
+        if (unit.restart === "always" || unit.restart === "on-failure") {
+            if (rt.restartCount >= MAX_RESTARTS) {
+                appendJournal(name, "Start request repeated too quickly, refusing to start (start-limit-hit).");
+                return;
+            }
+            rt.restartCount += 1;
+            rt.restartTimer = window.setTimeout(() => activate(name), unit.restartSec * 1000);
+        }
+    }
+};
+const startUnit = (name) => {
+    const unitName = normalizeName(name);
+    const rt = getRuntime(unitName);
+    if (rt.status === "active" || rt.status === "activating")
+        return;
+    activate(unitName);
+};
+// Stopping is cooperative, like sending a real service SIGTERM: it runs
+// every callback the unit registered via `systemd.onStop(...)` and then
+// marks the unit inactive. A unit that never registered a stop handler (the
+// equivalent of a daemon ignoring SIGTERM) has no interval/timer we can
+// reach into from outside to force-cancel, so it keeps running - write
+// services to cooperate with `onStop`, the same expectation a real daemon
+// has of handling SIGTERM.
+const stopUnit = (name) => {
+    const unitName = normalizeName(name);
+    const rt = getRuntime(unitName);
+    if (rt.restartTimer !== null) {
+        window.clearTimeout(rt.restartTimer);
+        rt.restartTimer = null;
+    }
+    if (rt.status !== "active" && rt.status !== "activating")
+        return;
+    rt.status = "deactivating";
+    appendJournal(unitName, "Stopping...");
+    rt.stopCallbacks.forEach((cb) => {
+        try {
+            cb();
+        }
+        catch (err) {
+            console.error(`systemd: stop handler for ${unitName} threw`, err);
+        }
+    });
+    rt.stopCallbacks = [];
+    rt.status = "inactive";
+    rt.mainPid = null;
+    rt.restartCount = 0;
+    appendJournal(unitName, "Stopped.");
+};
+const restartUnit = (name) => {
+    const unitName = normalizeName(name);
+    stopUnit(unitName);
+    activate(unitName);
+};
+// `enable`/`disable` record autostart intent in SYSTEMD_ENABLED_PATH - the
+// flat-file stand-in for real systemd's `WantedBy=` symlinks under
+// /etc/systemd/system/multi-user.target.wants/ (skipped here since the vfs's
+// symlink support is unreliable, matching this repo's existing preference
+// for plain tracked files over symlinks elsewhere, e.g. crontab).
+const enableUnit = (name) => {
+    const unitName = normalizeName(name);
+    const names = readEnabled();
+    if (!names.includes(unitName))
+        writeEnabled([...names, unitName]);
+    appendJournal(unitName, `Created symlink for ${unitName}.`);
+};
+const disableUnit = (name) => {
+    const unitName = normalizeName(name);
+    writeEnabled(readEnabled().filter((n) => n !== unitName));
+    appendJournal(unitName, `Removed symlink for ${unitName}.`);
+};
+// Starts every enabled unit found on disk - the analog of systemd reaching
+// multi-user.target at boot. Units not listed in enabled.json stay inactive
+// until started manually via `systemctl start`.
+const startSystemd = () => {
+    const enabled = readEnabled();
+    const present = new Set(listUnitNames());
+    enabled.filter((name) => present.has(name)).forEach((name) => activate(name));
+};
+
+
+/***/ }),
+
 /***/ "./src/core/window-manager.ts":
 /*!************************************!*\
   !*** ./src/core/window-manager.ts ***!
@@ -28524,6 +28838,24 @@ const registerProcessCommands = () => {
         appendProcInbox(numericPid, message);
         (_a = processRegistry.get(numericPid)) === null || _a === void 0 ? void 0 : _a.messages$.next(message);
     });
+    // Best-effort per-window memory reading via the non-standard Chrome-only
+    // `performance.memory` API on the window's own app iframe (same-origin,
+    // so accessible from here). Note this reports the whole renderer's shared
+    // JS heap, not a true per-iframe figure - same-origin iframes typically
+    // share one process, so it commonly reads the same value for every
+    // window. Still useful as a rough "is memory growing" signal; returns
+    // `null` when the API isn't available (non-Chromium browsers) or the
+    // iframe hasn't loaded far enough to have a contentWindow yet.
+    const readWindowMemory = (pid) => {
+        var _a, _b, _c, _d;
+        try {
+            const mem = (_d = (_c = (_b = (_a = processRegistry.get(pid)) === null || _a === void 0 ? void 0 : _a.iframe) === null || _b === void 0 ? void 0 : _b.contentWindow) === null || _c === void 0 ? void 0 : _c.performance) === null || _d === void 0 ? void 0 : _d.memory;
+            return typeof (mem === null || mem === void 0 ? void 0 : mem.usedJSHeapSize) === 'number' ? mem.usedJSHeapSize : null;
+        }
+        catch (_e) {
+            return null;
+        }
+    };
     // `process.list()` - returns a snapshot of every running window/process,
     // including uptime and the services its platform has requested so far.
     // Used by `/bin/ps.run` and the task manager app.
@@ -28541,9 +28873,13 @@ const registerProcessCommands = () => {
                 active: win.active,
                 startedAt: (_a = entry === null || entry === void 0 ? void 0 : entry.startedAt) !== null && _a !== void 0 ? _a : Date.now(),
                 services: proc ? Array.from(proc.requestedServices) : [],
+                memory: readWindowMemory(win.pid),
             };
         });
     });
+    // `process.memory(pid)` - the same best-effort reading for a single pid,
+    // for callers that don't need a full `process.list()` snapshot.
+    platform.host.registerCommand("process.memory", (pid) => readWindowMemory(Number(pid)));
 };
 // Behavior (event wiring, etc.) for new windows lives in the virtual
 // filesystem so it can be edited (via the file explorer) and takes effect
@@ -28754,6 +29090,7 @@ class WindowManager {
             servicePlatformName: command.servicePlatformName,
             startedAt: Date.now(),
             proxyFs,
+            iframe,
         });
         iframe.onload = () => {
             var _a, _b, _c;
@@ -156118,8 +156455,8 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _shared_index__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @shared/index */ "./src/shared/index.ts");
 /* harmony import */ var _shared_fs_utils__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! @shared/fs-utils */ "./src/shared/fs-utils.ts");
 /* harmony import */ var _shared_constants__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! @shared/constants */ "./src/shared/constants.ts");
-/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/Subject.js");
-/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/BehaviorSubject.js");
+/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/Subject.js");
+/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/BehaviorSubject.js");
 /* harmony import */ var _modules_modules__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ./modules/modules */ "./src/modules/modules.ts");
 /* harmony import */ var react__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! react */ "./node_modules/.pnpm/react@19.0.0/node_modules/react/index.js");
 /* harmony import */ var react__WEBPACK_IMPORTED_MODULE_4___default = /*#__PURE__*/__webpack_require__.n(react__WEBPACK_IMPORTED_MODULE_4__);
@@ -156127,7 +156464,8 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _shared_utils__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! @shared/utils */ "./src/shared/utils.ts");
 /* harmony import */ var _core_window_manager__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ./core/window-manager */ "./src/core/window-manager.ts");
 /* harmony import */ var _core_cron__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! ./core/cron */ "./src/core/cron.ts");
-/* harmony import */ var _core_ipc__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! ./core/ipc */ "./src/core/ipc.ts");
+/* harmony import */ var _core_systemd__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! ./core/systemd */ "./src/core/systemd.ts");
+/* harmony import */ var _core_ipc__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(/*! ./core/ipc */ "./src/core/ipc.ts");
 var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -156137,6 +156475,7 @@ var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _argume
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
+
 
 
 
@@ -156159,7 +156498,7 @@ class WindowService {
                 const iframe = this.window.document.createElement("iframe");
                 iframe.style.display = "none";
                 iframe.onload = () => {
-                    const platformEventEmitter = new rxjs__WEBPACK_IMPORTED_MODULE_10__.Subject();
+                    const platformEventEmitter = new rxjs__WEBPACK_IMPORTED_MODULE_11__.Subject();
                     const newPlatform = new _shared_index__WEBPACK_IMPORTED_MODULE_0__.Platform(platformEventEmitter, uniqueName);
                     iframe.contentWindow.platform = newPlatform;
                     const host = new _shared_index__WEBPACK_IMPORTED_MODULE_0__.Host(this.window, newPlatform, commands, widgets, modulesMap, settingsSections, widgetTypes);
@@ -156219,13 +156558,14 @@ const loadModules = (modules) => __awaiter(void 0, void 0, void 0, function* () 
     }
 });
 const runInitCommands = () => {
-    (0,_core_ipc__WEBPACK_IMPORTED_MODULE_9__.initIpc)(host.getFS());
+    (0,_core_ipc__WEBPACK_IMPORTED_MODULE_10__.initIpc)(host.getFS());
     const initd = [
         ['/home/user1/initd.run']
     ];
     initd.forEach(command => host.exec(hostPlatform, command[0], ...command.slice(1)));
     loadWidgets();
     (0,_core_cron__WEBPACK_IMPORTED_MODULE_8__.startCronScheduler)();
+    (0,_core_systemd__WEBPACK_IMPORTED_MODULE_9__.startSystemd)();
 };
 // Loads every `.js` file in `/etc/widgets/` and runs it via execString, so it
 // can call `platform.host.registerWidget(...)`. The widgets directory is
@@ -156253,12 +156593,12 @@ const loadWidgets = () => {
     }
 };
 // Load default variables
-const platformEventEmitter = new rxjs__WEBPACK_IMPORTED_MODULE_10__.Subject();
+const platformEventEmitter = new rxjs__WEBPACK_IMPORTED_MODULE_11__.Subject();
 const hostPlatform = new _shared_index__WEBPACK_IMPORTED_MODULE_0__.Platform(platformEventEmitter, "root");
 const platform = window.platform = hostPlatform;
-const commands = new rxjs__WEBPACK_IMPORTED_MODULE_11__.BehaviorSubject([]);
-const widgets = new rxjs__WEBPACK_IMPORTED_MODULE_11__.BehaviorSubject([]);
-const settingsSections = new rxjs__WEBPACK_IMPORTED_MODULE_11__.BehaviorSubject([]);
+const commands = new rxjs__WEBPACK_IMPORTED_MODULE_12__.BehaviorSubject([]);
+const widgets = new rxjs__WEBPACK_IMPORTED_MODULE_12__.BehaviorSubject([]);
+const settingsSections = new rxjs__WEBPACK_IMPORTED_MODULE_12__.BehaviorSubject([]);
 const widgetTypes = new Map();
 const host = new _shared_index__WEBPACK_IMPORTED_MODULE_0__.Host(window, hostPlatform, commands, widgets, modulesMap, settingsSections, widgetTypes);
 hostPlatform.setHost(host);
@@ -156446,6 +156786,17 @@ platform.host.registerCommand('notify', ({ title = '', body = '', duration = 400
     requestAnimationFrame(() => { toast.style.opacity = '1'; toast.style.transform = 'translateY(0)'; });
     setTimeout(dismiss, duration);
 });
+// systemctl-style service management commands, backing /bin/systemctl.run and
+// the Settings > Services page. See src/core/systemd.ts for the unit-file
+// parsing/activation/restart-policy logic these just expose as commands.
+platform.host.registerCommand('systemd.start', (name) => (0,_core_systemd__WEBPACK_IMPORTED_MODULE_9__.startUnit)(name));
+platform.host.registerCommand('systemd.stop', (name) => (0,_core_systemd__WEBPACK_IMPORTED_MODULE_9__.stopUnit)(name));
+platform.host.registerCommand('systemd.restart', (name) => (0,_core_systemd__WEBPACK_IMPORTED_MODULE_9__.restartUnit)(name));
+platform.host.registerCommand('systemd.enable', (name) => (0,_core_systemd__WEBPACK_IMPORTED_MODULE_9__.enableUnit)(name));
+platform.host.registerCommand('systemd.disable', (name) => (0,_core_systemd__WEBPACK_IMPORTED_MODULE_9__.disableUnit)(name));
+platform.host.registerCommand('systemd.status', (name) => (0,_core_systemd__WEBPACK_IMPORTED_MODULE_9__.getStatus)(name));
+platform.host.registerCommand('systemd.list', () => (0,_core_systemd__WEBPACK_IMPORTED_MODULE_9__.listUnits)());
+platform.host.registerCommand('systemd.journal', (name, lines) => (0,_core_systemd__WEBPACK_IMPORTED_MODULE_9__.readJournal)(name, lines));
 // Convenience commands for opening the terminal and settings via the keybinding
 // system, Spotlight, and the desktop context menu. These are proper app commands
 // that render directly into the window body they receive (via ui.iframe's exec),
