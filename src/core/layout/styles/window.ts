@@ -119,8 +119,4 @@ export const WINDOW_CSS = `
     iframe.dragging {
         pointer-events: none;
     }
-
-    .window.desktop-hidden {
-        display: none !important;
-    }
 `

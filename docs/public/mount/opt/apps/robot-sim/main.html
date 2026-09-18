@@ -1,0 +1,1756 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Robot Training Playground</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:#0d1117;color:#e2e8f0;font-family:ui-monospace,'JetBrains Mono',monospace;font-size:12px}
+#app{display:flex;flex-direction:column;height:100%}
+#toolbar{height:36px;background:#161b22;border-bottom:1px solid #30363d;display:flex;align-items:center;padding:0 10px;gap:8px;flex-shrink:0}
+.app-title{color:#10b981;font-weight:700;font-size:12.5px;white-space:nowrap}
+.spacer{flex:1}
+.btn{padding:3px 10px;border-radius:5px;border:1px solid #30363d;cursor:pointer;font-size:11px;font-weight:600;font-family:inherit;transition:background .15s;white-space:nowrap}
+.btn-green{background:#0d4429;color:#3fb950;border-color:#238636}.btn-green:hover{background:#238636;color:#fff}
+.btn-red{background:#3d0f12;color:#f85149;border-color:#6e1119}.btn-red:hover{background:#6e1119}
+.btn-blue{background:#0c1e3d;color:#58a6ff;border-color:#1f6feb}.btn-blue:hover{background:#1f6feb;color:#fff}
+.btn-gray{background:#21262d;color:#c9d1d9}.btn-gray:hover{background:#30363d}
+.btn-yellow{background:#3d2800;color:#e3b341;border-color:#9e6a03}.btn-yellow:hover{background:#9e6a03;color:#fff}
+.btn.active{outline:2px solid #58a6ff;outline-offset:-2px}
+select.sel{background:#21262d;color:#c9d1d9;border:1px solid #30363d;border-radius:5px;padding:3px 6px;font-size:11px;cursor:pointer;font-family:inherit}
+input.num{background:#21262d;color:#c9d1d9;border:1px solid #30363d;border-radius:5px;padding:3px 6px;font-size:11px;font-family:inherit;width:56px}
+.speed-badge{color:#8b949e;font-size:10px}
+#panels{display:flex;flex:1;overflow:hidden}
+/* Sidebar */
+#sidebar{width:180px;background:#0d1117;border-right:1px solid #21262d;display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto}
+.sb-sec{border-bottom:1px solid #21262d;padding:8px}
+.sb-label{font-size:10px;font-weight:700;color:#6e7681;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.sb-row{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:4px;align-items:center}
+.chip{padding:3px 7px;border-radius:4px;border:1px solid #30363d;cursor:pointer;font-size:10px;color:#8b949e;background:#161b22;white-space:nowrap}
+.chip:hover{border-color:#58a6ff;color:#c9d1d9}
+.chip.active{background:#0c1e3d;color:#58a6ff;border-color:#1f6feb}
+.cfg-row{display:flex;align-items:center;justify-content:space-between;margin:3px 0;font-size:10.5px;color:#8b949e}
+.cfg-val{color:#c9d1d9;font-weight:600}
+#sb-console{flex:1;overflow-y:auto;padding:6px;min-height:80px}
+.clog{padding:1px 0;font-size:10.5px;line-height:1.4}
+.clog.ok{color:#3fb950}.clog.err{color:#f85149}.clog.info{color:#58a6ff}.clog.dim{color:#6e7681}
+/* Sim panel */
+#sim-panel{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden;position:relative}
+#sim-canvas{display:block;width:100%;height:100%;background:#0a0d13}
+#builder-canvas{display:none;position:absolute;top:0;left:0;width:100%;height:100%;background:#0a0d13}
+#builder-toolbar,#terrain-toolbar{display:none;position:absolute;top:8px;left:8px;z-index:10;background:#161b22ee;border:1px solid #30363d;border-radius:6px;padding:6px;gap:6px;align-items:center;backdrop-filter:blur(4px)}
+/* pointer-events:none — these are informational overlays sitting on top of
+   the canvas; without this they silently swallow clicks meant for the
+   terrain/creature editor underneath (e.g. anything near the bottom of
+   the view, where this bar sits). */
+#builder-hint,#terrain-hint{display:none;position:absolute;bottom:10px;left:8px;right:8px;z-index:10;color:#8b949e;font-size:10.5px;background:#161b22cc;border:1px solid #30363d;border-radius:6px;padding:5px 8px;pointer-events:none}
+#cam-hint{position:absolute;top:8px;right:8px;z-index:5;color:#6e7681;font-size:10px;background:#161b22aa;border-radius:5px;padding:4px 7px;pointer-events:none}
+/* Data panel */
+#data-panel{width:200px;border-left:1px solid #21262d;display:flex;flex-direction:column;flex-shrink:0;overflow:hidden}
+.dp-sec{border-bottom:1px solid #21262d;padding:8px;flex-shrink:0}
+.dp-title{font-size:10px;font-weight:700;color:#6e7681;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+#sensor-grid{display:grid;grid-template-columns:1fr 1fr;gap:3px}
+.sensor-bar-wrap{display:flex;flex-direction:column;gap:1px}
+.sensor-name{font-size:9px;color:#6e7681}
+.sensor-bar-bg{height:6px;background:#21262d;border-radius:3px;overflow:hidden}
+.sensor-bar-fill{height:100%;background:#10b981;border-radius:3px;transition:width .08s}
+.sensor-val{font-size:9px;color:#8b949e;text-align:right}
+#reward-canvas{display:block;width:100%;height:80px;background:#0a0d13}
+#stats-panel{flex:1;overflow-y:auto;padding:8px}
+.stat-row{display:flex;justify-content:space-between;margin:2px 0;font-size:10.5px}
+.stat-k{color:#6e7681}.stat-v{color:#c9d1d9;font-weight:600;font-variant-numeric:tabular-nums}
+.stat-v.good{color:#3fb950}.stat-v.warn{color:#e3b341}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="toolbar">
+    <span class="app-title">🤖 Robot Sim 3D</span>
+    <button class="btn btn-green" id="btn-train" onclick="toggleTraining()">▶ Train</button>
+    <button class="btn btn-blue" id="btn-demo" onclick="runDemo()">Demo</button>
+    <button class="btn btn-gray" onclick="resetEpisode()">Reset</button>
+    <span class="spacer"></span>
+    <span class="speed-badge">Parallel:</span>
+    <select class="sel" id="parallel-sel" onchange="setParallel(+this.value)" title="Train this many robots at once, sharing one physics world and one model — more experience per second, not separate untrained agents">
+      <option value="1" selected>1×</option>
+      <option value="2">2×</option>
+      <option value="4">4×</option>
+      <option value="8">8×</option>
+      <option value="16">16×</option>
+    </select>
+    <span class="speed-badge">Speed:</span>
+    <select class="sel" id="speed-sel" onchange="setSpeed(+this.value)">
+      <option value="1">1×</option>
+      <option value="2">2×</option>
+      <option value="4">4×</option>
+      <option value="8" selected>8×</option>
+      <option value="16">16×</option>
+    </select>
+    <span class="speed-badge" id="fps-badge">0 fps</span>
+  </div>
+  <div id="panels">
+    <div id="sidebar">
+      <div class="sb-sec">
+        <div class="sb-label">Environment</div>
+        <div class="sb-row" id="env-chips">
+          <span class="chip active" data-env="flat">Flat</span>
+          <span class="chip" data-env="stairs">Stairs</span>
+          <span class="chip" data-env="walls">Walls</span>
+          <span class="chip" data-env="cliff">Cliff</span>
+          <span class="chip" data-env="rough">Rough</span>
+        </div>
+        <div class="sb-row">
+          <button class="btn btn-blue" id="btn-terrain" onclick="toggleTerrainEdit()" style="flex:1">🏗️ Edit Terrain</button>
+        </div>
+        <div class="cfg-row"><span>Piece height (m)</span><input class="num" type="number" id="terrain-height" value="1.5" min="0.5" max="6" step="0.5"></div>
+      </div>
+      <div class="sb-sec">
+        <div class="sb-label">Robot</div>
+        <div class="sb-row" id="robot-chips">
+          <span class="chip" data-robot="ball">Ball</span>
+          <span class="chip active" data-robot="car">Car</span>
+          <span class="chip" data-robot="walker">Walker</span>
+          <span class="chip" data-robot="drone">Drone</span>
+          <span class="chip" data-robot="custom">Custom</span>
+        </div>
+      </div>
+      <div class="sb-sec" id="custom-panel" style="display:none">
+        <div class="sb-label">Creature Builder</div>
+        <div class="sb-row">
+          <button class="btn btn-blue" id="btn-builder" onclick="toggleBuilder()" style="flex:1">✏️ Edit Blueprint</button>
+        </div>
+        <div class="sb-row">
+          <button class="btn btn-gray" onclick="saveCreature()" style="flex:1">💾 Save</button>
+          <button class="btn btn-gray" onclick="loadCreatureDialog()" style="flex:1">📂 Load</button>
+        </div>
+        <select class="sel" id="preset-sel" onchange="loadPreset(this.value)" style="width:100%;margin-top:4px">
+          <option value="">Presets…</option>
+          <option value="biped">Biped</option>
+          <option value="inchworm">Inchworm</option>
+        </select>
+        <div class="cfg-row" style="margin-top:6px"><span>Bones</span><span class="cfg-val" id="design-bones">0</span></div>
+        <div class="cfg-row"><span>Joints</span><span class="cfg-val" id="design-joints">0</span></div>
+        <div class="cfg-row"><span>Muscles</span><span class="cfg-val" id="design-muscles">0</span></div>
+      </div>
+      <div class="sb-sec">
+        <div class="sb-label">Agent Config</div>
+        <div class="cfg-row"><span>ε (explore)</span><span class="cfg-val" id="cfg-eps">1.00</span></div>
+        <div class="cfg-row"><span>γ (discount)</span><span class="cfg-val">0.99</span></div>
+        <div class="cfg-row"><span>LR</span><span class="cfg-val">0.001</span></div>
+        <div class="cfg-row"><span>Batch</span><span class="cfg-val">64</span></div>
+        <div class="cfg-row"><span>Memory</span><span class="cfg-val" id="cfg-mem">0</span></div>
+      </div>
+      <div class="sb-label" style="padding:6px 8px;border-bottom:1px solid #21262d">Console</div>
+      <div id="sb-console"></div>
+    </div>
+    <div id="sim-panel">
+      <canvas id="sim-canvas"></canvas>
+      <canvas id="builder-canvas"></canvas>
+      <div id="cam-hint">drag to orbit · scroll to zoom</div>
+      <div id="builder-toolbar">
+        <button class="btn btn-green active" data-tool="bone" onclick="setBuilderTool('bone')">🦴 Bone</button>
+        <button class="btn btn-gray" data-tool="joint" onclick="setBuilderTool('joint')">📍 Joint</button>
+        <button class="btn btn-yellow" data-tool="muscle" onclick="setBuilderTool('muscle')">💪 Muscle</button>
+        <button class="btn btn-red" data-tool="delete" onclick="setBuilderTool('delete')">🗑 Delete</button>
+        <span class="spacer"></span>
+        <button class="btn btn-gray" onclick="clearDesign()">Clear</button>
+        <button class="btn btn-blue" onclick="finishBuilder()">✓ Done</button>
+      </div>
+      <div id="builder-hint">Blueprint editor (2D side-view — extruded into a real 3D body). Drag to place a bone. Switch tool, click two bones to connect a joint (rigid) or muscle (contracts/expands under model control). First bone is the tracked "torso".</div>
+      <div id="terrain-toolbar">
+        <button class="btn btn-green active" data-terrain-tool="wall" onclick="setTerrainTool('wall')">🧱 Wall</button>
+        <button class="btn btn-gray" data-terrain-tool="step" onclick="setTerrainTool('step')">🪜 Step</button>
+        <button class="btn btn-gray" data-terrain-tool="platform" onclick="setTerrainTool('platform')">▭ Platform</button>
+        <button class="btn btn-red" data-terrain-tool="delete" onclick="setTerrainTool('delete')">🗑 Delete</button>
+        <span class="spacer"></span>
+        <button class="btn btn-gray" onclick="clearTerrain()">Clear</button>
+        <button class="btn btn-blue" onclick="finishTerrainEdit()">✓ Done</button>
+      </div>
+      <div id="terrain-hint">Click the ground to place the selected obstacle at the current height. Switch to Delete and click a piece to remove it. Drag still orbits the camera.</div>
+    </div>
+    <div id="data-panel">
+      <div class="dp-sec">
+        <div class="dp-title">Distance Sensors</div>
+        <div id="sensor-grid"></div>
+      </div>
+      <div class="dp-sec">
+        <div class="dp-title">Reward History</div>
+        <canvas id="reward-canvas"></canvas>
+      </div>
+      <div class="dp-sec" style="border:none;flex:1;overflow:auto">
+        <div class="dp-title">Stats</div>
+        <div id="stats-panel">
+          <div class="stat-row" title="Total completed episodes, pooled across all parallel instances"><span class="stat-k">Episode</span><span class="stat-v" id="s-ep">0</span></div>
+          <div class="stat-row" title="Instance #1 only"><span class="stat-k">Step (#1)</span><span class="stat-v" id="s-step">0</span></div>
+          <div class="stat-row" title="Instance #1 only"><span class="stat-k">Ep Reward (#1)</span><span class="stat-v" id="s-rew">0.00</span></div>
+          <div class="stat-row"><span class="stat-k">Best Reward</span><span class="stat-v good" id="s-best">0.00</span></div>
+          <div class="stat-row"><span class="stat-k">Avg (20)</span><span class="stat-v" id="s-avg">0.00</span></div>
+          <div class="stat-row"><span class="stat-k">Loss</span><span class="stat-v" id="s-loss">—</span></div>
+          <div class="stat-row"><span class="stat-k">Dist (m)</span><span class="stat-v" id="s-dist">0.00</span></div>
+          <div class="stat-row"><span class="stat-k">Velocity</span><span class="stat-v" id="s-vel">0.00</span></div>
+          <div class="stat-row"><span class="stat-k">Heading</span><span class="stat-v" id="s-ang">0°</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+<script>
+'use strict';
+
+// ── Globals ──────────────────────────────────────────────
+var simCanvas = document.getElementById('sim-canvas');
+var buildCanvas = document.getElementById('builder-canvas');
+var buildCtx = buildCanvas.getContext('2d');
+var rwCanvas = document.getElementById('reward-canvas');
+var rwCtx = rwCanvas.getContext('2d');
+
+var scene, camera, renderer, world;
+var groundPlaneMesh; // invisible XZ plane at y=0, used only for terrain-editor raycasting
+// Multiple robots can train in parallel, sharing one physics world and
+// one DQN (so more instances mean more experience collected per
+// wall-clock second, not more independently-untrained agents — the
+// same idea as vectorized environments in RL). `robot` stays an alias
+// for the "primary" instance (instances[0]) so all the single-robot
+// rendering/stats/camera code below keeps working unchanged; it's
+// re-derived every frame since respawning instance 0 replaces its
+// robot object.
+var instances = []; // [{ robot, stepCount, epReward }]
+var numInstances = 1;
+var INSTANCE_Z_SPREAD = 18; // meters — keep inside the side rails at z=±30
+var robot;
+var training = false, demo = false;
+var simSpeed = 8;
+var episode = 0; // total completed episodes, pooled across all parallel instances
+var bestReward = -Infinity;
+var rewardHistory = [];
+var lastFpsTime = 0, fpsFrames = 0, fps = 0;
+var animId = null;
+var curEnv = 'flat', curRobot = 'car';
+var tfReady = false;
+var lastLoss = null;
+var trainPending = false; // guard: at most one async train() call in flight at a time
+var DQN = null;
+var EP_MAX_STEPS = 600;
+var NUM_DIST_SENSORS = 8; // horizontal ring, yaw-relative
+var SENSOR_RANGE = 14;    // meters
+var PHYS_STEP = 1 / 60;   // seconds — Cannon.js works in SI units, unlike Matter's ms
+var groundMaterial, robotMaterial;
+
+// ── Camera: chase/orbit — a fixed look-at target while a robot is
+// active, or a free overview point while editing terrain. Drag to
+// orbit, wheel to zoom; both work in every mode except the 2D
+// blueprint editor (which owns its own separate canvas).
+var camYaw = 0.6, camPitch = 0.45, camDist = 9;
+var camDragging = false, camLastX = 0, camLastY = 0, camDownPos = null;
+var camTargetOverride = null; // {x,y,z} — set while terrainEditMode is active
+
+// ── Creature Builder state (2D blueprint, extruded into 3D) ──────
+// bone:    { x1, y1, x2, y2, w } — a stick in the blueprint's X-Y plane
+// joint:   { boneA, tA, boneB, tB } — rigid hinge (axis Z) at points along each bone (t: 0=start, 1=end)
+// muscle:  { boneA, tA, boneB, tB, minRatio, maxRatio } — controllable-length constraint;
+//          min/maxRatio scale the design-time rest length to get the actuation range.
+var design = { bones: [], joints: [], muscles: [] };
+var BONE_WIDTH = 0.4;   // meters
+var BONE_DEPTH = 0.4;   // meters — fixed extrusion depth out of the blueprint plane
+var builderMode = false;
+var builderTool = 'bone';
+var builderDragStart = null;
+var builderMouse = { x: 0, y: 0 };
+var builderPending = null;
+var builderCam = { x: 0, y: -1.2, scale: 40 }; // pixels-per-meter for the 2D blueprint view
+var CREATURES_DIR = '/home/user1/.local/share/ui.robot-sim/creatures';
+
+// ── TrainBoard integration ───────────────────────────────────────
+// Shared cross-app metrics log (same file + {run,step,metric,value}
+// row shape used by nn-ide, model-builder and the snake-* apps) —
+// TrainBoard's own main.html reads this exact path, so any app can
+// "push" training progress to it just by appending here.
+var TRAINBOARD_LOG_DIR = '/home/user1/.local/share/trainboard';
+var TRAINBOARD_LOG_PATH = TRAINBOARD_LOG_DIR + '/log.jsonl';
+var tbBuffer = [];
+var tbFlushing = false;
+
+function tbLog(step, metric, value) {
+  if (value == null || !isFinite(value)) return;
+  tbBuffer.push({ run: 'robot-sim-' + curRobot, step: step, metric: metric, value: value });
+}
+
+async function tbFlush() {
+  if (!tbBuffer.length || tbFlushing) return;
+  tbFlushing = true;
+  var batch = tbBuffer.splice(0, tbBuffer.length);
+  try {
+    await sdk().mkdir(TRAINBOARD_LOG_DIR).catch(function(){});
+    var existing = '';
+    try { existing = await sdk().readText(TRAINBOARD_LOG_PATH); } catch (e) { existing = ''; }
+    var sep = existing && !existing.endsWith('\n') ? '\n' : '';
+    var lines = batch.map(function(r){ return JSON.stringify(r); }).join('\n');
+    await sdk().writeText(TRAINBOARD_LOG_PATH, existing + sep + lines + '\n');
+  } catch (err) {
+    clog('TrainBoard log write failed: ' + err.message, 'warn');
+  } finally {
+    tbFlushing = false;
+  }
+}
+
+// ── Terrain (playground) editor state ─────────────────────────
+// piece: { type: 'wall'|'step'|'platform', x, z, w, h, d } — a box whose
+// base sits on the ground (y=0) and whose top is at height h.
+var terrain = [];
+var terrainBodies = [];
+var terrainMeshes = [];
+var terrainEditMode = false;
+var terrainTool = 'wall';
+var raycaster = new THREE.Raycaster();
+var mouseNDC = new THREE.Vector2();
+
+function sdk() {
+  return window.AppSDK || {
+    readText: () => Promise.reject(new Error('SDK not ready')),
+    writeText: () => Promise.reject(new Error('SDK not ready')),
+    mkdir: () => Promise.resolve(),
+    list: () => Promise.resolve([]),
+    exists: () => Promise.resolve(false)
+  };
+}
+
+// Console
+function clog(msg, cls) {
+  var el = document.getElementById('sb-console');
+  var d = document.createElement('div');
+  d.className = 'clog ' + (cls||'dim');
+  d.textContent = msg;
+  el.appendChild(d);
+  el.scrollTop = el.scrollHeight;
+  if (el.children.length > 200) el.removeChild(el.firstChild);
+}
+
+// ── Engine setup (Three.js scene + Cannon.js world) ─────────────
+function initEngine() {
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0a0d13);
+  scene.fog = new THREE.Fog(0x0a0d13, 40, 140);
+
+  camera = new THREE.PerspectiveCamera(60, 1, 0.1, 500);
+
+  renderer = new THREE.WebGLRenderer({ canvas: simCanvas, antialias: true });
+  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio||1));
+
+  var hemi = new THREE.HemisphereLight(0x8899aa, 0x0a0d13, 0.6);
+  scene.add(hemi);
+  var sun = new THREE.DirectionalLight(0xffffff, 0.9);
+  sun.position.set(30, 40, 20);
+  scene.add(sun);
+  scene.add(new THREE.AmbientLight(0x404050, 0.4));
+
+  var grid = new THREE.GridHelper(300, 60, 0x30363d, 0x1c2128);
+  grid.position.y = 0.01;
+  scene.add(grid);
+
+  // Invisible ground plane purely for terrain-editor raycasting (mouse -> world XZ).
+  var gp = new THREE.PlaneGeometry(1000, 1000);
+  gp.rotateX(-Math.PI/2);
+  groundPlaneMesh = new THREE.Mesh(gp, new THREE.MeshBasicMaterial({ visible: false }));
+  scene.add(groundPlaneMesh);
+
+  world = new CANNON.World();
+  world.gravity.set(0, -9.82, 0);
+  world.broadphase = new CANNON.NaiveBroadphase();
+  world.solver.iterations = 20;
+
+  groundMaterial = new CANNON.Material('ground');
+  robotMaterial = new CANNON.Material('robot');
+  world.addContactMaterial(new CANNON.ContactMaterial(groundMaterial, robotMaterial, { friction: 0.7, restitution: 0.05 }));
+  world.addContactMaterial(new CANNON.ContactMaterial(robotMaterial, robotMaterial, { friction: 0.5, restitution: 0.05 }));
+
+  // Base ground body (always present; separate from user-editable terrain pieces).
+  // collisionFilterMask must explicitly include the robot group (2) —
+  // Cannon's filter test is `(A.group & B.mask) && (B.group & A.mask)`,
+  // and the default mask is 1, which only matches group 1. Without this,
+  // robot bodies (group 2, masked to only see group 1) and ground bodies
+  // (group 1, default mask 1) never pass the bidirectional check against
+  // each other's *group* bit correctly and fall straight through.
+  var floorBody = new CANNON.Body({ mass: 0, material: groundMaterial, collisionFilterGroup: 1, collisionFilterMask: STATIC_MASK });
+  floorBody.addShape(new CANNON.Box(new CANNON.Vec3(200, 0.5, 40)));
+  floorBody.position.set(100, -0.5, 0);
+  world.addBody(floorBody);
+  var floorMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(400, 1, 80),
+    new THREE.MeshStandardMaterial({ color: 0x16202c, roughness: 0.95 })
+  );
+  floorMesh.position.set(100, -0.5, 0);
+  scene.add(floorMesh);
+
+  // Side rails so robots don't wander off the track in Z.
+  [-30, 30].forEach(function(z) {
+    var wallBody = new CANNON.Body({ mass: 0, material: groundMaterial, collisionFilterGroup: 1, collisionFilterMask: STATIC_MASK });
+    wallBody.addShape(new CANNON.Box(new CANNON.Vec3(200, 3, 0.5)));
+    wallBody.position.set(100, 2.5, z);
+    world.addBody(wallBody);
+    var wallMesh = new THREE.Mesh(new THREE.BoxGeometry(400, 6, 1), new THREE.MeshStandardMaterial({ color: 0x1c2534, transparent: true, opacity: 0.35 }));
+    wallMesh.position.copy(wallBody.position);
+    scene.add(wallMesh);
+  });
+}
+
+// ── Terrain (playground obstacles) ──────────────────────────────
+// `terrain` is a flat list of box pieces; presets just populate it,
+// and the in-scene editor lets the user add/remove pieces freely on
+// top of (or instead of) a preset.
+function buildEnvPreset(type) {
+  terrain = [];
+  if (type === 'stairs') {
+    for (var i = 0; i < 7; i++) {
+      terrain.push({ type: 'step', x: 12 + i*2.2, z: 0, w: 2.2, h: 0.6 + i*0.7, d: 8 });
+    }
+  } else if (type === 'walls') {
+    [14, 22, 30, 38].forEach(function(x, i) {
+      terrain.push({ type: 'wall', x: x, z: 0, w: 0.5, h: 1.2 + i*0.5, d: 5 });
+    });
+  } else if (type === 'cliff') {
+    terrain.push({ type: 'platform', x: 14, z: 0, w: 6, h: 0.01, d: 8 }); // marker piece before the gap (visual only, ~ground height)
+    // The actual gap is a real hole: remove ground coverage there by
+    // adding raised approach + landing platforms with a pit between.
+    terrain.push({ type: 'platform', x: 22, z: 0, w: 8, h: 0.1, d: 10 });
+  } else if (type === 'rough') {
+    for (var bi = 0; bi < 10; bi++) {
+      terrain.push({ type: 'platform', x: 10 + bi*2.6, z: 0, w: 2.6, h: 0.3 + Math.abs(Math.sin(bi*1.7))*0.9, d: 10 });
+    }
+  }
+  instantiateTerrain();
+}
+
+function instantiateTerrain() {
+  terrainBodies.forEach(function(b){ world.removeBody(b); });
+  terrainMeshes.forEach(function(m){ scene.remove(m); });
+  terrainBodies = [];
+  terrainMeshes = [];
+
+  var colors = { wall: 0x8b5cf6, step: 0x374151, platform: 0x2d5a4a };
+  terrain.forEach(function(p) {
+    var body = new CANNON.Body({ mass: 0, material: groundMaterial, collisionFilterGroup: 1, collisionFilterMask: STATIC_MASK });
+    body.addShape(new CANNON.Box(new CANNON.Vec3(p.w/2, p.h/2, p.d/2)));
+    body.position.set(p.x, p.h/2, p.z);
+    world.addBody(body);
+    terrainBodies.push(body);
+
+    var mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(p.w, p.h, p.d),
+      new THREE.MeshStandardMaterial({ color: colors[p.type] || 0x374151, roughness: 0.8 })
+    );
+    mesh.position.copy(body.position);
+    mesh.userData.terrainIndex = terrain.indexOf(p);
+    scene.add(mesh);
+    terrainMeshes.push(mesh);
+  });
+}
+
+// ── Robots ────────────────────────────────────────────────
+// y is a ground-clearance reference (not an absolute spawn height) —
+// each robot below computes its own resting height from its geometry
+// so it starts just above the floor rather than free-falling several
+// meters and crashing violently on the first physics step.
+var ROBOT_SPAWN = { x: 6, y: 0, z: 0 };
+var cg = 2; // collision group for robot bodies — see collisionFilterMask below
+var STATIC_MASK = -1; // ground/terrain bodies: collide with every group (default mask=1 misses the robot group)
+
+// Every (re)spawn — including a single instance's own episode resets —
+// picks a fresh random point instead of the exact same spot every time,
+// per the standing "spawn at random locations" requirement. Z spread
+// also gives parallel instances distinct lanes so they don't overlap;
+// robot bodies never collide with each other regardless (same
+// collisionFilterGroup/mask trick used for self-collision avoidance
+// within one creature), so overlap would just look wrong, not crash.
+function randomSpawn() {
+  return {
+    x: ROBOT_SPAWN.x + (Math.random()*2-1) * 2,
+    z: ROBOT_SPAWN.z + (Math.random()*2-1) * INSTANCE_Z_SPREAD
+  };
+}
+
+function mkBody(mass, shape, pos, extraOpts) {
+  var opts = Object.assign({ mass: mass, material: robotMaterial, linearDamping: 0.15, angularDamping: 0.3,
+    collisionFilterGroup: cg, collisionFilterMask: 1 }, extraOpts || {});
+  var body = new CANNON.Body(opts);
+  body.addShape(shape);
+  body.position.set(pos.x, pos.y, pos.z);
+  world.addBody(body);
+  return body;
+}
+
+function meshFor(body, color) {
+  var mesh;
+  var s = body.shapes[0];
+  if (s instanceof CANNON.Sphere) {
+    mesh = new THREE.Mesh(new THREE.SphereGeometry(s.radius, 16, 12), new THREE.MeshStandardMaterial({ color: color, roughness: 0.5 }));
+  } else if (s instanceof CANNON.Cylinder) {
+    mesh = new THREE.Mesh(new THREE.CylinderGeometry(s.radiusTop, s.radiusBottom, s.height, 16), new THREE.MeshStandardMaterial({ color: color, roughness: 0.6 }));
+  } else { // Box
+    var he = s.halfExtents;
+    mesh = new THREE.Mesh(new THREE.BoxGeometry(he.x*2, he.y*2, he.z*2), new THREE.MeshStandardMaterial({ color: color, roughness: 0.7 }));
+  }
+  scene.add(mesh);
+  return mesh;
+}
+
+function buildRobot(type, spawnOverride) {
+  var r = { type: type, bodies: [], meshes: [], constraints: [], sensors: [], joints: null, muscles: null };
+  var sp = spawnOverride ? { x: spawnOverride.x, y: ROBOT_SPAWN.y, z: spawnOverride.z } : ROBOT_SPAWN;
+
+  if (type === 'ball') {
+    r.main = mkBody(1, new CANNON.Sphere(0.4), { x: sp.x, y: sp.y + 0.42, z: sp.z });
+    r.bodies = [r.main];
+    r.numActions = 5; // fwd, back, left, right, coast
+
+  } else if (type === 'car') {
+    var chassis = mkBody(8, new CANNON.Box(new CANNON.Vec3(0.8, 0.25, 0.45)), { x: sp.x, y: sp.y + 0.5, z: sp.z });
+    r.main = chassis;
+    r.bodies = [chassis];
+    r.wheels = [];
+    var wheelPos = [
+      { x: -0.55, z: -0.5 }, { x: -0.55, z: 0.5 },
+      { x: 0.55, z: -0.5 }, { x: 0.55, z: 0.5 }
+    ];
+    var wheelQuat = new CANNON.Quaternion();
+    wheelQuat.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), Math.PI/2); // spin axis -> Z
+    wheelPos.forEach(function(wp) {
+      var wheel = new CANNON.Body({ mass: 0.4, material: robotMaterial, linearDamping: 0.1, angularDamping: 0.2, collisionFilterGroup: cg, collisionFilterMask: 1 });
+      wheel.addShape(new CANNON.Cylinder(0.32, 0.32, 0.22, 12), new CANNON.Vec3(), wheelQuat);
+      wheel.position.set(chassis.position.x + wp.x, chassis.position.y - 0.15, chassis.position.z + wp.z);
+      world.addBody(wheel);
+      var hinge = new CANNON.HingeConstraint(chassis, wheel, {
+        pivotA: new CANNON.Vec3(wp.x, -0.15, wp.z), pivotB: new CANNON.Vec3(0,0,0),
+        axisA: new CANNON.Vec3(0,0,1), axisB: new CANNON.Vec3(0,0,1), maxForce: 1e6
+      });
+      world.addConstraint(hinge);
+      r.bodies.push(wheel);
+      r.constraints.push(hinge);
+      r.wheels.push(wheel);
+    });
+    r.numActions = 5; // forward, backward, turn-left, turn-right, brake
+
+  } else if (type === 'walker') {
+    var tx = sp.x, tyBase = sp.y + 0.92; // torso height so the feet (lower legs) rest just above the floor
+    var torso = mkBody(4, new CANNON.Box(new CANNON.Vec3(0.16, 0.24, 0.11)), { x: tx, y: tyBase, z: sp.z });
+    r.main = torso;
+    r.torso = torso;
+    r.bodies = [torso];
+
+    var legDefs = [
+      { side: -1 }, // left
+      { side: 1 }   // right
+    ];
+    var uppers = [], lowers = [];
+    legDefs.forEach(function(ld) {
+      var hipX = tx + ld.side*0.12;
+      var upperY = tyBase - 0.24 - 0.17;
+      var upper = mkBody(1.2, new CANNON.Box(new CANNON.Vec3(0.06, 0.17, 0.06)), { x: hipX, y: upperY, z: sp.z });
+      var hip = new CANNON.HingeConstraint(torso, upper, {
+        pivotA: new CANNON.Vec3(ld.side*0.12, -0.24, 0), pivotB: new CANNON.Vec3(0, 0.17, 0),
+        axisA: new CANNON.Vec3(0,0,1), axisB: new CANNON.Vec3(0,0,1), maxForce: 1e6
+      });
+      world.addConstraint(hip);
+      r.bodies.push(upper); r.constraints.push(hip); uppers.push(upper);
+
+      var lowerY = upperY - 0.17 - 0.16;
+      var lower = mkBody(0.8, new CANNON.Box(new CANNON.Vec3(0.055, 0.16, 0.055)), { x: hipX, y: lowerY, z: sp.z });
+      var knee = new CANNON.HingeConstraint(upper, lower, {
+        pivotA: new CANNON.Vec3(0, -0.17, 0), pivotB: new CANNON.Vec3(0, 0.16, 0),
+        axisA: new CANNON.Vec3(0,0,1), axisB: new CANNON.Vec3(0,0,1), maxForce: 1e6
+      });
+      world.addConstraint(knee);
+      r.bodies.push(lower); r.constraints.push(knee); lowers.push(lower);
+    });
+    r.joints = [uppers[0], uppers[1], lowers[0], lowers[1]]; // [lUpper, rUpper, lLower, rLower]
+    // 6 coupled "gait primitive" actions rather than independent
+    // per-joint controls, plus yaw turning for 3D navigation — see
+    // the 2D version's history: independent per-joint actions were
+    // too hard for random exploration to combine into a gait, while
+    // coupled scissor/knee actions made walking discoverable.
+    r.numActions = 6; // 0=scissor A, 1=scissor B, 2=knees lift, 3=knees push, 4=turn L, 5=turn R
+
+  } else if (type === 'drone') {
+    var body = mkBody(1.5, new CANNON.Box(new CANNON.Vec3(0.5, 0.08, 0.15)), { x: sp.x, y: sp.y + 1.0, z: sp.z });
+    r.main = body;
+    r.bodies = [body];
+    body.linearDamping = 0.4;
+    body.angularDamping = 0.6;
+    r.numActions = 6; // up, down, forward, back, left, right
+
+  } else if (type === 'custom') {
+    if (!design.bones.length) {
+      r.main = mkBody(1, new CANNON.Box(new CANNON.Vec3(0.2,0.2,0.2)), { x: sp.x, y: sp.y, z: sp.z });
+      r.bodies = [r.main];
+      r.constraints = [];
+      r.muscles = [];
+      r.numActions = 1;
+    } else {
+      // Blueprint bones live in a 2D (X,Y) plane at design time; extrude
+      // each into a 3D box with a fixed Z depth, and orient it with a
+      // single Z-axis rotation (exactly the angle the 2D version used) —
+      // this keeps the 2D drawing tool valid while producing a real 3D
+      // body that can still topple sideways in Z under real physics.
+      // Body Y is built as `-blueprint_y + spawnDY` (see worldAttach below —
+      // the blueprint is drawn with screen-down as +y, which must flip to
+      // become world-up), so the creature's lowest WORLD point comes from
+      // its bones' largest blueprint y (maxDY), landing at -maxDY+spawnDY.
+      // Solve spawnDY so that equals the ground-clearance target.
+      var allY = [];
+      design.bones.forEach(function(b){ allY.push(b.y1, b.y2); });
+      var maxDY = Math.max.apply(null, allY);
+      var spawnDX = sp.x - design.bones[0].x1;
+      var spawnDY = sp.y + 0.15 + maxDY;
+      var spawnDZ = sp.z;
+
+      var worldAttach = function(boneIdx, t) {
+        var b = design.bones[boneIdx];
+        return { x: b.x1 + t*(b.x2-b.x1) + spawnDX, y: -(b.y1 + t*(b.y2-b.y1)) + spawnDY, z: spawnDZ };
+      };
+      var toLocal = function(body, wp) {
+        var q = body.quaternion.inverse();
+        var d = new CANNON.Vec3(wp.x - body.position.x, wp.y - body.position.y, wp.z - body.position.z);
+        return q.vmult(d);
+      };
+
+      var boneBodies = design.bones.map(function(b, i) {
+        // Flip Y so the blueprint's "down" (larger y1/y2) becomes world-down too.
+        var x1 = b.x1+spawnDX, y1 = -b.y1+spawnDY, x2 = b.x2+spawnDX, y2 = -b.y2+spawnDY;
+        var midX = (x1+x2)/2, midY = (y1+y2)/2;
+        var len = Math.max(0.1, Math.hypot(x2-x1, y2-y1));
+        var ang = Math.atan2(y2-y1, x2-x1);
+        var body = mkBody(0.6, new CANNON.Box(new CANNON.Vec3(len/2, (b.w/40)/2, BONE_DEPTH/2)), { x: midX, y: midY, z: spawnDZ });
+        body.quaternion.setFromAxisAngle(new CANNON.Vec3(0,0,1), ang);
+        return body;
+      });
+
+      r.main = boneBodies[0];
+      r.bodies = boneBodies;
+      r.joints = boneBodies.slice(1);
+
+      design.joints.forEach(function(j) {
+        var wA = worldAttach(j.boneA, j.tA), wB = worldAttach(j.boneB, j.tB);
+        var pA = toLocal(boneBodies[j.boneA], wA), pB = toLocal(boneBodies[j.boneB], wB);
+        var hinge = new CANNON.HingeConstraint(boneBodies[j.boneA], boneBodies[j.boneB], {
+          pivotA: pA, pivotB: pB, axisA: new CANNON.Vec3(0,0,1), axisB: new CANNON.Vec3(0,0,1), maxForce: 1e6
+        });
+        world.addConstraint(hinge);
+        r.constraints.push(hinge);
+      });
+
+      // Muscles are NOT Cannon constraints — CANNON.DistanceConstraint
+      // only connects body *centers*, which would ignore the designed
+      // attachment points entirely and (combined with the hip/knee
+      // hinges fighting it) caused a violent launch on spawn. Instead
+      // each muscle is a damped spring force applied every physics step
+      // at its actual local attachment points, pulling the two points
+      // toward `curLen` — a real tendon-like pull, and it naturally
+      // holds position between action updates without extra state.
+      r.muscles = design.muscles.map(function(m) {
+        var wA = worldAttach(m.boneA, m.tA), wB = worldAttach(m.boneB, m.tB);
+        var pA = toLocal(boneBodies[m.boneA], wA), pB = toLocal(boneBodies[m.boneB], wB);
+        var restLen = Math.hypot(wB.x-wA.x, wB.y-wA.y, wB.z-wA.z);
+        return {
+          bodyA: boneBodies[m.boneA], pointA: pA,
+          bodyB: boneBodies[m.boneB], pointB: pB,
+          minLen: restLen * (m.minRatio||0.65), maxLen: restLen * (m.maxRatio||1.35), curLen: restLen
+        };
+      });
+
+      r.numActions = Math.max(1, r.muscles.length * 2);
+    }
+  }
+
+  r.bodies.forEach(function(b, i) {
+    var color = i === 0 ? 0x10b981 : (r.type === 'car' && r.wheels && r.wheels.indexOf(b) !== -1 ? 0x4b5563 : 0x0d4429);
+    r.meshes.push(meshFor(b, color));
+  });
+  r.startX = r.main.position.x;
+  r.startY = r.main.position.y;
+  r.prevX = r.main.position.x;
+  return r;
+}
+
+function removeRobot(r) {
+  if (!r) return;
+  r.constraints.forEach(function(c){ world.removeConstraint(c); });
+  r.bodies.forEach(function(b){ world.removeBody(b); });
+  r.meshes.forEach(function(m){ scene.remove(m); });
+}
+
+// State size depends on robot type — the walker/custom creature
+// expose joint angles/velocities too, since without them the network
+// can't learn coordinated movement.
+function getStateSize(type) {
+  var base = NUM_DIST_SENSORS + 3 + 3; // 8 dist sensors + (vx,vy,vz) + (sin_yaw, cos_yaw, upDot)
+  if (type === 'walker') return base + 4*3; // 4 joints × (sin, cos, angVel about hinge axis)
+  if (type === 'custom') return base + Math.max(0, design.bones.length - 1)*3 + design.muscles.length;
+  return base;
+}
+
+// ── Actions → Physics ─────────────────────────────────────
+function forwardVector(body) {
+  var f = new CANNON.Vec3(1,0,0);
+  var out = new CANNON.Vec3();
+  body.quaternion.vmult(f, out);
+  out.y = 0;
+  var len = Math.hypot(out.x, out.z) || 1;
+  out.x /= len; out.z /= len;
+  return out;
+}
+
+function applyAction(r, action) {
+  var t = r.type;
+  if (t === 'ball') {
+    var f = 3.5;
+    if (action === 0) r.main.applyForce(new CANNON.Vec3(f,0,0), r.main.position);
+    else if (action === 1) r.main.applyForce(new CANNON.Vec3(-f,0,0), r.main.position);
+    else if (action === 2) r.main.applyForce(new CANNON.Vec3(0,0,f), r.main.position);
+    else if (action === 3) r.main.applyForce(new CANNON.Vec3(0,0,-f), r.main.position);
+    // action 4 = coast
+
+  } else if (t === 'car') {
+    var fwd = forwardVector(r.main);
+    var force = 26, turnRate = 1.1;
+    if (action === 0) {
+      r.main.applyForce(new CANNON.Vec3(fwd.x*force, 0, fwd.z*force), r.main.position);
+      r.wheels.forEach(function(w){ w.angularVelocity.z = 8; });
+    } else if (action === 1) {
+      r.main.applyForce(new CANNON.Vec3(-fwd.x*force*0.6, 0, -fwd.z*force*0.6), r.main.position);
+      r.wheels.forEach(function(w){ w.angularVelocity.z = -8; });
+    } else if (action === 2) {
+      r.main.angularVelocity.y = Math.max(-2.5, Math.min(2.5, r.main.angularVelocity.y + turnRate));
+    } else if (action === 3) {
+      r.main.angularVelocity.y = Math.max(-2.5, Math.min(2.5, r.main.angularVelocity.y - turnRate));
+    } else { // brake
+      r.main.velocity.x *= 0.8; r.main.velocity.z *= 0.8;
+    }
+
+  } else if (t === 'walker') {
+    var jS = 2.4;
+    var js = r.joints; // [lUpper, rUpper, lLower, rLower]
+    var clampZ = function(b, dv) { b.angularVelocity.z = Math.max(-6, Math.min(6, b.angularVelocity.z + dv)); };
+    if (action === 0) { clampZ(js[0], -jS); clampZ(js[1], jS); }
+    else if (action === 1) { clampZ(js[0], jS); clampZ(js[1], -jS); }
+    else if (action === 2) { clampZ(js[2], jS); clampZ(js[3], jS); }
+    else if (action === 3) { clampZ(js[2], -jS); clampZ(js[3], -jS); }
+    else if (action === 4) r.torso.angularVelocity.y = Math.max(-2, Math.min(2, r.torso.angularVelocity.y + 0.5));
+    else if (action === 5) r.torso.angularVelocity.y = Math.max(-2, Math.min(2, r.torso.angularVelocity.y - 0.5));
+
+  } else if (t === 'drone') {
+    var th = 9;
+    var m = r.main;
+    if (action === 0) m.applyForce(new CANNON.Vec3(0, th*2.2, 0), m.position);
+    else if (action === 1) m.applyForce(new CANNON.Vec3(0, -th*0.6, 0), m.position);
+    else if (action === 2) m.applyForce(new CANNON.Vec3(th*0.7, 0, 0), m.position);
+    else if (action === 3) m.applyForce(new CANNON.Vec3(-th*0.7, 0, 0), m.position);
+    else if (action === 4) m.applyForce(new CANNON.Vec3(0, 0, th*0.7), m.position);
+    else if (action === 5) m.applyForce(new CANNON.Vec3(0, 0, -th*0.7), m.position);
+
+  } else if (t === 'custom') {
+    var rate = 0.7;
+    var mi = Math.floor(action/2), dir = (action % 2 === 0) ? -1 : 1;
+    var mus = r.muscles && r.muscles[mi];
+    if (mus) {
+      mus.curLen = Math.max(mus.minLen, Math.min(mus.maxLen, mus.curLen + dir*rate*PHYS_STEP*8));
+    }
+  }
+}
+
+// Applies each muscle's damped spring force at its real attachment
+// points (see the comment where r.muscles is built) — called every
+// physics step so a muscle continues holding curLen even on steps
+// where a different muscle is the one being actuated.
+var MUSCLE_STIFFNESS = 40, MUSCLE_DAMPING = 3;
+var _muscleWA = new CANNON.Vec3(), _muscleWB = new CANNON.Vec3();
+
+function updateMuscles(r) {
+  if (!r.muscles) return;
+  r.muscles.forEach(function(m) {
+    m.bodyA.pointToWorldFrame(m.pointA, _muscleWA);
+    m.bodyB.pointToWorldFrame(m.pointB, _muscleWB);
+    var dx = _muscleWB.x - _muscleWA.x, dy = _muscleWB.y - _muscleWA.y, dz = _muscleWB.z - _muscleWA.z;
+    var dist = Math.hypot(dx, dy, dz) || 1e-6;
+    var dirX = dx/dist, dirY = dy/dist, dirZ = dz/dist;
+    var err = dist - m.curLen; // positive = currently longer than target -> pull together
+    var relVel = (m.bodyB.velocity.x-m.bodyA.velocity.x)*dirX + (m.bodyB.velocity.y-m.bodyA.velocity.y)*dirY + (m.bodyB.velocity.z-m.bodyA.velocity.z)*dirZ;
+    var forceMag = MUSCLE_STIFFNESS*err + MUSCLE_DAMPING*relVel;
+    var fx = dirX*forceMag, fy = dirY*forceMag, fz = dirZ*forceMag;
+    m.bodyA.applyForce(new CANNON.Vec3(fx, fy, fz), _muscleWA);
+    m.bodyB.applyForce(new CANNON.Vec3(-fx, -fy, -fz), _muscleWB);
+  });
+}
+
+// ── Sensors ───────────────────────────────────────────────
+var tmpEuler = new CANNON.Vec3();
+
+function readSensors(r) {
+  var origin = r.main.position;
+  var fwd = forwardVector(r.main);
+  var yaw = Math.atan2(fwd.z, fwd.x);
+  var state = [];
+
+  for (var i = 0; i < NUM_DIST_SENSORS; i++) {
+    var dir = yaw + (i / NUM_DIST_SENSORS) * Math.PI * 2;
+    var from = new CANNON.Vec3(origin.x, origin.y, origin.z);
+    var to = new CANNON.Vec3(origin.x + Math.cos(dir)*SENSOR_RANGE, origin.y, origin.z + Math.sin(dir)*SENSOR_RANGE);
+    var res = new CANNON.RaycastResult();
+    world.raycastClosest(from, to, {}, res);
+    var dist = res.hasHit ? res.distance : SENSOR_RANGE;
+    state.push(1 - dist / SENSOR_RANGE);
+  }
+
+  state.push(Math.max(-1, Math.min(1, r.main.velocity.x / 8)));
+  state.push(Math.max(-1, Math.min(1, r.main.velocity.y / 8)));
+  state.push(Math.max(-1, Math.min(1, r.main.velocity.z / 8)));
+  state.push(Math.sin(yaw), Math.cos(yaw));
+
+  var up = new CANNON.Vec3(0,1,0), upWorld = new CANNON.Vec3();
+  r.main.quaternion.vmult(new CANNON.Vec3(0,1,0), upWorld);
+  state.push(upWorld.dot(up)); // 1 = upright, <1 = tilted/fallen
+
+  if (r.joints) {
+    r.joints.forEach(function(j) {
+      j.quaternion.toEuler(tmpEuler, 'YZX');
+      state.push(Math.sin(tmpEuler.z), Math.cos(tmpEuler.z));
+      state.push(Math.max(-1, Math.min(1, j.angularVelocity.z / 6)));
+    });
+  }
+
+  if (r.muscles) {
+    r.muscles.forEach(function(m) {
+      var ratio = (m.curLen - m.minLen) / Math.max(1e-6, m.maxLen - m.minLen);
+      state.push(ratio*2 - 1);
+    });
+  }
+
+  r.sensors = state;
+  return state;
+}
+
+// ── Reward ────────────────────────────────────────────────
+function computeReward(r, done) {
+  var pos = r.main.position;
+  var dx = pos.x - r.prevX; // per-robot, not global — each parallel instance tracks its own progress
+  var vx = r.main.velocity.x;
+  r.prevX = pos.x;
+  var reward = 0;
+
+  if (r.type === 'ball') {
+    reward = dx * 0.4 + Math.max(0, vx) * 0.1;
+
+  } else if (r.type === 'car') {
+    reward = dx * 0.5 + Math.max(0, vx) * 0.3 + 0.01;
+    var upW = new CANNON.Vec3(); r.main.quaternion.vmult(new CANNON.Vec3(0,1,0), upW);
+    if (upW.y < 0.6) reward -= 0.05; // discourage flipping
+
+  } else if (r.type === 'walker') {
+    // No per-step reward for merely being upright — a free per-step
+    // subsidy previously made "stand still" the DQN's optimal policy.
+    // Reward now comes only from actual forward motion; falling costs
+    // the rest of the episode's reward plus the termination penalty.
+    reward = Math.max(0, vx) * 1.5 + dx * 1.0;
+
+  } else if (r.type === 'drone') {
+    var rise = pos.y - r.startY;
+    reward = Math.max(0, rise) * 0.05 + dx * 0.3 + Math.max(0, vx) * 0.1;
+
+  } else if (r.type === 'custom') {
+    reward = Math.max(0, vx) * 1.2 + dx * 0.8;
+  }
+
+  if (done) reward -= 3;
+  return reward;
+}
+
+function isDone(r) {
+  var p = r.main.position;
+  if (p.y < -8) return true; // fell through a gap / off the world
+  if (p.x < 0.5) return true; // went too far backward
+  if (p.x > 190) return true; // reached the end
+  var upW = new CANNON.Vec3(); r.main.quaternion.vmult(new CANNON.Vec3(0,1,0), upW);
+  if ((r.type === 'walker' || r.type === 'car') && upW.y < 0.35) return true; // tipped over
+  return false;
+}
+
+// ── DQN Agent ─────────────────────────────────────────────
+function buildAgent(stateSize, actionSize) {
+  if (!window.tf) { clog('TF.js not loaded — using random policy', 'warn'); return null; }
+  var gamma = 0.99, lr = 0.001, batchSize = 64;
+  var epsilon = 1.0, epsilonMin = 0.05;
+  var memory = [], memMax = 10000;
+  var targetUpdateFreq = 500, trainStep = 0;
+
+  function buildNet() {
+    var m = tf.sequential({ layers: [
+      tf.layers.dense({ inputShape: [stateSize], units: 128, activation: 'relu' }),
+      tf.layers.dense({ units: 128, activation: 'relu' }),
+      tf.layers.dense({ units: 64, activation: 'relu' }),
+      tf.layers.dense({ units: actionSize, activation: 'linear' })
+    ]});
+    m.compile({ optimizer: tf.train.adam(lr), loss: 'meanSquaredError' });
+    return m;
+  }
+
+  var model = buildNet(), target = buildNet();
+  target.setWeights(model.getWeights());
+
+  return {
+    get epsilon() { return epsilon; },
+    memLen: function(){ return memory.length; },
+    decayEpsilon: function() {
+      if (epsilon > epsilonMin) epsilon = Math.max(epsilonMin, epsilon * 0.97);
+    },
+    act: function(state) {
+      if (Math.random() < epsilon) return Math.floor(Math.random() * actionSize);
+      return tf.tidy(function() {
+        var q = model.predict(tf.tensor2d([state])).arraySync()[0];
+        return q.indexOf(Math.max.apply(null, q));
+      });
+    },
+    actGreedy: function(state) {
+      return tf.tidy(function() {
+        var q = model.predict(tf.tensor2d([state])).arraySync()[0];
+        return q.indexOf(Math.max.apply(null, q));
+      });
+    },
+    remember: function(s, a, r, ns, done) {
+      if (memory.length >= memMax) memory.shift();
+      memory.push([s, a, r, ns, done]);
+    },
+    train: async function() {
+      if (memory.length < batchSize) return null;
+      var batch = [];
+      for (var i = 0; i < batchSize; i++) batch.push(memory[Math.floor(Math.random()*memory.length)]);
+
+      var states = batch.map(function(b){ return b[0]; });
+      var nexts  = batch.map(function(b){ return b[3]; });
+
+      var qCur = tf.tidy(function(){ return model.predict(tf.tensor2d(states)).arraySync(); });
+      var qNxt = tf.tidy(function(){ return target.predict(tf.tensor2d(nexts)).arraySync(); });
+
+      var ys = qCur.map(function(q, i) {
+        var tgt = q.slice();
+        var b = batch[i];
+        tgt[b[1]] = b[4] ? b[2] : b[2] + gamma * Math.max.apply(null, qNxt[i]);
+        return tgt;
+      });
+
+      var xT = tf.tensor2d(states), yT = tf.tensor2d(ys);
+      var h = await model.fit(xT, yT, { epochs: 1, batchSize: batchSize, verbose: 0 });
+      xT.dispose(); yT.dispose();
+
+      trainStep++;
+      if (trainStep % targetUpdateFreq === 0) target.setWeights(model.getWeights());
+      return h.history.loss[0];
+    }
+  };
+}
+
+function scheduleTraining() {
+  if (trainPending || !DQN) return;
+  trainPending = true;
+  setTimeout(async function() {
+    try {
+      var loss = await DQN.train();
+      if (loss != null) lastLoss = loss;
+    } catch (e) { /* ignore transient tensor errors during resets */ }
+    trainPending = false;
+  }, 0);
+}
+
+// ── Rendering ─────────────────────────────────────────────
+var sensorLines = [];
+
+function syncMeshesToBodies() {
+  instances.forEach(function(inst) {
+    var r = inst.robot;
+    r.bodies.forEach(function(b, i) {
+      var m = r.meshes[i];
+      if (!m) return;
+      m.position.copy(b.position);
+      m.quaternion.copy(b.quaternion);
+    });
+  });
+}
+
+function updateSensorLines() {
+  sensorLines.forEach(function(l){ scene.remove(l); });
+  sensorLines = [];
+  if (!robot) return;
+  var origin = robot.main.position;
+  var fwd = forwardVector(robot.main);
+  var yaw = Math.atan2(fwd.z, fwd.x);
+  for (var i = 0; i < NUM_DIST_SENSORS; i++) {
+    var v = robot.sensors[i] || 0;
+    var dir = yaw + (i / NUM_DIST_SENSORS) * Math.PI * 2;
+    var dist = SENSOR_RANGE * (1 - v);
+    var end = new THREE.Vector3(origin.x + Math.cos(dir)*dist, origin.y, origin.z + Math.sin(dir)*dist);
+    var color = v > 0.5 ? 0xf85149 : 0x10b981;
+    var geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(origin.x, origin.y, origin.z), end]);
+    var line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: color, transparent: true, opacity: 0.4 + v*0.5 }));
+    scene.add(line);
+    sensorLines.push(line);
+  }
+}
+
+function updateCamera() {
+  var target;
+  if (camTargetOverride) {
+    target = camTargetOverride;
+  } else if (instances.length) {
+    // Follow the centroid of all active instances — collapses to
+    // exactly the single robot's position when there's only one.
+    var cx = 0, cy = 0, cz = 0;
+    instances.forEach(function(inst) { var p = inst.robot.main.position; cx += p.x; cy += p.y; cz += p.z; });
+    target = { x: cx/instances.length, y: cy/instances.length, z: cz/instances.length };
+  } else {
+    target = { x: 0, y: 0, z: 0 };
+  }
+  var ty = camTargetOverride ? target.y : target.y + 0.3;
+  var cx = target.x + camDist*Math.cos(camPitch)*Math.sin(camYaw);
+  var cy = ty + camDist*Math.sin(camPitch);
+  var cz = target.z + camDist*Math.cos(camPitch)*Math.cos(camYaw);
+  camera.position.set(cx, cy, cz);
+  camera.lookAt(target.x, ty, target.z);
+}
+
+function resizeCanvases() {
+  var sp = document.getElementById('sim-panel');
+  var w = sp.clientWidth, h = sp.clientHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  buildCanvas.width = w; buildCanvas.height = h;
+  rwCanvas.width = rwCanvas.parentElement.clientWidth - 16;
+  rwCanvas.height = 80;
+}
+
+// ── Sensor bars ───────────────────────────────────────────
+function buildSensorBars() {
+  var g = document.getElementById('sensor-grid');
+  g.innerHTML = '';
+  var labels = [];
+  for (var i = 0; i < NUM_DIST_SENSORS; i++) labels.push('D' + i + ' ' + Math.round(i / NUM_DIST_SENSORS * 360) + '°');
+  labels.push('Vx', 'Vy', 'Vz');
+  labels.forEach(function(name, i) {
+    var w = document.createElement('div');
+    w.className = 'sensor-bar-wrap';
+    w.innerHTML = '<div class="sensor-name">'+name+'</div><div class="sensor-bar-bg"><div class="sensor-bar-fill" id="sb'+i+'" style="width:0%"></div></div><div class="sensor-val" id="sv'+i+'">0.00</div>';
+    g.appendChild(w);
+  });
+}
+
+function updateSensorBars() {
+  if (!robot) return;
+  var state = robot.sensors;
+  for (var i = 0; i < NUM_DIST_SENSORS + 3; i++) {
+    var v = state[i] || 0;
+    var pct = Math.max(0, Math.min(100, Math.abs(v) * 100));
+    var bar = document.getElementById('sb' + i);
+    var val = document.getElementById('sv' + i);
+    if (bar) { bar.style.width = pct + '%'; bar.style.background = v > 0.5 ? '#f85149' : '#10b981'; }
+    if (val) val.textContent = v.toFixed(2);
+  }
+}
+
+// ── Reward chart ──────────────────────────────────────────
+function drawRewardChart() {
+  var W = rwCanvas.width, H = rwCanvas.height;
+  rwCtx.clearRect(0, 0, W, H);
+  if (rewardHistory.length < 2) return;
+  var data = rewardHistory.slice(-80);
+  var mn = Math.min.apply(null, data), mx = Math.max.apply(null, data);
+  var range = Math.max(1, mx - mn);
+  var zeroY = H - (0 - mn) / range * H;
+  rwCtx.strokeStyle = '#21262d'; rwCtx.lineWidth = 0.5;
+  rwCtx.beginPath(); rwCtx.moveTo(0, zeroY); rwCtx.lineTo(W, zeroY); rwCtx.stroke();
+  rwCtx.strokeStyle = '#10b981'; rwCtx.lineWidth = 1.5;
+  rwCtx.beginPath();
+  data.forEach(function(v, i) {
+    var x = (i / (data.length - 1)) * W;
+    var y = H - (v - mn) / range * H;
+    i === 0 ? rwCtx.moveTo(x, y) : rwCtx.lineTo(x, y);
+  });
+  rwCtx.stroke();
+}
+
+// ── Stats ─────────────────────────────────────────────────
+function updateStats(loss) {
+  var set = function(id, val) { var el = document.getElementById(id); if(el) el.textContent = val; };
+  var inst0 = instances[0];
+  set('s-ep', episode);
+  set('s-step', inst0 ? inst0.stepCount : 0);
+  set('s-rew', inst0 ? inst0.epReward.toFixed(2) : '0.00');
+  set('s-best', bestReward < -1e6 ? '—' : bestReward.toFixed(2));
+  var avg = rewardHistory.slice(-20).reduce(function(a,b){return a+b;},0) / Math.max(1, Math.min(20, rewardHistory.length));
+  set('s-avg', rewardHistory.length ? avg.toFixed(2) : '—');
+  set('s-loss', loss != null ? loss.toFixed(5) : '—');
+  if (robot) {
+    set('s-dist', (robot.main.position.x - robot.startX).toFixed(2));
+    set('s-vel', robot.main.velocity.x.toFixed(2));
+    var fwd = forwardVector(robot.main);
+    set('s-ang', (Math.atan2(fwd.z, fwd.x) * 180 / Math.PI).toFixed(1) + '°');
+  }
+  if (DQN) {
+    document.getElementById('cfg-eps').textContent = DQN.epsilon.toFixed(3);
+    document.getElementById('cfg-mem').textContent = DQN.memLen();
+  }
+}
+
+// ── Core simulation step (synchronous) ─────────────────────
+// Split into pre/post around a single SHARED world.step() so N
+// parallel instances (one physics world, one DQN) all advance
+// together: every instance's action must be applied before physics
+// steps, and every instance's nextState must be read after — reading
+// it before stepping physics was the root cause of the original 2D
+// version never learning anything (every transition looked like
+// "action → nothing changes").
+function collectStepPre(inst) {
+  var r = inst.robot;
+  var state = readSensors(r);
+  var action;
+
+  if (training && DQN) {
+    action = DQN.act(state);
+  } else if (demo && DQN) {
+    action = DQN.actGreedy(state);
+  } else {
+    action = Math.floor(Math.random() * r.numActions);
+  }
+
+  applyAction(r, action);
+  updateMuscles(r);
+  inst.pendingState = state;
+  inst.pendingAction = action;
+}
+
+function collectStepPost(inst) {
+  var r = inst.robot;
+  var done = isDone(r);
+  var reward = computeReward(r, done);
+  inst.epReward += reward;
+
+  var nextState = readSensors(r);
+
+  if (training && DQN) {
+    DQN.remember(inst.pendingState, inst.pendingAction, reward, nextState, done);
+    if (inst.stepCount % 4 === 0) scheduleTraining();
+  }
+  inst.stepCount++;
+
+  if (done || inst.stepCount >= EP_MAX_STEPS) {
+    rewardHistory.push(inst.epReward);
+    if (inst.epReward > bestReward) bestReward = inst.epReward;
+    clog('Ep ' + episode + ': reward=' + inst.epReward.toFixed(1) + ' steps=' + inst.stepCount + (DQN ? ' ε=' + DQN.epsilon.toFixed(3) : ''), inst.epReward > 0 ? 'ok' : 'dim');
+    if (training) {
+      var avg20 = rewardHistory.slice(-20).reduce(function(a,b){return a+b;},0) / Math.min(20, rewardHistory.length);
+      tbLog(episode, 'reward', inst.epReward);
+      tbLog(episode, 'avg_reward', avg20);
+      if (DQN) tbLog(episode, 'epsilon', DQN.epsilon);
+      if (lastLoss != null) tbLog(episode, 'loss', lastLoss);
+      tbFlush();
+    }
+    if (training && DQN) DQN.decayEpsilon();
+    episode++;
+    respawnInstance(inst);
+  }
+}
+
+// Respawns just the one instance whose episode ended, at a fresh
+// random location, without disturbing the other running instances.
+function respawnInstance(inst) {
+  removeRobot(inst.robot);
+  inst.robot = buildRobot(curRobot, randomSpawn());
+  inst.stepCount = 0;
+  inst.epReward = 0;
+}
+
+// ── Frame loop ────────────────────────────────────────────
+var lastTimestamp = 0;
+var simAccum = 0;
+
+function frame(ts) {
+  animId = requestAnimationFrame(frame);
+
+  fpsFrames++;
+  if (ts - lastFpsTime > 500) {
+    fps = Math.round(fpsFrames * 1000 / (ts - lastFpsTime));
+    document.getElementById('fps-badge').textContent = fps + ' fps';
+    lastFpsTime = ts; fpsFrames = 0;
+  }
+
+  var dt = Math.min(ts - lastTimestamp, 100);
+  lastTimestamp = ts;
+
+  if (builderMode) return; // 2D blueprint canvas handles its own render loop
+
+  if (!terrainEditMode && (training || demo) && instances.length) {
+    simAccum += dt * simSpeed;
+    var maxSteps = simSpeed * 2;
+    var steps = 0;
+    while (simAccum >= PHYS_STEP*1000 && steps < maxSteps) {
+      instances.forEach(collectStepPre);
+      world.step(PHYS_STEP); // one shared physics step advances every instance together
+      instances.forEach(collectStepPost); // may respawn a finished instance's robot in place
+      simAccum -= PHYS_STEP*1000;
+      steps++;
+    }
+  }
+
+  robot = instances.length ? instances[0].robot : null; // primary alias, re-derived since respawns replace it
+  updateCamera();
+  syncMeshesToBodies();
+  if (robot) updateSensorLines();
+  renderer.render(scene, camera);
+  updateSensorBars();
+  if (ts % 8 < 4) {
+    updateStats(lastLoss);
+    drawRewardChart();
+  }
+}
+
+// ── Camera orbit controls (drag to rotate, wheel to zoom) ───────
+simCanvas.addEventListener('mousedown', function(e) {
+  if (builderMode) return;
+  camDragging = true; camLastX = e.clientX; camLastY = e.clientY;
+  camDownPos = { x: e.clientX, y: e.clientY };
+});
+window.addEventListener('mousemove', function(e) {
+  if (!camDragging) return;
+  var dx = e.clientX - camLastX, dy = e.clientY - camLastY;
+  camLastX = e.clientX; camLastY = e.clientY;
+  camYaw -= dx * 0.007;
+  camPitch = Math.max(0.08, Math.min(1.45, camPitch + dy * 0.007));
+});
+window.addEventListener('mouseup', function(e) {
+  camDragging = false;
+  if (terrainEditMode && camDownPos) {
+    var moved = Math.hypot(e.clientX - camDownPos.x, e.clientY - camDownPos.y);
+    if (moved < 5) handleTerrainClick(e);
+  }
+  camDownPos = null;
+});
+simCanvas.addEventListener('wheel', function(e) {
+  if (builderMode) return;
+  camDist = Math.max(2, Math.min(140, camDist + e.deltaY * 0.02));
+  e.preventDefault();
+}, { passive: false });
+
+// ── Controls ──────────────────────────────────────────────
+function toggleTraining() {
+  if (demo) { demo = false; document.getElementById('btn-demo').textContent = 'Demo'; }
+  training = !training;
+  document.getElementById('btn-train').textContent = training ? '◼ Stop' : '▶ Train';
+  document.getElementById('btn-train').className = training ? 'btn btn-red' : 'btn btn-green';
+  clog(training ? 'Training started' : 'Training stopped', 'info');
+}
+
+function runDemo() {
+  if (training) toggleTraining();
+  demo = !demo;
+  document.getElementById('btn-demo').textContent = demo ? '◼ Stop Demo' : 'Demo';
+  clog(demo ? 'Running demo (greedy policy)' : 'Demo stopped', 'info');
+}
+
+// "Reset" button — respawns every instance at a fresh random location
+// and clears training history. Per-episode respawns (when an instance
+// merely finishes an episode) go through respawnInstance() instead,
+// which leaves the other running instances and the reward history alone.
+function resetEpisode() {
+  instances.forEach(function(inst) {
+    removeRobot(inst.robot);
+    inst.robot = buildRobot(curRobot, randomSpawn());
+    inst.stepCount = 0;
+    inst.epReward = 0;
+  });
+  robot = instances.length ? instances[0].robot : null;
+  episode = 0; lastLoss = null; rewardHistory = [];
+  clog('Reset', 'dim');
+}
+
+function setSpeed(s) { simSpeed = s; }
+
+function setParallel(n) {
+  numInstances = n;
+  camDist = Math.max(camDist, 8 + n * 2.5); // widen the default view so spread-out instances stay visible
+  initWorld();
+  clog('Parallel instances: ' + n, 'info');
+}
+
+function selectEnv(type) {
+  curEnv = type;
+  document.querySelectorAll('#env-chips .chip').forEach(function(c){
+    c.classList.toggle('active', c.dataset.env === type);
+  });
+  buildEnvPreset(type);
+  initWorld();
+  clog('Environment: ' + type, 'info');
+}
+
+function selectRobot(type) {
+  curRobot = type;
+  document.querySelectorAll('#robot-chips .chip').forEach(function(c){
+    c.classList.toggle('active', c.dataset.robot === type);
+  });
+  document.getElementById('custom-panel').style.display = type === 'custom' ? 'block' : 'none';
+
+  if (type === 'custom') {
+    if (builderMode) toggleBuilder();
+    if (!design.bones.length) {
+      clog('No creature yet — click ✏️ Edit Blueprint to build one, or pick a preset', 'info');
+      return;
+    }
+    buildCustomRobot();
+    return;
+  }
+
+  var stateSize = getStateSize(type);
+  var nA = 0;
+  if (window.tf) {
+    var tmp = buildRobot(type);
+    nA = tmp.numActions;
+    removeRobot(tmp);
+    DQN = buildAgent(stateSize, nA);
+  }
+  initWorld();
+  clog('Robot: ' + type + ' (state=' + stateSize + (nA ? ', actions=' + nA : '') + ')', 'info');
+}
+
+function buildCustomRobot() {
+  if (!design.bones.length) { clog('No creature design yet — click ✏️ Edit Blueprint to build one', 'warn'); return; }
+  curRobot = 'custom';
+  document.querySelectorAll('#robot-chips .chip').forEach(function(c){
+    c.classList.toggle('active', c.dataset.robot === 'custom');
+  });
+  document.getElementById('custom-panel').style.display = 'block';
+  var stateSize = getStateSize('custom');
+  var nA = Math.max(1, design.muscles.length * 2);
+  if (window.tf) DQN = buildAgent(stateSize, nA);
+  initWorld();
+  clog('Creature ready: ' + design.bones.length + ' bones, ' + design.joints.length + ' joints, ' + design.muscles.length + ' muscles (state=' + stateSize + ', actions=' + nA + ')', 'ok');
+}
+
+function initWorld() {
+  instances.forEach(function(inst){ removeRobot(inst.robot); });
+  instances = [];
+  for (var i = 0; i < numInstances; i++) {
+    instances.push({ robot: buildRobot(curRobot, randomSpawn()), stepCount: 0, epReward: 0 });
+  }
+  robot = instances[0].robot;
+  episode = 0; rewardHistory = [];
+  training = false; demo = false;
+  document.getElementById('btn-train').textContent = '▶ Train';
+  document.getElementById('btn-train').className = 'btn btn-green';
+  document.getElementById('btn-demo').textContent = 'Demo';
+}
+
+// ── Creature Builder (2D blueprint, extruded into 3D) ──────────
+function updateDesignCounts() {
+  var set = function(id, v) { var el = document.getElementById(id); if (el) el.textContent = v; };
+  set('design-bones', design.bones.length);
+  set('design-joints', design.joints.length);
+  set('design-muscles', design.muscles.length);
+}
+
+function toggleBuilder() {
+  if (training) toggleTraining();
+  demo = false;
+  if (terrainEditMode) toggleTerrainEdit();
+  builderMode = !builderMode;
+  buildCanvas.style.display = builderMode ? 'block' : 'none';
+  document.getElementById('builder-toolbar').style.display = builderMode ? 'flex' : 'none';
+  document.getElementById('builder-hint').style.display = builderMode ? 'block' : 'none';
+  document.getElementById('btn-builder').textContent = builderMode ? '◼ Stop Editing' : '✏️ Edit Blueprint';
+  builderPending = null;
+  if (builderMode) { clog('Blueprint editor opened — drag to place a bone', 'info'); renderBuilderLoop(); }
+}
+
+function renderBuilderLoop() {
+  if (!builderMode) return;
+  renderBuilder();
+  requestAnimationFrame(renderBuilderLoop);
+}
+
+function setBuilderTool(t) {
+  builderTool = t;
+  builderPending = null;
+  document.querySelectorAll('#builder-toolbar [data-tool]').forEach(function(b){
+    b.classList.toggle('active', b.dataset.tool === t);
+  });
+}
+
+function clearDesign() {
+  design = { bones: [], joints: [], muscles: [] };
+  builderPending = null;
+  updateDesignCounts();
+  clog('Design cleared', 'dim');
+}
+
+function finishBuilder() {
+  if (!design.bones.length) { clog('Add at least one bone first', 'warn'); return; }
+  builderMode = false;
+  buildCanvas.style.display = 'none';
+  document.getElementById('builder-toolbar').style.display = 'none';
+  document.getElementById('builder-hint').style.display = 'none';
+  document.getElementById('btn-builder').textContent = '✏️ Edit Blueprint';
+  buildCustomRobot();
+}
+
+function designAttach(boneIdx, t) {
+  var b = design.bones[boneIdx];
+  return { x: b.x1 + t * (b.x2 - b.x1), y: b.y1 + t * (b.y2 - b.y1) };
+}
+
+function screenToBuilderWorld(sx, sy) {
+  var W = buildCanvas.width, H = buildCanvas.height;
+  return {
+    x: builderCam.x + (sx - W / 2) / builderCam.scale,
+    y: builderCam.y + (sy - H * 0.5) / builderCam.scale
+  };
+}
+
+function canvasMousePos(e) {
+  var rect = buildCanvas.getBoundingClientRect();
+  return {
+    sx: (e.clientX - rect.left) * (buildCanvas.width / rect.width),
+    sy: (e.clientY - rect.top) * (buildCanvas.height / rect.height)
+  };
+}
+
+function nearestBoneAttach(pt, snapEnds) {
+  var best = null, bestDist = Infinity;
+  design.bones.forEach(function(b, i) {
+    var dx = b.x2 - b.x1, dy = b.y2 - b.y1;
+    var len2 = dx*dx + dy*dy || 1;
+    var t = ((pt.x - b.x1)*dx + (pt.y - b.y1)*dy) / len2;
+    t = Math.max(0, Math.min(1, t));
+    var px = b.x1 + t*dx, py = b.y1 + t*dy;
+    var d = Math.hypot(pt.x - px, pt.y - py);
+    if (d < bestDist) { bestDist = d; best = { boneIdx: i, t: t }; }
+  });
+  if (!best || bestDist > 1.0 / builderCam.scale * 40) return null;
+  if (snapEnds) {
+    if (best.t < 0.25) best.t = 0;
+    else if (best.t > 0.75) best.t = 1;
+  }
+  return best;
+}
+
+function deleteNearest(wp) {
+  var bestType = null, bestIdx = -1, bestDist = 30 / builderCam.scale;
+  design.muscles.forEach(function(m, i) {
+    var p = designAttach(m.boneA, m.tA), q = designAttach(m.boneB, m.tB);
+    var d = Math.hypot(wp.x - (p.x+q.x)/2, wp.y - (p.y+q.y)/2);
+    if (d < bestDist) { bestDist = d; bestType = 'muscle'; bestIdx = i; }
+  });
+  design.joints.forEach(function(j, i) {
+    var p = designAttach(j.boneA, j.tA);
+    var d = Math.hypot(wp.x - p.x, wp.y - p.y);
+    if (d < bestDist) { bestDist = d; bestType = 'joint'; bestIdx = i; }
+  });
+  if (bestType === null) {
+    var hit = nearestBoneAttach(wp, false);
+    if (hit) { bestType = 'bone'; bestIdx = hit.boneIdx; }
+  }
+
+  if (bestType === 'muscle') design.muscles.splice(bestIdx, 1);
+  else if (bestType === 'joint') design.joints.splice(bestIdx, 1);
+  else if (bestType === 'bone') {
+    design.joints = design.joints
+      .filter(function(j){ return j.boneA !== bestIdx && j.boneB !== bestIdx; })
+      .map(function(j){ return { boneA: j.boneA > bestIdx ? j.boneA-1 : j.boneA, tA: j.tA, boneB: j.boneB > bestIdx ? j.boneB-1 : j.boneB, tB: j.tB }; });
+    design.muscles = design.muscles
+      .filter(function(m){ return m.boneA !== bestIdx && m.boneB !== bestIdx; })
+      .map(function(m){ return { boneA: m.boneA > bestIdx ? m.boneA-1 : m.boneA, tA: m.tA, boneB: m.boneB > bestIdx ? m.boneB-1 : m.boneB, tB: m.tB, minRatio: m.minRatio, maxRatio: m.maxRatio }; });
+    design.bones.splice(bestIdx, 1);
+  }
+  updateDesignCounts();
+}
+
+buildCanvas.addEventListener('mousedown', function(e) {
+  if (!builderMode) return;
+  var p = canvasMousePos(e);
+  var wp = screenToBuilderWorld(p.sx, p.sy);
+  if (builderTool === 'bone') {
+    builderDragStart = wp;
+  } else if (builderTool === 'joint' || builderTool === 'muscle') {
+    var hit = nearestBoneAttach(wp, builderTool === 'joint');
+    if (!hit) return;
+    if (!builderPending) {
+      builderPending = hit;
+    } else if (builderPending.boneIdx === hit.boneIdx) {
+      builderPending = null;
+    } else {
+      if (builderTool === 'joint') {
+        design.joints.push({ boneA: builderPending.boneIdx, tA: builderPending.t, boneB: hit.boneIdx, tB: hit.t });
+      } else {
+        design.muscles.push({ boneA: builderPending.boneIdx, tA: builderPending.t, boneB: hit.boneIdx, tB: hit.t, minRatio: 0.65, maxRatio: 1.35 });
+      }
+      builderPending = null;
+      updateDesignCounts();
+    }
+  } else if (builderTool === 'delete') {
+    deleteNearest(wp);
+  }
+});
+
+buildCanvas.addEventListener('mousemove', function(e) {
+  if (!builderMode) return;
+  var p = canvasMousePos(e);
+  builderMouse = screenToBuilderWorld(p.sx, p.sy);
+});
+
+buildCanvas.addEventListener('mouseup', function(e) {
+  if (!builderMode || builderTool !== 'bone' || !builderDragStart) return;
+  var p = canvasMousePos(e);
+  var wp = screenToBuilderWorld(p.sx, p.sy);
+  if (Math.hypot(wp.x - builderDragStart.x, wp.y - builderDragStart.y) > 0.15) {
+    design.bones.push({ x1: builderDragStart.x, y1: builderDragStart.y, x2: wp.x, y2: wp.y, w: BONE_WIDTH*40 });
+    updateDesignCounts();
+  }
+  builderDragStart = null;
+});
+
+function renderBuilder() {
+  var W = buildCanvas.width, H = buildCanvas.height;
+  buildCtx.fillStyle = '#0a0d13';
+  buildCtx.fillRect(0, 0, W, H);
+
+  buildCtx.save();
+  buildCtx.translate(W/2 - builderCam.x*builderCam.scale, H*0.5 - builderCam.y*builderCam.scale);
+  buildCtx.scale(builderCam.scale, builderCam.scale);
+
+  buildCtx.strokeStyle = '#ffffff08';
+  buildCtx.lineWidth = 1 / builderCam.scale;
+  for (var gx = -10; gx <= 10; gx += 0.5) { buildCtx.beginPath(); buildCtx.moveTo(gx,-8); buildCtx.lineTo(gx,8); buildCtx.stroke(); }
+  for (var gy = -8; gy <= 8; gy += 0.5) { buildCtx.beginPath(); buildCtx.moveTo(-10,gy); buildCtx.lineTo(10,gy); buildCtx.stroke(); }
+
+  design.muscles.forEach(function(m) {
+    var p = designAttach(m.boneA, m.tA), q = designAttach(m.boneB, m.tB);
+    buildCtx.strokeStyle = '#e3b341';
+    buildCtx.lineWidth = 0.08;
+    buildCtx.setLineDash([0.1, 0.07]);
+    buildCtx.beginPath(); buildCtx.moveTo(p.x,p.y); buildCtx.lineTo(q.x,q.y); buildCtx.stroke();
+    buildCtx.setLineDash([]);
+  });
+
+  design.bones.forEach(function(b, i) {
+    buildCtx.strokeStyle = '#10b981';
+    buildCtx.lineWidth = b.w / 40;
+    buildCtx.lineCap = 'round';
+    buildCtx.beginPath(); buildCtx.moveTo(b.x1,b.y1); buildCtx.lineTo(b.x2,b.y2); buildCtx.stroke();
+    buildCtx.strokeStyle = i === 0 ? '#f1f5f9' : '#0d4429';
+    buildCtx.lineWidth = 0.05;
+    buildCtx.stroke();
+  });
+
+  design.joints.forEach(function(j) {
+    var p = designAttach(j.boneA, j.tA);
+    buildCtx.fillStyle = '#58a6ff';
+    buildCtx.beginPath(); buildCtx.arc(p.x, p.y, 0.12, 0, Math.PI*2); buildCtx.fill();
+  });
+
+  if (builderPending) {
+    var pp = designAttach(builderPending.boneIdx, builderPending.t);
+    buildCtx.strokeStyle = '#f85149';
+    buildCtx.lineWidth = 0.05;
+    buildCtx.beginPath(); buildCtx.arc(pp.x, pp.y, 0.2, 0, Math.PI*2); buildCtx.stroke();
+  }
+
+  if (builderDragStart && builderTool === 'bone') {
+    buildCtx.strokeStyle = '#3fb95088';
+    buildCtx.lineWidth = BONE_WIDTH;
+    buildCtx.lineCap = 'round';
+    buildCtx.beginPath(); buildCtx.moveTo(builderDragStart.x, builderDragStart.y); buildCtx.lineTo(builderMouse.x, builderMouse.y); buildCtx.stroke();
+  }
+
+  buildCtx.restore();
+}
+
+// ── Save / load / presets ────────────────────────────────────
+async function saveCreature() {
+  var name = prompt('Save creature as:', 'my-creature');
+  if (!name) return;
+  try {
+    await sdk().mkdir(CREATURES_DIR);
+    await sdk().writeText(CREATURES_DIR + '/' + name + '.json', JSON.stringify(design));
+    clog('Saved creature: ' + name, 'ok');
+  } catch (e) { clog('Save failed: ' + e.message, 'err'); }
+}
+
+async function loadCreatureDialog() {
+  try {
+    var items = await sdk().list(CREATURES_DIR);
+    var names = (items||[]).map(function(x){ return typeof x === 'string' ? x : (x.name||x); }).filter(function(n){ return n && n.endsWith('.json'); });
+    if (!names.length) { clog('No saved creatures found', 'warn'); return; }
+    var pick = prompt('Load which creature?\n' + names.join('\n'), names[0]);
+    if (!pick) return;
+    if (!pick.endsWith('.json')) pick += '.json';
+    var txt = await sdk().readText(CREATURES_DIR + '/' + pick);
+    design = JSON.parse(txt);
+    updateDesignCounts();
+    clog('Loaded creature: ' + pick, 'ok');
+  } catch (e) { clog('Load failed: ' + e.message, 'err'); }
+}
+
+var PRESETS = {
+  biped: {
+    bones: [
+      { x1: 0, y1: -1.0, x2: 0, y2: 0, w: 20 },
+      { x1: -0.15, y1: 0, x2: -0.25, y2: 0.85, w: 12 },
+      { x1: -0.25, y1: 0.85, x2: -0.25, y2: 1.65, w: 10 },
+      { x1: 0.15, y1: 0, x2: 0.25, y2: 0.85, w: 12 },
+      { x1: 0.25, y1: 0.85, x2: 0.25, y2: 1.65, w: 10 }
+    ],
+    joints: [
+      { boneA: 0, tA: 1, boneB: 1, tB: 0 },
+      { boneA: 1, tA: 1, boneB: 2, tB: 0 },
+      { boneA: 0, tA: 1, boneB: 3, tB: 0 },
+      { boneA: 3, tA: 1, boneB: 4, tB: 0 }
+    ],
+    muscles: [
+      { boneA: 0, tA: 0.3, boneB: 1, tB: 0.8, minRatio: 0.6, maxRatio: 1.5 },
+      { boneA: 0, tA: 0.3, boneB: 3, tB: 0.8, minRatio: 0.6, maxRatio: 1.5 },
+      { boneA: 1, tA: 0.2, boneB: 2, tB: 0.8, minRatio: 0.6, maxRatio: 1.5 },
+      { boneA: 3, tA: 0.2, boneB: 4, tB: 0.8, minRatio: 0.6, maxRatio: 1.5 }
+    ]
+  },
+  inchworm: {
+    bones: [
+      { x1: -0.75, y1: 0, x2: 0, y2: 0, w: 16 },
+      { x1: 0, y1: 0, x2: 0.75, y2: 0, w: 16 },
+      { x1: 0.75, y1: 0, x2: 1.5, y2: 0, w: 16 }
+    ],
+    joints: [
+      { boneA: 0, tA: 1, boneB: 1, tB: 0 },
+      { boneA: 1, tA: 1, boneB: 2, tB: 0 }
+    ],
+    muscles: [
+      { boneA: 0, tA: 0.2, boneB: 1, tB: 0.8, minRatio: 0.5, maxRatio: 1.4 },
+      { boneA: 1, tA: 0.2, boneB: 2, tB: 0.8, minRatio: 0.5, maxRatio: 1.4 }
+    ]
+  }
+};
+
+function loadPreset(name) {
+  if (!name || !PRESETS[name]) return;
+  design = JSON.parse(JSON.stringify(PRESETS[name]));
+  updateDesignCounts();
+  document.getElementById('preset-sel').value = '';
+  clog('Loaded preset: ' + name, 'info');
+  buildCustomRobot();
+}
+
+// ── Terrain (playground) editor ─────────────────────────────────
+function toggleTerrainEdit() {
+  if (builderMode) toggleBuilder();
+  if (training) toggleTraining();
+  demo = false;
+  terrainEditMode = !terrainEditMode;
+  document.getElementById('terrain-toolbar').style.display = terrainEditMode ? 'flex' : 'none';
+  document.getElementById('terrain-hint').style.display = terrainEditMode ? 'block' : 'none';
+  document.getElementById('btn-terrain').textContent = terrainEditMode ? '◼ Stop Editing' : '🏗️ Edit Terrain';
+  if (terrainEditMode) {
+    camTargetOverride = { x: 25, y: 0, z: 0 };
+    camDist = 45; camPitch = 0.8;
+    clog('Terrain editor opened — click the ground to place, or Delete to remove', 'info');
+  } else {
+    camTargetOverride = null;
+  }
+}
+
+function setTerrainTool(t) {
+  terrainTool = t;
+  document.querySelectorAll('#terrain-toolbar [data-terrain-tool]').forEach(function(b){
+    b.classList.toggle('active', b.dataset.terrainTool === t);
+  });
+}
+
+var TERRAIN_DEFAULTS = {
+  wall: { w: 0.6, d: 6 },
+  step: { w: 2.2, d: 8 },
+  platform: { w: 4, d: 10 }
+};
+
+function handleTerrainClick(e) {
+  var rect = simCanvas.getBoundingClientRect();
+  mouseNDC.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  mouseNDC.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera(mouseNDC, camera);
+
+  if (terrainTool === 'delete') {
+    var hits = raycaster.intersectObjects(terrainMeshes);
+    if (hits.length) {
+      var idx = terrainMeshes.indexOf(hits[0].object);
+      terrain.splice(idx, 1);
+      instantiateTerrain();
+      updateTerrainHint();
+    }
+    return;
+  }
+
+  var hit2 = raycaster.intersectObject(groundPlaneMesh);
+  if (!hit2.length) return;
+  var pt = hit2[0].point;
+  var h = Math.max(0.1, +document.getElementById('terrain-height').value || 1.5);
+  var d = TERRAIN_DEFAULTS[terrainTool];
+  terrain.push({ type: terrainTool, x: pt.x, z: pt.z, w: d.w, h: h, d: d.d });
+  instantiateTerrain();
+}
+
+function clearTerrain() {
+  terrain = [];
+  instantiateTerrain();
+  clog('Terrain cleared (flat ground)', 'dim');
+}
+
+function finishTerrainEdit() {
+  toggleTerrainEdit();
+}
+
+function updateTerrainHint() { /* placeholder for future piece-count display */ }
+
+// ── Chip click handlers ────────────────────────────────────
+document.querySelectorAll('#env-chips .chip').forEach(function(c){
+  c.addEventListener('click', function(){ selectEnv(this.dataset.env); });
+});
+document.querySelectorAll('#robot-chips .chip').forEach(function(c){
+  c.addEventListener('click', function(){ selectRobot(this.dataset.robot); });
+});
+
+// ── Boot ──────────────────────────────────────────────────
+window.addEventListener('resize', resizeCanvases);
+
+var tfScript = document.createElement('script');
+tfScript.src = 'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.15.0/dist/tf.min.js';
+tfScript.onload = function() {
+  tfReady = true;
+  clog('TensorFlow.js loaded — DQN ready', 'ok');
+  var stateSize = getStateSize(curRobot);
+  var testRobot = buildRobot(curRobot);
+  var nA = testRobot.numActions;
+  removeRobot(testRobot);
+  DQN = buildAgent(stateSize, nA);
+  clog('Agent: state=' + stateSize + ' actions=' + nA + ' net=128-128-64', 'info');
+  initWorld();
+};
+tfScript.onerror = function() { clog('TF.js failed to load — using random policy', 'warn'); };
+document.head.appendChild(tfScript);
+
+initEngine();
+resizeCanvases();
+buildSensorBars();
+buildEnvPreset(curEnv);
+initWorld();
+requestAnimationFrame(frame);
+
+clog('3D physics simulation ready (Three.js + Cannon.js)', 'ok');
+clog('Select environment & robot, then click ▶ Train', 'info');
+clog('Loading TensorFlow.js for DQN agent...', 'dim');
+</script>
+</body>
+</html>

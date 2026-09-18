@@ -28297,11 +28297,6 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   DESKTOP_CONTAINER_CLASS: () => (/* binding */ DESKTOP_CONTAINER_CLASS),
 /* harmony export */   WINDOWS_CONTAINER_CLASS: () => (/* binding */ WINDOWS_CONTAINER_CLASS),
 /* harmony export */   WindowManager: () => (/* binding */ WindowManager),
-/* harmony export */   activeDesktopSubject: () => (/* binding */ activeDesktopSubject),
-/* harmony export */   addDesktop: () => (/* binding */ addDesktop),
-/* harmony export */   desktopsSubject: () => (/* binding */ desktopsSubject),
-/* harmony export */   removeDesktop: () => (/* binding */ removeDesktop),
-/* harmony export */   switchDesktop: () => (/* binding */ switchDesktop),
 /* harmony export */   windowsSubject: () => (/* binding */ windowsSubject)
 /* harmony export */ });
 /* harmony import */ var _shared_draggable__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @shared/draggable */ "./src/shared/draggable.ts");
@@ -28346,57 +28341,6 @@ windowsSubject.subscribe(wins => {
         }
     }
 });
-const DEFAULT_DESKTOPS_CONFIG = { desktops: [{ id: "1", name: "Desktop 1" }], active: "1" };
-const readDesktopsConfig = () => {
-    try {
-        const raw = (0,_shared_fs_utils__WEBPACK_IMPORTED_MODULE_2__.readJsonFile)(platform.host.getFS(), _shared_constants__WEBPACK_IMPORTED_MODULE_3__.DESKTOPS_CONFIG_PATH);
-        if (raw && Array.isArray(raw.desktops) && raw.desktops.length && raw.active)
-            return raw;
-    }
-    catch (_) { /* platform not ready at module-eval time in remote.bundle */ }
-    return DEFAULT_DESKTOPS_CONFIG;
-};
-const writeDesktopsConfig = (desktops, active) => {
-    try {
-        (0,_shared_fs_utils__WEBPACK_IMPORTED_MODULE_2__.writeJsonFile)(platform.host.getFS(), _shared_constants__WEBPACK_IMPORTED_MODULE_3__.DESKTOPS_CONFIG_PATH, { desktops, active }, true);
-    }
-    catch (err) { /* best effort */ }
-};
-const initialDesktopsConfig = readDesktopsConfig();
-const desktopsSubject = new rxjs__WEBPACK_IMPORTED_MODULE_7__.BehaviorSubject(initialDesktopsConfig.desktops);
-const activeDesktopSubject = new rxjs__WEBPACK_IMPORTED_MODULE_7__.BehaviorSubject(initialDesktopsConfig.active);
-const switchDesktop = (id) => {
-    if (id === activeDesktopSubject.getValue())
-        return;
-    if (!desktopsSubject.getValue().some(d => d.id === id))
-        return;
-    activeDesktopSubject.next(id);
-    writeDesktopsConfig(desktopsSubject.getValue(), id);
-};
-const addDesktop = () => {
-    const desktops = desktopsSubject.getValue();
-    const id = `${Date.now()}`;
-    const updated = [...desktops, { id, name: `Desktop ${desktops.length + 1}` }];
-    desktopsSubject.next(updated);
-    activeDesktopSubject.next(id);
-    writeDesktopsConfig(updated, id);
-};
-const removeDesktop = (id) => {
-    const desktops = desktopsSubject.getValue();
-    if (desktops.length <= 1)
-        return;
-    const idx = desktops.findIndex(d => d.id === id);
-    if (idx === -1)
-        return;
-    const updated = desktops.filter(d => d.id !== id);
-    const wasActive = activeDesktopSubject.getValue() === id;
-    const newActive = wasActive ? updated[Math.max(0, idx - 1)].id : activeDesktopSubject.getValue();
-    // Move any windows on the removed desktop to the desktop that becomes active.
-    windowsSubject.next(windowsSubject.getValue().map(w => w.desktopId === id ? Object.assign(Object.assign({}, w), { desktopId: newActive }) : w));
-    desktopsSubject.next(updated);
-    activeDesktopSubject.next(newActive);
-    writeDesktopsConfig(updated, newActive);
-};
 const processRegistry = new Map();
 const writeProcMeta = (pid, meta) => {
     try {
@@ -28437,11 +28381,6 @@ const registerProcessCommands = () => {
     if (processCommandsRegistered || !(platform === null || platform === void 0 ? void 0 : platform.host))
         return;
     processCommandsRegistered = true;
-    platform.register('add-desktop', addDesktop);
-    platform.host.registerCommand('add-desktop', addDesktop, { callable: true });
-    platform.host.registerCommand('remove-active-desktop', () => {
-        removeDesktop(activeDesktopSubject.getValue());
-    }, { callable: true });
     // `process.kill(pid)` - sends SIGTERM: runs onDestroy callbacks then closes.
     platform.host.registerCommand("process.kill", (pid) => {
         var _a;
@@ -28534,19 +28473,6 @@ class WindowManager {
         this.contentRef = contentRef;
         this.windows = {};
         registerProcessCommands();
-        activeDesktopSubject.subscribe(() => this.updateVisibility());
-        windowsSubject.subscribe(() => this.updateVisibility());
-    }
-    // Hides windows that don't belong to the active desktop.
-    updateVisibility() {
-        const active = activeDesktopSubject.getValue();
-        const infos = windowsSubject.getValue();
-        Object.values(this.windows).forEach(wins => wins.forEach(w => {
-            var _a;
-            const info = infos.find(i => i.pid === w.pid);
-            const desktopId = (_a = info === null || info === void 0 ? void 0 : info.desktopId) !== null && _a !== void 0 ? _a : active;
-            w.container.classList.toggle("desktop-hidden", desktopId !== active);
-        }));
     }
     createWindow(command_name, ...args) {
         var _a, _b, _c, _d, _e, _f, _g;
@@ -28678,7 +28604,6 @@ class WindowManager {
                 icon,
                 minimized: false,
                 active: true,
-                desktopId: activeDesktopSubject.getValue(),
                 toggle: () => this.toggleMinimize(windowRef),
             },
         ]);
@@ -29432,9 +29357,20 @@ class Namespace {
         // Default ACL: read+write own app dir and user data dir.
         // System paths (/tmp, /var/log) are readable + writable.
         // Everything else is read-only by default.
+        //
+        // /home/user1/.local/share/trainboard is a deliberate exception:
+        // it's TrainBoard's shared cross-app metrics log (any app writes
+        // {run,step,metric,value} rows to log.jsonl there so TrainBoard
+        // can chart them), so every sandboxed app needs write access to
+        // it specifically, not just its own id's data dir. Without this,
+        // every app following that convention (nn-ide, model-builder,
+        // snake-cnn3d, snake-qlearning, snake-lstm, and now robot-sim)
+        // fails silently — each wraps the write in its own try/catch,
+        // so the ACL denial never surfaced as a visible error anywhere.
         this.acl = [
             { path: this.appDir, read: true, write: true },
             { path: `/home/user1/.local/share/${opts.id}`, read: true, write: true },
+            { path: '/home/user1/.local/share/trainboard', read: true, write: true },
             { path: '/tmp', read: true, write: true },
             { path: '/var/log', read: true, write: true },
             { path: '/', read: true, write: false },
@@ -29745,7 +29681,6 @@ class ProxyFS {
 "use strict";
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   DESKTOPS_CONFIG_PATH: () => (/* binding */ DESKTOPS_CONFIG_PATH),
 /* harmony export */   DESKTOP_PATH: () => (/* binding */ DESKTOP_PATH),
 /* harmony export */   FS_BACKEND_QUERY_PARAM: () => (/* binding */ FS_BACKEND_QUERY_PARAM),
 /* harmony export */   FS_BACKEND_STORAGE_KEY: () => (/* binding */ FS_BACKEND_STORAGE_KEY),
@@ -29770,8 +29705,6 @@ const WM_CURRENT_PATH = '/etc/wm/current.json';
 const WM_THEMES_DIR = '/etc/wm/themes';
 const WM_DEFAULT_THEME_PATH = `${WM_THEMES_DIR}/dark.json`;
 const WM_DIR = '/etc/wm';
-// Desktops
-const DESKTOPS_CONFIG_PATH = '/etc/wm/desktops.json';
 // Process management
 const PROC_DIR = '/proc';
 // Window manager behavior script

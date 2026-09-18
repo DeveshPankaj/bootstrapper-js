@@ -1,0 +1,1121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TypeScript / WebGL IDE</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:#0d1117;color:#e2e8f0;font-family:'JetBrains Mono',ui-monospace,monospace}
+#app{display:flex;flex-direction:column;height:100%}
+#toolbar{height:38px;background:#161b22;border-bottom:1px solid #30363d;display:flex;align-items:center;padding:0 10px;gap:6px;flex-shrink:0}
+.app-title{color:#3b82f6;font-weight:700;font-size:12px;white-space:nowrap}
+.file-badge{color:#8b949e;font-size:11px;margin-left:2px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lang-tag{font-size:9px;color:#60a5fa;background:#0c1e3d;border:1px solid #1f6feb;border-radius:4px;padding:1px 5px;margin-left:6px;text-transform:uppercase;letter-spacing:.3px}
+.spacer{flex:1}
+.btn{padding:3px 10px;border-radius:5px;border:1px solid #30363d;cursor:pointer;font-size:11px;font-weight:600;font-family:inherit;transition:background .15s}
+.btn-run{background:#1d4ed8;color:#fff;border-color:#2563eb}
+.btn-run:hover{background:#2563eb}
+.btn-run.running{background:#6e7681;border-color:#6e7681;cursor:default}
+.btn-secondary{background:#21262d;color:#c9d1d9}
+.btn-secondary:hover{background:#30363d}
+.btn-danger{background:#21262d;color:#8b949e}
+.btn-danger:hover{color:#f85149}
+#main-content{display:flex;flex:1;overflow:hidden}
+.resizer{width:5px;flex-shrink:0;cursor:col-resize;background:#21262d;position:relative;z-index:2}
+.resizer:hover,.resizer.dragging{background:#3b82f6}
+.resizing,.resizing *{user-select:none!important;cursor:col-resize!important}
+#sidebar{width:195px;background:#0d1117;display:flex;flex-direction:column;flex-shrink:0;overflow:hidden}
+.sb-head{padding:6px 10px;font-size:10px;font-weight:700;color:#8b949e;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #21262d;display:flex;align-items:center;justify-content:space-between}
+.sb-action{cursor:pointer;color:#3b82f6;font-size:13px;line-height:1;font-weight:400;flex-shrink:0}
+.sb-section{flex:1;overflow-y:auto;padding:4px 0}
+.sb-group{font-size:10px;color:#3b82f6;font-weight:600;padding:6px 10px 2px;text-transform:uppercase;letter-spacing:.3px;display:flex;align-items:center;justify-content:space-between}
+.sb-item{padding:5px 10px 5px 16px;font-size:11.5px;color:#c9d1d9;cursor:pointer;display:flex;align-items:center;gap:5px;white-space:nowrap;overflow:hidden}
+.sb-item:hover{background:#161b22}
+.sb-item:hover .sb-del{opacity:1}
+.sb-item.active{background:#1f2937;color:#e2e8f0;border-left:2px solid #3b82f6;padding-left:14px}
+.sb-item .ic{font-size:12px;flex-shrink:0;opacity:.8}
+.sb-item .nm{flex:1;overflow:hidden;text-overflow:ellipsis}
+.sb-item .sb-del{opacity:0;color:#6e7681;font-size:11px;flex-shrink:0;padding:0 2px}
+.sb-item .sb-del:hover{color:#f85149}
+#center-panel{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+#right-panel{width:340px;display:flex;flex-direction:column;flex-shrink:0;overflow:hidden}
+.editor-wrap{flex:1;overflow:hidden;position:relative}
+.CodeMirror{height:100%!important;font-size:12.5px;font-family:'JetBrains Mono',ui-monospace,monospace;line-height:1.6;background:#0d1117}
+.CodeMirror-scroll{height:100%!important}
+.CodeMirror-gutters{background:#0d1117;border-right:1px solid #21262d}
+.CodeMirror-linenumber{color:#484f58;padding-right:10px}
+#preview-header{height:32px;background:#161b22;border-bottom:1px solid #21262d;display:flex;align-items:center;padding:0 10px;gap:6px;flex-shrink:0}
+.pv-tab{padding:3px 10px;font-size:11px;color:#8b949e;cursor:pointer;border-bottom:2px solid transparent}
+.pv-tab.active{color:#e2e8f0;border-color:#3b82f6}
+.pv-tab:hover{color:#c9d1d9}
+#preview-body{flex:1;overflow:hidden;position:relative;background:#0a0d13}
+#canvas-preview{position:absolute;inset:0}
+#iframe-preview{position:absolute;inset:0;width:100%;height:100%;border:none;display:none;background:#fff}
+#console-right{position:absolute;inset:0;display:none;flex-direction:column;overflow:hidden}
+#console-right.show{display:flex}
+#console-lines{flex:1;overflow-y:auto;padding:6px 10px;font-size:11.5px;line-height:1.5}
+.log{padding:1px 0}.log.out{color:#c9d1d9}.log.err{color:#f85149}.log.info{color:#3b82f6}.log.ok{color:#3fb950}.log.dim{color:#6e7681;font-style:italic}.log.warn{color:#e3b341}
+#status-bar{height:22px;background:#0f172a;border-top:1px solid #21262d;display:flex;align-items:center;padding:0 10px;gap:8px;font-size:10px;color:#6e7681;flex-shrink:0}
+.st-ok{color:#3fb950}.st-err{color:#f85149}.st-run{color:#3b82f6}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="toolbar">
+    <span class="app-title">TS / WebGL IDE</span>
+    <span class="file-badge" id="file-badge">untitled.ts</span>
+    <span class="lang-tag" id="lang-tag">TS</span>
+    <span class="spacer"></span>
+    <button class="btn btn-secondary" onclick="newProject()">New</button>
+    <button class="btn btn-secondary" onclick="openProject()">Open</button>
+    <button class="btn btn-secondary" onclick="openFolder()">Open Folder</button>
+    <button class="btn btn-secondary" onclick="saveProject()">Save</button>
+    <button class="btn btn-run" id="run-btn" onclick="runCode()">▶ Run</button>
+    <button class="btn btn-danger" onclick="clearAll()">Clear</button>
+  </div>
+  <div id="main-content">
+    <div id="sidebar">
+      <div class="sb-head">TS IDE</div>
+      <div class="sb-section" id="sb-content"></div>
+    </div>
+    <div class="resizer" id="resizer-left" title="Drag to resize"></div>
+    <div id="center-panel">
+      <div class="editor-wrap"><textarea id="editor"></textarea></div>
+      <div id="status-bar">
+        <span id="status-msg">Ready</span>
+        <span class="spacer"></span>
+        <span id="status-lang">TypeScript</span>
+      </div>
+    </div>
+    <div class="resizer" id="resizer-right" title="Drag to resize"></div>
+    <div id="right-panel">
+      <div id="preview-header">
+        <span class="pv-tab active" onclick="setPvTab('canvas')" id="ptab-canvas">Preview</span>
+        <span class="pv-tab" onclick="setPvTab('console')" id="ptab-console">Console</span>
+        <span class="spacer"></span>
+        <span style="font-size:10px;color:#6e7681" id="pv-info">canvas preview</span>
+      </div>
+      <div id="preview-body">
+        <canvas id="canvas-preview"></canvas>
+        <iframe id="iframe-preview" sandbox="allow-scripts allow-same-origin"></iframe>
+        <div id="console-right">
+          <div id="console-lines"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/css/css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/htmlmixed/htmlmixed.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/typescript/5.3.3/typescript.min.js"></script>
+<script>
+// AppSDK bridge
+function sdk(){ return window.AppSDK||{readText:()=>Promise.reject(new Error('SDK not ready')),writeText:()=>Promise.reject(new Error('SDK not ready')),mkdir:()=>Promise.resolve(),list:()=>Promise.resolve([]),exists:()=>Promise.resolve(false),remove:()=>Promise.resolve(),rename:()=>Promise.resolve()}; }
+
+// --- Language detection by file extension (not a project-wide toggle —
+// each file in a project is edited/run according to its own extension,
+// so a single project can freely mix app.ts + shader.glsl + style.css) ---
+var EXT_LANG = { ts:'ts', tsx:'ts', js:'js', jsx:'js', mjs:'js', glsl:'glsl', vert:'glsl', frag:'glsl', fs:'glsl', vs:'glsl', html:'html', htm:'html', css:'css', json:'json' };
+var LANG_LABEL = { ts:'TypeScript', js:'JavaScript', glsl:'GLSL Shader', html:'HTML', css:'CSS', json:'JSON' };
+var EXT_ICON = { ts:'🔷', tsx:'🔷', js:'📜', jsx:'📜', mjs:'📜', glsl:'✨', vert:'✨', frag:'✨', html:'📄', htm:'📄', css:'🎨', json:'🧾' };
+
+function extOf(filename){ var m = /\.([a-zA-Z0-9]+)$/.exec(filename||''); return m ? m[1].toLowerCase() : ''; }
+function langFor(filename){ return EXT_LANG[extOf(filename)] || 'js'; }
+function iconFor(filename){ return EXT_ICON[extOf(filename)] || '📄'; }
+
+function cmModeFor(lang){
+  if (lang === 'glsl') return 'text/x-csrc'; // GLSL is C-like; no dedicated CodeMirror mode, this gets close
+  if (lang === 'css') return 'css';
+  if (lang === 'html') return 'htmlmixed';
+  if (lang === 'json') return {name:'javascript', json:true};
+  return {name:'javascript', typescript: lang === 'ts'};
+}
+
+// --- CodeMirror ---
+var editor = CodeMirror.fromTextArea(document.getElementById('editor'), {
+  mode: {name:'javascript', typescript:true}, theme:'dracula', lineNumbers:true,
+  indentUnit:2, tabSize:2, indentWithTabs:false,
+  matchBrackets:true, autoCloseBrackets:true, lineWrapping:false,
+  extraKeys:{'Ctrl-Enter':runCode,'Cmd-Enter':runCode,'Ctrl-S':saveProject,'Cmd-S':saveProject}
+});
+
+// --- Resizable panels (sidebar | editor | preview) ---
+function makeResizer(resizerEl, panelEl, opts){
+  var dragging = false, startX = 0, startWidth = 0;
+  resizerEl.addEventListener('mousedown', function(e){
+    dragging = true; startX = e.clientX; startWidth = panelEl.getBoundingClientRect().width;
+    resizerEl.classList.add('dragging');
+    document.body.classList.add('resizing');
+    e.preventDefault();
+  });
+  window.addEventListener('mousemove', function(e){
+    if (!dragging) return;
+    var delta = (e.clientX - startX) * (opts.grow === 'left' ? -1 : 1);
+    var w = Math.max(opts.min, Math.min(opts.max, startWidth + delta));
+    panelEl.style.width = w + 'px';
+    editor.refresh();
+  });
+  window.addEventListener('mouseup', function(){
+    if (!dragging) return;
+    dragging = false;
+    resizerEl.classList.remove('dragging');
+    document.body.classList.remove('resizing');
+  });
+}
+makeResizer(document.getElementById('resizer-left'), document.getElementById('sidebar'), { min: 120, max: 420, grow: 'right' });
+makeResizer(document.getElementById('resizer-right'), document.getElementById('right-panel'), { min: 200, max: 640, grow: 'left' });
+
+// --- Canvas preview: always fills the available preview area ---
+// canvas.width/height (the drawing buffer) is separate from its CSS
+// box size — #canvas-preview's CSS already fills #preview-body via
+// position:absolute;inset:0, but without this the buffer stays
+// whatever it was last set to (a stale 340×300 default, or whatever
+// size it had at Run time), so resizing the window or dragging the
+// panel dividers left it blurry/cropped instead of actually resizing.
+var previewBodyEl = document.getElementById('preview-body');
+function fitCanvasPreview(){
+  var cv = document.getElementById('canvas-preview');
+  var w = previewBodyEl.clientWidth, h = previewBodyEl.clientHeight;
+  if (w > 0 && h > 0 && (cv.width !== w || cv.height !== h)) { cv.width = w; cv.height = h; }
+}
+new ResizeObserver(fitCanvasPreview).observe(previewBodyEl);
+fitCanvasPreview();
+
+// --- Project / file state ---
+// A "project" is just a VFS directory (`projectDir`, or null for an
+// unsaved scratch buffer) holding any number of files (`files`, name ->
+// content). `activeFile` is whichever one is currently in the editor.
+// Opening an arbitrary folder (not just ones under VFS_BASE) works the
+// same way — `projectDir` can point anywhere the sandboxed app is
+// allowed to read/write.
+// The sandboxed app namespace only grants write access to its own
+// /opt/apps/<id> dir and /home/user1/.local/share/<id> (see
+// src/platform/namespace.ts) — /home/user1/projects/ts is read-only to
+// this app and every write there fails with an ACL error. "Open Folder"
+// can still freely READ any path (the default ACL allows read
+// everywhere), so opening projects saved elsewhere keeps working; only
+// *saving* requires the project to live under VFS_BASE, or under a
+// folder whose ACL was separately granted.
+var VFS_BASE = '/home/user1/.local/share/ui.ts-ide/projects';
+var projectDir = null;
+var files = {};
+var activeFile = null;
+var isDirty = false;
+var curPvTab = 'canvas';
+var tsReady = typeof ts !== 'undefined';
+
+editor.on('change', function(){
+  isDirty = true;
+  if (activeFile) files[activeFile] = editor.getValue();
+  updateBadge();
+});
+
+function projectName(){ return projectDir ? projectDir.split('/').filter(Boolean).pop() : null; }
+
+function updateBadge(){
+  var name = activeFile ? (projectName() ? projectName()+'/'+activeFile : activeFile) : 'untitled';
+  document.getElementById('file-badge').textContent = (isDirty?'● ':'')+name;
+  var lang = langFor(activeFile || 'untitled.ts');
+  document.getElementById('lang-tag').textContent = (activeFile ? extOf(activeFile) : 'ts').toUpperCase();
+  document.getElementById('status-lang').textContent = LANG_LABEL[lang] || lang;
+}
+
+// Switches the editor to a different file within the current in-memory
+// project, flushing the outgoing file's buffer first.
+function switchFile(name){
+  if (activeFile) files[activeFile] = editor.getValue();
+  activeFile = name;
+  editor.setValue(files[name] || '');
+  editor.setOption('mode', cmModeFor(langFor(name)));
+  updateBadge();
+  refreshSidebar();
+}
+
+// --- Preview tabs ---
+function setPvTab(t){
+  curPvTab = t;
+  document.getElementById('ptab-canvas').classList.toggle('active', t==='canvas');
+  document.getElementById('ptab-console').classList.toggle('active', t==='console');
+  document.getElementById('canvas-preview').style.display = t==='canvas'?'block':'none';
+  document.getElementById('console-right').classList.toggle('show', t==='console');
+  document.getElementById('pv-info').textContent = t==='canvas'?'canvas preview':'console';
+}
+
+// --- Console ---
+var conLines = document.getElementById('console-lines');
+
+function log(msg, cls){
+  var d = document.createElement('div');
+  d.className = 'log '+(cls||'out');
+  d.textContent = msg;
+  conLines.appendChild(d);
+  conLines.scrollTop = conLines.scrollHeight;
+}
+
+function setStatus(msg, cls){
+  var s = document.getElementById('status-msg');
+  s.textContent = msg;
+  s.className = cls||'';
+}
+
+function clearAll(){
+  conLines.innerHTML = '';
+  var cv = document.getElementById('canvas-preview');
+  cv.getContext('2d').clearRect(0,0,cv.width,cv.height);
+  var ifr = document.getElementById('iframe-preview');
+  ifr.srcdoc = '';
+  setStatus('Ready');
+}
+
+// Console-forwarding + error-catching shim injected into every preview
+// document (both single-file script mode and webapp mode) so the IDE's
+// own console panel shows what ran inside the sandboxed iframe.
+var CONSOLE_SHIM =
+'<script>' +
+'var _origLog=console.log,_origErr=console.error,_origWarn=console.warn;' +
+"console.log=function(){var a=Array.prototype.slice.call(arguments);_origLog.apply(console,a);window.parent.postMessage({t:'log',d:a.map(String).join(' ')},'*');};" +
+"console.error=function(){var a=Array.prototype.slice.call(arguments);_origErr.apply(console,a);window.parent.postMessage({t:'err',d:a.map(String).join(' ')},'*');};" +
+"console.warn=function(){var a=Array.prototype.slice.call(arguments);_origWarn.apply(console,a);window.parent.postMessage({t:'warn',d:a.map(String).join(' ')},'*');};" +
+"window.onerror=function(msg,_,l,c){window.parent.postMessage({t:'err',d:'Error at '+l+':'+c+': '+msg},'*');return true;};" +
+"window.parent.postMessage({t:'ready'},'*');" +
+'<\/script>';
+
+var msgHandlerInstalled = false;
+function ensureMsgHandler(btn){
+  if (msgHandlerInstalled) return;
+  msgHandlerInstalled = true;
+  window.addEventListener('message', function(ev){
+    if(!ev.data||typeof ev.data!=='object') return;
+    if(ev.data.t==='log'){ log(ev.data.d,'out'); }
+    else if(ev.data.t==='err'){ log(ev.data.d,'err'); setStatus('Runtime error','st-err'); }
+    else if(ev.data.t==='warn'){ log(ev.data.d,'warn'); }
+    else if(ev.data.t==='ready'){
+      var b = document.getElementById('run-btn');
+      b.classList.remove('running'); b.textContent='▶ Run';
+      if (document.getElementById('status-msg').className !== 'st-err') setStatus('Running','st-ok');
+    }
+  });
+}
+
+function transpileTs(code, label){
+  if(!tsReady){ throw new Error('TypeScript compiler not loaded yet, try again...'); }
+  var result = ts.transpileModule(code, {
+    compilerOptions:{ target: ts.ScriptTarget.ES2017, module: ts.ModuleKind.None, jsx: ts.JsxEmit.None, strict: false, noEmitOnError: false }
+  });
+  return result.outputText;
+}
+
+// --- Webapp mode: build one real HTML document out of every file the
+// project's index.html references, transpiling local .ts/.tsx scripts
+// inline. External http(s) URLs (CDN <script>/<link> tags) are left
+// untouched so @script-style dependencies still work. ---
+function buildWebappDoc(){
+  var html = files['index.html'];
+
+  html = html.replace(/<link([^>]+)href=["']([^"']+)["']([^>]*)>/gi, function(m, pre, href, post){
+    if (!/rel=["']stylesheet["']/i.test(pre+post)) return m;
+    if (/^https?:\/\//i.test(href)) return m;
+    var fn = href.replace(/^\.\//,'');
+    if (files[fn] == null) return m;
+    return '<style>\n'+files[fn]+'\n</style>';
+  });
+
+  html = html.replace(/<script([^>]*)\ssrc=["']([^"']+)["']([^>]*)><\/script>/gi, function(m, pre, src, post){
+    if (/^https?:\/\//i.test(src)) return m;
+    var fn = src.replace(/^\.\//,'');
+    if (files[fn] == null) return m;
+    var code = files[fn];
+    if (/\.tsx?$/.test(fn)) {
+      try { code = transpileTs(code, fn); }
+      catch(e){ code = 'console.error('+JSON.stringify('Compile error in '+fn+': '+e.message)+');'; }
+    }
+    return '<script>\n'+code+'\n<\/script>';
+  });
+
+  if (/<head[^>]*>/i.test(html)) html = html.replace(/<head([^>]*)>/i, '<head$1>'+CONSOLE_SHIM);
+  else html = CONSOLE_SHIM + html;
+
+  return html;
+}
+
+function runWebapp(btn){
+  var ifr = document.getElementById('iframe-preview');
+  var cv = document.getElementById('canvas-preview');
+  var doc;
+  try { doc = buildWebappDoc(); }
+  catch(e){ log('Webapp build failed: '+e.message,'err'); setStatus('Build error','st-err'); btn.classList.remove('running'); btn.textContent='▶ Run'; return; }
+
+  ensureMsgHandler();
+  cv.style.display = 'none';
+  ifr.style.display = 'block';
+  ifr.srcdoc = doc;
+  log('--- Webapp build & run ('+Object.keys(files).length+' files) ---','dim');
+  setPvTab('canvas');
+  setStatus('Building...', 'st-run');
+  btn.classList.remove('running'); btn.textContent='▶ Run'; // 'ready' postMessage also resets this once the page actually loads
+}
+
+// --- Run (single-file script mode: canvas/DOM demos, no index.html) ---
+function runScript(btn){
+  var lang = langFor(activeFile);
+  var code = editor.getValue();
+
+  if (lang === 'glsl'){ runGLSL(code); btn.classList.remove('running'); btn.textContent='▶ Run'; return; }
+  if (lang !== 'ts' && lang !== 'js'){
+    log('Nothing to run for .'+extOf(activeFile)+' — open a script file, or a project with index.html for webapp mode.', 'warn');
+    btn.classList.remove('running'); btn.textContent='▶ Run';
+    return;
+  }
+
+  setStatus('Transpiling...', 'st-run');
+
+  var scripts = [];
+  code.replace(/\/\/\s*@script\s+(\S+)/g, function(_,u){ scripts.push(u); });
+
+  var jsCode;
+  if (lang === 'ts'){
+    try { jsCode = transpileTs(code, activeFile); setStatus('Compiled OK', 'st-ok'); }
+    catch(e){ log('Compile error: '+e.message,'err'); setStatus('Compile error','st-err'); btn.classList.remove('running'); btn.textContent='▶ Run'; return; }
+  } else {
+    jsCode = code;
+  }
+
+  var cv = document.getElementById('canvas-preview');
+  fitCanvasPreview(); // ensure the mirror canvas already fills the current preview area before we size the inner one to match
+  var scriptTags = scripts.map(function(u){ return '<script src="'+u+'"><\/script>'; }).join('\n');
+
+  // The inner canvas sizes itself to the iframe's OWN window, which is
+  // already CSS-responsive (position:absolute;inset:0;width/height:100%)
+  // — so it tracks the real preview area continuously, including later
+  // resizes (dragging the panel dividers, resizing the whole window),
+  // rather than a size baked in once at Run time.
+  var srcdoc = `<!doctype html><html><head><meta charset="utf-8"><style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#0a0d13;overflow:hidden;font-family:system-ui,sans-serif;color:#e2e8f0}
+#preview{position:absolute;inset:0;width:100%;height:100%}
+canvas#preview{display:block}
+</style></head><body>
+<canvas id="preview"></canvas>
+${scriptTags}
+${CONSOLE_SHIM}
+<script>
+(function(){
+  var c = document.getElementById('preview');
+  function fit(){ c.width = window.innerWidth; c.height = window.innerHeight; }
+  fit();
+  window.addEventListener('resize', fit);
+})();
+try {
+${jsCode}
+} catch(e){ console.error(e.message||String(e)); }
+<\/script>
+</body></html>`;
+
+  ensureMsgHandler();
+  log('--- Run ---','dim');
+  setPvTab('canvas');
+
+  var ifr = document.getElementById('iframe-preview');
+  ifr.srcdoc = srcdoc;
+
+  var usesCanvas = /getContext\s*\(|WebGLRenderingContext|CanvasRenderingContext/.test(code);
+  var usesDOM = /innerHTML|createElement|getElementById|querySelector/.test(code) && !usesCanvas;
+
+  if (usesDOM){
+    cv.style.display='none';
+    ifr.style.display='block';
+  } else {
+    cv.style.display='block';
+    ifr.style.display='none';
+    // The mirror canvas's own width/height are kept current by the
+    // ResizeObserver in fitCanvasPreview() — drawImage here just scales
+    // whatever the inner canvas currently holds onto it, so both stay
+    // full-size even if the preview panel is resized mid-run.
+    var copyFrame = function(){
+      try {
+        var ifrCv = ifr.contentDocument && ifr.contentDocument.getElementById('preview');
+        if (ifrCv && ifrCv.tagName === 'CANVAS') cv.getContext('2d').drawImage(ifrCv, 0, 0, cv.width, cv.height);
+      } catch(e){}
+    };
+    setTimeout(copyFrame, 300);
+    var frames = 0;
+    var anim = function(){
+      copyFrame();
+      if (frames++ < 300) requestAnimationFrame(anim);
+    };
+    requestAnimationFrame(anim);
+  }
+
+  // The 'ready' postMessage from the iframe also resets the button
+  // (see ensureMsgHandler) once the sandboxed code actually starts
+  // running; this sync reset just covers the synchronous build step.
+  btn.classList.remove('running'); btn.textContent='▶ Run';
+}
+
+function runCode(){
+  var btn = document.getElementById('run-btn');
+  if(btn.classList.contains('running')) return;
+  if (activeFile) files[activeFile] = editor.getValue();
+
+  btn.classList.add('running'); btn.textContent='● Running';
+
+  // A project with an index.html is a webapp — build and run the whole
+  // thing regardless of which individual file happens to be focused.
+  // Both run* functions reset the button themselves once their
+  // synchronous build step finishes.
+  if (files['index.html'] != null) runWebapp(btn);
+  else runScript(btn);
+}
+
+// --- GLSL runner ---
+function runGLSL(fragSrc){
+  clearAll();
+  log('Compiling GLSL shader...','dim');
+  setPvTab('canvas');
+
+  var cv = document.getElementById('canvas-preview');
+  cv.style.display = 'block';
+  document.getElementById('iframe-preview').style.display = 'none';
+  fitCanvasPreview(); // full current preview-area size; the WebGL frame loop below re-reads cv.width/height every frame, so later resizes (ResizeObserver keeps it in sync) are picked up automatically
+  var gl;
+  try { gl = cv.getContext('webgl') || cv.getContext('experimental-webgl'); } catch(e){}
+  if(!gl){ log('WebGL not available','err'); return; }
+
+  var vertSrc = `
+    attribute vec2 a_pos;
+    void main(){ gl_Position = vec4(a_pos,0.0,1.0); }
+  `;
+
+  function mkShader(src, type){
+    var s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    if(!gl.getShaderParameter(s, gl.COMPILE_STATUS)){
+      throw new Error(gl.getShaderInfoLog(s));
+    }
+    return s;
+  }
+
+  try {
+    var prog = gl.createProgram();
+    gl.attachShader(prog, mkShader(vertSrc, gl.VERTEX_SHADER));
+    gl.attachShader(prog, mkShader(fragSrc, gl.FRAGMENT_SHADER));
+    gl.linkProgram(prog);
+    if(!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+    gl.useProgram(prog);
+
+    var quad = new Float32Array([-1,-1, 1,-1, -1,1, 1,1]);
+    var buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, quad, gl.STATIC_DRAW);
+
+    var posLoc = gl.getAttribLocation(prog, 'a_pos');
+    gl.enableVertexAttribArray(posLoc);
+    gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+
+    var uTime = gl.getUniformLocation(prog, 'u_time');
+    var uRes = gl.getUniformLocation(prog, 'u_resolution');
+
+    var t0 = Date.now();
+    var animId;
+    function frame(){
+      var t = (Date.now()-t0)/1000;
+      gl.viewport(0, 0, cv.width, cv.height);
+      if(uTime) gl.uniform1f(uTime, t);
+      if(uRes) gl.uniform2f(uRes, cv.width, cv.height);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      animId = requestAnimationFrame(frame);
+    }
+    frame();
+    setStatus('GLSL running','st-ok');
+    log('Shader compiled and running. Animating.','ok');
+  } catch(e){
+    log('GLSL error: '+e.message,'err');
+    setStatus('GLSL error','st-err');
+  }
+}
+
+// --- Project management ---
+async function listProjects(){
+  try {
+    var items = await sdk().list(VFS_BASE);
+    return (items||[]).map(function(x){ return typeof x==='string'?x:(x.name||x); }).filter(function(n){ return n && !n.startsWith('.'); });
+  } catch(e){ return []; }
+}
+
+// Loads every file in a VFS directory as the active project. Works for
+// projects saved under VFS_BASE and for any arbitrary folder opened via
+// "Open Folder" — both just end up as a directory full of files.
+async function loadProjectFromDir(dir){
+  var items;
+  try { items = await sdk().list(dir); }
+  catch(e){ log('Could not open folder: '+e.message,'err'); return; }
+  var names = (items||[]).map(function(x){ return typeof x==='string'?x:(x.name||x); }).filter(function(n){ return n && !n.startsWith('.'); });
+  if (!names.length){ log('Folder is empty: '+dir,'warn'); return; }
+
+  var newFiles = {};
+  for (var i=0;i<names.length;i++){
+    var n = names[i];
+    try { newFiles[n] = await sdk().readText(dir+'/'+n); }
+    catch(e){ /* skip subdirectories / unreadable entries */ }
+  }
+  if (!Object.keys(newFiles).length){ log('No readable files in: '+dir,'warn'); return; }
+
+  files = newFiles;
+  projectDir = dir;
+  var pick = names.indexOf('index.html')!==-1 ? 'index.html'
+    : (names.filter(function(n){ return /^main\./.test(n); })[0])
+    || Object.keys(files).sort()[0];
+  activeFile = null; // force switchFile to treat this as a real switch
+  switchFile(pick);
+  isDirty = false;
+  updateBadge();
+  log('Opened: '+dir+' ('+Object.keys(files).length+' files)','info');
+}
+
+async function saveProject(){
+  if (activeFile) files[activeFile] = editor.getValue();
+  var dir = projectDir;
+  if (!dir){
+    var name = prompt('Project name:','my-project');
+    if (!name) return;
+    name = name.trim().replace(/[^a-zA-Z0-9_-]/g,'_');
+    dir = VFS_BASE+'/'+name;
+  }
+  try {
+    await sdk().mkdir(dir);
+    var names = Object.keys(files);
+    for (var i=0;i<names.length;i++){
+      await sdk().writeText(dir+'/'+names[i], files[names[i]]);
+    }
+    projectDir = dir;
+    isDirty = false;
+    updateBadge();
+    log('Saved: '+dir+' ('+names.length+' files)','ok');
+    refreshSidebar();
+  } catch(e){
+    log('Save failed: '+e.message,'err');
+  }
+}
+
+// Toolbar "New" starts a brand-new project (clears the file list);
+// the sidebar's "+" next to Files instead adds one file to whatever
+// project is currently open.
+function newProject(){
+  if (isDirty && !confirm('Discard unsaved changes?')) return;
+  var name = prompt('New file name (with extension):','app.ts');
+  if (!name) return;
+  files = {};
+  files[name] = '';
+  projectDir = null;
+  activeFile = null;
+  switchFile(name);
+  isDirty = false;
+  updateBadge();
+  clearAll();
+  log('New project: '+name,'dim');
+}
+
+async function addFileToProject(){
+  var name = prompt('New file name (with extension):', 'utils.ts');
+  if (!name) return;
+  if (files[name] != null){ log('A file named "'+name+'" already exists','warn'); switchFile(name); return; }
+  files[name] = '';
+  if (projectDir){
+    try { await sdk().writeText(projectDir+'/'+name, ''); } catch(e){}
+  }
+  switchFile(name);
+  log('Added file: '+name,'ok');
+}
+
+async function deleteFile(name){
+  if (!confirm('Delete "'+name+'"? This cannot be undone.')) return;
+  delete files[name];
+  if (projectDir){
+    try { await sdk().remove(projectDir+'/'+name); } catch(e){}
+  }
+  if (activeFile === name){
+    var remaining = Object.keys(files);
+    activeFile = null;
+    if (remaining.length) switchFile(remaining[0]);
+    else { editor.setValue(''); updateBadge(); clearAll(); }
+  }
+  refreshSidebar();
+  log('Deleted: '+name,'dim');
+}
+
+async function renameFile(oldName){
+  var newName = prompt('Rename file:', oldName);
+  if (!newName || newName === oldName) return;
+  if (files[newName] != null){ log('A file named "'+newName+'" already exists','warn'); return; }
+  files[newName] = files[oldName];
+  delete files[oldName];
+  if (projectDir){
+    try { await sdk().rename(projectDir+'/'+oldName, projectDir+'/'+newName); }
+    catch(e){
+      try { await sdk().writeText(projectDir+'/'+newName, files[newName]); await sdk().remove(projectDir+'/'+oldName); } catch(_){}
+    }
+  }
+  if (activeFile === oldName) activeFile = newName;
+  refreshSidebar();
+  updateBadge();
+  log('Renamed to: '+newName,'ok');
+}
+
+async function openProject(){
+  var projects = await listProjects();
+  if(!projects.length){ log('No saved projects yet.','dim'); return; }
+  var name = prompt('Open project:\n'+projects.join('\n'), projects[0]);
+  if(!name) return;
+  if(isDirty && !confirm('Discard unsaved changes?')) return;
+  await loadProjectFromDir(VFS_BASE+'/'+name.trim());
+}
+
+async function openFolder(){
+  var dir = prompt('Open folder (full VFS path):', VFS_BASE);
+  if (!dir) return;
+  if (isDirty && !confirm('Discard unsaved changes?')) return;
+  await loadProjectFromDir(dir.trim().replace(/\/+$/,''));
+}
+
+async function refreshSidebar(){
+  var sb = document.getElementById('sb-content');
+  var html = '<div class="sb-group">Examples</div>';
+  EXAMPLES.forEach(function(ex,i){
+    html += '<div class="sb-item" onclick="loadExample('+i+')" title="'+ex.name+'"><span class="ic">'+ex.icon+'</span><span class="nm">'+ex.name+'</span></div>';
+  });
+
+  html += '<div class="sb-group" style="margin-top:8px">Templates</div>';
+  TEMPLATES.forEach(function(t,i){
+    html += '<div class="sb-item" onclick="loadTemplate('+i+')" title="'+t.name+'"><span class="ic">'+t.icon+'</span><span class="nm">'+t.name+'</span></div>';
+  });
+
+  var fileNames = Object.keys(files);
+  if (fileNames.length){
+    html += '<div class="sb-group" style="margin-top:8px"><span>Files'+(projectName()?' — '+projectName():'')+'</span><span class="sb-action" onclick="addFileToProject()" title="Add file">＋</span></div>';
+    fileNames.sort().forEach(function(fn){
+      html += '<div class="sb-item'+(activeFile===fn?' active':'')+'" onclick="switchFile(\''+fn+'\')" ondblclick="renameFile(\''+fn+'\')" title="'+fn+' (double-click to rename)">'
+            + '<span class="ic">'+iconFor(fn)+'</span><span class="nm">'+fn+'</span>'
+            + '<span class="sb-del" onclick="event.stopPropagation();deleteFile(\''+fn+'\')" title="Delete">✕</span></div>';
+    });
+  }
+
+  var projects = await listProjects();
+  html += '<div class="sb-group" style="margin-top:8px"><span>Projects</span><span class="sb-action" onclick="openFolder()" title="Open any folder">📂</span></div>';
+  if (projects.length){
+    projects.forEach(function(n){
+      html += '<div class="sb-item'+(projectName()===n?' active':'')+'" onclick="loadProjectFromDir(VFS_BASE+\'/\'+\''+n+'\')" title="'+n+'"><span class="ic">📁</span><span class="nm">'+n+'</span></div>';
+    });
+  }
+  sb.innerHTML = html;
+}
+
+function loadExample(i){
+  if(isDirty && !confirm('Discard unsaved changes?')) return;
+  var ex = EXAMPLES[i];
+  var fn = 'scratch.'+(ex.lang||'ts');
+  files = {};
+  files[fn] = ex.code;
+  projectDir = null;
+  activeFile = null;
+  switchFile(fn);
+  isDirty = false;
+  updateBadge();
+  clearAll();
+  log('Loaded: '+ex.name,'dim');
+  refreshSidebar();
+}
+
+function loadTemplate(i){
+  if(isDirty && !confirm('Discard unsaved changes?')) return;
+  var t = TEMPLATES[i];
+  files = Object.assign({}, t.files);
+  projectDir = null;
+  var pick = files['index.html'] != null ? 'index.html' : Object.keys(files)[0];
+  activeFile = null;
+  switchFile(pick);
+  isDirty = false;
+  updateBadge();
+  clearAll();
+  log('Loaded template: '+t.name+' ('+Object.keys(files).length+' files)','dim');
+  refreshSidebar();
+  if (files['index.html'] != null) runCode();
+}
+
+// --- Examples (single-file scratch snippets) ---
+var EXAMPLES = [
+{name:'Hello Canvas', lang:'ts', icon:'🎨', code:
+`// Hello Canvas — TypeScript canvas rendering
+// Press Ctrl+Enter or ▶ Run to execute
+
+const canvas = document.getElementById('preview') as HTMLCanvasElement;
+const ctx = canvas.getContext('2d')!;
+const W = canvas.width, H = canvas.height;
+
+// Background gradient
+const bg = ctx.createLinearGradient(0, 0, 0, H);
+bg.addColorStop(0, '#0f172a');
+bg.addColorStop(1, '#1e1b4b');
+ctx.fillStyle = bg;
+ctx.fillRect(0, 0, W, H);
+
+// Animated rings
+function drawRing(cx: number, cy: number, r: number, color: string) {
+  const grad = ctx.createRadialGradient(cx, cy, r*0.3, cx, cy, r);
+  grad.addColorStop(0, color + 'aa');
+  grad.addColorStop(1, color + '00');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+drawRing(W*0.3, H*0.45, 80, '#6366f1');
+drawRing(W*0.65, H*0.55, 60, '#22d3ee');
+drawRing(W*0.5, H*0.3, 50, '#f59e0b');
+
+// Title
+ctx.fillStyle = '#f1f5f9';
+ctx.font = 'bold 22px monospace';
+ctx.textAlign = 'center';
+ctx.fillText('TypeScript IDE', W/2, H/2 - 10);
+ctx.font = '13px monospace';
+ctx.fillStyle = '#94a3b8';
+ctx.fillText('Edit code above and press ▶ Run', W/2, H/2 + 18);
+
+// Grid
+ctx.strokeStyle = '#ffffff10';
+ctx.lineWidth = 1;
+for(let x = 0; x < W; x += 40) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+for(let y = 0; y < H; y += 40) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+
+console.log('Canvas rendered! W='+W+' H='+H);
+console.log('Try modifying colors or drawing more shapes.');
+`},
+
+{name:'WebGL Triangle', lang:'ts', icon:'📐', code:
+`// WebGL Triangle — basic WebGL with colored vertices
+const canvas = document.getElementById('preview') as HTMLCanvasElement;
+canvas.width = canvas.offsetWidth || 340;
+canvas.height = canvas.offsetHeight || 300;
+const gl = canvas.getContext('webgl') as WebGLRenderingContext;
+if (!gl) throw new Error('WebGL not supported');
+
+const vertSrc = \`
+  attribute vec2 a_pos;
+  attribute vec3 a_col;
+  varying vec3 v_col;
+  void main() {
+    gl_Position = vec4(a_pos, 0.0, 1.0);
+    v_col = a_col;
+  }
+\`;
+
+const fragSrc = \`
+  precision mediump float;
+  varying vec3 v_col;
+  void main() { gl_FragColor = vec4(v_col, 1.0); }
+\`;
+
+function mkShader(src: string, type: number): WebGLShader {
+  const s = gl.createShader(type)!;
+  gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS))
+    throw new Error(gl.getShaderInfoLog(s)||'shader error');
+  return s;
+}
+
+const prog = gl.createProgram()!;
+gl.attachShader(prog, mkShader(vertSrc, gl.VERTEX_SHADER));
+gl.attachShader(prog, mkShader(fragSrc, gl.FRAGMENT_SHADER));
+gl.linkProgram(prog);
+gl.useProgram(prog);
+
+// x, y, r, g, b  (3 vertices)
+const data = new Float32Array([
+   0.0,  0.72,  0.98, 0.40, 0.40,  // top — red
+  -0.72,-0.52,  0.40, 0.95, 0.40,  // bottom-left — green
+   0.72,-0.52,  0.40, 0.40, 0.95,  // bottom-right — blue
+]);
+
+const buf = gl.createBuffer()!;
+gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+
+const stride = 5 * 4;
+const posLoc = gl.getAttribLocation(prog, 'a_pos');
+const colLoc = gl.getAttribLocation(prog, 'a_col');
+gl.enableVertexAttribArray(posLoc);
+gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, stride, 0);
+gl.enableVertexAttribArray(colLoc);
+gl.vertexAttribPointer(colLoc, 3, gl.FLOAT, false, stride, 8);
+
+gl.clearColor(0.06, 0.07, 0.09, 1.0);
+gl.clear(gl.COLOR_BUFFER_BIT);
+gl.viewport(0, 0, canvas.width, canvas.height);
+gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+console.log('WebGL triangle rendered!');
+console.log('Try changing the vertex colors in the data array.');
+`},
+
+{name:'GLSL Shader', lang:'glsl', icon:'✨', code:
+`// GLSL Fragment Shader — animated plasma waves
+// Runs live on the GPU with requestAnimationFrame
+// Change this fragment shader and press ▶ Run
+
+precision mediump float;
+uniform float u_time;
+uniform vec2 u_resolution;
+
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  vec2 p = uv * 2.0 - 1.0;
+  p.x *= u_resolution.x / u_resolution.y;
+
+  float r = 0.5 + 0.5 * sin(p.x * 5.0 + u_time * 0.9);
+  float g = 0.5 + 0.5 * sin(p.y * 4.0 + u_time * 1.2 + 2.1);
+  float b = 0.5 + 0.5 * sin((p.x + p.y) * 3.5 - u_time * 0.7 + 4.2);
+
+  // Ripple
+  float d = length(p);
+  float ripple = sin(d * 8.0 - u_time * 2.5) * 0.3;
+
+  gl_FragColor = vec4(
+    clamp(r + ripple, 0.0, 1.0),
+    clamp(g + ripple * 0.5, 0.0, 1.0),
+    clamp(b + ripple * 0.8, 0.0, 1.0),
+    1.0
+  );
+}
+`},
+
+{name:'TF.js — XOR Training', lang:'ts', icon:'🧠', code:
+`// TensorFlow.js — Train a neural net to solve XOR
+// @script https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.15.0/dist/tf.min.js
+
+declare var tf: any;
+
+async function main() {
+  console.log('TensorFlow.js version: ' + tf.version.tfjs);
+
+  // Build model: 2 → 16 → 16 → 1
+  const model = tf.sequential({ layers: [
+    tf.layers.dense({ inputShape: [2], units: 16, activation: 'relu' }),
+    tf.layers.dense({ units: 16, activation: 'relu' }),
+    tf.layers.dense({ units: 1, activation: 'sigmoid' })
+  ]});
+
+  model.compile({ optimizer: tf.train.adam(0.05), loss: 'binaryCrossentropy' });
+
+  // XOR dataset
+  const xs = tf.tensor2d([[0,0],[0,1],[1,0],[1,1]]);
+  const ys = tf.tensor2d([[0],[1],[1],[0]]);
+
+  console.log('Training XOR network for 500 epochs...');
+
+  await model.fit(xs, ys, {
+    epochs: 500,
+    batchSize: 4,
+    callbacks: {
+      onEpochEnd: async (epoch: number, logs: any) => {
+        if ((epoch + 1) % 100 === 0) {
+          console.log(\`Epoch \${epoch+1}/500 — loss: \${logs.loss.toFixed(5)}\`);
+        }
+      }
+    }
+  });
+
+  console.log('\\n✓ Training complete! Testing predictions:');
+  const preds: any = model.predict(xs);
+  const vals: number[] = await preds.data();
+  const inputs = [[0,0],[0,1],[1,0],[1,1]];
+  const expected = [0,1,1,0];
+  inputs.forEach((inp, i) => {
+    const p = vals[i];
+    const ok = Math.round(p) === expected[i];
+    console.log(\`  [\${inp[0]},\${inp[1]}] → \${p.toFixed(4)} (\${Math.round(p)}) \${ok ? '✓' : '✗'}\`);
+  });
+
+  // Show inference stats
+  const accuracy = inputs.reduce((acc, _, i) => acc + (Math.round(vals[i]) === expected[i] ? 1 : 0), 0);
+  console.log(\`\\nAccuracy: \${accuracy}/4 (\${accuracy*25}%)\`);
+  preds.dispose(); xs.dispose(); ys.dispose();
+}
+
+main().catch((e: Error) => console.error('Error:', e.message));
+`},
+
+{name:'SQLite — CRUD Demo', lang:'ts', icon:'🗄️', code:
+`// SQLite in browser — sql.js (WASM) CRUD demo
+// @script https://cdn.jsdelivr.net/npm/sql.js@1.10.3/dist/sql-wasm.js
+
+declare var initSqlJs: any;
+
+async function main() {
+  console.log('Loading sql.js (SQLite WASM)...');
+  const SQL = await initSqlJs({
+    locateFile: (f: string) => \`https://cdn.jsdelivr.net/npm/sql.js@1.10.3/dist/\${f}\`
+  });
+
+  const db = new SQL.Database();
+  console.log('SQLite database created in memory');
+
+  // Schema
+  db.run(\`
+    CREATE TABLE tasks (
+      id    INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      done  INTEGER DEFAULT 0,
+      prio  TEXT DEFAULT 'normal'
+    )
+  \`);
+
+  // Insert
+  const ins = db.prepare('INSERT INTO tasks (title, done, prio) VALUES (?,?,?)');
+  [
+    ['Design physics engine',  0, 'high'],
+    ['Write TypeScript types', 1, 'high'],
+    ['Add GLSL shader editor', 1, 'normal'],
+    ['Write unit tests',       0, 'low'],
+    ['Deploy to production',   0, 'high'],
+    ['Update documentation',   0, 'normal'],
+  ].forEach(r => ins.run(r));
+  ins.free();
+
+  // Query all
+  console.log('\\n--- All Tasks ---');
+  const all = db.exec('SELECT id,title,done,prio FROM tasks ORDER BY prio,id');
+  if (all[0]) {
+    all[0].values.forEach((r: any[]) =>
+      console.log(\`  [\${r[0]}] [\${r[2]?'✓':'·'}] (\${r[3]}) \${r[1]}\`)
+    );
+  }
+
+  // Update
+  db.run("UPDATE tasks SET done=1 WHERE title LIKE '%physics%'");
+  console.log('\\n✓ Updated "physics engine" task to done');
+
+  // Aggregation
+  const stats = db.exec(\`
+    SELECT prio, COUNT(*) as total, SUM(done) as done_count
+    FROM tasks GROUP BY prio ORDER BY prio
+  \`);
+  console.log('\\n--- Stats by Priority ---');
+  if (stats[0]) {
+    stats[0].values.forEach((r: any[]) =>
+      console.log(\`  \${r[0]}: \${r[2]}/\${r[1]} done\`)
+    );
+  }
+
+  // Delete
+  db.run('DELETE FROM tasks WHERE done=1');
+  const rem = db.exec('SELECT COUNT(*) FROM tasks')[0].values[0][0];
+  console.log(\`\\nDeleted completed tasks. Remaining: \${rem}\`);
+
+  db.close();
+  console.log('\\nDatabase closed.');
+  console.log('To save to VFS: use AppSDK.writeText() with db.export()');
+}
+
+main().catch((e: Error) => console.error(e.message));
+`}
+];
+
+// --- Templates (multi-file boilerplates) ---
+var TEMPLATES = [
+{name:'Webapp Starter', icon:'🌐', files:{
+'index.html':
+`<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>My Webapp</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app"></div>
+<script src="app.ts"><\/script>
+</body>
+</html>
+`,
+'style.css':
+`body {
+  margin: 0;
+  font-family: system-ui, -apple-system, sans-serif;
+  background: #0f172a;
+  color: #e2e8f0;
+}
+#app {
+  padding: 24px;
+}
+h1 {
+  color: #60a5fa;
+  font-size: 20px;
+  margin: 0 0 8px;
+}
+p { color: #94a3b8; font-size: 13px; line-height: 1.6; }
+code {
+  background: #1e293b;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+button {
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  margin-top: 8px;
+}
+button:hover { background: #3b82f6; }
+`,
+'app.ts':
+`// Entry point — index.html loads this file as a <script src="app.ts">.
+// Run rebuilds index.html + style.css + app.ts into one real page and
+// shows it live in the preview pane (open the Console tab for logs).
+const app = document.getElementById('app') as HTMLElement;
+
+let count = 0;
+function render() {
+  app.innerHTML = \`
+    <h1>Hello, Webapp!</h1>
+    <p>This project has three files: <code>index.html</code>, <code>style.css</code>, <code>app.ts</code> — edit any of them in the sidebar.</p>
+    <p>Count: \${count}</p>
+    <button id="inc">Click me</button>
+  \`;
+  (document.getElementById('inc') as HTMLButtonElement).onclick = () => { count++; render(); };
+}
+render();
+console.log('Webapp started');
+`
+}}
+];
+
+// --- Boot ---
+// Defined AFTER EXAMPLES/TEMPLATES so the initial load below can
+// actually see them — loading the very first example synchronously at
+// CodeMirror-setup time (before this data existed) used to throw and
+// silently abort the rest of the boot script.
+loadExample(0);
+log('TypeScript / WebGL IDE ready', 'info');
+log('Files are per-extension: .ts/.js/.glsl/.html/.css all edit and run correctly in the same project.', 'dim');
+log('Pick "Webapp Starter" under Templates for a multi-file HTML/CSS/TS starter with live preview.', 'dim');
+setPvTab('canvas');
+</script>
+</body>
+</html>

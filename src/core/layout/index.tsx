@@ -6,7 +6,7 @@ import { createRoot } from 'react-dom/client'
 import React from 'react'
 import { Taskbar } from './commands'
 import { ContextMenu, ContextMenuItem } from './contextmenu'
-import { DESKTOP_CONTAINER_CLASS, WINDOWS_CONTAINER_CLASS, WindowManager, desktopsSubject, windowsSubject } from '../window-manager'
+import { DESKTOP_CONTAINER_CLASS, WINDOWS_CONTAINER_CLASS, WindowManager, windowsSubject } from '../window-manager'
 import { broadcastIpcEvent, registerWindowIpcHandlers } from '../ipc'
 import { LayoutManager } from '../../system/layout-manager'
 import { DesktopManager } from '../../system/desktop-manager'
@@ -288,7 +288,128 @@ const resolveWallpaperUrl = (wallpaper: string): string => {
     }
 }
 
+// A canvas wallpaper is a VFS .js file exporting `render(canvas)`, run
+// live behind the desktop (fixed, z-index:-1) instead of a static
+// background-image. It executes in a sandboxed iframe (allow-scripts,
+// no allow-same-origin) — same trust boundary as every other app iframe
+// in this codebase — via a dynamically-created module blob so the file
+// can use real `export function render(canvas) {...}` syntax.
+const CANVAS_WALLPAPER_PREFIX = 'canvas:'
+let canvasWallpaperIframe: HTMLIFrameElement | null = null
+let canvasWallpaperMouseHandler: ((e: MouseEvent) => void) | null = null
+let canvasWallpaperWindowsSub: { unsubscribe: () => void } | null = null
+
+const unmountCanvasWallpaper = () => {
+    if (canvasWallpaperMouseHandler) {
+        platform.window.document.removeEventListener('mousemove', canvasWallpaperMouseHandler)
+        canvasWallpaperMouseHandler = null
+    }
+    if (canvasWallpaperWindowsSub) { canvasWallpaperWindowsSub.unsubscribe(); canvasWallpaperWindowsSub = null }
+    if (canvasWallpaperIframe) { canvasWallpaperIframe.remove(); canvasWallpaperIframe = null }
+}
+
+const buildCanvasWallpaperSrcdoc = (code: string): string => {
+    // JSON.stringify handles quote/newline/backslash escaping correctly for
+    // embedding as a JS string literal; it does NOT escape '/', so any
+    // </script> inside the user's code would otherwise prematurely close
+    // this wrapper's own <script> tag — neutralize just that substring in
+    // the serialized payload (mirrors the same trick used for the VFS dock
+    // and sandboxed app iframes elsewhere in this file).
+    const codeJson = JSON.stringify(code).replace(/<\/script/gi, '<\\/script')
+    return `<!doctype html><html><head><meta charset="utf-8"><style>
+*{margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:#000}
+canvas{display:block;width:100%;height:100%}
+</style></head><body>
+<canvas id="wallpaper-canvas"></canvas>
+<script>window.__WALLPAPER_SRC__ = ${codeJson};<\/script>
+<script type="module">
+(async function(){
+  var canvas = document.getElementById('wallpaper-canvas');
+  function fit(){ canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+  fit();
+  window.addEventListener('resize', fit);
+
+  // The wallpaper iframe itself stays pointer-events:none (removing that
+  // would swallow desktop clicks/drag-select for the whole empty-desktop
+  // area, since iframe-internal mouse events never bubble to the parent
+  // document). Instead the outer layout forwards real cursor position
+  // over the desktop via postMessage, so a script can still react to the
+  // mouse — read it from the second argument passed to render().
+  var mouse = { x: -1, y: -1, active: false };
+  // Live count of open windows — lets a wallpaper react to the desktop
+  // being empty (e.g. a character that peeks out from the side only
+  // when nothing is open). Updated by the same postMessage channel.
+  var windows = { count: 0 };
+  window.addEventListener('message', function(ev){
+    if (!ev.data) return;
+    if (ev.data.t === 'mouse') { mouse.x = ev.data.x; mouse.y = ev.data.y; mouse.active = true; }
+    else if (ev.data.t === 'windows') { windows.count = ev.data.count; }
+  });
+
+  try {
+    var blob = new Blob([window.__WALLPAPER_SRC__], { type: 'text/javascript' });
+    var url = URL.createObjectURL(blob);
+    var mod = await import(url);
+    URL.revokeObjectURL(url);
+    if (typeof mod.render !== 'function') { console.error('Canvas wallpaper must export a render(canvas) function'); return; }
+    mod.render(canvas, { mouse: mouse, windows: windows });
+  } catch (e) { console.error('Canvas wallpaper error:', e); }
+})();
+<\/script>
+</body></html>`
+}
+
+const mountCanvasWallpaper = (vfsPath: string) => {
+    unmountCanvasWallpaper()
+    let code: string
+    try {
+        code = platform.host.getFS().readFileSync(vfsPath, 'utf-8') as string
+    } catch (err) {
+        console.error('Failed to load canvas wallpaper', vfsPath, err)
+        return
+    }
+    const doc = platform.window.document
+    const iframe = doc.createElement('iframe')
+    iframe.id = 'canvas-wallpaper-iframe'
+    iframe.setAttribute('sandbox', 'allow-scripts')
+    iframe.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;border:none;z-index:-1;pointer-events:none;'
+    iframe.srcdoc = buildCanvasWallpaperSrcdoc(code)
+    doc.body.insertBefore(iframe, doc.body.firstChild)
+    canvasWallpaperIframe = iframe
+
+    // Forwards real mouse position over the desktop into the sandboxed
+    // wallpaper (see the message listener built into the srcdoc above) —
+    // this is what lets a wallpaper be "interactive" without the iframe
+    // itself ever intercepting real pointer events.
+    canvasWallpaperMouseHandler = (e: MouseEvent) => {
+        iframe.contentWindow?.postMessage({ t: 'mouse', x: e.clientX, y: e.clientY }, '*')
+    }
+    doc.addEventListener('mousemove', canvasWallpaperMouseHandler)
+
+    // Forwards live open-window count so a wallpaper can react to the
+    // desktop being empty (see api.windows.count in buildCanvasWallpaperSrcdoc).
+    canvasWallpaperWindowsSub = windowsSubject.subscribe(wins => {
+        iframe.contentWindow?.postMessage({ t: 'windows', count: wins.length }, '*')
+    })
+}
+
 const applyCss = ({wallpaper, grid}: {wallpaper: string, grid: LayoutDef['grid']}) => {
+    if (wallpaper.startsWith(CANVAS_WALLPAPER_PREFIX)) {
+        mountCanvasWallpaper(wallpaper.slice(CANVAS_WALLPAPER_PREFIX.length))
+        styles.replace([
+            RESET_CSS,
+            MATERIAL_SYMBOLS_CSS,
+            layoutCss(grid, 'none'),
+            WIDGETS_CSS,
+            WINDOW_CSS,
+            TASKBAR_CSS,
+            CONTEXTMENU_CSS,
+            DESKTOP_ENV_CSS,
+        ].join('\n'))
+        return
+    }
+    unmountCanvasWallpaper()
     const wallpaperUrl = resolveWallpaperUrl(wallpaper)
     styles.replace([
         RESET_CSS,
@@ -992,10 +1113,19 @@ export const render = (container: HTMLElement) => {
 
     // Open a VFS dock HTML as a fixed-position frameless iframe in the layout.
     // Sandboxed (no same-origin), IPC SDK inlined so it can communicate.
+    // Auto-hide behaviour: dock starts hidden below the viewport (translateY 100%,
+    // pointer-events:none) so it never blocks app content. Moving the mouse within
+    // TRIGGER_PX of the bottom edge reveals it; moving away hides it after a delay.
     const openVfsDock = (id: string) => {
         const doc = platform.window.document
-        const existing = doc.getElementById('vfs-dock-iframe')
-        if (existing) existing.remove()
+
+        // Abort previous dock's listeners before replacing it.
+        const existing = doc.getElementById('vfs-dock-iframe') as HTMLIFrameElement | null
+        if (existing) {
+            const cleanup = (existing as any).__dockCleanup
+            if (typeof cleanup === 'function') cleanup()
+            existing.remove()
+        }
         doc.body.classList.remove('vfs-dock-active')
         doc.body.classList.remove('vfs-dock-occupy')
         doc.documentElement.style.removeProperty('--vfs-dock-height')
@@ -1019,23 +1149,94 @@ export const render = (container: HTMLElement) => {
             const hMatch = appHtml.match(/<!--\s*dock:height=(\d+)\s*-->/)
             const h = hMatch ? parseInt(hMatch[1]) : 64
 
-            const iframe = doc.createElement('iframe')
+            const iframe = doc.createElement('iframe') as HTMLIFrameElement
             iframe.id = 'vfs-dock-iframe'
             iframe.setAttribute('sandbox', 'allow-scripts allow-forms allow-modals')
             iframe.srcdoc = srcdoc
-            iframe.style.cssText = `position:fixed;bottom:0;left:0;width:100%;height:${h}px;border:none;background:transparent;z-index:9000;pointer-events:auto;`
+            // Hidden by default: translated off screen + no pointer events.
+            // Transition eases the slide-in/out animation.
+            iframe.style.cssText = `position:fixed;bottom:0;left:0;width:100%;height:${h}px;border:none;background:transparent;z-index:9000;pointer-events:none;transform:translateY(100%);transition:transform 0.18s ease;`
             doc.body.appendChild(iframe)
             doc.body.classList.add('vfs-dock-active')
-
-            // Reserve bottom space so windows don't go behind the dock.
-            // Reads occupyBottom from /etc/managers.json; defaults to false.
             doc.documentElement.style.setProperty('--vfs-dock-height', `${h}px`)
-            let occupyBottom = false
-            try {
-                const cfg = JSON.parse(fs.readFileSync('/etc/managers.json', 'utf-8') as string)
-                if (cfg.occupyBottom === true) occupyBottom = true
-            } catch (_) {}
-            if (occupyBottom) doc.body.classList.add('vfs-dock-occupy')
+
+            // ── Auto-hide logic ──────────────────────────────────────────────
+            // Pixels from the bottom of the viewport that trigger reveal.
+            const TRIGGER_PX = 14
+            let shown = false
+            let hideTimer: ReturnType<typeof setTimeout> | null = null
+            // When no windows are open the dock stays visible; auto-hide only
+            // activates while at least one window exists.
+            let windowsOpen = windowsSubject.getValue().length > 0
+
+            const showDock = () => {
+                if (shown) return
+                shown = true
+                if (hideTimer) { clearTimeout(hideTimer); hideTimer = null }
+                iframe.style.transform = 'translateY(0)'
+                iframe.style.pointerEvents = 'auto'
+            }
+
+            const hideDock = (ms = 450) => {
+                if (hideTimer) clearTimeout(hideTimer)
+                hideTimer = setTimeout(() => {
+                    shown = false
+                    iframe.style.transform = 'translateY(100%)'
+                    iframe.style.pointerEvents = 'none'
+                }, ms)
+            }
+
+            // Mouse moves over the main document (fires when NOT over the iframe).
+            const onDocMouseMove = (e: MouseEvent) => {
+                if (!windowsOpen) return // stays pinned open
+                const fromBottom = doc.documentElement.clientHeight - e.clientY
+                if (fromBottom <= TRIGGER_PX) {
+                    showDock()
+                } else if (shown) {
+                    hideDock()
+                }
+            }
+
+            // Mouse entered the iframe element → cancel any pending hide.
+            const onIframeEnter = () => {
+                shown = true
+                if (hideTimer) { clearTimeout(hideTimer); hideTimer = null }
+            }
+
+            // Mouse left the iframe element → schedule hide only when apps are open.
+            const onIframeLeave = () => { if (windowsOpen) hideDock(450) }
+
+            doc.addEventListener('mousemove', onDocMouseMove)
+            iframe.addEventListener('mouseenter', onIframeEnter)
+            iframe.addEventListener('mouseleave', onIframeLeave)
+
+            // Subscribe to window count changes to switch between pinned and auto-hide.
+            const winsSub = windowsSubject.subscribe(wins => {
+                const hadWindows = windowsOpen
+                windowsOpen = wins.length > 0
+                if (!windowsOpen && hadWindows) {
+                    // Last window closed → pin dock visible immediately.
+                    if (hideTimer) { clearTimeout(hideTimer); hideTimer = null }
+                    showDock()
+                } else if (windowsOpen && !hadWindows) {
+                    // First window opened → start auto-hide; hide after short delay.
+                    hideDock(800)
+                }
+            })
+
+            // Show dock immediately when no windows are open on mount.
+            if (!windowsOpen) showDock()
+
+            // Store cleanup so switching docks removes the old listeners.
+            ;(iframe as any).__dockCleanup = () => {
+                doc.removeEventListener('mousemove', onDocMouseMove)
+                iframe.removeEventListener('mouseenter', onIframeEnter)
+                iframe.removeEventListener('mouseleave', onIframeLeave)
+                if (hideTimer) clearTimeout(hideTimer)
+                winsSub.unsubscribe()
+            }
+            // ────────────────────────────────────────────────────────────────
+
         } catch (err) {
             console.error('[dock-manager] Failed to open dock:', err)
         }
@@ -1183,12 +1384,7 @@ export const render = (container: HTMLElement) => {
     const onContextMenu: React.MouseEventHandler<HTMLDivElement>  = (event) => {
         if ((event.target as HTMLElement).closest('.window, iframe')) return;
         event.preventDefault()
-        const items = loadContextMenuItems()
-        const multiDesktop = desktopsSubject.getValue().length > 1
-        showContextMenuHandler(event.clientX, event.clientY, [
-            ...items,
-            ...(multiDesktop ? [{ type: 'action' as const, id: '8', title: 'Remove Desktop', cmd: `platform.host.callCommand('remove-active-desktop')` }] : []),
-        ])
+        showContextMenuHandler(event.clientX, event.clientY, loadContextMenuItems())
     }
     root.render(
         <LayoutShell

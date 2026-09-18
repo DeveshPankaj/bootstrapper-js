@@ -6,9 +6,6 @@ export const WM_THEMES_DIR = '/etc/wm/themes'
 export const WM_DEFAULT_THEME_PATH = `${WM_THEMES_DIR}/dark.json`
 export const WM_DIR = '/etc/wm'
 
-// Desktops
-export const DESKTOPS_CONFIG_PATH = '/etc/wm/desktops.json'
-
 // Process management
 export const PROC_DIR = '/proc'
 

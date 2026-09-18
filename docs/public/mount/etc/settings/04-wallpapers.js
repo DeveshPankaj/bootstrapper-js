@@ -6,12 +6,91 @@ const { utils } = platform.getService('settings')
 const { fs, origin, configWallpapers, imageExtensions, getExt, FilePicker } = utils
 
 const isGradient = (v) => /^\s*(linear|radial|conic)-gradient\s*\(/i.test(v)
+const CANVAS_PREFIX = 'canvas:'
+const isCanvasWallpaper = (v) => v.startsWith(CANVAS_PREFIX)
+// Shared system location for wallpaper assets of every kind (image files
+// and canvas .js scripts alike) — mirrors the /usr/share/icons/ convention
+// already used elsewhere in this vfs for read-mostly shared visual assets.
+// (Real Linux distros use /usr/share/backgrounds or /usr/share/wallpapers
+// for this; /var is for variable runtime state — logs, spool, caches —
+// not static user-selectable content, so it isn't the right fit here.)
+const WALLPAPERS_DIR = '/usr/share/wallpapers'
+
+// Same harness used by the real desktop wallpaper (src/core/layout/index.tsx,
+// mountCanvasWallpaper) — kept in sync manually since this settings page and
+// the compiled layout bundle are separate build contexts. Runs the script in
+// a sandboxed iframe as a real ES module, so it can use `export function
+// render(canvas) {...}`.
+const buildCanvasWallpaperSrcdoc = (code) => {
+  const codeJson = JSON.stringify(code).replace(/<\/script/gi, '<\\/script')
+  return `<!doctype html><html><head><meta charset="utf-8"><style>
+*{margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:#000}
+canvas{display:block;width:100%;height:100%}
+</style></head><body>
+<canvas id="wallpaper-canvas"></canvas>
+<script>window.__WALLPAPER_SRC__ = ${codeJson};<\/script>
+<script type="module">
+(async function(){
+  var canvas = document.getElementById('wallpaper-canvas');
+  function fit(){ canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+  fit();
+  window.addEventListener('resize', fit);
+  // Same render(canvas, api) shape as the real desktop wallpaper, so an
+  // interactive script doesn't throw when previewed here — but this
+  // thumbnail's iframe stays pointer-events:none (see CanvasWallpaperThumb)
+  // so clicking the card still selects the wallpaper instead of the
+  // iframe swallowing the click, which means it can't forward real mouse
+  // coordinates; scripts just see an inactive mouse in this small preview.
+  var mouse = { x: -1, y: -1, active: false };
+  // Preview always looks like an empty desktop (count: 0) so a
+  // window-count-reactive script (e.g. a character that peeks out when
+  // nothing is open) shows its "active" state in the thumbnail.
+  var windows = { count: 0 };
+  try {
+    var blob = new Blob([window.__WALLPAPER_SRC__], { type: 'text/javascript' });
+    var url = URL.createObjectURL(blob);
+    var mod = await import(url);
+    URL.revokeObjectURL(url);
+    if (typeof mod.render !== 'function') { console.error('Canvas wallpaper must export a render(canvas) function'); return; }
+    mod.render(canvas, { mouse: mouse, windows: windows });
+  } catch (e) { console.error('Canvas wallpaper preview error:', e); }
+})();
+<\/script>
+</body></html>`
+}
+
+// Live preview thumbnail for a canvas wallpaper card — actually runs the
+// script (sandboxed) at card size, rather than a static screenshot, so the
+// grid shows what the animation looks like before picking it.
+const CanvasWallpaperThumb = ({ path }) => {
+  const ref = React.useRef(null)
+  React.useEffect(() => {
+    if (!ref.current) return
+    try {
+      const code = fs.readFileSync(path, 'utf-8')
+      ref.current.srcdoc = buildCanvasWallpaperSrcdoc(code)
+    } catch (err) {
+      ref.current.srcdoc = ''
+    }
+  }, [path])
+  return (
+    <iframe
+      ref={ref}
+      className="wallpaper-thumb"
+      sandbox="allow-scripts"
+      style={{ width: '100%', height: '100%', border: 'none', pointerEvents: 'none', display: 'block' }}
+      title={path}
+    />
+  )
+}
 
 const Wallpapers = () => {
   const [inputValue, setInputValue] = React.useState('');
   const [gradientInput, setGradientInput] = React.useState('linear-gradient(135deg, #667eea 0%, #764ba2 100%)');
   const [wallpapers, setWallpapers] = React.useState(configWallpapers);
   const [showPicker, setShowPicker] = React.useState(false);
+  const [showScriptPicker, setShowScriptPicker] = React.useState(false);
   const [showFolderPicker, setShowFolderPicker] = React.useState(false);
   const [wallpapersDir, setWallpapersDir] = React.useState(() => platform.userPref.getWallpapersDir() ?? '');
   const [activeWallpaper, setActiveWallpaper] = React.useState(() => platform.userPref.getWallpaper());
@@ -89,6 +168,10 @@ const Wallpapers = () => {
     addAndSet(`/(sw)${path}`);
   };
 
+  const onPickScript = (path) => {
+    addAndSet(`${CANVAS_PREFIX}${path}`);
+  };
+
   const onPickWallpapersDir = (path) => {
     setWallpapersDir(path);
     platform.host.callCommand('set-wallpapers-dir', path);
@@ -121,6 +204,10 @@ const Wallpapers = () => {
         <button className="settings-btn primary" onClick={() => setShowPicker(true)}>
           <span className="material-symbols-outlined" style={{fontSize: '1.1rem', verticalAlign: '-2px', marginRight: '0.25rem'}}>folder_open</span>
           Choose from Files
+        </button>
+        <button className="settings-btn" onClick={() => setShowScriptPicker(true)} title="Pick a .js file exporting render(canvas) to use as a live animated wallpaper">
+          <span className="material-symbols-outlined" style={{fontSize: '1.1rem', verticalAlign: '-2px', marginRight: '0.25rem'}}>animation</span>
+          Canvas Script...
         </button>
       </div>
       <div className="wallpaper-toolbar">
@@ -164,13 +251,14 @@ const Wallpapers = () => {
         >Apply</button>
       </div>
 
-      <h2 className="settings-section-title" style={{marginTop: '1.5rem', marginBottom: '0.75rem', fontSize: '0.9rem', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.06em'}}>Images</h2>
+      <h2 className="settings-section-title" style={{marginTop: '1.5rem', marginBottom: '0.75rem', fontSize: '0.9rem', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.06em'}}>Images &amp; Canvas</h2>
       <div className="wallpaper-grid">
         {[...wallpapers, ...folderWallpapers].map((url, index) => {
-          const fullUrl = toFullUrl(url);
+          const canvasWp = isCanvasWallpaper(url);
+          const fullUrl = canvasWp ? url : toFullUrl(url);
           const active = fullUrl === activeWallpaper || url === activeWallpaper;
           const fromList = index < wallpapers.length;
-          const gradient = isGradient(url);
+          const gradient = !canvasWp && isGradient(url);
           return (
             <div
               key={url}
@@ -179,22 +267,35 @@ const Wallpapers = () => {
               onContextMenu={fromList ? (ev) => onContextMenuHandler(ev, url) : undefined}
               style={gradient ? {background: url, minHeight: '80px'} : undefined}
             >
-              {gradient ? null : <img src={fullUrl} alt={`Wallpaper ${index + 1}`} className="wallpaper-thumb" />}
+              {canvasWp ? (
+                <CanvasWallpaperThumb path={url.slice(CANVAS_PREFIX.length)} />
+              ) : gradient ? null : (
+                <img src={fullUrl} alt={`Wallpaper ${index + 1}`} className="wallpaper-thumb" />
+              )}
               <div className="wallpaper-overlay">
                 {active ? (
                   <span className="material-symbols-outlined wallpaper-check">check_circle</span>
                 ) : (
-                  <span className="wallpaper-overlay-label">{gradient ? 'Gradient' : 'Set as Wallpaper'}</span>
+                  <span className="wallpaper-overlay-label">{canvasWp ? 'Canvas' : gradient ? 'Gradient' : 'Set as Wallpaper'}</span>
                 )}
               </div>
             </div>
           );
         })}
       </div>
+      {showScriptPicker && (
+        <FilePicker
+          title="Choose a canvas wallpaper script (.js exporting render(canvas))"
+          initialDir={WALLPAPERS_DIR}
+          accept={new Set(['.js'])}
+          onSelect={onPickScript}
+          onClose={() => setShowScriptPicker(false)}
+        />
+      )}
       {showPicker && (
         <FilePicker
           title="Choose a wallpaper image"
-          initialDir="/home/user1"
+          initialDir={WALLPAPERS_DIR}
           accept={imageExtensions}
           onSelect={onPickFromFiles}
           onClose={() => setShowPicker(false)}
@@ -203,7 +304,7 @@ const Wallpapers = () => {
       {showFolderPicker && (
         <FilePicker
           title="Choose a wallpapers folder"
-          initialDir={wallpapersDir || '/home/user1'}
+          initialDir={wallpapersDir || WALLPAPERS_DIR}
           mode="folder"
           onSelect={onPickWallpapersDir}
           onClose={() => setShowFolderPicker(false)}

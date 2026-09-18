@@ -1,6 +1,10 @@
 const isCssGradient = (v: string) =>
     /^\s*(linear|radial|conic)-gradient\s*\(/i.test(v)
 
+// 'none' is a literal passthrough (not a url()) — used when a canvas
+// wallpaper is active, since the live rendering comes from a background
+// iframe instead and the grid's own background must stay transparent so
+// that iframe (sitting behind it) shows through.
 export const layoutCss = (grid: { columns: string, rows: string, areas: string }, wallpaperUrl: string) => `
     .layout-default {
         height: 100%;
@@ -9,7 +13,7 @@ export const layoutCss = (grid: { columns: string, rows: string, areas: string }
         grid-template-rows: ${grid.rows};
         grid-auto-flow: row;
         grid-template-areas: ${grid.areas};
-        background-image: ${isCssGradient(wallpaperUrl) ? wallpaperUrl : `url(${wallpaperUrl})`};
+        background-image: ${isCssGradient(wallpaperUrl) || wallpaperUrl === 'none' ? wallpaperUrl : `url(${wallpaperUrl})`};
         background-repeat: no-repeat;
         background-size: cover;
     }

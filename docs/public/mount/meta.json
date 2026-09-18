@@ -137,6 +137,41 @@
     "file": "/home/user1/Notes.md"
   },
   {
+    "path": "/usr/share/wallpapers/plasma-waves.js",
+    "file": "/usr/share/wallpapers/plasma-waves.js",
+    "force_reload": true
+  },
+  {
+    "path": "/usr/share/wallpapers/particles-interactive.js",
+    "file": "/usr/share/wallpapers/particles-interactive.js",
+    "force_reload": true
+  },
+  {
+    "path": "/usr/share/wallpapers/slowmo-orbs.js",
+    "file": "/usr/share/wallpapers/slowmo-orbs.js",
+    "force_reload": true
+  },
+  {
+    "path": "/usr/share/wallpapers/day-night-cycle.js",
+    "file": "/usr/share/wallpapers/day-night-cycle.js",
+    "force_reload": true
+  },
+  {
+    "path": "/usr/share/wallpapers/kitty-parallax.js",
+    "file": "/usr/share/wallpapers/kitty-parallax.js",
+    "force_reload": true
+  },
+  {
+    "path": "/usr/share/wallpapers/parallax-mountains.js",
+    "file": "/usr/share/wallpapers/parallax-mountains.js",
+    "force_reload": true
+  },
+  {
+    "path": "/usr/share/wallpapers/minimal-drift.js",
+    "file": "/usr/share/wallpapers/minimal-drift.js",
+    "force_reload": true
+  },
+  {
     "path": "/bin/ps.run",
     "file": "/bin/ps.run",
     "force_reload": true
@@ -954,6 +989,36 @@
   {
     "path": "/opt/apps/graph-editor/main.js",
     "file": "/opt/apps/graph-editor/main.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/robot-sim/main.js",
+    "file": "/opt/apps/robot-sim/main.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/robot-sim/main.html",
+    "file": "/opt/apps/robot-sim/main.html",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/cpp-ide/main.js",
+    "file": "/opt/apps/cpp-ide/main.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/cpp-ide/main.html",
+    "file": "/opt/apps/cpp-ide/main.html",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/ts-ide/main.js",
+    "file": "/opt/apps/ts-ide/main.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/ts-ide/main.html",
+    "file": "/opt/apps/ts-ide/main.html",
     "force_reload": true
   }
 ]

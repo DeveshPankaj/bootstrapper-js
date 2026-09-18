@@ -6,7 +6,7 @@ describe('constants', () => {
         const pathConstants = [
             'LAYOUTS_PATH', 'LAYOUT_CONFIG_PATH', 'WM_CURRENT_PATH',
             'WM_THEMES_DIR', 'WM_DEFAULT_THEME_PATH', 'WM_DIR',
-            'DESKTOPS_CONFIG_PATH', 'PROC_DIR', 'WINDOW_MANAGER_MODULE_PATH',
+            'PROC_DIR', 'WINDOW_MANAGER_MODULE_PATH',
             'KEYBINDINGS_FILE', 'WIDGETS_DIR', 'WIDGET_POSITIONS_PATH',
             'WIDGETS_CONFIG_PATH', 'DESKTOP_PATH',
         ] as const

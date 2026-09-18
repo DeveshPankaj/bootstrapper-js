@@ -323,12 +323,16 @@ platform.host.registerCommand('ui.terminal', (body: any, props: any) => {
     platform.host.getCommand('ui.iframe')?.exec(body, props, '/opt/apps/terminal/main.html')
 }, { icon: 'terminal', title: 'Terminal' })
 
-platform.host.registerCommand('ui.settings', (body: any, props: any) => {
+// `initialSection` (optional) matches a settings section's registered
+// name (e.g. '04-wallpapers') and lands Settings on that page instead of
+// its default first page — see settings.html's currentPage effect, which
+// reads it via props.$args[0].
+platform.host.registerCommand('ui.settings', (body: any, props: any, initialSection?: string) => {
     if (!body) {
-        platform.host.execCommand("service('001-core.layout', 'open-window') (command('ui.settings'))", platform)
+        platform.host.execCommand(`service('001-core.layout', 'open-window') (command('ui.settings')${initialSection ? `, '${initialSection}'` : ''})`, platform)
         return
     }
-    platform.host.getCommand('ui.iframe')?.exec(body, props, '/opt/apps/settings/main.html')
+    platform.host.getCommand('ui.iframe')?.exec(body, props, '/opt/apps/settings/main.html', initialSection)
 }, { icon: 'settings', title: 'Settings' })
 
 // Fallback 'explorer' command, delegating to the compiled ui.file-explorer module.
