@@ -929,7 +929,7 @@
   {
     "path": "/etc/managers.json",
     "file": "/etc/managers.json",
-    "force_reload": true
+    "force_reload": false
   },
   {
     "path": "/opt/wm/classic.js",
@@ -994,6 +994,21 @@
   {
     "path": "/opt/desktop/manager.js",
     "file": "/opt/desktop/manager.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/desktop/windows-tiles.js",
+    "file": "/opt/desktop/windows-tiles.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/desktop/scifi.js",
+    "file": "/opt/desktop/scifi.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/desktop/interactive.js",
+    "file": "/opt/desktop/interactive.js",
     "force_reload": true
   },
   {

@@ -26,9 +26,22 @@ const DOCK_OPTIONS = [
     { id: 'gnome',   label: 'GNOME',           icon: 'apps',                    desc: 'Dark full-width bar, left-aligned, active-app label.' },
 ]
 
+// Desktop-icon variants — /opt/desktop/<id>.js for every id but 'default',
+// which instead uses /opt/desktop/manager.js (the original single
+// hand-editable file) so pre-existing customisations of that file keep
+// working unchanged. See src/core/layout/index.tsx's DesktopMount/
+// openVfsDesktop for the loader and hot-swap mechanics.
+const DESKTOP_OPTIONS = [
+    { id: 'none',          label: 'None',           icon: 'indeterminate_check_box', desc: 'No desktop icons — a completely empty desktop.' },
+    { id: 'default',       label: 'Default',       icon: 'grid_view',       desc: 'Classic desktop icon grid — drag to reorder, double-click to open.' },
+    { id: 'windows-tiles', label: 'Windows Tiles',  icon: 'apps',            desc: 'Colourful Live-Tile-style squares with big icons.' },
+    { id: 'scifi',         label: 'Sci-Fi HUD',     icon: 'hexagon',         desc: 'Glowing hexagon frames, scanlines, targeting-reticle corners.' },
+    { id: 'interactive',   label: 'Interactive',    icon: 'touch_app',       desc: 'Icons magnify and tilt toward the cursor, with a click ripple.' },
+]
+
 const readManagers = () => {
     try { return JSON.parse(fs.readFileSync(MANAGERS_PATH, 'utf-8')) }
-    catch (_) { return { windowManager: 'default', dockManager: 'default' } }
+    catch (_) { return { windowManager: 'default', dockManager: 'default', desktopManager: 'default' } }
 }
 
 const writeManagers = (cfg) => {
@@ -38,6 +51,10 @@ const writeManagers = (cfg) => {
 
 const openDock = (id) => {
     platform.host.callCommand('open-vfs-dock', id)
+}
+
+const openDesktop = (id) => {
+    platform.host.callCommand('open-vfs-desktop', id)
 }
 
 const OptionList = ({ options, activeId, onSelect }) =>
@@ -74,38 +91,37 @@ const OptionList = ({ options, activeId, onSelect }) =>
         )
     )
 
-// ─── Dock settings panel ───────────────────────────────────────────────────────
+// ─── Generic per-variant settings panel ────────────────────────────────────────
+// Shared by dock and desktop-icon variants: polls `getCmd` for the active
+// variant's live schema (an array of { key, label, type, value, ... }, as
+// registered by the variant module itself — see get-dock-schema/
+// get-desktop-schema in src/core/layout/index.tsx) and pushes edits through
+// `setCmd`, which persists them and re-applies live without a remount.
 
-const DockSettingsPanel = () => {
+const SchemaSettingsPanel = ({ getCmd, setCmd, emptyMessage }) => {
     const [schema, setSchema] = React.useState([])
-    const [dockId, setDockId] = React.useState('')
 
     const refreshSchema = () => {
         try {
-            const result = platform.host.callCommand('get-dock-schema')
-            if (result && result.schema && result.schema.length) {
-                setSchema(result.schema)
-                setDockId(result.dockId)
-            }
+            const result = platform.host.callCommand(getCmd)
+            setSchema(result && result.schema ? result.schema : [])
         } catch (_) {}
     }
 
     React.useEffect(() => {
         refreshSchema()
-        // Re-read when dock changes its schema registration.
+        // Re-read when the active variant changes its schema registration.
         const tid = setInterval(refreshSchema, 2000)
         return () => clearInterval(tid)
-    }, [])
+    }, [getCmd])
 
     if (!schema.length) {
-        return React.createElement('p', { className: 'hint', style: { margin: '6px 0' } },
-            'No active dock or dock has no configurable settings.'
-        )
+        return React.createElement('p', { className: 'hint', style: { margin: '6px 0' } }, emptyMessage)
     }
 
     const setSetting = (key, value) => {
         setSchema(prev => prev.map(e => e.key === key ? { ...e, value } : e))
-        platform.host.callCommand('set-dock-setting', { key, value })
+        platform.host.callCommand(setCmd, { key, value })
     }
 
     return React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 4 } },
@@ -319,13 +335,34 @@ const ManagersSettings = () => {
 
         // ── Active dock settings ──
         React.createElement('p', { className: 'muted-small', style: { margin: '16px 0 4px' } }, 'DOCK SETTINGS'),
-        React.createElement(DockSettingsPanel),
+        React.createElement(SchemaSettingsPanel, {
+            getCmd: 'get-dock-schema', setCmd: 'set-dock-setting',
+            emptyMessage: 'No active dock or dock has no configurable settings.',
+        }),
+
+        // ── Desktop icons ──
+        React.createElement('p', { className: 'muted-small', style: { margin: '16px 0 4px' } }, 'DESKTOP ICONS'),
+        React.createElement('p', { className: 'hint', style: { margin: '0 0 6px' } },
+            'How files in your home directory render on the desktop. Switching applies immediately.'
+        ),
+        React.createElement(OptionList, {
+            options: DESKTOP_OPTIONS,
+            activeId: cfg.desktopManager || 'default',
+            onSelect: (id) => { update({ desktopManager: id }); openDesktop(id) },
+        }),
+
+        // ── Active desktop-icon variant settings ──
+        React.createElement('p', { className: 'muted-small', style: { margin: '16px 0 4px' } }, 'DESKTOP ICON SETTINGS'),
+        React.createElement(SchemaSettingsPanel, {
+            getCmd: 'get-desktop-schema', setCmd: 'set-desktop-setting',
+            emptyMessage: 'This desktop icon variant has no configurable settings.',
+        }),
 
         // ── VFS config files ──
         React.createElement('p', { className: 'muted-small', style: { margin: '20px 0 6px' } }, 'VFS CONFIGURATION FILES'),
         React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 4 } },
             [
-                { path: '/opt/desktop/manager.js', label: 'Desktop icons renderer', desc: 'Export render(container, api). Edit to customise desktop icons.' },
+                { path: '/opt/desktop/manager.js', label: 'Desktop icons ("Default" variant)', desc: 'Export render(container, api) — and optionally getSettingsSchema/applySetting. Edit to customise, or pick a different variant above.' },
                 { path: '/etc/contextmenu.json',   label: 'Desktop context menu',   desc: 'JSON array of { id, type, title, cmd } items.' },
                 { path: '/etc/taskbar.json',        label: 'Taskbar pinned apps',    desc: 'JSON { pinned: ["command-name", ...] }.' },
                 { path: '/opt/window-manager.js',  label: 'WM behavior script',     desc: 'Per-window event wiring; re-read on every new window.' },

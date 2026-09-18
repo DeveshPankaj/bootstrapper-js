@@ -158239,34 +158239,101 @@ const WidgetsPanel = () => {
         return null;
     return (react__WEBPACK_IMPORTED_MODULE_4___default().createElement("div", { className: "widgets-panel", ref: panelRef }, visibleWidgets.map((widget, i) => (react__WEBPACK_IMPORTED_MODULE_4___default().createElement(WidgetItem, { key: widget.name, widget: widget, savedPosition: positions[widget.name], defaultTop: i * 100, panelRef: panelRef, onRemove: handleRemove })))));
 };
-// VFS Desktop Manager — loads /opt/desktop/manager.js if present, falls back
-// to the compiled ListDirComponent so the desktop always renders.
+// VFS Desktop Manager — pluggable desktop-icon renderer, mirroring the dock's
+// variant system (see openVfsDock below) but running in-process (execString,
+// direct FS/callback access) instead of a sandboxed iframe, since desktop
+// icons need tight synchronous access to openFile/showFileActions - the same
+// trust level as /opt/wm/*.js window-manager styles, not the dock's untrusted
+// postMessage boundary.
+//
+// id 'default' preserves the pre-existing behavior exactly: use
+// /opt/desktop/manager.js if present (the original single hand-editable
+// override file), else fall back to the compiled ListDirComponent. Any other
+// id loads /opt/desktop/<id>.js, which must export render(container, api)
+// and may optionally export getSettingsSchema(storedValues)/
+// applySetting(key, value) for a live per-variant settings panel in
+// Settings > Managers (see get-desktop-schema/set-desktop-setting below,
+// which mirror get-dock-schema/set-dock-setting but stay in-process).
 const VFS_DESKTOP_PATH = '/opt/desktop/manager.js';
+const DESKTOP_VARIANTS_DIR = '/opt/desktop';
+const desktopManagerSubject = new rxjs__WEBPACK_IMPORTED_MODULE_19__.BehaviorSubject('default');
+let activeDesktopModule = null;
+let activeDesktopId = 'default';
+let activeDesktopSchema = [];
+const readDesktopSettings = (id) => {
+    try {
+        const fs = platform.host.getFS();
+        const path = `/etc/desktop/${id}.json`;
+        if (fs.existsSync(path))
+            return JSON.parse(fs.readFileSync(path, 'utf-8'));
+    }
+    catch (_) { }
+    return {};
+};
 const DesktopMount = ({ openFile, showFileActionsHandler }) => {
     const ref = react__WEBPACK_IMPORTED_MODULE_4___default().useRef(null);
+    const [desktopId, setDesktopId] = react__WEBPACK_IMPORTED_MODULE_4___default().useState(desktopManagerSubject.getValue());
+    // Reacts to open-vfs-desktop calls (Settings > Managers) - the dependency
+    // on desktopId in the effect below re-runs mount/cleanup, giving a hot
+    // swap with no page reload.
+    react__WEBPACK_IMPORTED_MODULE_4___default().useEffect(() => {
+        const sub = desktopManagerSubject.subscribe(setDesktopId);
+        return () => sub.unsubscribe();
+    }, []);
     react__WEBPACK_IMPORTED_MODULE_4___default().useEffect(() => {
         const container = ref.current;
         if (!container)
             return;
         const fs = platform.host.getFS();
-        if (fs.existsSync(VFS_DESKTOP_PATH)) {
-            try {
-                const src = fs.readFileSync(VFS_DESKTOP_PATH, 'utf-8');
-                const mod = platform.host.execString(src, VFS_DESKTOP_PATH);
-                if (typeof (mod === null || mod === void 0 ? void 0 : mod.render) === 'function') {
-                    const cleanup = mod.render(container, { openFile, showFileActions: showFileActionsHandler });
-                    return typeof cleanup === 'function' ? cleanup : undefined;
-                }
+        const loadFrom = (path) => platform.host.execString(fs.readFileSync(path, 'utf-8'), path);
+        if (desktopId === 'none') {
+            activeDesktopModule = null;
+            activeDesktopId = desktopId;
+            activeDesktopSchema = [];
+            return undefined;
+        }
+        let mod = null;
+        try {
+            if (desktopId !== 'default') {
+                const path = `${DESKTOP_VARIANTS_DIR}/${desktopId}.js`;
+                if (fs.existsSync(path))
+                    mod = loadFrom(path);
             }
-            catch (err) {
-                console.error('[desktop-manager] VFS load failed:', err);
+            else if (fs.existsSync(VFS_DESKTOP_PATH)) {
+                mod = loadFrom(VFS_DESKTOP_PATH);
             }
         }
-        // Fallback: compile-time ListDirComponent
+        catch (err) {
+            console.error('[desktop-manager] VFS load failed:', err);
+        }
+        if (mod && typeof mod.render === 'function') {
+            activeDesktopModule = mod;
+            activeDesktopId = desktopId;
+            try {
+                activeDesktopSchema = typeof mod.getSettingsSchema === 'function'
+                    ? mod.getSettingsSchema(readDesktopSettings(desktopId)) : [];
+            }
+            catch (err) {
+                console.error('[desktop-manager] getSettingsSchema failed:', err);
+                activeDesktopSchema = [];
+            }
+            const cleanup = mod.render(container, { openFile, showFileActions: showFileActionsHandler });
+            return () => {
+                activeDesktopModule = null;
+                activeDesktopSchema = [];
+                if (typeof cleanup === 'function')
+                    cleanup();
+            };
+        }
+        // Fallback: compile-time ListDirComponent (also covers 'default' when
+        // /opt/desktop/manager.js is missing).
+        activeDesktopModule = null;
+        activeDesktopId = desktopId;
+        activeDesktopSchema = [];
         const root = (0,react_dom_client__WEBPACK_IMPORTED_MODULE_3__.createRoot)(container);
         root.render(react__WEBPACK_IMPORTED_MODULE_4___default().createElement(_apps_file_explorer_desktop__WEBPACK_IMPORTED_MODULE_11__.ListDirComponent, { openFile: openFile, showFileActions: showFileActionsHandler, customClass: 'desktop-icons' }));
         return () => setTimeout(() => root.unmount(), 0);
-    }, []);
+    }, [desktopId]);
     return react__WEBPACK_IMPORTED_MODULE_4___default().createElement("div", { ref: ref, style: { width: '100%', height: '100%' } });
 };
 const LayoutShell = (props) => {
@@ -158403,6 +158470,49 @@ const render = (container) => {
     platform.host.registerCommand('get-dock-schema', getDockSchema);
     platform.register('set-dock-setting', setDockSetting);
     platform.host.registerCommand('set-dock-setting', setDockSetting);
+    // Desktop-icons settings commands — same shape as get-dock-schema/
+    // set-dock-setting, but the active variant's schema array lives in-process
+    // (activeDesktopSchema) rather than behind an IPC bridge, since desktop
+    // variants aren't sandboxed. Settings > Managers polls get-desktop-schema
+    // the same way it polls get-dock-schema for the active dock.
+    const getDesktopSchema = () => ({ desktopId: activeDesktopId, schema: activeDesktopSchema });
+    const setDesktopSetting = (data) => {
+        var _a;
+        const entry = activeDesktopSchema.find(e => e.key === data.key);
+        if (entry)
+            entry.value = data.value;
+        try {
+            const fs = platform.host.getFS();
+            if (!fs.existsSync('/etc/desktop'))
+                fs.mkdirSync('/etc/desktop', { recursive: true });
+            const settingsPath = `/etc/desktop/${activeDesktopId}.json`;
+            let current = {};
+            try {
+                current = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+            }
+            catch (_) { }
+            current[data.key] = data.value;
+            fs.writeFileSync(settingsPath, JSON.stringify(current, null, 2));
+        }
+        catch (_) { }
+        try {
+            (_a = activeDesktopModule === null || activeDesktopModule === void 0 ? void 0 : activeDesktopModule.applySetting) === null || _a === void 0 ? void 0 : _a.call(activeDesktopModule, data.key, data.value);
+        }
+        catch (err) {
+            console.error('[desktop-manager] applySetting failed:', err);
+        }
+        return true;
+    };
+    platform.register('get-desktop-schema', getDesktopSchema);
+    platform.host.registerCommand('get-desktop-schema', getDesktopSchema);
+    platform.register('set-desktop-setting', setDesktopSetting);
+    platform.host.registerCommand('set-desktop-setting', setDesktopSetting);
+    // Switch the active desktop-icons variant - DesktopMount's subscription to
+    // desktopManagerSubject reacts immediately (hot-swap, no reload), mirroring
+    // openVfsDock's immediate-replace semantics for the dock.
+    const openVfsDesktop = (id) => desktopManagerSubject.next(id || 'default');
+    platform.register('open-vfs-desktop', openVfsDesktop);
+    platform.host.registerCommand('open-vfs-desktop', openVfsDesktop);
     // Open a VFS dock HTML as a fixed-position frameless iframe in the layout.
     // Sandboxed (no same-origin), IPC SDK inlined so it can communicate.
     // Auto-hide behaviour: dock starts hidden below the viewport (translateY 100%,
@@ -158569,6 +158679,8 @@ const render = (container) => {
             : { dockManager: 'default' };
         if (cfg.dockManager && cfg.dockManager !== 'none')
             openVfsDock(cfg.dockManager);
+        if (cfg.desktopManager)
+            openVfsDesktop(cfg.desktopManager);
     }
     catch (_) { }
     const root = (0,react_dom_client__WEBPACK_IMPORTED_MODULE_3__.createRoot)(container);
