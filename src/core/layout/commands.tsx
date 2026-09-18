@@ -1,8 +1,7 @@
 import { Command, Platform } from '@shared/index'
 import React from 'react'
-import ReactDOM from 'react-dom'
 import { map } from 'rxjs'
-import { windowsSubject, TaskbarWindowInfo, desktopsSubject, activeDesktopSubject, removeDesktop, switchDesktop } from '../window-manager'
+import { windowsSubject, TaskbarWindowInfo } from '../window-manager'
 
 
 const platform = Platform.getInstance()
@@ -81,55 +80,6 @@ const openSettings = () => {
     platform.host.callCommand('ui.settings')
 }
 
-// Desktop ("Space") switcher: one pill per desktop (click to switch,
-// right-click for a "Delete desktop" menu). New desktops are added via the
-// desktop background's right-click context menu ("Add Desktop").
-const DesktopSwitcher = () => {
-    const [desktops, setDesktops] = React.useState(desktopsSubject.getValue())
-    const [active, setActive] = React.useState(activeDesktopSubject.getValue())
-    const [menu, setMenu] = React.useState<{ id: string, x: number, y: number } | null>(null)
-
-    React.useEffect(() => {
-        const sub1 = desktopsSubject.subscribe(setDesktops)
-        const sub2 = activeDesktopSubject.subscribe(setActive)
-        return () => {
-            sub1.unsubscribe()
-            sub2.unsubscribe()
-        }
-    }, [])
-
-    React.useEffect(() => {
-        if (!menu) return
-        const close = () => setMenu(null)
-        document.addEventListener('click', close)
-        return () => document.removeEventListener('click', close)
-    }, [menu])
-
-    if (desktops.length <= 1) return null
-
-    return (
-        <div className="desktop-switcher">
-            {desktops.map((d, idx) => (
-                <div
-                    key={d.id}
-                    className={`desktop-pill${d.id === active ? ' active' : ''}`}
-                    title={d.name}
-                    onClick={() => switchDesktop(d.id)}
-                    onContextMenu={ev => { ev.preventDefault(); setMenu({ id: d.id, x: ev.clientX, y: ev.clientY }) }}
-                >
-                    {idx + 1}
-                </div>
-            ))}
-            {menu ? ReactDOM.createPortal(
-                <div className="desktop-context-menu" style={{ top: menu.y, left: menu.x }}>
-                    <button disabled={desktops.length <= 1} onClick={() => { removeDesktop(menu.id); setMenu(null) }}>Delete desktop</button>
-                </div>,
-                document.body
-            ) : null}
-        </div>
-    )
-}
-
 const TaskbarWindowIcon = ({ win }: { win: TaskbarWindowInfo }) => (
     <div
         className={`taskbar-icon-button taskbar-window-icon${win.active ? ' active' : ''}${win.minimized ? ' minimized' : ''}`}
@@ -150,26 +100,18 @@ const TaskbarWindowIcon = ({ win }: { win: TaskbarWindowInfo }) => (
 // (header/footer/left-nav/right-nav/floating toolbar).
 export const Taskbar = ({ onCommandClick, vertical, align = 'start' }: { onCommandClick: (cmd: Command) => void, vertical?: boolean, align?: 'start' | 'center' | 'end' }) => {
     const [windows, setWindows] = React.useState<Array<TaskbarWindowInfo>>(windowsSubject.getValue())
-    const [activeDesktop, setActiveDesktop] = React.useState(activeDesktopSubject.getValue())
 
     React.useEffect(() => {
         const subscription = windowsSubject.subscribe(setWindows)
-        const desktopSub = activeDesktopSubject.subscribe(setActiveDesktop)
-        return () => {
-            subscription.unsubscribe()
-            desktopSub.unsubscribe()
-        }
+        return () => subscription.unsubscribe()
     }, [])
-
-    const visibleWindows = windows.filter(win => win.desktopId === activeDesktop)
 
     return (
         <div className="taskbar" role="toolbar" aria-label="Taskbar">
             <Commands onCommandClick={onCommandClick} vertical={vertical} align={align} />
-            {visibleWindows.length ? <div className="taskbar-divider" /> : null}
-            {visibleWindows.map(win => <TaskbarWindowIcon key={win.pid} win={win} />)}
+            {windows.length ? <div className="taskbar-divider" /> : null}
+            {windows.map(win => <TaskbarWindowIcon key={win.pid} win={win} />)}
             <div className="taskbar-spacer" />
-            <DesktopSwitcher />
             <div className="taskbar-icon-button" aria-label="open-app-drawer" title="App Drawer" onClick={() => platform.host.callCommand('ui.app-drawer')}>
                 <span className="material-symbols-outlined">grid_view</span>
             </div>

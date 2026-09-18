@@ -525,8 +525,24 @@
 
     const [currentPage, setCurrentPage] = React.useState(null)
 
+    // props.$args[0], when given (e.g. by the desktop's "Change Wallpaper"
+    // context menu item), names a section to land on instead of the
+    // default first page — matches the `name` a section registered with,
+    // e.g. '04-wallpapers'. Sections register progressively as each
+    // /etc/settings/*.js file loads, so allPages can be non-empty before
+    // the wanted one has registered — grabbing allPages[0] as soon as
+    // *anything* was available would lock in the wrong page for good
+    // (this effect bails out once currentPage is set), so wait for the
+    // specific wanted section instead of falling back early.
     React.useEffect(() => {
-      if (!currentPage && allPages.length) setCurrentPage(allPages[0])
+      if (currentPage) return
+      const wanted = props.$args && props.$args[0]
+      if (wanted) {
+        const target = allPages.find(p => p.name === wanted)
+        if (target) setCurrentPage(target)
+        return
+      }
+      if (allPages.length) setCurrentPage(allPages[0])
     }, [allPages, currentPage])
 
     return (

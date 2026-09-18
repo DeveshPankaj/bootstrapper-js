@@ -1,0 +1,627 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>C++ IDE</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:#0d1117;color:#e2e8f0;font-family:'JetBrains Mono',ui-monospace,monospace}
+#app{display:flex;flex-direction:column;height:100%}
+#toolbar{height:38px;background:#161b22;border-bottom:1px solid #30363d;display:flex;align-items:center;padding:0 10px;gap:6px;flex-shrink:0}
+.app-title{color:#58a6ff;font-weight:700;font-size:12px;white-space:nowrap}
+.file-badge{color:#8b949e;font-size:11px;margin-left:2px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.spacer{flex:1}
+.btn{padding:3px 10px;border-radius:5px;border:1px solid #30363d;cursor:pointer;font-size:11px;font-weight:600;font-family:inherit;transition:background .15s}
+.btn-run{background:#238636;color:#fff;border-color:#2ea043}
+.btn-run:hover{background:#2ea043}
+.btn-run.running{background:#6e7681;border-color:#6e7681;cursor:default}
+.btn-secondary{background:#21262d;color:#c9d1d9}
+.btn-secondary:hover{background:#30363d}
+.btn-danger{background:#21262d;color:#8b949e}
+.btn-danger:hover{color:#f85149}
+#main-content{display:flex;flex:1;overflow:hidden}
+#sidebar{width:195px;background:#0d1117;border-right:1px solid #21262d;display:flex;flex-direction:column;flex-shrink:0;overflow:hidden}
+.sb-head{padding:6px 10px;font-size:10px;font-weight:700;color:#8b949e;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #21262d;display:flex;align-items:center;justify-content:space-between}
+.sb-head .sb-action{cursor:pointer;color:#58a6ff;font-size:14px;line-height:1;font-weight:400}
+.sb-section{flex:1;overflow-y:auto;padding:4px 0}
+.sb-group{font-size:10px;color:#58a6ff;font-weight:600;padding:6px 10px 2px;text-transform:uppercase;letter-spacing:.3px}
+.sb-item{padding:5px 10px 5px 16px;font-size:11.5px;color:#c9d1d9;cursor:pointer;display:flex;align-items:center;gap:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sb-item:hover{background:#161b22}
+.sb-item.active{background:#1f2937;color:#e2e8f0;border-left:2px solid #58a6ff;padding-left:14px}
+.sb-item .ic{font-size:13px;flex-shrink:0;opacity:.8}
+#editor-panel{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.editor-wrap{flex:1;overflow:hidden;position:relative}
+.CodeMirror{height:100%!important;font-size:13px;font-family:'JetBrains Mono',ui-monospace,monospace;line-height:1.6;background:#0d1117}
+.CodeMirror-scroll{height:100%!important}
+.CodeMirror-gutters{background:#0d1117;border-right:1px solid #21262d}
+.CodeMirror-linenumber{color:#484f58;padding-right:10px}
+#output-panel{height:210px;border-top:1px solid #21262d;display:flex;flex-direction:column;flex-shrink:0}
+#out-tabs{display:flex;background:#161b22;border-bottom:1px solid #21262d;flex-shrink:0}
+.out-tab{padding:4px 14px;font-size:11.5px;color:#8b949e;cursor:pointer;border-bottom:2px solid transparent;transition:color .15s}
+.out-tab:hover{color:#c9d1d9}
+.out-tab.active{color:#e2e8f0;border-color:#58a6ff}
+#out-body{flex:1;overflow:hidden;position:relative}
+#console-pane{position:absolute;inset:0;overflow-y:auto;padding:6px 10px;font-size:12px;line-height:1.5}
+#canvas-pane{position:absolute;inset:0;overflow:auto;display:none;align-items:center;justify-content:center;background:#0a0d13;padding:8px}
+#canvas-pane.show{display:flex}
+#out-canvas{border:1px solid #30363d;image-rendering:pixelated}
+.log{padding:1px 0}.log.out{color:#c9d1d9}.log.err{color:#f85149}.log.info{color:#58a6ff}.log.ok{color:#3fb950}.log.dim{color:#6e7681;font-style:italic}
+.prompt{color:#8b949e;margin-right:4px}
+/* Modal */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;z-index:200}
+.modal{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:20px 24px;min-width:300px;max-width:460px;width:90%}
+.modal h3{font-size:14px;font-weight:700;margin-bottom:14px;color:#e2e8f0}
+.modal label{display:block;font-size:11px;color:#8b949e;margin-bottom:4px}
+.modal input,.modal select{width:100%;padding:7px 10px;background:#0d1117;border:1px solid #30363d;border-radius:6px;color:#c9d1d9;font-size:12px;font-family:inherit;outline:none;margin-bottom:12px}
+.modal input:focus{border-color:#58a6ff}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:4px}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="toolbar">
+    <span class="app-title">C++ IDE</span>
+    <span class="file-badge" id="file-badge">untitled.cpp</span>
+    <span class="spacer"></span>
+    <button class="btn btn-secondary" onclick="newFile()">New</button>
+    <button class="btn btn-secondary" onclick="openProject()">Open</button>
+    <button class="btn btn-secondary" onclick="saveProject()">Save</button>
+    <button class="btn btn-run" id="run-btn" onclick="runCode()">▶ Run</button>
+    <button class="btn btn-danger" onclick="clearOutput()">Clear</button>
+  </div>
+  <div id="main-content">
+    <div id="sidebar">
+      <div class="sb-head">C++ IDE <span class="sb-action" title="New project" onclick="newFile()">＋</span></div>
+      <div class="sb-section" id="sb-content">
+        <div class="sb-group">Examples</div>
+      </div>
+    </div>
+    <div id="editor-panel">
+      <div class="editor-wrap"><textarea id="editor"></textarea></div>
+      <div id="output-panel">
+        <div id="out-tabs">
+          <div class="out-tab active" onclick="switchTab('console')">Console</div>
+          <div class="out-tab" onclick="switchTab('canvas')">Canvas</div>
+        </div>
+        <div id="out-body">
+          <div id="console-pane"></div>
+          <div id="canvas-pane"><canvas id="out-canvas"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/JSCPP@2.2.1/dist/JSCPP.es5.min.js"></script>
+<script>
+// --- AppSDK ---
+function sdk(){ return window.AppSDK||{readText:()=>Promise.reject(new Error('SDK not ready')),writeText:()=>Promise.reject(new Error('SDK not ready')),mkdir:()=>Promise.resolve(),list:()=>Promise.resolve([]),exists:()=>Promise.resolve(false)}; }
+
+// --- CodeMirror ---
+var editor = CodeMirror.fromTextArea(document.getElementById('editor'), {
+  mode: 'text/x-c++src', theme: 'dracula', lineNumbers: true,
+  indentUnit: 4, tabSize: 4, indentWithTabs: false,
+  matchBrackets: true, autoCloseBrackets: true, lineWrapping: false,
+  extraKeys: {'Ctrl-Enter': runCode, 'Cmd-Enter': runCode, 'Ctrl-S': saveProject, 'Cmd-S': saveProject}
+});
+editor.setValue(EXAMPLES[0].code);
+
+// --- Projects state ---
+var VFS_BASE = '/home/user1/projects/cpp';
+var currentProject = null;
+var isDirty = false;
+editor.on('change', function(){ isDirty=true; updateBadge(); });
+
+function updateBadge(){
+  var badge = document.getElementById('file-badge');
+  var name = currentProject ? currentProject + '.cpp' : 'untitled.cpp';
+  badge.textContent = (isDirty ? '● ' : '') + name;
+}
+
+// --- Output ---
+var consolePn = document.getElementById('console-pane');
+var curTab = 'console';
+
+function log(msg, cls){
+  var div = document.createElement('div');
+  div.className = 'log ' + (cls||'out');
+  div.textContent = msg;
+  consolePn.appendChild(div);
+  consolePn.scrollTop = consolePn.scrollHeight;
+}
+
+function clearOutput(){
+  consolePn.innerHTML = '';
+  var cv = document.getElementById('out-canvas');
+  var ctx = cv.getContext('2d');
+  ctx.clearRect(0, 0, cv.width, cv.height);
+}
+
+function switchTab(t){
+  curTab = t;
+  var tabs = document.querySelectorAll('.out-tab');
+  tabs[0].classList.toggle('active', t==='console');
+  tabs[1].classList.toggle('active', t==='canvas');
+  document.getElementById('console-pane').style.display = t==='console'?'':'none';
+  document.getElementById('canvas-pane').classList.toggle('show', t==='canvas');
+}
+
+// --- Canvas draw protocol ---
+function processCanvasCmd(line){
+  var cv = document.getElementById('out-canvas');
+  var ctx = cv.getContext('2d');
+  var parts = line.trim().split(/\s+/);
+  var cmd = parts[0];
+  if(cmd==='##CANVAS##'){
+    cv.width = parseInt(parts[1])||400; cv.height = parseInt(parts[2])||300;
+    ctx.clearRect(0,0,cv.width,cv.height);
+    return true;
+  }
+  if(cmd==='##CLEAR##'){
+    ctx.fillStyle=parts[1]||'#000'; ctx.fillRect(0,0,cv.width,cv.height); return true;
+  }
+  if(cmd==='##RECT##'){
+    ctx.fillStyle=parts[5]||'#fff';
+    ctx.fillRect(parseInt(parts[1]),parseInt(parts[2]),parseInt(parts[3]),parseInt(parts[4])); return true;
+  }
+  if(cmd==='##CIRCLE##'){
+    ctx.fillStyle=parts[4]||'#fff';
+    ctx.beginPath(); ctx.arc(parseInt(parts[1]),parseInt(parts[2]),parseInt(parts[3]),0,Math.PI*2); ctx.fill(); return true;
+  }
+  if(cmd==='##LINE##'){
+    ctx.strokeStyle=parts[5]||'#fff'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(parseInt(parts[1]),parseInt(parts[2])); ctx.lineTo(parseInt(parts[3]),parseInt(parts[4])); ctx.stroke(); return true;
+  }
+  if(cmd==='##TEXT##'){
+    ctx.fillStyle=parts[parts.length-1]||'#fff';
+    ctx.font='14px monospace';
+    ctx.fillText(parts.slice(3,parts.length-1).join(' '),parseInt(parts[1]),parseInt(parts[2])); return true;
+  }
+  return false;
+}
+
+// --- Run ---
+var runTimeout = null;
+
+function runCode(){
+  var btn = document.getElementById('run-btn');
+  if(btn.classList.contains('running')) return;
+  btn.classList.add('running'); btn.textContent='◼ Stop';
+  clearOutput();
+  log('Running...', 'dim');
+
+  var code = editor.getValue();
+  var stdoutLines = [];
+  var hasCanvas = false;
+
+  try {
+    var rt = JSCPP.run(code, '', {
+      stdio: {
+        write: function(s){
+          var lines = s.split('\n');
+          lines.forEach(function(line){
+            if(line==='') return;
+            stdoutLines.push(line);
+            if(processCanvasCmd(line)){ hasCanvas=true; return; }
+            log(line, 'out');
+          });
+        }
+      },
+      maxTimeout: 8000
+    });
+    log('Exited with code ' + (rt||0), 'info');
+    if(hasCanvas){ switchTab('canvas'); }
+  } catch(e){
+    var msg = e.message || String(e);
+    // Clean up JSCPP error messages
+    msg = msg.replace(/Error: /g,'').replace(/\n.*$/g,'');
+    log('Error: ' + msg, 'err');
+  }
+
+  btn.classList.remove('running'); btn.textContent='▶ Run';
+}
+
+// --- Project management ---
+async function listProjects(){
+  try {
+    var items = await sdk().list(VFS_BASE);
+    return (items||[]).filter(function(x){ return x && typeof x === 'string' ? !x.startsWith('.') : (x.name && !x.name.startsWith('.')); });
+  } catch(e){ return []; }
+}
+
+async function loadProject(name){
+  try {
+    var txt = await sdk().readText(VFS_BASE + '/' + name + '/main.cpp');
+    editor.setValue(txt);
+    currentProject = name;
+    isDirty = false;
+    updateBadge();
+    log('Opened project: ' + name, 'info');
+    refreshSidebar();
+  } catch(e){
+    log('Failed to open: ' + e.message, 'err');
+  }
+}
+
+async function saveProject(){
+  var name = currentProject;
+  if(!name){
+    name = prompt('Project name:', 'my-project');
+    if(!name) return;
+    name = name.trim().replace(/[^a-zA-Z0-9_-]/g,'_');
+  }
+  try {
+    await sdk().mkdir(VFS_BASE + '/' + name);
+    await sdk().writeText(VFS_BASE + '/' + name + '/main.cpp', editor.getValue());
+    currentProject = name;
+    isDirty = false;
+    updateBadge();
+    log('Saved project: ' + name, 'ok');
+    refreshSidebar();
+  } catch(e){
+    log('Save failed: ' + e.message, 'err');
+  }
+}
+
+function newFile(){
+  if(isDirty && !confirm('Discard unsaved changes?')) return;
+  editor.setValue(EXAMPLES[0].code);
+  currentProject = null;
+  isDirty = false;
+  updateBadge();
+  log('New file created', 'dim');
+}
+
+async function openProject(){
+  var projects = await listProjects();
+  if(!projects.length){ log('No saved projects yet. Use Save to create one.', 'dim'); return; }
+  var names = projects.map(function(p){ return typeof p==='string'?p:(p.name||p); });
+  var name = prompt('Open project:\n' + names.join('\n'), names[0]);
+  if(!name) return;
+  if(isDirty && !confirm('Discard unsaved changes?')) return;
+  await loadProject(name.trim());
+}
+
+async function refreshSidebar(){
+  var sb = document.getElementById('sb-content');
+  var html = '<div class="sb-group">Examples</div>';
+  EXAMPLES.forEach(function(ex, i){
+    html += '<div class="sb-item' + (currentProject===null && i===0?' active':'') + '" onclick="loadExample('+i+')" title="'+ex.name+'"><span class="ic">📄</span>' + ex.name + '</div>';
+  });
+
+  var projects = await listProjects();
+  var names = projects.map(function(p){ return typeof p==='string'?p:(p.name||p); }).filter(Boolean);
+  if(names.length){
+    html += '<div class="sb-group" style="margin-top:8px">Projects</div>';
+    names.forEach(function(n){
+      html += '<div class="sb-item' + (currentProject===n?' active':'') + '" onclick="loadProject(\''+n+'\')" title="'+n+'"><span class="ic">📁</span>' + n + '</div>';
+    });
+  }
+  sb.innerHTML = html;
+}
+
+function loadExample(i){
+  if(isDirty && !confirm('Discard unsaved changes?')) return;
+  editor.setValue(EXAMPLES[i].code);
+  currentProject = null;
+  isDirty = false;
+  updateBadge();
+  clearOutput();
+  log('Loaded example: ' + EXAMPLES[i].name, 'dim');
+  refreshSidebar();
+}
+
+// --- Examples ---
+var EXAMPLES = [
+{name: 'Hello World', code:
+`#include <iostream>
+using namespace std;
+
+int main() {
+    cout << "Hello, World!" << endl;
+    cout << "Welcome to C++ IDE" << endl;
+    cout << "Running via JSCPP interpreter in browser." << endl;
+
+    // Variables and types
+    int x = 42;
+    double pi = 3.14159;
+    string name = "C++";
+
+    cout << "\\n" << name << " is language #" << x << endl;
+    cout << "Pi = " << pi << endl;
+
+    return 0;
+}
+`},
+
+{name: 'Fibonacci', code:
+`#include <iostream>
+using namespace std;
+
+int fib_rec(int n) {
+    if (n <= 1) return n;
+    return fib_rec(n-1) + fib_rec(n-2);
+}
+
+long long fib_iter(int n) {
+    if (n <= 1) return n;
+    long long a = 0, b = 1;
+    for (int i = 2; i <= n; i++) {
+        long long c = a + b;
+        a = b; b = c;
+    }
+    return b;
+}
+
+int main() {
+    cout << "Fibonacci (recursive, first 12):" << endl;
+    for (int i = 0; i < 12; i++) {
+        cout << "  F(" << i << ") = " << fib_rec(i) << endl;
+    }
+
+    cout << "\\nFibonacci (iterative, first 25):" << endl;
+    for (int i = 0; i < 25; i++) {
+        cout << "  F(" << i << ") = " << fib_iter(i) << endl;
+    }
+    return 0;
+}
+`},
+
+{name: 'Sorting & Search', code:
+`#include <iostream>
+using namespace std;
+
+void bubbleSort(int arr[], int n) {
+    for (int i = 0; i < n-1; i++)
+        for (int j = 0; j < n-i-1; j++)
+            if (arr[j] > arr[j+1]) {
+                int t = arr[j]; arr[j] = arr[j+1]; arr[j+1] = t;
+            }
+}
+
+int binarySearch(int arr[], int n, int target) {
+    int lo = 0, hi = n-1;
+    while (lo <= hi) {
+        int mid = (lo+hi)/2;
+        if (arr[mid] == target) return mid;
+        else if (arr[mid] < target) lo = mid+1;
+        else hi = mid-1;
+    }
+    return -1;
+}
+
+void printArr(int arr[], int n) {
+    for (int i = 0; i < n; i++) {
+        if (i) cout << ", ";
+        cout << arr[i];
+    }
+    cout << endl;
+}
+
+int main() {
+    int data[] = {64, 34, 25, 12, 22, 11, 90, 55, 3, 78};
+    int n = 10;
+
+    cout << "Original: ";
+    printArr(data, n);
+
+    bubbleSort(data, n);
+    cout << "Sorted:   ";
+    printArr(data, n);
+
+    int targets[] = {25, 11, 99, 78};
+    cout << "\\nBinary search:" << endl;
+    for (int i = 0; i < 4; i++) {
+        int idx = binarySearch(data, n, targets[i]);
+        if (idx >= 0)
+            cout << "  " << targets[i] << " -> found at index " << idx << endl;
+        else
+            cout << "  " << targets[i] << " -> not found" << endl;
+    }
+    return 0;
+}
+`},
+
+{name: 'OOP — Stack', code:
+`#include <iostream>
+using namespace std;
+
+class Stack {
+    int data[256];
+    int top;
+public:
+    Stack() : top(-1) {}
+
+    bool isEmpty() const { return top == -1; }
+    bool isFull()  const { return top == 255; }
+    int  size()    const { return top + 1; }
+
+    void push(int v) {
+        if (isFull()) { cout << "Stack overflow!" << endl; return; }
+        data[++top] = v;
+    }
+
+    int pop() {
+        if (isEmpty()) { cout << "Stack underflow!" << endl; return 0; }
+        return data[top--];
+    }
+
+    int peek() const {
+        if (isEmpty()) return 0;
+        return data[top];
+    }
+
+    void print() const {
+        cout << "Stack [";
+        for (int i = 0; i <= top; i++) {
+            if (i) cout << ", ";
+            cout << data[i];
+        }
+        cout << "] (top=" << (isEmpty()?"empty":to_string(peek())) << ")" << endl;
+    }
+};
+
+int main() {
+    Stack s;
+    cout << "Pushing 10, 20, 30, 40, 50..." << endl;
+    for (int v : {10,20,30,40,50}) s.push(v);
+
+    s.print();
+    cout << "Peek: " << s.peek() << endl;
+    cout << "Size: " << s.size() << endl;
+
+    cout << "\\nPopping:" << endl;
+    while (!s.isEmpty()) {
+        cout << "  pop -> " << s.pop() << endl;
+    }
+    cout << "Empty: " << (s.isEmpty() ? "yes" : "no") << endl;
+    return 0;
+}
+`},
+
+{name: 'Canvas Draw', code:
+`#include <iostream>
+using namespace std;
+
+// Canvas drawing protocol — the IDE renders these lines
+// ##CANVAS## w h     - set canvas size
+// ##CLEAR## #rrggbb  - fill background
+// ##RECT## x y w h #color
+// ##CIRCLE## cx cy r #color
+// ##LINE## x1 y1 x2 y2 #color
+// ##TEXT## x y words #color
+
+void canvas(int w,int h){ cout<<"##CANVAS## "<<w<<" "<<h<<endl; }
+void clear(const char* c){ cout<<"##CLEAR## "<<c<<endl; }
+void rect(int x,int y,int w,int h,const char* c){ cout<<"##RECT## "<<x<<" "<<y<<" "<<w<<" "<<h<<" "<<c<<endl; }
+void circle(int cx,int cy,int r,const char* c){ cout<<"##CIRCLE## "<<cx<<" "<<cy<<" "<<r<<" "<<c<<endl; }
+void line_(int x1,int y1,int x2,int y2,const char* c){ cout<<"##LINE## "<<x1<<" "<<y1<<" "<<x2<<" "<<y2<<" "<<c<<endl; }
+void text(int x,int y,const char* msg,const char* c){ cout<<"##TEXT## "<<x<<" "<<y<<" "<<msg<<" "<<c<<endl; }
+
+int main() {
+    canvas(440, 300);
+    clear("#0f172a");
+
+    // Bar chart
+    int vals[] = {70, 120, 90, 150, 60, 180, 100};
+    const char* colors[] = {"#6366f1","#22d3ee","#f59e0b","#10b981","#ec4899","#3b82f6","#a78bfa"};
+    int n = 7;
+    int bw = 40, gap = 10, startX = 30, baseY = 250;
+
+    for (int i = 0; i < n; i++) {
+        int x = startX + i*(bw+gap);
+        rect(x, baseY-vals[i], bw, vals[i], colors[i]);
+    }
+
+    // Axes
+    line_(25, 250, 380, 250, "#475569");
+    line_(25, 250, 25, 60, "#475569");
+
+    // Title & labels
+    text(120, 40, "Bar Chart Demo", "#e2e8f0");
+    text(30, 275, "Mon Tue Wed Thu Fri Sat Sun", "#94a3b8");
+
+    // Circles
+    circle(390, 90, 35, "#6366f1");
+    circle(390, 160, 25, "#22d3ee");
+    circle(390, 215, 18, "#f59e0b");
+
+    cout << "Canvas rendered!" << endl;
+    cout << "Switch to the Canvas tab to see the output." << endl;
+    return 0;
+}
+`},
+
+{name: 'Neural Network', code:
+`#include <iostream>
+#include <cmath>
+using namespace std;
+
+// 2-4-1 feedforward neural net for XOR
+// Uses sigmoid activation + backpropagation
+
+double sig(double x){ return 1.0/(1.0+exp(-x)); }
+double dsig(double s){ return s*(1.0-s); }
+
+double W1[2][4], B1[4], W2[4][1], B2[1];
+
+void initWeights() {
+    // Pseudo-random init using simple formula
+    double v = 0.5;
+    for(int i=0;i<2;i++) for(int j=0;j<4;j++){
+        W1[i][j] = v; v = sin(v*3.7+1.1)*0.8; if(v<0)v=-v; v=v*2-1;
+    }
+    for(int j=0;j<4;j++){ B1[j]=0.1*(j%2==0?1:-1); }
+    for(int j=0;j<4;j++){ W2[j][0]=0.6*(j%2==0?1:-1); }
+    B2[0]=0.1;
+}
+
+double forward(double x[2], double h[4]) {
+    for(int j=0;j<4;j++){
+        double z=B1[j];
+        for(int i=0;i<2;i++) z+=x[i]*W1[i][j];
+        h[j]=sig(z);
+    }
+    double z=B2[0];
+    for(int j=0;j<4;j++) z+=h[j]*W2[j][0];
+    return sig(z);
+}
+
+void train(double X[4][2], double Y[4], int epochs, double lr) {
+    for(int ep=0;ep<epochs;ep++){
+        double loss=0;
+        for(int s=0;s<4;s++){
+            double h[4], out=forward(X[s],h);
+            double err=Y[s]-out;
+            loss+=err*err;
+            // Output layer delta
+            double d_out=err*dsig(out);
+            // Hidden layer deltas & weight update
+            for(int j=0;j<4;j++){
+                double d_h=d_out*W2[j][0]*dsig(h[j]);
+                for(int i=0;i<2;i++) W1[i][j]+=lr*d_h*X[s][i];
+                B1[j]+=lr*d_h;
+                W2[j][0]+=lr*d_out*h[j];
+            }
+            B2[0]+=lr*d_out;
+        }
+        if((ep+1)%500==0)
+            cout<<"Epoch "<<(ep+1)<<": MSE="<<loss/4.0<<endl;
+    }
+}
+
+int main(){
+    double X[4][2]={{0,0},{0,1},{1,0},{1,1}};
+    double Y[4]={0,1,1,0};
+
+    initWeights();
+    cout<<"Training XOR network (2->4->1) for 2000 epochs..."<<endl;
+    train(X,Y,2000,0.5);
+
+    cout<<"\\nFinal predictions:"<<endl;
+    for(int s=0;s<4;s++){
+        double h[4], p=forward(X[s],h);
+        int pred=(p>0.5)?1:0;
+        cout<<"  ["<<(int)X[s][0]<<","<<(int)X[s][1]<<"] -> "<<p<<" (~"<<pred<<") ";
+        cout<<(pred==(int)Y[s]?"OK":"FAIL")<<endl;
+    }
+    return 0;
+}
+`}
+];
+
+// Init
+refreshSidebar();
+log('C++ IDE ready. Select an example or write your own code.', 'info');
+log('Press Ctrl+Enter or click Run to execute.', 'dim');
+log('JSCPP interpreter supports most standard C++ constructs.', 'dim');
+</script>
+</body>
+</html>

@@ -28655,10 +28655,8 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _shared_index__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @shared/index */ "./src/shared/index.ts");
 /* harmony import */ var react__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! react */ "./node_modules/.pnpm/react@19.0.0/node_modules/react/index.js");
 /* harmony import */ var react__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(react__WEBPACK_IMPORTED_MODULE_1__);
-/* harmony import */ var react_dom__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! react-dom */ "./node_modules/.pnpm/react-dom@19.0.0_react@19.0.0/node_modules/react-dom/index.js");
-/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/operators/map.js");
-/* harmony import */ var _window_manager__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../window-manager */ "./src/core/window-manager.ts");
-
+/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/operators/map.js");
+/* harmony import */ var _window_manager__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../window-manager */ "./src/core/window-manager.ts");
 
 
 
@@ -28682,7 +28680,7 @@ const Commands = ({ onCommandClick, vertical, align = 'start' }) => {
     react__WEBPACK_IMPORTED_MODULE_1___default().useEffect(() => {
         const defaultCommands = readPinnedCommands();
         const subscription = platform.host.commands$
-            .pipe((0,rxjs__WEBPACK_IMPORTED_MODULE_4__.map)(commands => defaultCommands.map(cmd => commands.find(command => command.name === cmd)).filter(x => x)))
+            .pipe((0,rxjs__WEBPACK_IMPORTED_MODULE_3__.map)(commands => defaultCommands.map(cmd => commands.find(command => command.name === cmd)).filter(x => x)))
             .subscribe(_commands => setCommands(_commands));
         const { remove: removeToggleCommand } = platform.host.registerCommand('core.toggle-navbar', () => {
             setExpended(state => !state);
@@ -28719,35 +28717,6 @@ const Commands = ({ onCommandClick, vertical, align = 'start' }) => {
 const openSettings = () => {
     platform.host.callCommand('ui.settings');
 };
-// Desktop ("Space") switcher: one pill per desktop (click to switch,
-// right-click for a "Delete desktop" menu). New desktops are added via the
-// desktop background's right-click context menu ("Add Desktop").
-const DesktopSwitcher = () => {
-    const [desktops, setDesktops] = react__WEBPACK_IMPORTED_MODULE_1___default().useState(_window_manager__WEBPACK_IMPORTED_MODULE_3__.desktopsSubject.getValue());
-    const [active, setActive] = react__WEBPACK_IMPORTED_MODULE_1___default().useState(_window_manager__WEBPACK_IMPORTED_MODULE_3__.activeDesktopSubject.getValue());
-    const [menu, setMenu] = react__WEBPACK_IMPORTED_MODULE_1___default().useState(null);
-    react__WEBPACK_IMPORTED_MODULE_1___default().useEffect(() => {
-        const sub1 = _window_manager__WEBPACK_IMPORTED_MODULE_3__.desktopsSubject.subscribe(setDesktops);
-        const sub2 = _window_manager__WEBPACK_IMPORTED_MODULE_3__.activeDesktopSubject.subscribe(setActive);
-        return () => {
-            sub1.unsubscribe();
-            sub2.unsubscribe();
-        };
-    }, []);
-    react__WEBPACK_IMPORTED_MODULE_1___default().useEffect(() => {
-        if (!menu)
-            return;
-        const close = () => setMenu(null);
-        document.addEventListener('click', close);
-        return () => document.removeEventListener('click', close);
-    }, [menu]);
-    if (desktops.length <= 1)
-        return null;
-    return (react__WEBPACK_IMPORTED_MODULE_1___default().createElement("div", { className: "desktop-switcher" },
-        desktops.map((d, idx) => (react__WEBPACK_IMPORTED_MODULE_1___default().createElement("div", { key: d.id, className: `desktop-pill${d.id === active ? ' active' : ''}`, title: d.name, onClick: () => (0,_window_manager__WEBPACK_IMPORTED_MODULE_3__.switchDesktop)(d.id), onContextMenu: ev => { ev.preventDefault(); setMenu({ id: d.id, x: ev.clientX, y: ev.clientY }); } }, idx + 1))),
-        menu ? react_dom__WEBPACK_IMPORTED_MODULE_2__.createPortal(react__WEBPACK_IMPORTED_MODULE_1___default().createElement("div", { className: "desktop-context-menu", style: { top: menu.y, left: menu.x } },
-            react__WEBPACK_IMPORTED_MODULE_1___default().createElement("button", { disabled: desktops.length <= 1, onClick: () => { (0,_window_manager__WEBPACK_IMPORTED_MODULE_3__.removeDesktop)(menu.id); setMenu(null); } }, "Delete desktop")), document.body) : null));
-};
 const TaskbarWindowIcon = ({ win }) => (react__WEBPACK_IMPORTED_MODULE_1___default().createElement("div", { className: `taskbar-icon-button taskbar-window-icon${win.active ? ' active' : ''}${win.minimized ? ' minimized' : ''}`, "aria-label": `window-${win.pid}`, title: win.title, onClick: win.toggle },
     react__WEBPACK_IMPORTED_MODULE_1___default().createElement("span", { className: "material-symbols-outlined" }, win.icon || 'window'),
     react__WEBPACK_IMPORTED_MODULE_1___default().createElement("div", { className: "taskbar-preview" },
@@ -28757,23 +28726,16 @@ const TaskbarWindowIcon = ({ win }) => (react__WEBPACK_IMPORTED_MODULE_1___defau
 // title), and a settings icon that's the same across all taskbar placements
 // (header/footer/left-nav/right-nav/floating toolbar).
 const Taskbar = ({ onCommandClick, vertical, align = 'start' }) => {
-    const [windows, setWindows] = react__WEBPACK_IMPORTED_MODULE_1___default().useState(_window_manager__WEBPACK_IMPORTED_MODULE_3__.windowsSubject.getValue());
-    const [activeDesktop, setActiveDesktop] = react__WEBPACK_IMPORTED_MODULE_1___default().useState(_window_manager__WEBPACK_IMPORTED_MODULE_3__.activeDesktopSubject.getValue());
+    const [windows, setWindows] = react__WEBPACK_IMPORTED_MODULE_1___default().useState(_window_manager__WEBPACK_IMPORTED_MODULE_2__.windowsSubject.getValue());
     react__WEBPACK_IMPORTED_MODULE_1___default().useEffect(() => {
-        const subscription = _window_manager__WEBPACK_IMPORTED_MODULE_3__.windowsSubject.subscribe(setWindows);
-        const desktopSub = _window_manager__WEBPACK_IMPORTED_MODULE_3__.activeDesktopSubject.subscribe(setActiveDesktop);
-        return () => {
-            subscription.unsubscribe();
-            desktopSub.unsubscribe();
-        };
+        const subscription = _window_manager__WEBPACK_IMPORTED_MODULE_2__.windowsSubject.subscribe(setWindows);
+        return () => subscription.unsubscribe();
     }, []);
-    const visibleWindows = windows.filter(win => win.desktopId === activeDesktop);
     return (react__WEBPACK_IMPORTED_MODULE_1___default().createElement("div", { className: "taskbar", role: "toolbar", "aria-label": "Taskbar" },
         react__WEBPACK_IMPORTED_MODULE_1___default().createElement(Commands, { onCommandClick: onCommandClick, vertical: vertical, align: align }),
-        visibleWindows.length ? react__WEBPACK_IMPORTED_MODULE_1___default().createElement("div", { className: "taskbar-divider" }) : null,
-        visibleWindows.map(win => react__WEBPACK_IMPORTED_MODULE_1___default().createElement(TaskbarWindowIcon, { key: win.pid, win: win })),
+        windows.length ? react__WEBPACK_IMPORTED_MODULE_1___default().createElement("div", { className: "taskbar-divider" }) : null,
+        windows.map(win => react__WEBPACK_IMPORTED_MODULE_1___default().createElement(TaskbarWindowIcon, { key: win.pid, win: win })),
         react__WEBPACK_IMPORTED_MODULE_1___default().createElement("div", { className: "taskbar-spacer" }),
-        react__WEBPACK_IMPORTED_MODULE_1___default().createElement(DesktopSwitcher, null),
         react__WEBPACK_IMPORTED_MODULE_1___default().createElement("div", { className: "taskbar-icon-button", "aria-label": "open-app-drawer", title: "App Drawer", onClick: () => platform.host.callCommand('ui.app-drawer') },
             react__WEBPACK_IMPORTED_MODULE_1___default().createElement("span", { className: "material-symbols-outlined" }, "grid_view")),
         react__WEBPACK_IMPORTED_MODULE_1___default().createElement("div", { className: "taskbar-icon-button", "aria-label": "open-pkg-manager", title: "App Manager", onClick: () => {
@@ -29200,6 +29162,10 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   layoutCss: () => (/* binding */ layoutCss)
 /* harmony export */ });
 const isCssGradient = (v) => /^\s*(linear|radial|conic)-gradient\s*\(/i.test(v);
+// 'none' is a literal passthrough (not a url()) — used when a canvas
+// wallpaper is active, since the live rendering comes from a background
+// iframe instead and the grid's own background must stay transparent so
+// that iframe (sitting behind it) shows through.
 const layoutCss = (grid, wallpaperUrl) => `
     .layout-default {
         height: 100%;
@@ -29208,7 +29174,7 @@ const layoutCss = (grid, wallpaperUrl) => `
         grid-template-rows: ${grid.rows};
         grid-auto-flow: row;
         grid-template-areas: ${grid.areas};
-        background-image: ${isCssGradient(wallpaperUrl) ? wallpaperUrl : `url(${wallpaperUrl})`};
+        background-image: ${isCssGradient(wallpaperUrl) || wallpaperUrl === 'none' ? wallpaperUrl : `url(${wallpaperUrl})`};
         background-repeat: no-repeat;
         background-size: cover;
     }
@@ -29322,7 +29288,7 @@ const TASKBAR_CSS = `
         background: var(--wm-surface-hover, rgba(127, 127, 127, 0.2));
     }
 
-    .taskbar-icon-button:focus-visible, .desktop-pill:focus-visible {
+    .taskbar-icon-button:focus-visible {
         outline: 2px solid var(--wm-accent, #0a84ff);
         outline-offset: 2px;
     }
@@ -29378,71 +29344,6 @@ const TASKBAR_CSS = `
         white-space: nowrap;
     }
 
-    .desktop-switcher {
-        display: flex;
-        align-items: center;
-        gap: 0.3rem;
-    }
-
-    .left-nav .desktop-switcher, .right-nav .desktop-switcher {
-        flex-direction: column;
-    }
-
-    .desktop-pill {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        min-width: 1.6rem;
-        height: 1.6rem;
-        padding: 0 0.3rem;
-        border-radius: 6px;
-        font-size: 0.8rem;
-        cursor: pointer;
-        color: var(--wm-header-color, #1d1d1f);
-        transition: background 0.15s ease;
-    }
-
-    .desktop-pill:hover {
-        background: var(--wm-surface-hover, rgba(127, 127, 127, 0.2));
-    }
-
-    .desktop-pill.active {
-        background: var(--wm-accent, #0a84ff);
-        color: #fff;
-    }
-
-    .desktop-context-menu {
-        position: fixed;
-        z-index: 100;
-        background: var(--wm-window-bg, #fff);
-        backdrop-filter: blur(var(--wm-blur, 10px));
-        border-radius: var(--wm-radius, 8px);
-        box-shadow: var(--wm-shadow, 0 8px 32px rgba(31, 38, 135, 0.37));
-        color: var(--wm-header-color, #1d1d1f);
-        overflow: hidden;
-    }
-
-    .desktop-context-menu button {
-        display: block;
-        width: 100%;
-        padding: 0.5rem 1rem;
-        border: none;
-        background: transparent;
-        color: inherit;
-        font-size: 0.85rem;
-        text-align: left;
-        cursor: pointer;
-        transition: background 0.15s ease;
-    }
-
-    .desktop-context-menu button:hover {
-        background: var(--wm-surface-hover, rgba(127, 127, 127, 0.2));
-    }
-
-    .desktop-context-menu button:disabled {
-        opacity: 0.4;
-        cursor: default;
-    }
 `;
 
 
@@ -29715,10 +29616,6 @@ const WINDOW_CSS = `
     iframe.dragging {
         pointer-events: none;
     }
-
-    .window.desktop-hidden {
-        display: none !important;
-    }
 `;
 
 
@@ -29736,11 +29633,6 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   DESKTOP_CONTAINER_CLASS: () => (/* binding */ DESKTOP_CONTAINER_CLASS),
 /* harmony export */   WINDOWS_CONTAINER_CLASS: () => (/* binding */ WINDOWS_CONTAINER_CLASS),
 /* harmony export */   WindowManager: () => (/* binding */ WindowManager),
-/* harmony export */   activeDesktopSubject: () => (/* binding */ activeDesktopSubject),
-/* harmony export */   addDesktop: () => (/* binding */ addDesktop),
-/* harmony export */   desktopsSubject: () => (/* binding */ desktopsSubject),
-/* harmony export */   removeDesktop: () => (/* binding */ removeDesktop),
-/* harmony export */   switchDesktop: () => (/* binding */ switchDesktop),
 /* harmony export */   windowsSubject: () => (/* binding */ windowsSubject)
 /* harmony export */ });
 /* harmony import */ var _shared_draggable__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @shared/draggable */ "./src/shared/draggable.ts");
@@ -29785,57 +29677,6 @@ windowsSubject.subscribe(wins => {
         }
     }
 });
-const DEFAULT_DESKTOPS_CONFIG = { desktops: [{ id: "1", name: "Desktop 1" }], active: "1" };
-const readDesktopsConfig = () => {
-    try {
-        const raw = (0,_shared_fs_utils__WEBPACK_IMPORTED_MODULE_2__.readJsonFile)(platform.host.getFS(), _shared_constants__WEBPACK_IMPORTED_MODULE_3__.DESKTOPS_CONFIG_PATH);
-        if (raw && Array.isArray(raw.desktops) && raw.desktops.length && raw.active)
-            return raw;
-    }
-    catch (_) { /* platform not ready at module-eval time in remote.bundle */ }
-    return DEFAULT_DESKTOPS_CONFIG;
-};
-const writeDesktopsConfig = (desktops, active) => {
-    try {
-        (0,_shared_fs_utils__WEBPACK_IMPORTED_MODULE_2__.writeJsonFile)(platform.host.getFS(), _shared_constants__WEBPACK_IMPORTED_MODULE_3__.DESKTOPS_CONFIG_PATH, { desktops, active }, true);
-    }
-    catch (err) { /* best effort */ }
-};
-const initialDesktopsConfig = readDesktopsConfig();
-const desktopsSubject = new rxjs__WEBPACK_IMPORTED_MODULE_7__.BehaviorSubject(initialDesktopsConfig.desktops);
-const activeDesktopSubject = new rxjs__WEBPACK_IMPORTED_MODULE_7__.BehaviorSubject(initialDesktopsConfig.active);
-const switchDesktop = (id) => {
-    if (id === activeDesktopSubject.getValue())
-        return;
-    if (!desktopsSubject.getValue().some(d => d.id === id))
-        return;
-    activeDesktopSubject.next(id);
-    writeDesktopsConfig(desktopsSubject.getValue(), id);
-};
-const addDesktop = () => {
-    const desktops = desktopsSubject.getValue();
-    const id = `${Date.now()}`;
-    const updated = [...desktops, { id, name: `Desktop ${desktops.length + 1}` }];
-    desktopsSubject.next(updated);
-    activeDesktopSubject.next(id);
-    writeDesktopsConfig(updated, id);
-};
-const removeDesktop = (id) => {
-    const desktops = desktopsSubject.getValue();
-    if (desktops.length <= 1)
-        return;
-    const idx = desktops.findIndex(d => d.id === id);
-    if (idx === -1)
-        return;
-    const updated = desktops.filter(d => d.id !== id);
-    const wasActive = activeDesktopSubject.getValue() === id;
-    const newActive = wasActive ? updated[Math.max(0, idx - 1)].id : activeDesktopSubject.getValue();
-    // Move any windows on the removed desktop to the desktop that becomes active.
-    windowsSubject.next(windowsSubject.getValue().map(w => w.desktopId === id ? Object.assign(Object.assign({}, w), { desktopId: newActive }) : w));
-    desktopsSubject.next(updated);
-    activeDesktopSubject.next(newActive);
-    writeDesktopsConfig(updated, newActive);
-};
 const processRegistry = new Map();
 const writeProcMeta = (pid, meta) => {
     try {
@@ -29876,11 +29717,6 @@ const registerProcessCommands = () => {
     if (processCommandsRegistered || !(platform === null || platform === void 0 ? void 0 : platform.host))
         return;
     processCommandsRegistered = true;
-    platform.register('add-desktop', addDesktop);
-    platform.host.registerCommand('add-desktop', addDesktop, { callable: true });
-    platform.host.registerCommand('remove-active-desktop', () => {
-        removeDesktop(activeDesktopSubject.getValue());
-    }, { callable: true });
     // `process.kill(pid)` - sends SIGTERM: runs onDestroy callbacks then closes.
     platform.host.registerCommand("process.kill", (pid) => {
         var _a;
@@ -29973,19 +29809,6 @@ class WindowManager {
         this.contentRef = contentRef;
         this.windows = {};
         registerProcessCommands();
-        activeDesktopSubject.subscribe(() => this.updateVisibility());
-        windowsSubject.subscribe(() => this.updateVisibility());
-    }
-    // Hides windows that don't belong to the active desktop.
-    updateVisibility() {
-        const active = activeDesktopSubject.getValue();
-        const infos = windowsSubject.getValue();
-        Object.values(this.windows).forEach(wins => wins.forEach(w => {
-            var _a;
-            const info = infos.find(i => i.pid === w.pid);
-            const desktopId = (_a = info === null || info === void 0 ? void 0 : info.desktopId) !== null && _a !== void 0 ? _a : active;
-            w.container.classList.toggle("desktop-hidden", desktopId !== active);
-        }));
     }
     createWindow(command_name, ...args) {
         var _a, _b, _c, _d, _e, _f, _g;
@@ -30117,7 +29940,6 @@ class WindowManager {
                 icon,
                 minimized: false,
                 active: true,
-                desktopId: activeDesktopSubject.getValue(),
                 toggle: () => this.toggleMinimize(windowRef),
             },
         ]);
@@ -30871,9 +30693,20 @@ class Namespace {
         // Default ACL: read+write own app dir and user data dir.
         // System paths (/tmp, /var/log) are readable + writable.
         // Everything else is read-only by default.
+        //
+        // /home/user1/.local/share/trainboard is a deliberate exception:
+        // it's TrainBoard's shared cross-app metrics log (any app writes
+        // {run,step,metric,value} rows to log.jsonl there so TrainBoard
+        // can chart them), so every sandboxed app needs write access to
+        // it specifically, not just its own id's data dir. Without this,
+        // every app following that convention (nn-ide, model-builder,
+        // snake-cnn3d, snake-qlearning, snake-lstm, and now robot-sim)
+        // fails silently — each wraps the write in its own try/catch,
+        // so the ACL denial never surfaced as a visible error anywhere.
         this.acl = [
             { path: this.appDir, read: true, write: true },
             { path: `/home/user1/.local/share/${opts.id}`, read: true, write: true },
+            { path: '/home/user1/.local/share/trainboard', read: true, write: true },
             { path: '/tmp', read: true, write: true },
             { path: '/var/log', read: true, write: true },
             { path: '/', read: true, write: false },
@@ -31184,7 +31017,6 @@ class ProxyFS {
 "use strict";
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   DESKTOPS_CONFIG_PATH: () => (/* binding */ DESKTOPS_CONFIG_PATH),
 /* harmony export */   DESKTOP_PATH: () => (/* binding */ DESKTOP_PATH),
 /* harmony export */   FS_BACKEND_QUERY_PARAM: () => (/* binding */ FS_BACKEND_QUERY_PARAM),
 /* harmony export */   FS_BACKEND_STORAGE_KEY: () => (/* binding */ FS_BACKEND_STORAGE_KEY),
@@ -31209,8 +31041,6 @@ const WM_CURRENT_PATH = '/etc/wm/current.json';
 const WM_THEMES_DIR = '/etc/wm/themes';
 const WM_DEFAULT_THEME_PATH = `${WM_THEMES_DIR}/dark.json`;
 const WM_DIR = '/etc/wm';
-// Desktops
-const DESKTOPS_CONFIG_PATH = '/etc/wm/desktops.json';
 // Process management
 const PROC_DIR = '/proc';
 // Window manager behavior script
@@ -157841,7 +157671,131 @@ const resolveWallpaperUrl = (wallpaper) => {
         return wallpaper;
     }
 };
+// A canvas wallpaper is a VFS .js file exporting `render(canvas)`, run
+// live behind the desktop (fixed, z-index:-1) instead of a static
+// background-image. It executes in a sandboxed iframe (allow-scripts,
+// no allow-same-origin) — same trust boundary as every other app iframe
+// in this codebase — via a dynamically-created module blob so the file
+// can use real `export function render(canvas) {...}` syntax.
+const CANVAS_WALLPAPER_PREFIX = 'canvas:';
+let canvasWallpaperIframe = null;
+let canvasWallpaperMouseHandler = null;
+let canvasWallpaperWindowsSub = null;
+const unmountCanvasWallpaper = () => {
+    if (canvasWallpaperMouseHandler) {
+        platform.window.document.removeEventListener('mousemove', canvasWallpaperMouseHandler);
+        canvasWallpaperMouseHandler = null;
+    }
+    if (canvasWallpaperWindowsSub) {
+        canvasWallpaperWindowsSub.unsubscribe();
+        canvasWallpaperWindowsSub = null;
+    }
+    if (canvasWallpaperIframe) {
+        canvasWallpaperIframe.remove();
+        canvasWallpaperIframe = null;
+    }
+};
+const buildCanvasWallpaperSrcdoc = (code) => {
+    // JSON.stringify handles quote/newline/backslash escaping correctly for
+    // embedding as a JS string literal; it does NOT escape '/', so any
+    // </script> inside the user's code would otherwise prematurely close
+    // this wrapper's own <script> tag — neutralize just that substring in
+    // the serialized payload (mirrors the same trick used for the VFS dock
+    // and sandboxed app iframes elsewhere in this file).
+    const codeJson = JSON.stringify(code).replace(/<\/script/gi, '<\\/script');
+    return `<!doctype html><html><head><meta charset="utf-8"><style>
+*{margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:#000}
+canvas{display:block;width:100%;height:100%}
+</style></head><body>
+<canvas id="wallpaper-canvas"></canvas>
+<script>window.__WALLPAPER_SRC__ = ${codeJson};<\/script>
+<script type="module">
+(async function(){
+  var canvas = document.getElementById('wallpaper-canvas');
+  function fit(){ canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+  fit();
+  window.addEventListener('resize', fit);
+
+  // The wallpaper iframe itself stays pointer-events:none (removing that
+  // would swallow desktop clicks/drag-select for the whole empty-desktop
+  // area, since iframe-internal mouse events never bubble to the parent
+  // document). Instead the outer layout forwards real cursor position
+  // over the desktop via postMessage, so a script can still react to the
+  // mouse — read it from the second argument passed to render().
+  var mouse = { x: -1, y: -1, active: false };
+  // Live count of open windows — lets a wallpaper react to the desktop
+  // being empty (e.g. a character that peeks out from the side only
+  // when nothing is open). Updated by the same postMessage channel.
+  var windows = { count: 0 };
+  window.addEventListener('message', function(ev){
+    if (!ev.data) return;
+    if (ev.data.t === 'mouse') { mouse.x = ev.data.x; mouse.y = ev.data.y; mouse.active = true; }
+    else if (ev.data.t === 'windows') { windows.count = ev.data.count; }
+  });
+
+  try {
+    var blob = new Blob([window.__WALLPAPER_SRC__], { type: 'text/javascript' });
+    var url = URL.createObjectURL(blob);
+    var mod = await import(url);
+    URL.revokeObjectURL(url);
+    if (typeof mod.render !== 'function') { console.error('Canvas wallpaper must export a render(canvas) function'); return; }
+    mod.render(canvas, { mouse: mouse, windows: windows });
+  } catch (e) { console.error('Canvas wallpaper error:', e); }
+})();
+<\/script>
+</body></html>`;
+};
+const mountCanvasWallpaper = (vfsPath) => {
+    unmountCanvasWallpaper();
+    let code;
+    try {
+        code = platform.host.getFS().readFileSync(vfsPath, 'utf-8');
+    }
+    catch (err) {
+        console.error('Failed to load canvas wallpaper', vfsPath, err);
+        return;
+    }
+    const doc = platform.window.document;
+    const iframe = doc.createElement('iframe');
+    iframe.id = 'canvas-wallpaper-iframe';
+    iframe.setAttribute('sandbox', 'allow-scripts');
+    iframe.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;border:none;z-index:-1;pointer-events:none;';
+    iframe.srcdoc = buildCanvasWallpaperSrcdoc(code);
+    doc.body.insertBefore(iframe, doc.body.firstChild);
+    canvasWallpaperIframe = iframe;
+    // Forwards real mouse position over the desktop into the sandboxed
+    // wallpaper (see the message listener built into the srcdoc above) —
+    // this is what lets a wallpaper be "interactive" without the iframe
+    // itself ever intercepting real pointer events.
+    canvasWallpaperMouseHandler = (e) => {
+        var _a;
+        (_a = iframe.contentWindow) === null || _a === void 0 ? void 0 : _a.postMessage({ t: 'mouse', x: e.clientX, y: e.clientY }, '*');
+    };
+    doc.addEventListener('mousemove', canvasWallpaperMouseHandler);
+    // Forwards live open-window count so a wallpaper can react to the
+    // desktop being empty (see api.windows.count in buildCanvasWallpaperSrcdoc).
+    canvasWallpaperWindowsSub = _window_manager__WEBPACK_IMPORTED_MODULE_7__.windowsSubject.subscribe(wins => {
+        var _a;
+        (_a = iframe.contentWindow) === null || _a === void 0 ? void 0 : _a.postMessage({ t: 'windows', count: wins.length }, '*');
+    });
+};
 const applyCss = ({ wallpaper, grid }) => {
+    if (wallpaper.startsWith(CANVAS_WALLPAPER_PREFIX)) {
+        mountCanvasWallpaper(wallpaper.slice(CANVAS_WALLPAPER_PREFIX.length));
+        styles.replace([
+            _styles_base__WEBPACK_IMPORTED_MODULE_12__.RESET_CSS,
+            _styles_base__WEBPACK_IMPORTED_MODULE_12__.MATERIAL_SYMBOLS_CSS,
+            (0,_styles_layout__WEBPACK_IMPORTED_MODULE_13__.layoutCss)(grid, 'none'),
+            _styles_widgets__WEBPACK_IMPORTED_MODULE_16__.WIDGETS_CSS,
+            _styles_window__WEBPACK_IMPORTED_MODULE_14__.WINDOW_CSS,
+            _styles_taskbar__WEBPACK_IMPORTED_MODULE_15__.TASKBAR_CSS,
+            _styles_contextmenu__WEBPACK_IMPORTED_MODULE_17__.CONTEXTMENU_CSS,
+            _styles_desktop_env__WEBPACK_IMPORTED_MODULE_18__.DESKTOP_ENV_CSS,
+        ].join('\n'));
+        return;
+    }
+    unmountCanvasWallpaper();
     const wallpaperUrl = resolveWallpaperUrl(wallpaper);
     styles.replace([
         _styles_base__WEBPACK_IMPORTED_MODULE_12__.RESET_CSS,
@@ -158428,11 +158382,19 @@ const render = (container) => {
     platform.host.registerCommand('set-dock-setting', setDockSetting);
     // Open a VFS dock HTML as a fixed-position frameless iframe in the layout.
     // Sandboxed (no same-origin), IPC SDK inlined so it can communicate.
+    // Auto-hide behaviour: dock starts hidden below the viewport (translateY 100%,
+    // pointer-events:none) so it never blocks app content. Moving the mouse within
+    // TRIGGER_PX of the bottom edge reveals it; moving away hides it after a delay.
     const openVfsDock = (id) => {
         const doc = platform.window.document;
+        // Abort previous dock's listeners before replacing it.
         const existing = doc.getElementById('vfs-dock-iframe');
-        if (existing)
+        if (existing) {
+            const cleanup = existing.__dockCleanup;
+            if (typeof cleanup === 'function')
+                cleanup();
             existing.remove();
+        }
         doc.body.classList.remove('vfs-dock-active');
         doc.body.classList.remove('vfs-dock-occupy');
         doc.documentElement.style.removeProperty('--vfs-dock-height');
@@ -158460,21 +158422,95 @@ const render = (container) => {
             iframe.id = 'vfs-dock-iframe';
             iframe.setAttribute('sandbox', 'allow-scripts allow-forms allow-modals');
             iframe.srcdoc = srcdoc;
-            iframe.style.cssText = `position:fixed;bottom:0;left:0;width:100%;height:${h}px;border:none;background:transparent;z-index:9000;pointer-events:auto;`;
+            // Hidden by default: translated off screen + no pointer events.
+            // Transition eases the slide-in/out animation.
+            iframe.style.cssText = `position:fixed;bottom:0;left:0;width:100%;height:${h}px;border:none;background:transparent;z-index:9000;pointer-events:none;transform:translateY(100%);transition:transform 0.18s ease;`;
             doc.body.appendChild(iframe);
             doc.body.classList.add('vfs-dock-active');
-            // Reserve bottom space so windows don't go behind the dock.
-            // Reads occupyBottom from /etc/managers.json; defaults to false.
             doc.documentElement.style.setProperty('--vfs-dock-height', `${h}px`);
-            let occupyBottom = false;
-            try {
-                const cfg = JSON.parse(fs.readFileSync('/etc/managers.json', 'utf-8'));
-                if (cfg.occupyBottom === true)
-                    occupyBottom = true;
-            }
-            catch (_) { }
-            if (occupyBottom)
-                doc.body.classList.add('vfs-dock-occupy');
+            // ── Auto-hide logic ──────────────────────────────────────────────
+            // Pixels from the bottom of the viewport that trigger reveal.
+            const TRIGGER_PX = 14;
+            let shown = false;
+            let hideTimer = null;
+            // When no windows are open the dock stays visible; auto-hide only
+            // activates while at least one window exists.
+            let windowsOpen = _window_manager__WEBPACK_IMPORTED_MODULE_7__.windowsSubject.getValue().length > 0;
+            const showDock = () => {
+                if (shown)
+                    return;
+                shown = true;
+                if (hideTimer) {
+                    clearTimeout(hideTimer);
+                    hideTimer = null;
+                }
+                iframe.style.transform = 'translateY(0)';
+                iframe.style.pointerEvents = 'auto';
+            };
+            const hideDock = (ms = 450) => {
+                if (hideTimer)
+                    clearTimeout(hideTimer);
+                hideTimer = setTimeout(() => {
+                    shown = false;
+                    iframe.style.transform = 'translateY(100%)';
+                    iframe.style.pointerEvents = 'none';
+                }, ms);
+            };
+            // Mouse moves over the main document (fires when NOT over the iframe).
+            const onDocMouseMove = (e) => {
+                if (!windowsOpen)
+                    return; // stays pinned open
+                const fromBottom = doc.documentElement.clientHeight - e.clientY;
+                if (fromBottom <= TRIGGER_PX) {
+                    showDock();
+                }
+                else if (shown) {
+                    hideDock();
+                }
+            };
+            // Mouse entered the iframe element → cancel any pending hide.
+            const onIframeEnter = () => {
+                shown = true;
+                if (hideTimer) {
+                    clearTimeout(hideTimer);
+                    hideTimer = null;
+                }
+            };
+            // Mouse left the iframe element → schedule hide only when apps are open.
+            const onIframeLeave = () => { if (windowsOpen)
+                hideDock(450); };
+            doc.addEventListener('mousemove', onDocMouseMove);
+            iframe.addEventListener('mouseenter', onIframeEnter);
+            iframe.addEventListener('mouseleave', onIframeLeave);
+            // Subscribe to window count changes to switch between pinned and auto-hide.
+            const winsSub = _window_manager__WEBPACK_IMPORTED_MODULE_7__.windowsSubject.subscribe(wins => {
+                const hadWindows = windowsOpen;
+                windowsOpen = wins.length > 0;
+                if (!windowsOpen && hadWindows) {
+                    // Last window closed → pin dock visible immediately.
+                    if (hideTimer) {
+                        clearTimeout(hideTimer);
+                        hideTimer = null;
+                    }
+                    showDock();
+                }
+                else if (windowsOpen && !hadWindows) {
+                    // First window opened → start auto-hide; hide after short delay.
+                    hideDock(800);
+                }
+            });
+            // Show dock immediately when no windows are open on mount.
+            if (!windowsOpen)
+                showDock();
+            iframe.__dockCleanup = () => {
+                doc.removeEventListener('mousemove', onDocMouseMove);
+                iframe.removeEventListener('mouseenter', onIframeEnter);
+                iframe.removeEventListener('mouseleave', onIframeLeave);
+                if (hideTimer)
+                    clearTimeout(hideTimer);
+                winsSub.unsubscribe();
+            };
+            // ────────────────────────────────────────────────────────────────
         }
         catch (err) {
             console.error('[dock-manager] Failed to open dock:', err);
@@ -158615,12 +158651,7 @@ const render = (container) => {
         if (event.target.closest('.window, iframe'))
             return;
         event.preventDefault();
-        const items = loadContextMenuItems();
-        const multiDesktop = _window_manager__WEBPACK_IMPORTED_MODULE_7__.desktopsSubject.getValue().length > 1;
-        showContextMenuHandler(event.clientX, event.clientY, [
-            ...items,
-            ...(multiDesktop ? [{ type: 'action', id: '8', title: 'Remove Desktop', cmd: `platform.host.callCommand('remove-active-desktop')` }] : []),
-        ]);
+        showContextMenuHandler(event.clientX, event.clientY, loadContextMenuItems());
     };
     root.render(react__WEBPACK_IMPORTED_MODULE_4___default().createElement(LayoutShell, { contentRef: contentRef, contextMenuRef: contextMenuRef, onCommandClick: onCommandClick, onContextMenu: onContextMenu, openFile: openFile, showFileActionsHandler: showFileActionsHandler, contextMenuComponentRef: contextMenuComponentRef }));
 };

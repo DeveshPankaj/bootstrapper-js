@@ -212,6 +212,51 @@
       "main": "main.js"
     },
     {
+      "id": "robot-sim",
+      "name": "Robot Sim",
+      "description": "Physics-based AI robot training playground. Simulate robots (ball, car, walker, drone) in dynamic environments (stairs, cliff, obstacles) with 8-direction distance sensors, contact detection, and DQN reinforcement learning via TensorFlow.js.",
+      "version": "1.0.0",
+      "icon": "smart_toy",
+      "category": "AI",
+      "author": "bootstrapper-js",
+      "commandName": "ui.robot-sim",
+      "files": [
+        { "dest": "main.js",   "src": "/public/mount/opt/apps/robot-sim/main.js" },
+        { "dest": "main.html", "src": "/public/mount/opt/apps/robot-sim/main.html" }
+      ],
+      "main": "main.js"
+    },
+    {
+      "id": "cpp-ide",
+      "name": "C++ IDE",
+      "description": "In-browser C++ IDE with syntax highlighting, JSCPP interpreter, canvas drawing, and VFS project management. Includes examples: Hello World, Fibonacci, Sorting, OOP, Canvas Draw, Neural Network.",
+      "version": "1.0.0",
+      "icon": "terminal",
+      "category": "Dev",
+      "author": "bootstrapper-js",
+      "commandName": "ui.cpp-ide",
+      "files": [
+        { "dest": "main.js",   "src": "/public/mount/opt/apps/cpp-ide/main.js" },
+        { "dest": "main.html", "src": "/public/mount/opt/apps/cpp-ide/main.html" }
+      ],
+      "main": "main.js"
+    },
+    {
+      "id": "ts-ide",
+      "name": "TypeScript / WebGL IDE",
+      "description": "In-browser IDE for TypeScript, JavaScript, WebGL, and GLSL shaders. TypeScript compilation via compiler API, live GLSL shader preview, VFS projects. Examples: Canvas, WebGL Triangle, GLSL Plasma, TensorFlow.js XOR, SQLite CRUD, Webapp.",
+      "version": "1.0.0",
+      "icon": "code",
+      "category": "Dev",
+      "author": "bootstrapper-js",
+      "commandName": "ui.ts-ide",
+      "files": [
+        { "dest": "main.js",   "src": "/public/mount/opt/apps/ts-ide/main.js" },
+        { "dest": "main.html", "src": "/public/mount/opt/apps/ts-ide/main.html" }
+      ],
+      "main": "main.js"
+    },
+    {
       "id": "graph-editor",
       "name": "Graph Editor",
       "description": "Visual node-graph editor with drag-to-connect edges, multiple shapes, force-directed layout, and Mermaid/PNG export.",
