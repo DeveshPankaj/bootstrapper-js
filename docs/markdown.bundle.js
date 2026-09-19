@@ -2,10 +2,10 @@
 /******/ 	"use strict";
 /******/ 	var __webpack_modules__ = ({
 
-/***/ "../../../node_modules/.pnpm/react-dom@19.0.0_react@19.0.0/node_modules/react-dom/cjs/react-dom-client.development.js":
-/*!****************************************************************************************************************************!*\
-  !*** ../../../node_modules/.pnpm/react-dom@19.0.0_react@19.0.0/node_modules/react-dom/cjs/react-dom-client.development.js ***!
-  \****************************************************************************************************************************/
+/***/ "./node_modules/.pnpm/react-dom@19.0.0_react@19.0.0/node_modules/react-dom/cjs/react-dom-client.development.js":
+/*!*********************************************************************************************************************!*\
+  !*** ./node_modules/.pnpm/react-dom@19.0.0_react@19.0.0/node_modules/react-dom/cjs/react-dom-client.development.js ***!
+  \*********************************************************************************************************************/
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 /**
@@ -20902,9 +20902,9 @@
       "function" ===
         typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart &&
       __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart(Error());
-    var Scheduler = __webpack_require__(/*! scheduler */ "../../../node_modules/.pnpm/scheduler@0.25.0/node_modules/scheduler/index.js"),
-      React = __webpack_require__(/*! react */ "../../../node_modules/.pnpm/react@19.0.0/node_modules/react/index.js"),
-      ReactDOM = __webpack_require__(/*! react-dom */ "../../../node_modules/.pnpm/react-dom@19.0.0_react@19.0.0/node_modules/react-dom/index.js"),
+    var Scheduler = __webpack_require__(/*! scheduler */ "./node_modules/.pnpm/scheduler@0.25.0/node_modules/scheduler/index.js"),
+      React = __webpack_require__(/*! react */ "./node_modules/.pnpm/react@19.0.0/node_modules/react/index.js"),
+      ReactDOM = __webpack_require__(/*! react-dom */ "./node_modules/.pnpm/react-dom@19.0.0_react@19.0.0/node_modules/react-dom/index.js"),
       REACT_LEGACY_ELEMENT_TYPE = Symbol.for("react.element"),
       REACT_ELEMENT_TYPE = Symbol.for("react.transitional.element"),
       REACT_PORTAL_TYPE = Symbol.for("react.portal"),
@@ -24728,10 +24728,10 @@
 
 /***/ }),
 
-/***/ "../../../node_modules/.pnpm/react-dom@19.0.0_react@19.0.0/node_modules/react-dom/cjs/react-dom.development.js":
-/*!*********************************************************************************************************************!*\
-  !*** ../../../node_modules/.pnpm/react-dom@19.0.0_react@19.0.0/node_modules/react-dom/cjs/react-dom.development.js ***!
-  \*********************************************************************************************************************/
+/***/ "./node_modules/.pnpm/react-dom@19.0.0_react@19.0.0/node_modules/react-dom/cjs/react-dom.development.js":
+/*!**************************************************************************************************************!*\
+  !*** ./node_modules/.pnpm/react-dom@19.0.0_react@19.0.0/node_modules/react-dom/cjs/react-dom.development.js ***!
+  \**************************************************************************************************************/
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 /**
@@ -24817,7 +24817,7 @@
       "function" ===
         typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart &&
       __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart(Error());
-    var React = __webpack_require__(/*! react */ "../../../node_modules/.pnpm/react@19.0.0/node_modules/react/index.js"),
+    var React = __webpack_require__(/*! react */ "./node_modules/.pnpm/react@19.0.0/node_modules/react/index.js"),
       Internals = {
         d: {
           f: noop,
@@ -25162,10 +25162,10 @@
 
 /***/ }),
 
-/***/ "../../../node_modules/.pnpm/react-dom@19.0.0_react@19.0.0/node_modules/react-dom/client.js":
-/*!**************************************************************************************************!*\
-  !*** ../../../node_modules/.pnpm/react-dom@19.0.0_react@19.0.0/node_modules/react-dom/client.js ***!
-  \**************************************************************************************************/
+/***/ "./node_modules/.pnpm/react-dom@19.0.0_react@19.0.0/node_modules/react-dom/client.js":
+/*!*******************************************************************************************!*\
+  !*** ./node_modules/.pnpm/react-dom@19.0.0_react@19.0.0/node_modules/react-dom/client.js ***!
+  \*******************************************************************************************/
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
 
@@ -25199,16 +25199,16 @@ function checkDCE() {
 }
 
 if (false) {} else {
-  module.exports = __webpack_require__(/*! ./cjs/react-dom-client.development.js */ "../../../node_modules/.pnpm/react-dom@19.0.0_react@19.0.0/node_modules/react-dom/cjs/react-dom-client.development.js");
+  module.exports = __webpack_require__(/*! ./cjs/react-dom-client.development.js */ "./node_modules/.pnpm/react-dom@19.0.0_react@19.0.0/node_modules/react-dom/cjs/react-dom-client.development.js");
 }
 
 
 /***/ }),
 
-/***/ "../../../node_modules/.pnpm/react-dom@19.0.0_react@19.0.0/node_modules/react-dom/index.js":
-/*!*************************************************************************************************!*\
-  !*** ../../../node_modules/.pnpm/react-dom@19.0.0_react@19.0.0/node_modules/react-dom/index.js ***!
-  \*************************************************************************************************/
+/***/ "./node_modules/.pnpm/react-dom@19.0.0_react@19.0.0/node_modules/react-dom/index.js":
+/*!******************************************************************************************!*\
+  !*** ./node_modules/.pnpm/react-dom@19.0.0_react@19.0.0/node_modules/react-dom/index.js ***!
+  \******************************************************************************************/
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
 
@@ -25242,16 +25242,16 @@ function checkDCE() {
 }
 
 if (false) {} else {
-  module.exports = __webpack_require__(/*! ./cjs/react-dom.development.js */ "../../../node_modules/.pnpm/react-dom@19.0.0_react@19.0.0/node_modules/react-dom/cjs/react-dom.development.js");
+  module.exports = __webpack_require__(/*! ./cjs/react-dom.development.js */ "./node_modules/.pnpm/react-dom@19.0.0_react@19.0.0/node_modules/react-dom/cjs/react-dom.development.js");
 }
 
 
 /***/ }),
 
-/***/ "../../../node_modules/.pnpm/react@19.0.0/node_modules/react/cjs/react.development.js":
-/*!********************************************************************************************!*\
-  !*** ../../../node_modules/.pnpm/react@19.0.0/node_modules/react/cjs/react.development.js ***!
-  \********************************************************************************************/
+/***/ "./node_modules/.pnpm/react@19.0.0/node_modules/react/cjs/react.development.js":
+/*!*************************************************************************************!*\
+  !*** ./node_modules/.pnpm/react@19.0.0/node_modules/react/cjs/react.development.js ***!
+  \*************************************************************************************/
 /***/ ((module, exports, __webpack_require__) => {
 
 /* module decorator */ module = __webpack_require__.nmd(module);
@@ -26780,25 +26780,25 @@ if (false) {} else {
 
 /***/ }),
 
-/***/ "../../../node_modules/.pnpm/react@19.0.0/node_modules/react/index.js":
-/*!****************************************************************************!*\
-  !*** ../../../node_modules/.pnpm/react@19.0.0/node_modules/react/index.js ***!
-  \****************************************************************************/
+/***/ "./node_modules/.pnpm/react@19.0.0/node_modules/react/index.js":
+/*!*********************************************************************!*\
+  !*** ./node_modules/.pnpm/react@19.0.0/node_modules/react/index.js ***!
+  \*********************************************************************/
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
 
 
 if (false) {} else {
-  module.exports = __webpack_require__(/*! ./cjs/react.development.js */ "../../../node_modules/.pnpm/react@19.0.0/node_modules/react/cjs/react.development.js");
+  module.exports = __webpack_require__(/*! ./cjs/react.development.js */ "./node_modules/.pnpm/react@19.0.0/node_modules/react/cjs/react.development.js");
 }
 
 
 /***/ }),
 
-/***/ "../../../node_modules/.pnpm/scheduler@0.25.0/node_modules/scheduler/cjs/scheduler.development.js":
-/*!********************************************************************************************************!*\
-  !*** ../../../node_modules/.pnpm/scheduler@0.25.0/node_modules/scheduler/cjs/scheduler.development.js ***!
-  \********************************************************************************************************/
+/***/ "./node_modules/.pnpm/scheduler@0.25.0/node_modules/scheduler/cjs/scheduler.development.js":
+/*!*************************************************************************************************!*\
+  !*** ./node_modules/.pnpm/scheduler@0.25.0/node_modules/scheduler/cjs/scheduler.development.js ***!
+  \*************************************************************************************************/
 /***/ ((__unused_webpack_module, exports) => {
 
 /**
@@ -27169,16 +27169,16 @@ if (false) {} else {
 
 /***/ }),
 
-/***/ "../../../node_modules/.pnpm/scheduler@0.25.0/node_modules/scheduler/index.js":
-/*!************************************************************************************!*\
-  !*** ../../../node_modules/.pnpm/scheduler@0.25.0/node_modules/scheduler/index.js ***!
-  \************************************************************************************/
+/***/ "./node_modules/.pnpm/scheduler@0.25.0/node_modules/scheduler/index.js":
+/*!*****************************************************************************!*\
+  !*** ./node_modules/.pnpm/scheduler@0.25.0/node_modules/scheduler/index.js ***!
+  \*****************************************************************************/
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
 
 
 if (false) {} else {
-  module.exports = __webpack_require__(/*! ./cjs/scheduler.development.js */ "../../../node_modules/.pnpm/scheduler@0.25.0/node_modules/scheduler/cjs/scheduler.development.js");
+  module.exports = __webpack_require__(/*! ./cjs/scheduler.development.js */ "./node_modules/.pnpm/scheduler@0.25.0/node_modules/scheduler/cjs/scheduler.development.js");
 }
 
 
@@ -27271,9 +27271,9 @@ var __webpack_exports__ = {};
   !*** ./src/apps/markdown/index.tsx ***!
   \*************************************/
 __webpack_require__.r(__webpack_exports__);
-/* harmony import */ var react__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! react */ "../../../node_modules/.pnpm/react@19.0.0/node_modules/react/index.js");
+/* harmony import */ var react__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! react */ "./node_modules/.pnpm/react@19.0.0/node_modules/react/index.js");
 /* harmony import */ var react__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(react__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var react_dom_client__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! react-dom/client */ "../../../node_modules/.pnpm/react-dom@19.0.0_react@19.0.0/node_modules/react-dom/client.js");
+/* harmony import */ var react_dom_client__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! react-dom/client */ "./node_modules/.pnpm/react-dom@19.0.0_react@19.0.0/node_modules/react-dom/client.js");
 
 
 const platform = window.platform;
