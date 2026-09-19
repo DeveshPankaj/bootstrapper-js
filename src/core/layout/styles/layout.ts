@@ -1,4 +1,4 @@
-const isCssGradient = (v: string) =>
+export const isCssGradient = (v: string) =>
     /^\s*(linear|radial|conic)-gradient\s*\(/i.test(v)
 
 // 'none' is a literal passthrough (not a url()) — used when a canvas

@@ -28640,6 +28640,245 @@ __webpack_require__.r(__webpack_exports__);
 
 /***/ }),
 
+/***/ "./src/core/layout/ambient-color.ts":
+/*!******************************************!*\
+  !*** ./src/core/layout/ambient-color.ts ***!
+  \******************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   updateAmbientColor: () => (/* binding */ updateAmbientColor)
+/* harmony export */ });
+/* harmony import */ var _styles_layout__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./styles/layout */ "./src/core/layout/styles/layout.ts");
+var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+// Ambient color extraction — samples the active wallpaper (image or CSS
+// gradient) for its dominant color, and exposes it as CSS custom
+// properties (--ambient-bg, --ambient-fg, --ambient-blur) that adaptive UI
+// surfaces (currently just the context menu, see styles/contextmenu.ts)
+// read with a fixed fallback, so nothing looks broken before the async
+// sample resolves or if it fails (e.g. a tainted canvas from a
+// cross-origin wallpaper URL with no CORS headers).
+
+let requestId = 0;
+const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+const rgbToHsl = (r, g, b) => {
+    r /= 255;
+    g /= 255;
+    b /= 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h = 0, s = 0;
+    const l = (max + min) / 2;
+    const d = max - min;
+    if (d !== 0) {
+        s = d / (1 - Math.abs(2 * l - 1));
+        switch (max) {
+            case r:
+                h = ((g - b) / d) % 6;
+                break;
+            case g:
+                h = (b - r) / d + 2;
+                break;
+            default: h = (r - g) / d + 4;
+        }
+        h *= 60;
+        if (h < 0)
+            h += 360;
+    }
+    return [h, s, l];
+};
+const hslToRgb = (h, s, l) => {
+    const c = (1 - Math.abs(2 * l - 1)) * s;
+    const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+    const m = l - c / 2;
+    let r = 0, g = 0, b = 0;
+    if (h < 60) {
+        r = c;
+        g = x;
+        b = 0;
+    }
+    else if (h < 120) {
+        r = x;
+        g = c;
+        b = 0;
+    }
+    else if (h < 180) {
+        r = 0;
+        g = c;
+        b = x;
+    }
+    else if (h < 240) {
+        r = 0;
+        g = x;
+        b = c;
+    }
+    else if (h < 300) {
+        r = x;
+        g = 0;
+        b = c;
+    }
+    else {
+        r = c;
+        g = 0;
+        b = x;
+    }
+    return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)];
+};
+// Resolves any valid CSS color string to [r,g,b] via the browser's own CSS
+// engine (handles hex/rgb/rgba/hsl/named colors uniformly) rather than
+// hand-parsing every format. Takes `doc` explicitly (see updateAmbientColor)
+// rather than using the bare global `document` - this module runs inside
+// the layout bundle's own hidden module-loader iframe, a different
+// document than the visible top-level page, so getComputedStyle would
+// resolve against the wrong (invisible, styleless) document otherwise.
+const cssColorToRgb = (doc, color) => {
+    const el = doc.createElement('div');
+    el.style.color = color;
+    doc.body.appendChild(el);
+    const computed = doc.defaultView.getComputedStyle(el).color;
+    doc.body.removeChild(el);
+    const m = computed.match(/[\d.]+/g);
+    if (!m || m.length < 3)
+        return null;
+    return [Math.round(+m[0]), Math.round(+m[1]), Math.round(+m[2])];
+};
+const luminance = (r, g, b) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
+// Downsamples an image (loaded from a same-origin/blob URL — see
+// resolveWallpaperUrl in index.tsx, which already converts vfs `/(sw)/...`
+// wallpapers to blob: URLs before this ever sees them) to a small grid and
+// averages pixel color + measures luminance variance ("business" of the
+// image, used to pick a blur amount). Rejects if the canvas ends up
+// tainted (a cross-origin wallpaper URL with no CORS headers) — callers
+// must catch and fall back.
+const sampleImage = (url) => {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+            try {
+                const size = 24;
+                const canvas = document.createElement('canvas');
+                canvas.width = size;
+                canvas.height = size;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, size, size);
+                const { data } = ctx.getImageData(0, 0, size, size);
+                let r = 0, g = 0, b = 0;
+                const lums = [];
+                const count = data.length / 4;
+                for (let i = 0; i < data.length; i += 4) {
+                    r += data[i];
+                    g += data[i + 1];
+                    b += data[i + 2];
+                    lums.push(luminance(data[i], data[i + 1], data[i + 2]));
+                }
+                r /= count;
+                g /= count;
+                b /= count;
+                const meanLum = lums.reduce((a, v) => a + v, 0) / lums.length;
+                const variance = lums.reduce((a, v) => a + (v - meanLum) ** 2, 0) / lums.length;
+                resolve({ rgb: [r, g, b], variance });
+            }
+            catch (err) {
+                reject(err);
+            }
+        };
+        img.onerror = () => reject(new Error('failed to load wallpaper image for ambient sampling'));
+        img.src = url;
+    });
+};
+// Averages every color stop found in a CSS gradient string.
+const sampleGradient = (doc, gradient) => {
+    const matches = gradient.match(/rgba?\([^)]+\)|hsla?\([^)]+\)|#[0-9a-fA-F]{3,8}\b/g);
+    if (!matches || !matches.length)
+        return null;
+    const colors = matches.map(c => cssColorToRgb(doc, c)).filter((c) => c !== null);
+    if (!colors.length)
+        return null;
+    const r = colors.reduce((a, c) => a + c[0], 0) / colors.length;
+    const g = colors.reduce((a, c) => a + c[1], 0) / colors.length;
+    const b = colors.reduce((a, c) => a + c[2], 0) / colors.length;
+    const lums = colors.map(c => luminance(c[0], c[1], c[2]));
+    const meanLum = lums.reduce((a, v) => a + v, 0) / lums.length;
+    const variance = lums.reduce((a, v) => a + (v - meanLum) ** 2, 0) / lums.length;
+    return { rgb: [r, g, b], variance };
+};
+// Neutral fallback for canvas wallpapers (live JS-rendered, behind a
+// sandboxed cross-origin iframe with no pixel access from here) and for
+// anything that fails to sample (tainted canvas, network error, etc.).
+const FALLBACK = { rgb: [30, 32, 38], variance: 600 };
+const applyAmbient = (doc, rgb, variance) => {
+    const [h, s, l] = rgbToHsl(rgb[0], rgb[1], rgb[2]);
+    // Keep the wallpaper's hue/saturation, but clamp lightness into a band
+    // that stays legible as a translucent menu material regardless of how
+    // dark or bright the source is — mirrors how macOS/iOS "vibrancy"
+    // materials bias toward usable contrast rather than reproducing the
+    // backdrop exactly.
+    const clampedL = clamp(l, 0.22, 0.62);
+    const [br, bg, bb] = hslToRgb(h, clamp(s, 0, 0.55), clampedL);
+    const bgLuminance = luminance(br, bg, bb);
+    const fg = bgLuminance > 150 ? '#111318' : '#f5f6f8';
+    // More "business"/detail in the sampled wallpaper -> more blur, to
+    // soften it into a calmer backdrop for menu text; a flat/plain
+    // wallpaper needs less blur to still read as intentional depth rather
+    // than a fog. 600 is a representative variance for a fairly busy photo.
+    const blur = clamp(12 + (variance / 600) * 16, 10, 28);
+    const root = doc.documentElement.style;
+    root.setProperty('--ambient-bg', `rgba(${br}, ${bg}, ${bb}, 0.35)`);
+    root.setProperty('--ambient-fg', fg);
+    root.setProperty('--ambient-blur', `${blur.toFixed(0)}px`);
+};
+// Called from applyCss() (src/core/layout/index.tsx) every time the
+// wallpaper changes, and once at boot. `doc` must be platform.window.document
+// (the actual visible top-level page) - this module is bundled into the
+// layout bundle, which loads inside its own hidden module-loader iframe, so
+// the bare global `document` here would silently resolve to that invisible
+// iframe's own (styleless, non-rendered) document instead - the same
+// "bare document inside the layout bundle resolves to the wrong iframe"
+// gotcha documented elsewhere in index.tsx (see windowsSubject.subscribe).
+// `wallpaper` is the raw preference value (may be `canvas:...`, a CSS
+// gradient, or an image URL/path); `resolvedImageUrl` is only meaningful
+// for the image case and should already be resolveWallpaperUrl()'d (blob:
+// for vfs wallpapers) so same-origin sampling works without a CORS round-trip.
+const updateAmbientColor = (doc, wallpaper, resolvedImageUrl) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a, _b;
+    const myRequestId = ++requestId;
+    const commit = (rgb, variance) => {
+        if (myRequestId !== requestId)
+            return; // a newer wallpaper change superseded this one
+        applyAmbient(doc, rgb, variance);
+    };
+    if (wallpaper.startsWith('canvas:')) {
+        commit(FALLBACK.rgb, FALLBACK.variance);
+        return;
+    }
+    if ((0,_styles_layout__WEBPACK_IMPORTED_MODULE_0__.isCssGradient)(wallpaper) || wallpaper === 'none') {
+        const sampled = wallpaper === 'none' ? null : sampleGradient(doc, wallpaper);
+        commit((_a = sampled === null || sampled === void 0 ? void 0 : sampled.rgb) !== null && _a !== void 0 ? _a : FALLBACK.rgb, (_b = sampled === null || sampled === void 0 ? void 0 : sampled.variance) !== null && _b !== void 0 ? _b : FALLBACK.variance);
+        return;
+    }
+    try {
+        const { rgb, variance } = yield sampleImage(resolvedImageUrl);
+        commit(rgb, variance);
+    }
+    catch (err) {
+        console.warn('[ambient-color] failed to sample wallpaper, using fallback', err);
+        commit(FALLBACK.rgb, FALLBACK.variance);
+    }
+});
+
+
+/***/ }),
+
 /***/ "./src/core/layout/commands.tsx":
 /*!**************************************!*\
   !*** ./src/core/layout/commands.tsx ***!
@@ -28907,8 +29146,15 @@ const CONTEXTMENU_CSS = `
         display: none;
         z-index: 300;
         overflow: hidden;
-        background: rgba(255, 255, 255, 0.15);
-        backdrop-filter: blur(10px);
+        /* --ambient-* are set by src/core/layout/ambient-color.ts from the
+           active wallpaper's sampled dominant color every time it changes
+           (see applyCss/updateAmbientColor) - the fallback values here are
+           what's shown before that async sample resolves, or if it fails
+           (e.g. a tainted canvas from a cross-origin wallpaper with no CORS
+           headers), so the menu never looks broken either way. */
+        background: var(--ambient-bg, rgba(255, 255, 255, 0.15));
+        backdrop-filter: blur(var(--ambient-blur, 10px));
+        color: var(--ambient-fg, inherit);
         border-radius: 15px;
         box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
         border: 1px solid rgba(255, 255, 255, 0.18);
@@ -29159,6 +29405,7 @@ const DESKTOP_ENV_CSS = `
 "use strict";
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   isCssGradient: () => (/* binding */ isCssGradient),
 /* harmony export */   layoutCss: () => (/* binding */ layoutCss)
 /* harmony export */ });
 const isCssGradient = (v) => /^\s*(linear|radial|conic)-gradient\s*\(/i.test(v);
@@ -157440,8 +157687,8 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   render: () => (/* binding */ render)
 /* harmony export */ });
-/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_19__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/BehaviorSubject.js");
-/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_20__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/operators/filter.js");
+/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_20__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/BehaviorSubject.js");
+/* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_21__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.1/node_modules/rxjs/dist/esm5/internal/operators/filter.js");
 /* harmony import */ var _shared_index__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @shared/index */ "./src/shared/index.ts");
 /* harmony import */ var _shared_fs_utils__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! @shared/fs-utils */ "./src/shared/fs-utils.ts");
 /* harmony import */ var _shared_constants__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! @shared/constants */ "./src/shared/constants.ts");
@@ -157457,11 +157704,13 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _apps_file_explorer_desktop__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(/*! ../../apps/file-explorer/desktop */ "./src/apps/file-explorer/desktop.tsx");
 /* harmony import */ var _styles_base__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(/*! ./styles/base */ "./src/core/layout/styles/base.ts");
 /* harmony import */ var _styles_layout__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(/*! ./styles/layout */ "./src/core/layout/styles/layout.ts");
-/* harmony import */ var _styles_window__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(/*! ./styles/window */ "./src/core/layout/styles/window.ts");
-/* harmony import */ var _styles_taskbar__WEBPACK_IMPORTED_MODULE_15__ = __webpack_require__(/*! ./styles/taskbar */ "./src/core/layout/styles/taskbar.ts");
-/* harmony import */ var _styles_widgets__WEBPACK_IMPORTED_MODULE_16__ = __webpack_require__(/*! ./styles/widgets */ "./src/core/layout/styles/widgets.ts");
-/* harmony import */ var _styles_contextmenu__WEBPACK_IMPORTED_MODULE_17__ = __webpack_require__(/*! ./styles/contextmenu */ "./src/core/layout/styles/contextmenu.ts");
-/* harmony import */ var _styles_desktop_env__WEBPACK_IMPORTED_MODULE_18__ = __webpack_require__(/*! ./styles/desktop-env */ "./src/core/layout/styles/desktop-env.ts");
+/* harmony import */ var _ambient_color__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(/*! ./ambient-color */ "./src/core/layout/ambient-color.ts");
+/* harmony import */ var _styles_window__WEBPACK_IMPORTED_MODULE_15__ = __webpack_require__(/*! ./styles/window */ "./src/core/layout/styles/window.ts");
+/* harmony import */ var _styles_taskbar__WEBPACK_IMPORTED_MODULE_16__ = __webpack_require__(/*! ./styles/taskbar */ "./src/core/layout/styles/taskbar.ts");
+/* harmony import */ var _styles_widgets__WEBPACK_IMPORTED_MODULE_17__ = __webpack_require__(/*! ./styles/widgets */ "./src/core/layout/styles/widgets.ts");
+/* harmony import */ var _styles_contextmenu__WEBPACK_IMPORTED_MODULE_18__ = __webpack_require__(/*! ./styles/contextmenu */ "./src/core/layout/styles/contextmenu.ts");
+/* harmony import */ var _styles_desktop_env__WEBPACK_IMPORTED_MODULE_19__ = __webpack_require__(/*! ./styles/desktop-env */ "./src/core/layout/styles/desktop-env.ts");
+
 
 
 
@@ -157658,7 +157907,7 @@ const readCurrentLayoutId = () => {
 const writeCurrentLayoutId = (layoutId) => {
     (0,_shared_fs_utils__WEBPACK_IMPORTED_MODULE_1__.writeJsonFile)(platform.host.getFS(), _shared_constants__WEBPACK_IMPORTED_MODULE_2__.LAYOUT_CONFIG_PATH, { layout: layoutId }, true);
 };
-const layoutSubject = new rxjs__WEBPACK_IMPORTED_MODULE_19__.BehaviorSubject(readCurrentLayoutId());
+const layoutSubject = new rxjs__WEBPACK_IMPORTED_MODULE_20__.BehaviorSubject(readCurrentLayoutId());
 const getCurrentLayout = () => {
     const layouts = readLayouts();
     return layouts.find(l => l.id === layoutSubject.getValue()) || layouts[0] || DEFAULT_LAYOUTS[0];
@@ -157813,12 +158062,13 @@ const applyCss = ({ wallpaper, grid }) => {
             _styles_base__WEBPACK_IMPORTED_MODULE_12__.RESET_CSS,
             _styles_base__WEBPACK_IMPORTED_MODULE_12__.MATERIAL_SYMBOLS_CSS,
             (0,_styles_layout__WEBPACK_IMPORTED_MODULE_13__.layoutCss)(grid, 'none'),
-            _styles_widgets__WEBPACK_IMPORTED_MODULE_16__.WIDGETS_CSS,
-            _styles_window__WEBPACK_IMPORTED_MODULE_14__.WINDOW_CSS,
-            _styles_taskbar__WEBPACK_IMPORTED_MODULE_15__.TASKBAR_CSS,
-            _styles_contextmenu__WEBPACK_IMPORTED_MODULE_17__.CONTEXTMENU_CSS,
-            _styles_desktop_env__WEBPACK_IMPORTED_MODULE_18__.DESKTOP_ENV_CSS,
+            _styles_widgets__WEBPACK_IMPORTED_MODULE_17__.WIDGETS_CSS,
+            _styles_window__WEBPACK_IMPORTED_MODULE_15__.WINDOW_CSS,
+            _styles_taskbar__WEBPACK_IMPORTED_MODULE_16__.TASKBAR_CSS,
+            _styles_contextmenu__WEBPACK_IMPORTED_MODULE_18__.CONTEXTMENU_CSS,
+            _styles_desktop_env__WEBPACK_IMPORTED_MODULE_19__.DESKTOP_ENV_CSS,
         ].join('\n'));
+        (0,_ambient_color__WEBPACK_IMPORTED_MODULE_14__.updateAmbientColor)(platform.window.document, wallpaper, '');
         return;
     }
     unmountCanvasWallpaper();
@@ -157827,12 +158077,13 @@ const applyCss = ({ wallpaper, grid }) => {
         _styles_base__WEBPACK_IMPORTED_MODULE_12__.RESET_CSS,
         _styles_base__WEBPACK_IMPORTED_MODULE_12__.MATERIAL_SYMBOLS_CSS,
         (0,_styles_layout__WEBPACK_IMPORTED_MODULE_13__.layoutCss)(grid, wallpaperUrl),
-        _styles_widgets__WEBPACK_IMPORTED_MODULE_16__.WIDGETS_CSS,
-        _styles_window__WEBPACK_IMPORTED_MODULE_14__.WINDOW_CSS,
-        _styles_taskbar__WEBPACK_IMPORTED_MODULE_15__.TASKBAR_CSS,
-        _styles_contextmenu__WEBPACK_IMPORTED_MODULE_17__.CONTEXTMENU_CSS,
-        _styles_desktop_env__WEBPACK_IMPORTED_MODULE_18__.DESKTOP_ENV_CSS,
+        _styles_widgets__WEBPACK_IMPORTED_MODULE_17__.WIDGETS_CSS,
+        _styles_window__WEBPACK_IMPORTED_MODULE_15__.WINDOW_CSS,
+        _styles_taskbar__WEBPACK_IMPORTED_MODULE_16__.TASKBAR_CSS,
+        _styles_contextmenu__WEBPACK_IMPORTED_MODULE_18__.CONTEXTMENU_CSS,
+        _styles_desktop_env__WEBPACK_IMPORTED_MODULE_19__.DESKTOP_ENV_CSS,
     ].join('\n'));
+    (0,_ambient_color__WEBPACK_IMPORTED_MODULE_14__.updateAmbientColor)(platform.window.document, wallpaper, wallpaperUrl);
 };
 const userPrefWallpaper = platform.userPref.getWallpaper();
 applyCss({ wallpaper: userPrefWallpaper || '/public/wp-11.jpg', grid: getCurrentLayout().grid });
@@ -158027,7 +158278,7 @@ const readEnabledWidgets = () => {
         return cfg.enabled;
     return null;
 };
-const enabledWidgetsSubject = new rxjs__WEBPACK_IMPORTED_MODULE_19__.BehaviorSubject(readEnabledWidgets());
+const enabledWidgetsSubject = new rxjs__WEBPACK_IMPORTED_MODULE_20__.BehaviorSubject(readEnabledWidgets());
 const setEnabledWidgets = (enabled) => {
     try {
         (0,_shared_fs_utils__WEBPACK_IMPORTED_MODULE_1__.writeJsonFile)(platform.host.getFS(), _shared_constants__WEBPACK_IMPORTED_MODULE_2__.WIDGETS_CONFIG_PATH, { enabled }, true);
@@ -158259,7 +158510,7 @@ const WidgetsPanel = () => {
 // which mirror get-dock-schema/set-dock-setting but stay in-process).
 const VFS_DESKTOP_PATH = '/opt/desktop/manager.js';
 const DESKTOP_VARIANTS_DIR = '/opt/desktop';
-const desktopManagerSubject = new rxjs__WEBPACK_IMPORTED_MODULE_19__.BehaviorSubject('default');
+const desktopManagerSubject = new rxjs__WEBPACK_IMPORTED_MODULE_20__.BehaviorSubject('default');
 let activeDesktopModule = null;
 let activeDesktopId = 'default';
 let activeDesktopSchema = [];
@@ -158805,13 +159056,13 @@ const registerContextMenu = (container, ref) => {
         }
     });
 };
-platform.events$.pipe((0,rxjs__WEBPACK_IMPORTED_MODULE_20__.filter)(x => x.type === 'loaded')).subscribe(event => {
+platform.events$.pipe((0,rxjs__WEBPACK_IMPORTED_MODULE_21__.filter)(x => x.type === 'loaded')).subscribe(event => {
     const container = platform.window.document.createElement('div');
     container.classList.add('layout-default');
     platform.host.appendDomElement(container);
     render(container);
 });
-platform.events$.pipe((0,rxjs__WEBPACK_IMPORTED_MODULE_20__.filter)(x => x.type === 'exit')).subscribe(event => {
+platform.events$.pipe((0,rxjs__WEBPACK_IMPORTED_MODULE_21__.filter)(x => x.type === 'exit')).subscribe(event => {
     console.log(event);
 });
 
