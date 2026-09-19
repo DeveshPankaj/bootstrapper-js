@@ -1,0 +1,12 @@
+# Core unit — started by systemd (PID 1) at boot, alongside widgets.service
+# and shell.service. Previously a hardcoded startCronScheduler() call in
+# src/remote.ts; now a real systemd-managed service like any other.
+[Unit]
+Description=Cron job scheduler — polls /etc/crontab and runs due jobs
+
+[Service]
+ExecStart=/opt/systemd/lib/cron-daemon.js
+Restart=no
+
+[Install]
+WantedBy=multi-user.target

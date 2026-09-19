@@ -1,0 +1,12 @@
+# Core unit — started by systemd (PID 1) at boot. Previously a hardcoded
+# host.exec('/home/user1/initd.run') call in src/remote.ts; now a real
+# systemd-managed service, the analogue of a login shell/session starting.
+[Unit]
+Description=Runs the user's startup script (/home/user1/initd.run)
+
+[Service]
+ExecStart=/opt/systemd/lib/shell-init.js
+Restart=no
+
+[Install]
+WantedBy=multi-user.target

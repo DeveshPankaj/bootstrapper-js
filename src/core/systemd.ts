@@ -12,6 +12,24 @@ export const SYSTEMD_UNITS_DIR = "/etc/systemd/system";
 export const SYSTEMD_ENABLED_PATH = "/etc/systemd/enabled.json";
 export const SYSTEMD_LOG_DIR = "/var/log/systemd";
 
+// systemd itself is PID 1 - reserved globally, see ProcessManager's
+// _pidCounter starting at 2 in src/platform/process-manager.ts, so no GUI
+// window can ever collide with it.
+export const SYSTEMD_PID = 1;
+let systemdStartedAt: number | null = null;
+
+export type SystemdSelf = { pid: number; name: string; description: string; startedAt: number | null };
+
+// Exposed as the `systemd.self` command so callers (Task Manager, ps.run,
+// etc.) can list systemd itself as a process alongside process.list()'s
+// GUI windows and listUnits()'s managed services.
+export const getSelf = (): SystemdSelf => ({
+  pid: SYSTEMD_PID,
+  name: "systemd",
+  description: "System and service manager (PID 1)",
+  startedAt: systemdStartedAt,
+});
+
 type RestartPolicy = "no" | "on-failure" | "always";
 
 type ParsedUnit = {
@@ -316,6 +334,7 @@ export const disableUnit = (name: string): void => {
 // multi-user.target at boot. Units not listed in enabled.json stay inactive
 // until started manually via `systemctl start`.
 export const startSystemd = (): void => {
+  systemdStartedAt = Date.now();
   const enabled = readEnabled();
   const present = new Set(listUnitNames());
   enabled.filter((name) => present.has(name)).forEach((name) => activate(name));

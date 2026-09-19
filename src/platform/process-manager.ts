@@ -21,7 +21,10 @@ declare global {
 export class ProcessManager {
     private static _instance: ProcessManager | null = null
 
-    private _pidCounter = 1
+    // Starts at 2, not 1 - PID 1 is reserved for systemd (src/core/systemd.ts),
+    // the init system that starts before any GUI window can open, matching
+    // real Linux where PID 1 is always init/systemd.
+    private _pidCounter = 2
     private _processes = new Map<number, ProcessRecord>()
     private _processes$ = new BehaviorSubject<ProcessRecord[]>([])
 
@@ -70,7 +73,7 @@ export class ProcessManager {
     }
 
     public reset(): void {
-        this._pidCounter = 1
+        this._pidCounter = 2
         this._processes.clear()
         this._processes$.next([])
     }

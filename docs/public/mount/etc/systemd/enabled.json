@@ -1,3 +1,6 @@
 [
+  "cron.service",
+  "widgets.service",
+  "shell.service",
   "heartbeat.service"
 ]

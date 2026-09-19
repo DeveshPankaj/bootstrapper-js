@@ -28420,9 +28420,11 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   SYSTEMD_ENABLED_PATH: () => (/* binding */ SYSTEMD_ENABLED_PATH),
 /* harmony export */   SYSTEMD_LOG_DIR: () => (/* binding */ SYSTEMD_LOG_DIR),
+/* harmony export */   SYSTEMD_PID: () => (/* binding */ SYSTEMD_PID),
 /* harmony export */   SYSTEMD_UNITS_DIR: () => (/* binding */ SYSTEMD_UNITS_DIR),
 /* harmony export */   disableUnit: () => (/* binding */ disableUnit),
 /* harmony export */   enableUnit: () => (/* binding */ enableUnit),
+/* harmony export */   getSelf: () => (/* binding */ getSelf),
 /* harmony export */   getStatus: () => (/* binding */ getStatus),
 /* harmony export */   listUnitNames: () => (/* binding */ listUnitNames),
 /* harmony export */   listUnits: () => (/* binding */ listUnits),
@@ -28446,6 +28448,20 @@ __webpack_require__.r(__webpack_exports__);
 const SYSTEMD_UNITS_DIR = "/etc/systemd/system";
 const SYSTEMD_ENABLED_PATH = "/etc/systemd/enabled.json";
 const SYSTEMD_LOG_DIR = "/var/log/systemd";
+// systemd itself is PID 1 - reserved globally, see ProcessManager's
+// _pidCounter starting at 2 in src/platform/process-manager.ts, so no GUI
+// window can ever collide with it.
+const SYSTEMD_PID = 1;
+let systemdStartedAt = null;
+// Exposed as the `systemd.self` command so callers (Task Manager, ps.run,
+// etc.) can list systemd itself as a process alongside process.list()'s
+// GUI windows and listUnits()'s managed services.
+const getSelf = () => ({
+    pid: SYSTEMD_PID,
+    name: "systemd",
+    description: "System and service manager (PID 1)",
+    startedAt: systemdStartedAt,
+});
 const runtime = new Map();
 let nextPid = 1000;
 const newRuntime = () => ({
@@ -28715,6 +28731,7 @@ const disableUnit = (name) => {
 // multi-user.target at boot. Units not listed in enabled.json stay inactive
 // until started manually via `systemctl start`.
 const startSystemd = () => {
+    systemdStartedAt = Date.now();
     const enabled = readEnabled();
     const present = new Set(listUnitNames());
     enabled.filter((name) => present.has(name)).forEach((name) => activate(name));
@@ -29930,7 +29947,10 @@ __webpack_require__.r(__webpack_exports__);
 
 class ProcessManager {
     constructor() {
-        this._pidCounter = 1;
+        // Starts at 2, not 1 - PID 1 is reserved for systemd (src/core/systemd.ts),
+        // the init system that starts before any GUI window can open, matching
+        // real Linux where PID 1 is always init/systemd.
+        this._pidCounter = 2;
         this._processes = new Map();
         this._processes$ = new rxjs__WEBPACK_IMPORTED_MODULE_1__.BehaviorSubject([]);
         this.processes$ = this._processes$.asObservable();
@@ -29978,7 +29998,7 @@ class ProcessManager {
         return Array.from(this._processes.values());
     }
     reset() {
-        this._pidCounter = 1;
+        this._pidCounter = 2;
         this._processes.clear();
         this._processes$.next([]);
     }
@@ -156557,14 +156577,21 @@ const loadModules = (modules) => __awaiter(void 0, void 0, void 0, function* () 
         setTimeout(runInitCommands);
     }
 });
+// systemd (see src/core/systemd.ts) is PID 1: the first thing boot starts,
+// and it owns starting everything else this layer is responsible for - cron,
+// widget loading, and the user's shell/session init script - as its own
+// enabled units (cron.service/widgets.service/shell.service, see
+// /etc/systemd/system/) rather than as separate hardcoded calls here. Their
+// ExecStart scripts call the load-widgets/start-cron-scheduler commands
+// registered below, or host.exec the initd.run script directly.
+//
+// This doesn't (and structurally can't, without a much larger rearchitecture)
+// extend to the layout/dock UI shell: that boots as a separate webpack
+// bundle/iframe "module" loaded in parallel by loadModules() below, already
+// running by the time runInitCommands fires here - closer to kernel/module
+// loading than a systemd-managed userspace service.
 const runInitCommands = () => {
     (0,_core_ipc__WEBPACK_IMPORTED_MODULE_10__.initIpc)(host.getFS());
-    const initd = [
-        ['/home/user1/initd.run']
-    ];
-    initd.forEach(command => host.exec(hostPlatform, command[0], ...command.slice(1)));
-    loadWidgets();
-    (0,_core_cron__WEBPACK_IMPORTED_MODULE_8__.startCronScheduler)();
     (0,_core_systemd__WEBPACK_IMPORTED_MODULE_9__.startSystemd)();
 };
 // Loads every `.js` file in `/etc/widgets/` and runs it via execString, so it
@@ -156796,7 +156823,14 @@ platform.host.registerCommand('systemd.enable', (name) => (0,_core_systemd__WEBP
 platform.host.registerCommand('systemd.disable', (name) => (0,_core_systemd__WEBPACK_IMPORTED_MODULE_9__.disableUnit)(name));
 platform.host.registerCommand('systemd.status', (name) => (0,_core_systemd__WEBPACK_IMPORTED_MODULE_9__.getStatus)(name));
 platform.host.registerCommand('systemd.list', () => (0,_core_systemd__WEBPACK_IMPORTED_MODULE_9__.listUnits)());
+platform.host.registerCommand('systemd.self', () => (0,_core_systemd__WEBPACK_IMPORTED_MODULE_9__.getSelf)());
 platform.host.registerCommand('systemd.journal', (name, lines) => (0,_core_systemd__WEBPACK_IMPORTED_MODULE_9__.readJournal)(name, lines));
+// Backing commands for cron.service/widgets.service (see /etc/systemd/system/
+// and /opt/systemd/lib/) - lets those units' ExecStart scripts reach this
+// compiled TS logic via the normal command-call path instead of duplicating
+// it in the vfs.
+platform.host.registerCommand('start-cron-scheduler', () => (0,_core_cron__WEBPACK_IMPORTED_MODULE_8__.startCronScheduler)());
+platform.host.registerCommand('load-widgets', () => loadWidgets());
 // Convenience commands for opening the terminal and settings via the keybinding
 // system, Spotlight, and the desktop context menu. These are proper app commands
 // that render directly into the window body they receive (via ui.iframe's exec),

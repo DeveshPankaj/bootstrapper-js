@@ -8,7 +8,7 @@ import { createRoot } from "react-dom/client";
 import * as utils from '@shared/utils'
 import { DESKTOP_CONTAINER_CLASS, WINDOWS_CONTAINER_CLASS } from './core/window-manager'
 import { startCronScheduler } from './core/cron'
-import { startSystemd, startUnit, stopUnit, restartUnit, enableUnit, disableUnit, getStatus as getUnitStatus, listUnits, readJournal } from './core/systemd'
+import { startSystemd, startUnit, stopUnit, restartUnit, enableUnit, disableUnit, getStatus as getUnitStatus, listUnits, readJournal, getSelf as getSystemdSelf } from './core/systemd'
 import { initIpc } from './core/ipc'
 
 class WindowService {
@@ -102,16 +102,21 @@ const loadModules = async (modules: { [name: string]: Module }) => {
   }
 };
 
+// systemd (see src/core/systemd.ts) is PID 1: the first thing boot starts,
+// and it owns starting everything else this layer is responsible for - cron,
+// widget loading, and the user's shell/session init script - as its own
+// enabled units (cron.service/widgets.service/shell.service, see
+// /etc/systemd/system/) rather than as separate hardcoded calls here. Their
+// ExecStart scripts call the load-widgets/start-cron-scheduler commands
+// registered below, or host.exec the initd.run script directly.
+//
+// This doesn't (and structurally can't, without a much larger rearchitecture)
+// extend to the layout/dock UI shell: that boots as a separate webpack
+// bundle/iframe "module" loaded in parallel by loadModules() below, already
+// running by the time runInitCommands fires here - closer to kernel/module
+// loading than a systemd-managed userspace service.
 const runInitCommands = () => {
   initIpc(host.getFS());
-
-  const initd: Array<Array<string>> = [
-    ['/home/user1/initd.run']
-  ];
-  initd.forEach(command => host.exec(hostPlatform, command[0], ...command.slice(1)))
-
-  loadWidgets();
-  startCronScheduler();
   startSystemd();
 }
 
@@ -322,7 +327,15 @@ platform.host.registerCommand('systemd.enable', (name: string) => enableUnit(nam
 platform.host.registerCommand('systemd.disable', (name: string) => disableUnit(name));
 platform.host.registerCommand('systemd.status', (name: string) => getUnitStatus(name));
 platform.host.registerCommand('systemd.list', () => listUnits());
+platform.host.registerCommand('systemd.self', () => getSystemdSelf());
 platform.host.registerCommand('systemd.journal', (name: string, lines?: number) => readJournal(name, lines));
+
+// Backing commands for cron.service/widgets.service (see /etc/systemd/system/
+// and /opt/systemd/lib/) - lets those units' ExecStart scripts reach this
+// compiled TS logic via the normal command-call path instead of duplicating
+// it in the vfs.
+platform.host.registerCommand('start-cron-scheduler', () => startCronScheduler());
+platform.host.registerCommand('load-widgets', () => loadWidgets());
 
 // Convenience commands for opening the terminal and settings via the keybinding
 // system, Spotlight, and the desktop context menu. These are proper app commands
