@@ -12,3 +12,8 @@ temp/.DS_Store
 # generated test screenshots — local only, not tracked
 testing/screenshots/
 .githooks/
+
+# WISP relay server for the Alpine WASM Linux VM app — a general-purpose
+# outbound network relay (see relay/README.md); a local dev tool, not
+# something meant to ship with the publicly-hosted app.
+relay/
