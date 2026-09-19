@@ -77,18 +77,38 @@ tr:hover td{background:rgba(255,255,255,.02)}
 /* Import modal */
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:100}
 .modal-bg.open{display:flex}
-.modal{background:var(--s1);border:1px solid var(--bd);border-radius:12px;padding:20px;width:480px;max-width:90vw;display:flex;flex-direction:column;gap:10px}
+.modal{background:var(--s1);border:1px solid var(--bd);border-radius:12px;padding:20px;width:560px;max-width:92vw;display:flex;flex-direction:column;gap:10px;max-height:80vh;overflow:hidden}
 .modal h3{font-size:14px;margin-bottom:2px}
 .modal p{font-size:11px;color:var(--mu)}
-.modal textarea{width:100%;background:var(--s2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:8px;resize:vertical;height:160px;font-family:'Cascadia Code',monospace;font-size:11px;outline:none}
+.modal textarea{width:100%;background:var(--s2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:8px;resize:vertical;height:140px;font-family:'Cascadia Code',monospace;font-size:11px;outline:none}
 .modal textarea:focus{border-color:var(--ac)}
-.modal-foot{display:flex;gap:8px;justify-content:flex-end}
+.modal-foot{display:flex;gap:8px;justify-content:flex-end;flex-shrink:0}
+/* Import modal tabs */
+.import-tabs{display:flex;gap:0;border-bottom:1px solid var(--bd);margin:0 -20px;padding:0 20px}
+.import-tab{padding:6px 14px;font-size:12px;font-weight:600;color:var(--mu);cursor:pointer;border-bottom:2px solid transparent;transition:color .12s;white-space:nowrap}
+.import-tab.active{color:var(--ac);border-bottom-color:var(--ac)}
+.import-tab:hover:not(.active){color:var(--tx)}
+.import-panel{display:none;flex-direction:column;gap:8px;overflow-y:auto}
+.import-panel.active{display:flex}
+/* VFS browser */
+.file-check-list{background:var(--s2);border:1px solid var(--bd);border-radius:6px;padding:6px;min-height:80px;max-height:160px;overflow-y:auto;display:flex;flex-direction:column;gap:2px}
+.vfs-file-item{display:flex;align-items:center;gap:8px;padding:4px 6px;border-radius:4px;cursor:pointer;font-size:11px}
+.vfs-file-item:hover{background:rgba(255,255,255,.04)}
+.vfs-file-item input[type=checkbox]{accent-color:var(--ac);cursor:pointer;flex-shrink:0}
+.vfs-file-item .fi-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vfs-file-item .fi-type{font-size:10px;color:var(--mu);flex-shrink:0}
+/* Upload area */
+.upload-area{display:flex;align-items:center;justify-content:center;text-align:center;background:var(--s2);border:1.5px dashed var(--bd);border-radius:8px;padding:18px;cursor:pointer;transition:border-color .15s;font-size:12px;color:var(--mu)}
+.upload-area:hover{border-color:var(--ac);color:var(--tx)}
+.upload-file-item{display:flex;align-items:center;gap:8px;padding:5px 8px;background:var(--s2);border-radius:6px;font-size:11px}
+.upload-file-item .ufi-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.upload-file-item .ufi-rows{color:var(--gr);font-size:10px;font-weight:700}
 /* 3D panel */
 .canvas-wrap{flex:1;position:relative;overflow:hidden}
 #c3d{display:block;width:100%;height:100%;cursor:grab}
 #c3d:active{cursor:grabbing}
 .c3d-info{position:absolute;top:10px;left:10px;background:rgba(15,17,23,.8);padding:6px 10px;border-radius:6px;font-size:11px;color:var(--mu);border:1px solid var(--bd);pointer-events:none}
-.c3d-tooltip{position:absolute;background:var(--s1);border:1px solid var(--bd);border-radius:6px;padding:6px 9px;font-size:11px;max-width:200px;word-break:break-word;pointer-events:none;display:none}
+.c3d-tooltip{position:absolute;background:var(--s1);border:1px solid var(--ac);border-radius:8px;padding:8px 11px;font-size:11px;max-width:260px;word-break:break-word;pointer-events:none;display:none;box-shadow:0 4px 16px rgba(0,0,0,.5);line-height:1.45}
 .c3d-bar{padding:8px 14px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:8px;flex-shrink:0;font-size:12px}
 /* Query panel */
 .query-panel{padding:14px;display:flex;flex-direction:column;gap:12px;overflow-y:auto}
@@ -211,8 +231,42 @@ input[type=range]{accent-color:var(--ac)}
 <div class="modal-bg" id="importModal">
   <div class="modal">
     <h3>Import Rows</h3>
-    <p>One text per line — or JSON array of strings / objects with a "text" field.</p>
-    <textarea id="importTa" placeholder='One sentence per line&#10;— or JSON: ["row1","row2"]&#10;— or [{&quot;text&quot;:"row1",&quot;label&quot;:"A"}]'></textarea>
+
+    <div class="import-tabs">
+      <div class="import-tab active" data-itab="paste">Paste</div>
+      <div class="import-tab" data-itab="vfs">VFS Files</div>
+      <div class="import-tab" data-itab="upload">Upload</div>
+    </div>
+
+    <!-- Paste tab (existing behavior) -->
+    <div class="import-panel active" id="ipanel-paste">
+      <p>One text per line — or JSON array of strings / objects with a "text" field.</p>
+      <textarea id="importTa" placeholder='One sentence per line&#10;— or JSON: ["row1","row2"]&#10;— or [{"text":"row1","label":"A"}]'></textarea>
+    </div>
+
+    <!-- VFS Files tab -->
+    <div class="import-panel" id="ipanel-vfs">
+      <p>Browse a VFS folder. Supported: .txt, .md, .csv, .json</p>
+      <div style="display:flex;gap:6px;align-items:center">
+        <input class="q-input" id="vfsPathInput" placeholder="/home/user1/documents" style="flex:1;font-size:12px" />
+        <button class="btn btn-sm btn-ghost" id="vfsBrowseBtn">Browse</button>
+      </div>
+      <div class="file-check-list" id="vfsFileList">
+        <div style="color:var(--mu);font-size:11px;padding:8px">Enter a VFS folder path and click Browse.</div>
+      </div>
+      <div style="font-size:10px;color:var(--mu)" id="vfsSel">0 files selected</div>
+    </div>
+
+    <!-- Upload tab -->
+    <div class="import-panel" id="ipanel-upload">
+      <p>Upload CSV, Markdown (.md), or plain text files from your computer.</p>
+      <label class="upload-area">
+        <input type="file" id="fileInput" multiple accept=".csv,.md,.txt,.json" style="display:none">
+        Click to select files &nbsp;·&nbsp; <small>.csv .md .txt .json</small>
+      </label>
+      <div style="display:flex;flex-direction:column;gap:4px" id="uploadFileList"></div>
+    </div>
+
     <div class="modal-foot">
       <button class="btn btn-ghost btn-sm" id="importCancel">Cancel</button>
       <button class="btn btn-sm" id="importConfirm">Import</button>
@@ -221,17 +275,17 @@ input[type=range]{accent-color:var(--ac)}
 </div>
 
 <script>
-// ── AppSDK bridge (may be injected by SW; fallback is no-op) ─────────────────
-const SDK = window.AppSDK || {
-  readText: () => Promise.reject(new Error('no SDK')),
-  writeText: () => Promise.reject(new Error('no SDK')),
+// ── AppSDK bridge — always read at call-time so port-arrival race is avoided ──
+function getSDK(){ return window.AppSDK || {
+  readText: () => Promise.reject(new Error('AppSDK not ready')),
+  writeText: () => Promise.reject(new Error('AppSDK not ready')),
   mkdir: () => Promise.resolve(),
   exists: () => Promise.resolve(false),
   list: () => Promise.resolve([]),
-};
+}; }
 
 // ── State ────────────────────────────────────────────────────────────────────
-const STORE_DIR = '/home/user1/.local/share/vector-store';
+const STORE_DIR = '/home/user1/.local/share/ui.vector-store';
 let projects = [];     // { slug, name, model, rows:[{id,text,vector}], ... }
 let curIdx = -1;       // index into projects[]
 let model = null;
@@ -251,13 +305,13 @@ function setStatus(state, msg, pct=-1){
 // ── VFS persistence ──────────────────────────────────────────────────────────
 async function loadProjects() {
   try {
-    await SDK.mkdir(STORE_DIR);
-    const files = await SDK.list(STORE_DIR);
-    const jsonFiles = files.filter(f=>f.name.endsWith('.json'));
+    await getSDK().mkdir(STORE_DIR);
+    const files = await getSDK().list(STORE_DIR);
+    const jsonFiles = files.filter(f=>f.endsWith('.json'));
     projects=[];
     for(const f of jsonFiles){
       try{
-        const raw=await SDK.readText(STORE_DIR+'/'+f.name);
+        const raw=await getSDK().readText(STORE_DIR+'/'+f);
         projects.push(JSON.parse(raw));
       }catch(_){}
     }
@@ -270,8 +324,8 @@ async function loadProjects() {
 
 async function saveProject(proj){
   try{
-    await SDK.mkdir(STORE_DIR);
-    await SDK.writeText(STORE_DIR+'/'+proj.slug+'.json', JSON.stringify(proj,null,2));
+    await getSDK().mkdir(STORE_DIR);
+    await getSDK().writeText(STORE_DIR+'/'+proj.slug+'.json', JSON.stringify(proj,null,2));
   }catch(e){ console.warn('save failed',e); }
 }
 
@@ -323,7 +377,7 @@ function renderRows(){
   tbody.innerHTML=p.rows.map((r,i)=>`
     <tr data-rid="${r.id}">
       <td style="color:var(--mu);width:30px;font-variant-numeric:tabular-nums">${i+1}</td>
-      <td class="txt-cell">${escHtml(r.text.length>200?r.text.slice(0,200)+'…':r.text)}</td>
+      <td class="txt-cell">${escHtml(r.text.length>200?r.text.slice(0,200)+'…':r.text)}${r.source&&r.source!=='paste'?`<div style="font-size:10px;color:var(--mu);margin-top:2px">${escHtml(r.source)}</div>`:''}</td>
       <td><span class="vec-badge ${r.vector?'ok':'pending'}">${r.vector?r.vector.length+'d':'pending'}</span></td>
       <td><button class="row-del" data-i="${i}" title="Delete row">×</button></td>
     </tr>`).join('');
@@ -385,14 +439,164 @@ async function embedAll(){
   clearPca();
 }
 
-// ── Import ───────────────────────────────────────────────────────────────────
-function parseImport(raw){
+// ── Import parsers ────────────────────────────────────────────────────────────
+function parseImport(raw, source='paste'){
   raw=raw.trim();
   if(raw.startsWith('[')){
     const arr=JSON.parse(raw);
-    return arr.map(x=>typeof x==='string'?{id:uid(),text:x,vector:null}:{id:uid(),text:x.text||JSON.stringify(x),vector:null});
+    return arr.map(x=>typeof x==='string'?{id:uid(),text:x,vector:null,source}:{id:uid(),text:x.text||JSON.stringify(x),vector:null,source});
   }
-  return raw.split('\n').map(l=>l.trim()).filter(l=>l).map(l=>({id:uid(),text:l,vector:null}));
+  return raw.split('\n').map(l=>l.trim()).filter(l=>l).map(l=>({id:uid(),text:l,vector:null,source}));
+}
+
+function parseCsv(text, source){
+  // Simple RFC4180 parser – each row becomes a joined cell string
+  const rows=[];
+  let cur='',inQ=false,cells=[],i=0;
+  const push=()=>{cells.push(cur);cur='';};
+  for(;i<text.length;i++){
+    const c=text[i];
+    if(inQ){
+      if(c==='"'&&text[i+1]==='"'){cur+='"';i++}
+      else if(c==='"'){inQ=false}
+      else cur+=c;
+    }else{
+      if(c==='"'){inQ=true}
+      else if(c===','){push()}
+      else if(c==='\r'||c==='\n'){
+        if(c==='\r'&&text[i+1]==='\n')i++;
+        push();
+        const joined=cells.join(' | ').trim();
+        if(joined) rows.push({id:uid(),text:joined,vector:null,source});
+        cells=[];
+      }else cur+=c;
+    }
+  }
+  push();
+  const joined=cells.join(' | ').trim();
+  if(joined) rows.push({id:uid(),text:joined,vector:null,source});
+  // If first row looks like a header (all short, no numbers), skip it
+  // (heuristic: skip if all cells < 25 chars and no row > 1 cell differs)
+  return rows;
+}
+
+function parseMd(text, source){
+  // Split by headings, each chunk = heading + content below it
+  const chunks=[];
+  const lines=text.split('\n');
+  let buf=[];
+  const flush=()=>{const t=buf.join('\n').trim();if(t)chunks.push({id:uid(),text:t,vector:null,source});buf=[];};
+  for(const l of lines){
+    if(/^#{1,4}\s/.test(l)){flush();buf.push(l)}
+    else buf.push(l);
+  }
+  flush();
+  return chunks;
+}
+
+function parseTxt(text, source){
+  // Split by blank lines (paragraphs)
+  return text.split(/\n{2,}/)
+    .map(p=>p.trim()).filter(p=>p.length>10)
+    .map(p=>({id:uid(),text:p,vector:null,source}));
+}
+
+function parseFile(text, filename){
+  const ext=filename.split('.').pop().toLowerCase();
+  const src=filename;
+  if(ext==='csv') return parseCsv(text,src);
+  if(ext==='md'||ext==='markdown') return parseMd(text,src);
+  if(ext==='json') return parseImport(text,src);
+  return parseTxt(text,src); // .txt and fallback
+}
+
+// ── VFS file browser ──────────────────────────────────────────────────────────
+let vfsSelectedFiles=[];
+const VFS_EXTS=['txt','md','csv','json'];
+
+async function browseVfs(){
+  const path=document.getElementById('vfsPathInput').value.trim().replace(/\/$/,'');
+  if(!path) return;
+  const list=document.getElementById('vfsFileList');
+  list.innerHTML='<div style="color:var(--mu);font-size:11px;padding:8px">Loading…</div>';
+  vfsSelectedFiles=[];
+  try{
+    // SDK.list returns string[] (names only)
+    const names=await getSDK().list(path);
+    const supported=[];
+    for(const name of names){
+      const ext=name.split('.').pop().toLowerCase();
+      if(VFS_EXTS.includes(ext)){
+        supported.push(name);
+      }else if(!name.includes('.')){
+        // might be a dir — try listing one level
+        try{
+          const sub=await getSDK().list(path+'/'+name);
+          for(const sname of sub){
+            const sext=sname.split('.').pop().toLowerCase();
+            if(VFS_EXTS.includes(sext)) supported.push(name+'/'+sname);
+          }
+        }catch(_){}
+      }
+    }
+    if(!supported.length){list.innerHTML='<div style="color:var(--mu);font-size:11px;padding:8px">No supported files found (.txt, .md, .csv, .json).</div>';return}
+    list.innerHTML=supported.map(f=>`
+      <label class="vfs-file-item">
+        <input type="checkbox" value="${f}" class="vfs-cb">
+        <span class="fi-name">${f}</span>
+        <span class="fi-type">${f.split('.').pop().toUpperCase()}</span>
+      </label>`).join('');
+    list.querySelectorAll('.vfs-cb').forEach(cb=>{
+      cb.addEventListener('change',()=>{
+        vfsSelectedFiles=[];
+        list.querySelectorAll('.vfs-cb:checked').forEach(c=>vfsSelectedFiles.push(c.value));
+        document.getElementById('vfsSel').textContent=`${vfsSelectedFiles.length} file${vfsSelectedFiles.length!==1?'s':''} selected`;
+      });
+    });
+    document.getElementById('vfsSel').textContent='0 files selected';
+  }catch(e){
+    list.innerHTML=`<div style="color:var(--rd);font-size:11px;padding:8px">Error: ${e.message}</div>`;
+  }
+}
+
+async function importVfsFiles(){
+  const base=document.getElementById('vfsPathInput').value.trim().replace(/\/$/,'');
+  if(!vfsSelectedFiles.length){alert('Select at least one file.');return}
+  const rows=[];
+  for(const fname of vfsSelectedFiles){
+    try{
+      const text=await getSDK().readText(base+'/'+fname);
+      rows.push(...parseFile(text,fname));
+    }catch(e){console.warn('skip',fname,e)}
+  }
+  return rows;
+}
+
+// ── Upload from computer ──────────────────────────────────────────────────────
+let uploadParsedRows=[];
+
+function readFileAsText(file){return new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=rej;r.readAsText(file)})}
+
+async function handleFileInput(files){
+  uploadParsedRows=[];
+  const listEl=document.getElementById('uploadFileList');
+  listEl.innerHTML='';
+  for(const file of files){
+    try{
+      const text=await readFileAsText(file);
+      const rows=parseFile(text,file.name);
+      uploadParsedRows.push(...rows);
+      const div=document.createElement('div');
+      div.className='upload-file-item';
+      div.innerHTML=`<span class="ufi-name">${file.name}</span><span class="ufi-rows">+${rows.length} rows</span>`;
+      listEl.appendChild(div);
+    }catch(e){
+      const div=document.createElement('div');
+      div.className='upload-file-item';
+      div.innerHTML=`<span class="ufi-name" style="color:var(--rd)">${file.name} — error</span>`;
+      listEl.appendChild(div);
+    }
+  }
 }
 
 // ── PCA 3D ───────────────────────────────────────────────────────────────────
@@ -407,7 +611,7 @@ function computePca(){
   if(embedded.length<3){alert('Need at least 3 embedded rows for 3D view.');return}
   setStatus('busy','Computing PCA…',-1);
   const vectors=embedded.map(r=>r.vector);
-  pca3dPts=simplePca3(vectors).map((pt,i)=>({...pt,label:embedded[i].text.slice(0,60),idx:i}));
+  pca3dPts=simplePca3(vectors).map((pt,i)=>({...pt,label:embedded[i].text.slice(0,60),idx:i,text:embedded[i].text,source:embedded[i].source||'paste',dims:embedded[i].vector.length,rowNum:i+1}));
   setStatus('ok','PCA computed',-1);
   document.getElementById('pcaStatus').textContent=`${embedded.length} points`;
   renderCanvas();
@@ -501,9 +705,16 @@ c3d.addEventListener('mousemove',e=>{
     const d=Math.sqrt(dx*dx+dy*dy);
     if(d<minD){minD=d;nearest=p}
   }
-  if(nearest&&minD<12){
-    tip.style.display='';tip.style.left=mx+12+'px';tip.style.top=my+4+'px';
-    tip.textContent=nearest.label;
+  if(nearest&&minD<14){
+    const srcHtml=nearest.source&&nearest.source!=='paste'?`<div style="font-size:10px;color:var(--mu);margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(nearest.source)}">📁 ${escHtml(nearest.source)}</div>`:'';
+    const snippet=nearest.text.length>200?nearest.text.slice(0,200)+'…':nearest.text;
+    tip.innerHTML=`<div style="font-weight:700;color:var(--ac);font-size:10px;margin-bottom:5px">#${nearest.rowNum} &nbsp;·&nbsp; ${nearest.dims}d</div>${srcHtml}<div style="color:var(--tx)">${escHtml(snippet)}</div>`;
+    // position: flip left/up if near edges
+    tip.style.display='';
+    const tw=tip.offsetWidth||260,th=tip.offsetHeight||100;
+    const left=mx+16+tw>c3d.width?mx-tw-6:mx+16;
+    const top=my+4+th>c3d.height?my-th-4:my+4;
+    tip.style.left=left+'px';tip.style.top=top+'px';
   }else{tip.style.display='none'}
 });
 c3d.addEventListener('mouseup',()=>drag=null);
@@ -579,10 +790,10 @@ document.getElementById('delProjBtn').addEventListener('click',async()=>{
   if(curIdx<0) return;
   const p=projects[curIdx];
   if(!confirm(`Delete project "${p.name}"?`)) return;
-  try{ await SDK.readText(STORE_DIR+'/'+p.slug+'.json'); }catch(_){}
+  try{ await getSDK().readText(STORE_DIR+'/'+p.slug+'.json'); }catch(_){}
   // Overwrite with tombstone is simplest; we can't delete via current AppSDK
   // Use a remove call if available
-  try{ if(SDK.remove) await SDK.remove(STORE_DIR+'/'+p.slug+'.json'); }catch(_){}
+  try{ const sdk=getSDK(); if(sdk.remove) await sdk.remove(STORE_DIR+'/'+p.slug+'.json'); }catch(_){}
   projects.splice(curIdx,1);
   curIdx=-1;
   document.getElementById('noProj').style.display='';
@@ -590,14 +801,55 @@ document.getElementById('delProjBtn').addEventListener('click',async()=>{
   document.getElementById('exportBtn').style.display='none';
   renderProjList();
 });
-document.getElementById('importBtn').addEventListener('click',()=>document.getElementById('importModal').classList.add('open'));
+// Import modal open/close
+document.getElementById('importBtn').addEventListener('click',()=>{
+  uploadParsedRows=[];vfsSelectedFiles=[];
+  document.getElementById('uploadFileList').innerHTML='';
+  document.getElementById('vfsFileList').innerHTML='<div style="color:var(--mu);font-size:11px;padding:8px">Enter a VFS folder path and click Browse.</div>';
+  document.getElementById('vfsSel').textContent='0 files selected';
+  // activate Paste tab
+  document.querySelectorAll('.import-tab').forEach(t=>t.classList.toggle('active',t.dataset.itab==='paste'));
+  document.querySelectorAll('.import-panel').forEach(p=>p.classList.toggle('active',p.id==='ipanel-paste'));
+  document.getElementById('importModal').classList.add('open');
+});
 document.getElementById('importCancel').addEventListener('click',()=>document.getElementById('importModal').classList.remove('open'));
+
+// Import modal tabs
+document.querySelectorAll('.import-tab').forEach(t=>t.addEventListener('click',()=>{
+  document.querySelectorAll('.import-tab').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.import-panel').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active');
+  const p=document.getElementById('ipanel-'+t.dataset.itab);
+  if(p) p.classList.add('active');
+}));
+
+// VFS browse
+document.getElementById('vfsBrowseBtn').addEventListener('click',browseVfs);
+document.getElementById('vfsPathInput').addEventListener('keydown',e=>{if(e.key==='Enter')browseVfs()});
+
+// File input (upload tab)
+document.getElementById('fileInput').addEventListener('change',async function(){
+  if(this.files.length) await handleFileInput(this.files);
+});
+
+// Import confirm — dispatches to active tab
 document.getElementById('importConfirm').addEventListener('click',async()=>{
   if(curIdx<0) return;
-  const raw=document.getElementById('importTa').value.trim();
-  if(!raw) return;
+  const activeTab=document.querySelector('.import-tab.active')?.dataset.itab||'paste';
+  let rows=[];
   try{
-    const rows=parseImport(raw);
+    if(activeTab==='paste'){
+      const raw=document.getElementById('importTa').value.trim();
+      if(!raw){alert('Nothing to import.');return}
+      rows=parseImport(raw,'paste');
+    }else if(activeTab==='vfs'){
+      rows=await importVfsFiles();
+      if(!rows){return}
+    }else if(activeTab==='upload'){
+      rows=[...uploadParsedRows];
+      if(!rows.length){alert('No parsed rows. Select files first.');return}
+    }
+    if(!rows.length){alert('No rows found.');return}
     projects[curIdx].rows.push(...rows);
     projects[curIdx].updated=new Date().toISOString();
     await saveProject(projects[curIdx]);
@@ -605,7 +857,7 @@ document.getElementById('importConfirm').addEventListener('click',async()=>{
     document.getElementById('importTa').value='';
     document.getElementById('importModal').classList.remove('open');
     setStatus('ok',`Imported ${rows.length} rows`,-1);
-  }catch(e){alert('Parse error: '+e.message)}
+  }catch(e){alert('Import error: '+e.message)}
 });
 document.getElementById('computePcaBtn').addEventListener('click',computePca);
 document.getElementById('searchBtn').addEventListener('click',runQuery);

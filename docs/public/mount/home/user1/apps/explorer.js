@@ -1116,6 +1116,7 @@ const ListDirConponent = ({ dir, openFile, showFileActions, showDirActions, hand
     ".webm": "/usr/share/icons/video-icon.svg",
     ".": "/usr/share/icons/folder-icon.png",
     "": "/usr/share/icons/invalid-file-icon.png",
+    ...(platform.host.getFileTypeIcons ? platform.host.getFileTypeIcons() : {}),
   };
 
   const imageExtensions = new Set([
@@ -1181,6 +1182,10 @@ const ListDirConponent = ({ dir, openFile, showFileActions, showDirActions, hand
     const urls = [];
     const next = {};
     Object.entries(extIconMap).forEach(([ext, path]) => {
+      if (path.startsWith('data:')) {
+        next[ext] = path; // data URIs used directly — no blob conversion needed
+        return;
+      }
       try {
         const data = fs.readFileSync(path);
         const blob = new Blob([data], { type: path.endsWith(".webp") ? "image/webp" : path.endsWith(".svg") ? "image/svg+xml" : "image/png" });

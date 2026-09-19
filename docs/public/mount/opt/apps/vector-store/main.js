@@ -25,4 +25,7 @@ platform.host.registerCommand('ui.vector-store', function(body, props) {
   if (props && typeof props.setTitle === 'function') {
     props.setTitle('Vector Store');
   }
+  if (props && typeof props.setWindowView === 'function') {
+    props.setWindowView(true);
+  }
 });

@@ -78,6 +78,7 @@ body{margin:0;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-siz
 }
 .mv-zoom-btn:hover{background:#ede9e4;}
 .mv-zoom-pct{font-size:11px;color:#aaa;min-width:36px;text-align:center;}
+.mv-divider{width:1px;height:18px;background:#e5e0db;flex-shrink:0;margin:0 2px;}
 `;
 
 const MERMAID_CDN = 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js';
@@ -102,45 +103,61 @@ const loadMermaid = (doc) => {
   return mermaidLoadPromise;
 };
 
+// Fixed PNG converter: strips @font-face external URLs to avoid tainted canvas,
+// uses base64 data URL for better iframe/sandbox compat.
 const svgToPngBlob = (svgEl, iframeDoc) => new Promise((resolve, reject) => {
-  const Ser = iframeDoc.defaultView.XMLSerializer;
-  const svgStr = new Ser().serializeToString(svgEl);
-  const svgBlob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
-  const url = URL.createObjectURL(svgBlob);
-  const img = new Image();
+  const win = iframeDoc.defaultView;
+  const clone = svgEl.cloneNode(true);
+
+  // Strip @font-face rules that reference external URLs — they taint the canvas.
+  clone.querySelectorAll('style').forEach(s => {
+    s.textContent = s.textContent.replace(/@font-face\s*\{[^}]*url\s*\([^)]*https?:[^)]*\)[^}]*\}/g, '');
+  });
+
+  // Ensure explicit width/height so the canvas knows the dimensions.
+  const vb = svgEl.viewBox?.baseVal;
+  const W = vb?.width || svgEl.width?.baseVal?.value || 800;
+  const H = vb?.height || svgEl.height?.baseVal?.value || 600;
+  clone.setAttribute('width', String(W));
+  clone.setAttribute('height', String(H));
+
+  const svgStr = new win.XMLSerializer().serializeToString(clone);
+  // Base64 data URL avoids blob-URL loading issues inside sandboxed iframes.
+  const b64 = win.btoa(win.unescape(win.encodeURIComponent(svgStr)));
+  const dataUrl = 'data:image/svg+xml;base64,' + b64;
+
+  const img = new win.Image();
   img.onload = () => {
-    const vb = svgEl.viewBox?.baseVal;
-    const W = (vb?.width || svgEl.width?.baseVal?.value || img.naturalWidth || 800);
-    const H = (vb?.height || svgEl.height?.baseVal?.value || img.naturalHeight || 600);
     const scale = 2;
     const canvas = iframeDoc.createElement('canvas');
-    canvas.width = W * scale; canvas.height = H * scale;
+    canvas.width = W * scale;
+    canvas.height = H * scale;
     const ctx = canvas.getContext('2d');
     ctx.scale(scale, scale);
-    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, W, H);
     ctx.drawImage(img, 0, 0, W, H);
-    URL.revokeObjectURL(url);
-    canvas.toBlob(b => b ? resolve(b) : reject(new Error('toBlob failed')), 'image/png');
+    canvas.toBlob(b => b ? resolve(b) : reject(new Error('toBlob returned null')), 'image/png');
   };
-  img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('SVG render failed')); };
-  img.src = url;
+  img.onerror = () => reject(new Error('SVG failed to load as image (check font/resource errors)'));
+  img.src = dataUrl;
 });
 
-const App = ({ initialArg, docRef, topDoc, fs }) => {
-  const filePath = initialArg || null;
+const App = ({ initialArg, docRef, topDoc, fs, onTitleChange }) => {
+  const [filePath, setFilePath] = React.useState(initialArg || null);
   const baseName = filePath ? filePath.split('/').pop().replace(/\.[^.]*$/, '') : 'diagram';
 
   const [source, setSource] = React.useState(() => {
-    if (filePath) { try { return fs.readFileSync(filePath, 'utf8'); } catch(_){} }
+    if (initialArg) { try { return fs.readFileSync(initialArg, 'utf8'); } catch(_){} }
     return DEFAULT_DIAGRAM;
   });
-  const [svgHtml, setSvgHtml]       = React.useState('');
+  const [svgHtml, setSvgHtml]         = React.useState('');
   const [renderError, setRenderError] = React.useState('');
   const [mermaidReady, setMermaidReady] = React.useState(false);
-  const [loading, setLoading]       = React.useState(true);
-  const [saveStatus, setSaveStatus] = React.useState('');
-  const [pinned, setPinned]         = React.useState(false);
-  const [zoomPct, setZoomPct]       = React.useState(100);
+  const [loading, setLoading]         = React.useState(true);
+  const [saveStatus, setSaveStatus]   = React.useState('');
+  const [pinned, setPinned]           = React.useState(false);
+  const [zoomPct, setZoomPct]         = React.useState(100);
 
   const mermaidRef    = React.useRef(null);
   const renderIdRef   = React.useRef(0);
@@ -151,7 +168,6 @@ const App = ({ initialArg, docRef, topDoc, fs }) => {
   const dragRef       = React.useRef(null);
   const pipCleanupRef = React.useRef(null);
 
-  // Load mermaid
   React.useEffect(() => {
     const doc = docRef.current;
     if (!doc) return;
@@ -160,7 +176,6 @@ const App = ({ initialArg, docRef, topDoc, fs }) => {
       .catch(e => { setRenderError('Failed to load Mermaid: ' + e.message); setLoading(false); });
   }, []);
 
-  // Render diagram on source change
   React.useEffect(() => {
     if (!mermaidReady || !mermaidRef.current) return;
     const trimmed = source.trim();
@@ -177,7 +192,6 @@ const App = ({ initialArg, docRef, topDoc, fs }) => {
       });
   }, [source, mermaidReady]);
 
-  // Wheel zoom — passive:false so we can preventDefault
   React.useEffect(() => {
     const el = previewRef.current;
     if (!el) return;
@@ -204,7 +218,6 @@ const App = ({ initialArg, docRef, topDoc, fs }) => {
   const zoomIn  = () => { zoomRef.current = Math.min(10, zoomRef.current * 1.25); applyTransform(); setZoomPct(Math.round(zoomRef.current * 100)); };
   const zoomOut = () => { zoomRef.current = Math.max(0.1, zoomRef.current / 1.25); applyTransform(); setZoomPct(Math.round(zoomRef.current * 100)); };
 
-  // Drag pan
   const onMouseDown = (e) => {
     if (e.button !== 0 || e.target.tagName === 'A') return;
     dragRef.current = { sx: e.clientX, sy: e.clientY, px: panRef.current.x, py: panRef.current.y };
@@ -227,40 +240,73 @@ const App = ({ initialArg, docRef, topDoc, fs }) => {
 
   const getSvgEl = () => svgWrapRef.current?.querySelector('svg');
 
-  // Save source .mmd file
+  // Open a file from VFS
+  const openFile = () => {
+    const path = docRef.current.defaultView.prompt('Open file (VFS path):', filePath || '/home/user1/diagram.mmd');
+    if (!path) return;
+    try {
+      const content = fs.readFileSync(path, 'utf8');
+      setSource(content);
+      setFilePath(path);
+      onTitleChange?.(path.split('/').pop());
+    } catch(e) {
+      docRef.current.defaultView.alert('Cannot open: ' + e.message);
+    }
+  };
+
+  // New/blank diagram
+  const newDiagram = () => {
+    setSource(DEFAULT_DIAGRAM);
+    setFilePath(null);
+    resetView();
+    onTitleChange?.('Diagram');
+  };
+
+  // Save source to VFS
   const save = () => {
-    if (!filePath) return;
-    try { fs.writeFileSync(filePath, source); setSaveStatus('saved'); }
-    catch(_) { setSaveStatus('error'); }
+    if (!filePath) {
+      const path = docRef.current.defaultView.prompt('Save to VFS path:', '/home/user1/diagram.mmd');
+      if (!path) return;
+      try { fs.writeFileSync(path, source); setFilePath(path); onTitleChange?.(path.split('/').pop()); setSaveStatus('saved'); }
+      catch(e) { setSaveStatus('error'); }
+    } else {
+      try { fs.writeFileSync(filePath, source); setSaveStatus('saved'); }
+      catch(_) { setSaveStatus('error'); }
+    }
     setTimeout(() => setSaveStatus(''), 2000);
   };
 
-  // Copy SVG markup
   const copySvg = () => {
     if (!svgHtml) return;
-    try { navigator.clipboard.writeText(svgHtml); } catch(_) {}
+    try { docRef.current.defaultView.navigator.clipboard?.writeText(svgHtml); } catch(_) {}
   };
 
-  // Download PNG via browser download
+  // Download PNG to browser — uses FileReader data URL to work in sandboxed iframes
   const downloadPng = async () => {
     const svgEl = getSvgEl();
     if (!svgEl) return;
     try {
       const blob = await svgToPngBlob(svgEl, docRef.current);
-      const url = URL.createObjectURL(blob);
-      const a = docRef.current.createElement('a');
-      a.href = url; a.download = baseName + '.png';
-      docRef.current.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 2000);
-    } catch(e) { alert('PNG export failed: ' + e.message); }
+      await new Promise((res, rej) => {
+        const r = new docRef.current.defaultView.FileReader();
+        r.onload = () => {
+          const a = docRef.current.createElement('a');
+          a.href = r.result; a.download = baseName + '.png';
+          docRef.current.body.appendChild(a); a.click(); a.remove();
+          res();
+        };
+        r.onerror = rej;
+        r.readAsDataURL(blob);
+      });
+    } catch(e) { docRef.current.defaultView.alert('PNG export failed: ' + e.message); }
   };
 
-  // Save PNG to VFS
+  // Save PNG to VFS path
   const savePng = async () => {
     const svgEl = getSvgEl();
     if (!svgEl) return;
     const defaultPath = filePath ? filePath.replace(/\.[^.]*$/, '.png') : `/home/user1/${baseName}.png`;
-    const savePath = prompt('Save PNG to VFS path:', defaultPath);
+    const savePath = docRef.current.defaultView.prompt('Save PNG to VFS path:', defaultPath);
     if (!savePath) return;
     try {
       const blob = await svgToPngBlob(svgEl, docRef.current);
@@ -268,10 +314,10 @@ const App = ({ initialArg, docRef, topDoc, fs }) => {
       fs.writeFileSync(savePath, Buffer.from(ab));
       setSaveStatus('png-saved');
       setTimeout(() => setSaveStatus(''), 2500);
-    } catch(e) { alert('Save failed: ' + e.message); }
+    } catch(e) { docRef.current.defaultView.alert('Save failed: ' + e.message); }
   };
 
-  // Pin as floating PiP overlay in top document
+  // Pin as floating PiP overlay
   const togglePin = () => {
     if (pipCleanupRef.current) { pipCleanupRef.current(); return; }
     const svgEl = getSvgEl();
@@ -293,49 +339,38 @@ const App = ({ initialArg, docRef, topDoc, fs }) => {
     clone.style.cssText = 'max-width:100%;height:auto;';
     body.appendChild(clone);
     pip.appendChild(hdr); pip.appendChild(body); doc.body.appendChild(pip);
-    // Drag
     let dragging = false, dx = 0, dy = 0;
-    hdr.addEventListener('mousedown', e => {
-      dragging = true; const r = pip.getBoundingClientRect();
-      dx = e.clientX - r.left; dy = e.clientY - r.top; e.preventDefault();
-    });
-    const onMove = e => {
-      if (!dragging) return;
-      pip.style.left = (e.clientX - dx) + 'px'; pip.style.top = (e.clientY - dy) + 'px';
-      pip.style.right = 'auto'; pip.style.bottom = 'auto';
-    };
+    hdr.addEventListener('mousedown', e => { dragging = true; const r = pip.getBoundingClientRect(); dx = e.clientX - r.left; dy = e.clientY - r.top; e.preventDefault(); });
+    const onMove = e => { if (!dragging) return; pip.style.left = (e.clientX - dx)+'px'; pip.style.top = (e.clientY - dy)+'px'; pip.style.right='auto'; pip.style.bottom='auto'; };
     const onUp = () => { dragging = false; };
     doc.addEventListener('mousemove', onMove); doc.addEventListener('mouseup', onUp);
-    const cleanup = () => {
-      doc.removeEventListener('mousemove', onMove); doc.removeEventListener('mouseup', onUp);
-      pip.remove(); pipCleanupRef.current = null; setPinned(false);
-    };
+    const cleanup = () => { doc.removeEventListener('mousemove', onMove); doc.removeEventListener('mouseup', onUp); pip.remove(); pipCleanupRef.current = null; setPinned(false); };
     pipCleanupRef.current = cleanup;
     setPinned(true);
   };
 
   const hasSvg = !!svgHtml;
+  const isDirty = !filePath || saveStatus !== 'saved';
 
   return (
     <div className="mv-root">
       <div className="mv-toolbar">
-        <span className="mv-title">{filePath ? filePath.split('/').pop() : 'Untitled Diagram'}</span>
+        <span className="mv-title">{filePath ? filePath.split('/').pop() : 'Untitled'}</span>
+        <button className="mv-btn" onClick={newDiagram} title="New diagram"><span className="msi">add</span>New</button>
+        <button className="mv-btn" onClick={openFile} title="Open file from VFS"><span className="msi">folder_open</span>Open</button>
+        <button className={`mv-btn${filePath && saveStatus !== 'saved' ? ' primary' : ''}`} onClick={save} title="Save to VFS">
+          {saveStatus === 'saved' ? '✓ Saved' : saveStatus === 'error' ? '✗ Error' : <><span className="msi">save</span>Save</>}
+        </button>
         {hasSvg && <>
+          <div className="mv-divider"/>
           <button className="mv-btn" onClick={copySvg} title="Copy SVG markup">Copy SVG</button>
-          <button className="mv-btn" onClick={downloadPng} title="Download PNG file">
-            <span className="msi">download</span> PNG
-          </button>
-          <button className="mv-btn" onClick={savePng} title="Save PNG to VFS">Save PNG</button>
+          <button className="mv-btn" onClick={downloadPng} title="Download PNG to computer"><span className="msi">download</span>PNG</button>
+          <button className="mv-btn" onClick={savePng} title="Save PNG to VFS"><span className="msi">image</span>Save PNG</button>
           <button className={`mv-btn${pinned?' active':''}`} onClick={togglePin} title={pinned?'Unpin':'Float as overlay'}>
-            <span className="msi">{pinned?'push_pin':'push_pin'}</span>{pinned?'Pinned':'Pin'}
+            <span className="msi">push_pin</span>{pinned?'Pinned':'Pin'}
           </button>
         </>}
-        {filePath && (
-          <button className={`mv-btn${saveStatus==='saved'?'':' primary'}`} onClick={save} disabled={saveStatus==='error'}>
-            {saveStatus==='saved'?'Saved!':saveStatus==='error'?'Error':'Save .mmd'}
-          </button>
-        )}
-        {saveStatus==='png-saved' && <span style={{fontSize:11,color:'#888'}}>PNG saved ✓</span>}
+        {saveStatus === 'png-saved' && <span style={{fontSize:11,color:'#888'}}>PNG saved ✓</span>}
       </div>
 
       <div className="mv-body">
@@ -360,12 +395,8 @@ const App = ({ initialArg, docRef, topDoc, fs }) => {
             {!loading && renderError && <div className="mv-error">{renderError}</div>}
             {!loading && !renderError && (
               <>
-                <div ref={svgWrapRef} className="mv-svg-wrap"
-                  dangerouslySetInnerHTML={{ __html: svgHtml || '' }}
-                />
-                {!hasSvg && (
-                  <div className="mv-empty">{source.trim() ? 'Rendering…' : 'Enter a diagram in the editor'}</div>
-                )}
+                <div ref={svgWrapRef} className="mv-svg-wrap" dangerouslySetInnerHTML={{ __html: svgHtml || '' }} />
+                {!hasSvg && <div className="mv-empty">{source.trim() ? 'Rendering…' : 'Enter a diagram in the editor'}</div>}
               </>
             )}
           </div>
@@ -373,7 +404,7 @@ const App = ({ initialArg, docRef, topDoc, fs }) => {
       </div>
 
       <div className="mv-status">
-        <span>{filePath || 'No file'}</span>
+        <span>{filePath || 'No file — use Save to pick a path'}</span>
         <span style={{marginLeft:'auto',fontSize:10}}>Scroll to zoom · Drag to pan</span>
       </div>
     </div>
@@ -402,13 +433,31 @@ const run = (...args) => {
 
   if (props.setTitle) props.setTitle(initialArg ? initialArg.split('/').pop() : 'Diagram');
   const root = ReactDOM.createRoot(container);
-  root.render(<App initialArg={initialArg||null} docRef={{current:doc}} topDoc={topDoc} fs={fs} />);
-  props.setHeaderStyles({ background:'#ffffff', color:'#555', boxShadow:'none', borderBottom:'1px solid #f0ede9' });
+  root.render(
+    <App
+      initialArg={initialArg || null}
+      docRef={{ current: doc }}
+      topDoc={topDoc}
+      fs={fs}
+      onTitleChange={t => props.setTitle?.(t)}
+    />
+  );
+  props.setHeaderStyles({ background: '#ffffff', color: '#555', boxShadow: 'none', borderBottom: '1px solid #f0ede9' });
   props.setWindowView(true);
   props.onDestroy(() => { mermaidLoadPromise = null; setTimeout(() => root.unmount(), 0); });
 };
 
 platform.host.registerCommand('ui.mermaid', run, {
-  callable: false, icon: 'account_tree', title: 'Diagram', fullScreen: false, category: 'Dev',
+  icon: 'account_tree', title: 'Diagram Editor', fullScreen: false, category: 'Dev',
   fileExtensions: ['.mmd', '.mermaid'],
 });
+
+const _mermaidIconSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <rect x="5" y="3" width="22" height="9" rx="2.5" fill="#7c3aed"/>
+  <rect x="5" y="20" width="22" height="9" rx="2.5" fill="#7c3aed"/>
+  <line x1="16" y1="12" x2="16" y2="17" stroke="#a78bfa" stroke-width="2.2"/>
+  <polygon points="11,17 21,17 16,22" fill="#a78bfa"/>
+</svg>`;
+const _mermaidIconUrl = 'data:image/svg+xml,' + encodeURIComponent(_mermaidIconSvg);
+platform.host.registerFileTypeIcon('.mmd', _mermaidIconUrl);
+platform.host.registerFileTypeIcon('.mermaid', _mermaidIconUrl);

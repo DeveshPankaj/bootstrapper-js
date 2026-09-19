@@ -6,7 +6,7 @@ const platform = window.platform;
 const fs = platform.host.getFS();
 const React = platform.getService('React');
 const { createRoot } = platform.getService('ReactDOM');
-const { useState, useEffect, useCallback, useRef } = React;
+const { useState, useEffect, useCallback, useRef, useMemo } = React;
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -571,8 +571,21 @@ const Icon = ({ name, style }) => (
 const DiscoverView = ({ registryApps, installed, loading, fetchError, onInstall, onUninstall, installingId, uninstallingId, search, setSearch }) => {
 
   const installedIds = new Set(installed.map(p => p.id));
+  const [regFilter, setRegFilter] = useState('');
+
+  // Unique registry URLs present in the app list
+  const registryUrls = useMemo(() => {
+    const seen = new Set();
+    registryApps.forEach(a => { if (a._registryUrl) seen.add(a._registryUrl); });
+    return [...seen];
+  }, [registryApps]);
+
+  const registryLabel = url => {
+    try { const u = new URL(url); return u.hostname + (u.pathname !== '/' ? u.pathname : ''); } catch(_) { return url; }
+  };
 
   const visible = registryApps.filter(app => {
+    if (regFilter && app._registryUrl !== regFilter) return false;
     if (!search) return true;
     const q = search.toLowerCase();
     return (
@@ -595,6 +608,28 @@ const DiscoverView = ({ registryApps, installed, loading, fetchError, onInstall,
           onChange={e => setSearch(e.target.value)}
         />
       </div>
+      {registryUrls.length > 1 && (
+        <div style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 14px', borderBottom:'1px solid #2d3148', flexWrap:'wrap' }}>
+          <span style={{ fontSize:11, color:'#7880a0', flexShrink:0 }}>Registry:</span>
+          <button
+            style={{ padding:'2px 9px', borderRadius:5, border:'1px solid', fontSize:11, cursor:'pointer',
+              background: regFilter==='' ? 'rgba(99,102,241,.15)' : 'none',
+              borderColor: regFilter==='' ? '#6366f1' : '#2d3148',
+              color: regFilter==='' ? '#6366f1' : '#7880a0', fontWeight: regFilter==='' ? 600 : 400 }}
+            onClick={() => setRegFilter('')}
+          >All</button>
+          {registryUrls.map(url => (
+            <button key={url}
+              style={{ padding:'2px 9px', borderRadius:5, border:'1px solid', fontSize:11, cursor:'pointer',
+                background: regFilter===url ? 'rgba(99,102,241,.15)' : 'none',
+                borderColor: regFilter===url ? '#6366f1' : '#2d3148',
+                color: regFilter===url ? '#6366f1' : '#7880a0', fontWeight: regFilter===url ? 600 : 400 }}
+              onClick={() => setRegFilter(regFilter===url ? '' : url)}
+              title={url}
+            >{registryLabel(url)}</button>
+          ))}
+        </div>
+      )}
       <div className="pkg-scroll">
         {fetchError && <div className="pkg-error">{fetchError}</div>}
         {loading && (

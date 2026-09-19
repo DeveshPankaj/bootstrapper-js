@@ -29596,8 +29596,10 @@ class Namespace {
     }
     bestMatch(path) {
         // Find the most-specific ACL entry whose path is a prefix of the target path.
+        // Special-case e.path === '/' so the catch-all works: any '/foo' starts with '/'
+        // without adding an extra slash (which would require '//').
         return this.acl
-            .filter(e => path === e.path || path.startsWith(e.path + '/'))
+            .filter(e => path === e.path || e.path === '/' || path.startsWith(e.path + '/'))
             .sort((a, b) => b.path.length - a.path.length)[0];
     }
     checkRead(path) {
@@ -30191,6 +30193,7 @@ class Host {
         this.modulesMap = modulesMap;
         this.settingsSections = settingsSections;
         this.widgetTypes = widgetTypes;
+        this.fileTypeIcons = {};
         this.commands$ = this.commands.asObservable();
         this.widgets$ = this.widgets.asObservable();
         this.settingsSections$ = this.settingsSections.asObservable();
@@ -30448,6 +30451,12 @@ class Host {
         if (!srv)
             console.warn(`Service: [${moduleName}/${serviceName}] not found`);
         return srv;
+    }
+    registerFileTypeIcon(ext, iconUrl) {
+        this.fileTypeIcons[ext] = iconUrl;
+    }
+    getFileTypeIcons() {
+        return Object.assign({}, this.fileTypeIcons);
     }
     getFS() {
         this.platform.requestedServices.add('fs');

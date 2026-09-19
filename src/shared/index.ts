@@ -429,6 +429,16 @@ export class Host {
     return srv;
   }
 
+  private fileTypeIcons: Record<string, string> = {};
+
+  public registerFileTypeIcon(ext: string, iconUrl: string): void {
+    this.fileTypeIcons[ext] = iconUrl;
+  }
+
+  public getFileTypeIcons(): Record<string, string> {
+    return { ...this.fileTypeIcons };
+  }
+
   public getFS() {
     this.platform.requestedServices.add('fs')
     // @ts-ignore

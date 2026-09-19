@@ -785,7 +785,8 @@ const ListDirComponent = ({ dir, openFile, showFileActions, showDirActions, hand
         '.mkv': '/usr/share/icons/video-icon.svg',
         '.webm': '/usr/share/icons/video-icon.svg',
         '.': '/usr/share/icons/folder-icon.png',
-        '': '/usr/share/icons/invalid-file-icon.png'
+        '': '/usr/share/icons/invalid-file-icon.png',
+        ...(platform.host.getFileTypeIcons?.() ?? {}),
     }
 
     const imageExtensions = new Set([
@@ -851,6 +852,10 @@ const ListDirComponent = ({ dir, openFile, showFileActions, showDirActions, hand
         const urls: string[] = []
         const next: Record<string, string> = {}
         Object.entries(extIconMap).forEach(([ext, path]) => {
+            if (path.startsWith('data:')) {
+                next[ext] = path;
+                return;
+            }
             try {
                 const data = fs.readFileSync(path)
                 const blob = new Blob([data], { type: path.endsWith('.webp') ? 'image/webp' : path.endsWith('.svg') ? 'image/svg+xml' : 'image/png' })

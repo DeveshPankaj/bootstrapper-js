@@ -28473,41 +28473,9 @@ __webpack_require__.r(__webpack_exports__);
 
 const platform = _shared_index__WEBPACK_IMPORTED_MODULE_1__.Platform.getInstance();
 const ListDirComponent = ({ dir, openFile, showFileActions, customClass }) => {
+    var _a, _b, _c;
     dir !== null && dir !== void 0 ? dir : (dir = _shared_utils__WEBPACK_IMPORTED_MODULE_2__.DESKTOP_PATH);
-    const extIconMap = {
-        '.js': '/(sw)/usr/share/icons/js-icon.png',
-        '.ts': '/(sw)/usr/share/icons/ts-icon.png',
-        '.proj': '/(sw)/usr/share/icons/game-icon.png',
-        '.html': '/(sw)/usr/share/icons/html-icon.png',
-        '.png': '/(sw)/usr/share/icons/png-icon.png',
-        '.jpg': '/(sw)/usr/share/icons/png-icon.png',
-        '.jpeg': '/(sw)/usr/share/icons/png-icon.png',
-        '.gif': '/(sw)/usr/share/icons/png-icon.png',
-        '.webp': '/(sw)/usr/share/icons/png-icon.png',
-        '.svg': '/(sw)/usr/share/icons/png-icon.png',
-        '.bmp': '/(sw)/usr/share/icons/png-icon.png',
-        '.ico': '/(sw)/usr/share/icons/png-icon.png',
-        '.avif': '/(sw)/usr/share/icons/png-icon.png',
-        '.run': '/(sw)/usr/share/icons/bash.png',
-        '.md': '/(sw)/usr/share/icons/note-icon.webp',
-        '.json': '/(sw)/usr/share/icons/json.png',
-        '.db': '/(sw)/usr/share/icons/db-icon.svg',
-        '.sqlite': '/(sw)/usr/share/icons/db-icon.svg',
-        '.sqlite3': '/(sw)/usr/share/icons/db-icon.svg',
-        '.ipynb': '/(sw)/usr/share/icons/ipynb-icon.png',
-        '.mp3': '/(sw)/usr/share/icons/audio-icon.png',
-        '.wav': '/(sw)/usr/share/icons/audio-icon.png',
-        '.ogg': '/(sw)/usr/share/icons/audio-icon.png',
-        '.flac': '/(sw)/usr/share/icons/audio-icon.png',
-        '.m4a': '/(sw)/usr/share/icons/audio-icon.png',
-        '.aac': '/(sw)/usr/share/icons/audio-icon.png',
-        '.opus': '/(sw)/usr/share/icons/audio-icon.png',
-        '.mp4': '/(sw)/usr/share/icons/video-icon.svg',
-        '.mkv': '/(sw)/usr/share/icons/video-icon.svg',
-        '.webm': '/(sw)/usr/share/icons/video-icon.svg',
-        '.': '/(sw)/usr/share/icons/folder-icon.png',
-        '': '/(sw)/usr/share/icons/invalid-file-icon.png'
-    };
+    const extIconMap = Object.assign({ '.js': '/(sw)/usr/share/icons/js-icon.png', '.ts': '/(sw)/usr/share/icons/ts-icon.png', '.proj': '/(sw)/usr/share/icons/game-icon.png', '.html': '/(sw)/usr/share/icons/html-icon.png', '.png': '/(sw)/usr/share/icons/png-icon.png', '.jpg': '/(sw)/usr/share/icons/png-icon.png', '.jpeg': '/(sw)/usr/share/icons/png-icon.png', '.gif': '/(sw)/usr/share/icons/png-icon.png', '.webp': '/(sw)/usr/share/icons/png-icon.png', '.svg': '/(sw)/usr/share/icons/png-icon.png', '.bmp': '/(sw)/usr/share/icons/png-icon.png', '.ico': '/(sw)/usr/share/icons/png-icon.png', '.avif': '/(sw)/usr/share/icons/png-icon.png', '.run': '/(sw)/usr/share/icons/bash.png', '.md': '/(sw)/usr/share/icons/note-icon.webp', '.json': '/(sw)/usr/share/icons/json.png', '.db': '/(sw)/usr/share/icons/db-icon.svg', '.sqlite': '/(sw)/usr/share/icons/db-icon.svg', '.sqlite3': '/(sw)/usr/share/icons/db-icon.svg', '.ipynb': '/(sw)/usr/share/icons/ipynb-icon.png', '.mp3': '/(sw)/usr/share/icons/audio-icon.png', '.wav': '/(sw)/usr/share/icons/audio-icon.png', '.ogg': '/(sw)/usr/share/icons/audio-icon.png', '.flac': '/(sw)/usr/share/icons/audio-icon.png', '.m4a': '/(sw)/usr/share/icons/audio-icon.png', '.aac': '/(sw)/usr/share/icons/audio-icon.png', '.opus': '/(sw)/usr/share/icons/audio-icon.png', '.mp4': '/(sw)/usr/share/icons/video-icon.svg', '.mkv': '/(sw)/usr/share/icons/video-icon.svg', '.webm': '/(sw)/usr/share/icons/video-icon.svg', '.': '/(sw)/usr/share/icons/folder-icon.png', '': '/(sw)/usr/share/icons/invalid-file-icon.png' }, ((_c = (_b = (_a = platform.host).getFileTypeIcons) === null || _b === void 0 ? void 0 : _b.call(_a)) !== null && _c !== void 0 ? _c : {}));
     const imageExtensions = new Set([
         '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.ico', '.avif',
     ]);
@@ -30914,8 +30882,10 @@ class Namespace {
     }
     bestMatch(path) {
         // Find the most-specific ACL entry whose path is a prefix of the target path.
+        // Special-case e.path === '/' so the catch-all works: any '/foo' starts with '/'
+        // without adding an extra slash (which would require '//').
         return this.acl
-            .filter(e => path === e.path || path.startsWith(e.path + '/'))
+            .filter(e => path === e.path || e.path === '/' || path.startsWith(e.path + '/'))
             .sort((a, b) => b.path.length - a.path.length)[0];
     }
     checkRead(path) {
@@ -31509,6 +31479,7 @@ class Host {
         this.modulesMap = modulesMap;
         this.settingsSections = settingsSections;
         this.widgetTypes = widgetTypes;
+        this.fileTypeIcons = {};
         this.commands$ = this.commands.asObservable();
         this.widgets$ = this.widgets.asObservable();
         this.settingsSections$ = this.settingsSections.asObservable();
@@ -31766,6 +31737,12 @@ class Host {
         if (!srv)
             console.warn(`Service: [${moduleName}/${serviceName}] not found`);
         return srv;
+    }
+    registerFileTypeIcon(ext, iconUrl) {
+        this.fileTypeIcons[ext] = iconUrl;
+    }
+    getFileTypeIcons() {
+        return Object.assign({}, this.fileTypeIcons);
     }
     getFS() {
         this.platform.requestedServices.add('fs');

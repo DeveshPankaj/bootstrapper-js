@@ -41,8 +41,10 @@ export class Namespace {
 
     private bestMatch(path: string): AclEntry | undefined {
         // Find the most-specific ACL entry whose path is a prefix of the target path.
+        // Special-case e.path === '/' so the catch-all works: any '/foo' starts with '/'
+        // without adding an extra slash (which would require '//').
         return this.acl
-            .filter(e => path === e.path || path.startsWith(e.path + '/'))
+            .filter(e => path === e.path || e.path === '/' || path.startsWith(e.path + '/'))
             .sort((a, b) => b.path.length - a.path.length)[0]
     }
 

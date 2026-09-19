@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WASM VM</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
+<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+<!-- Use copy.sh's v86 build (proven to work with KolibriOS), served locally to avoid CORS -->
+<!-- Absolute path so this works both when served directly and via service worker (/(sw)/...) -->
+<script src="/public/mount/opt/apps/alpine-wasm/images/v86_all.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d1117;--bg2:#161b22;--bg3:#21262d;
+  --tx:#e6edf3;--mu:#8b949e;--ac:#58a6ff;
+  --gr:#3fb950;--rd:#f85149;--yn:#d29922;
+  --bd:#30363d;--hd:#1f6feb;--fd:monospace;
+}
+html,body{height:100%;background:var(--bg);color:var(--tx);font-family:system-ui,sans-serif;overflow:hidden}
+#app{display:flex;flex-direction:column;height:100%;overflow:hidden}
+
+/* ── Topbar ── */
+#topbar{
+  display:flex;align-items:center;gap:8px;
+  padding:5px 10px;background:var(--bg2);border-bottom:1px solid var(--bd);
+  flex-shrink:0;min-height:36px;
+}
+#topbar .logo{font-size:16px;line-height:1;flex-shrink:0}
+#title-area .title{font-weight:600;font-size:12px;color:var(--tx)}
+#title-area .subtitle{font-size:10px;color:var(--mu)}
+.spacer{flex:1}
+
+/* Mode selector */
+#mode-btns{display:flex;gap:3px;background:var(--bg3);border:1px solid var(--bd);border-radius:6px;padding:2px}
+.mode-btn{
+  padding:3px 10px;font-size:11px;border:none;border-radius:4px;cursor:pointer;
+  background:transparent;color:var(--mu);transition:all .15s;white-space:nowrap;
+}
+.mode-btn:hover{color:var(--tx)}
+.mode-btn.active{background:var(--hd);color:#fff;font-weight:600}
+
+/* Restart btn */
+#btn-restart{
+  padding:3px 8px;font-size:11px;border:1px solid var(--bd);border-radius:5px;
+  background:var(--bg3);color:var(--mu);cursor:pointer;
+}
+#btn-restart:hover{border-color:var(--ac);color:var(--ac)}
+
+#status-dot{width:7px;height:7px;border-radius:50%;background:var(--rd);flex-shrink:0;transition:background .3s}
+#status-dot.booting{background:var(--yn);animation:pulse 1s ease-in-out infinite}
+#status-dot.ready{background:var(--gr)}
+#status-text{font-size:10px;color:var(--mu)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* ── Tabs ── */
+#tabs{display:flex;background:var(--bg2);border-bottom:1px solid var(--bd);flex-shrink:0;padding:0 8px}
+.tab{
+  padding:6px 12px;font-size:11px;cursor:pointer;
+  border-bottom:2px solid transparent;color:var(--mu);
+  transition:color .15s,border-color .15s;display:flex;align-items:center;gap:4px;user-select:none;
+}
+.tab:hover{color:var(--tx)}
+.tab.active{color:var(--ac);border-bottom-color:var(--ac)}
+.tab.hidden{display:none}
+.badge{font-size:9px;background:var(--rd);color:#fff;border-radius:8px;padding:1px 5px;line-height:1.5}
+
+/* ── Panels ── */
+#panels{flex:1;overflow:hidden;position:relative}
+.panel{position:absolute;inset:0;display:none;flex-direction:column;overflow:hidden}
+.panel.active{display:flex}
+
+/* Terminal panel */
+#terminal-wrap{flex:1;overflow:hidden;padding:4px;background:#000}
+#terminal-wrap .xterm{height:100%}
+
+/* VGA panel */
+#vga-wrap{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:#111;overflow:hidden;position:relative;
+}
+#screen_container{
+  position:relative;display:flex;align-items:center;justify-content:center;
+  width:100%;height:100%;overflow:hidden;
+}
+#screen_container canvas{
+  max-width:100%;max-height:100%;object-fit:contain;display:block;cursor:none;
+}
+#screen_container>div:first-child{
+  display:none; /* text-mode fallback — hidden; v86 shows it only in text mode */
+}
+#vga-hint{
+  position:absolute;bottom:6px;left:50%;transform:translateX(-50%);
+  font-size:10px;color:rgba(255,255,255,.35);pointer-events:none;white-space:nowrap;
+  transition:opacity .3s;
+}
+#vga-loading{
+  position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:10px;
+  background:#111;color:var(--mu);font-size:13px;
+}
+#vga-loading .spinner{
+  width:28px;height:28px;border:2px solid var(--bd);
+  border-top-color:var(--ac);border-radius:50%;animation:spin .7s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* IPC panel */
+#ipc-panel{flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--bg)}
+#ipc-log{flex:1;overflow-y:auto;padding:10px;font-family:var(--fd);font-size:11px;line-height:1.6}
+.ipc-msg{padding:3px 0;border-bottom:1px solid var(--bd);display:flex;gap:8px}
+.ipc-msg .dir{font-size:9px;padding:1px 5px;border-radius:3px;align-self:flex-start;margin-top:2px;flex-shrink:0;font-weight:700}
+.ipc-msg .dir.out{background:var(--hd);color:#fff}
+.ipc-msg .dir.in{background:var(--bg3);color:var(--gr)}
+.ipc-msg .ts{font-size:9px;color:var(--mu);align-self:flex-start;margin-top:3px;flex-shrink:0}
+.ipc-msg .body{color:var(--tx);word-break:break-all;white-space:pre-wrap}
+#ipc-bar{display:flex;gap:6px;padding:8px;border-top:1px solid var(--bd);background:var(--bg2);align-items:center}
+#ipc-input{
+  flex:1;background:var(--bg3);border:1px solid var(--bd);border-radius:5px;
+  color:var(--tx);padding:5px 9px;font-family:var(--fd);font-size:11px;outline:none;
+}
+#ipc-input:focus{border-color:var(--ac)}
+#ipc-send{padding:5px 12px;background:var(--ac);color:#fff;border:none;border-radius:5px;font-size:11px;cursor:pointer;font-weight:600}
+#ipc-send:disabled{opacity:.4;cursor:default}
+
+/* IPC setup section */
+#setup-section{margin:8px;padding:10px;background:var(--bg2);border:1px solid var(--bd);border-radius:7px;font-size:11px}
+#setup-section h3{font-size:11px;color:var(--ac);margin-bottom:6px}
+#setup-section p{color:var(--mu);margin-bottom:7px;line-height:1.5}
+.btn-setup{
+  padding:4px 10px;background:var(--bg3);border:1px solid var(--bd);
+  border-radius:4px;color:var(--tx);font-size:10px;cursor:pointer;
+}
+.btn-setup:hover{border-color:var(--ac);color:var(--ac)}
+.btn-setup:disabled{opacity:.4;cursor:default}
+
+/* About panel */
+#about-panel{flex:1;overflow-y:auto;padding:16px}
+.about-card{background:var(--bg2);border:1px solid var(--bd);border-radius:7px;padding:14px;margin-bottom:10px}
+.about-card h2{font-size:13px;color:var(--ac);margin-bottom:8px}
+.about-card p{font-size:11px;color:var(--mu);line-height:1.6;margin-bottom:4px}
+.about-card code{font-family:var(--fd);background:var(--bg3);padding:1px 5px;border-radius:3px;color:var(--gr);font-size:10px}
+.arch-row{display:flex;align-items:center;gap:7px;margin:5px 0;font-size:11px;flex-wrap:wrap}
+.arch-box{background:var(--bg3);border:1px solid var(--bd);border-radius:4px;padding:3px 9px;font-size:10px;color:var(--tx)}
+.arch-arrow{color:var(--mu)}
+
+/* Status bar */
+#statusbar{
+  display:flex;align-items:center;gap:10px;
+  padding:2px 10px;background:var(--bg2);border-top:1px solid var(--bd);
+  font-size:10px;color:var(--mu);flex-shrink:0;
+}
+.sep{color:var(--bd)}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- Top bar -->
+  <div id="topbar">
+    <span class="logo" id="topbar-logo">🐧</span>
+    <div id="title-area">
+      <div class="title" id="topbar-title">WASM VM</div>
+      <div class="subtitle" id="topbar-sub">Linux in WebAssembly · v86</div>
+    </div>
+    <div class="spacer"></div>
+    <div id="mode-btns">
+      <button class="mode-btn active" data-mode="linux">🐧 Linux</button>
+      <button class="mode-btn" data-mode="kolibri">🌸 KolibriOS</button>
+    </div>
+    <button id="btn-restart" title="Restart VM">↺</button>
+    <span id="status-dot"></span>
+    <span id="status-text">Initializing…</span>
+  </div>
+
+  <!-- Tabs -->
+  <div id="tabs">
+    <div class="tab active" data-tab="screen">⌨ Terminal</div>
+    <div class="tab" data-tab="ipc" id="tab-ipc">⇌ IPC Bridge <span class="badge" id="ipc-badge" style="display:none">0</span></div>
+    <div class="tab" data-tab="about">ℹ About</div>
+  </div>
+
+  <!-- Panels -->
+  <div id="panels">
+
+    <!-- Screen panel: xterm (Linux) or VGA canvas (KolibriOS) -->
+    <div class="panel active" id="panel-screen">
+      <!-- Linux: xterm -->
+      <div id="terminal-wrap"></div>
+      <!-- KolibriOS: VGA canvas -->
+      <div id="vga-wrap" style="display:none">
+        <div id="vga-loading">
+          <div class="spinner"></div>
+          <span id="vga-loading-text">Loading KolibriOS…</span>
+        </div>
+        <div id="screen_container">
+          <div style="white-space:pre;font:14px monospace;line-height:14px"></div>
+          <canvas></canvas>
+        </div>
+        <div id="vga-hint">Click inside to capture mouse &amp; keyboard · Esc = release</div>
+      </div>
+    </div>
+
+    <!-- IPC panel -->
+    <div class="panel" id="panel-ipc">
+      <div id="ipc-panel">
+        <div id="setup-section">
+          <h3>IPC Bridge Setup</h3>
+          <p>After boot, inject the bridge script. It reads JSON from <code>/dev/ttyS1</code> and responds.</p>
+          <button class="btn-setup" id="btn-setup-bridge" disabled>Inject IPC Bridge</button>
+          <button class="btn-setup" id="btn-setup-node" style="margin-left:6px" disabled>Install Node.js (apk)</button>
+        </div>
+        <div id="ipc-log"><div style="color:var(--mu);padding:4px 0">IPC log will appear here…</div></div>
+        <div id="ipc-bar">
+          <input id="ipc-input" type="text" placeholder='{"cmd":"ping"}  or any text…' disabled>
+          <button id="ipc-send" disabled>Send</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- About panel -->
+    <div class="panel" id="panel-about">
+      <div id="about-panel">
+        <div class="about-card">
+          <h2>Linux Mode</h2>
+          <div class="arch-row">
+            <div class="arch-box">xterm.js</div>
+            <span class="arch-arrow">⟷ serial0</span>
+            <div class="arch-box">buildroot Linux</div>
+          </div>
+          <div class="arch-row">
+            <div class="arch-box">IPC panel</div>
+            <span class="arch-arrow">⟷ serial1 /dev/ttyS1</span>
+            <div class="arch-box">bridge.sh / node</div>
+          </div>
+        </div>
+        <div class="about-card">
+          <h2>KolibriOS Mode</h2>
+          <div class="arch-row">
+            <div class="arch-box">VGA canvas</div>
+            <span class="arch-arrow">⟷ v86 VGA framebuffer</span>
+            <div class="arch-box">KolibriOS GUI</div>
+          </div>
+          <p>Click inside the screen to capture mouse. Press <code>Esc</code> to release pointer lock.</p>
+          <p>KolibriOS is a tiny x86 OS written in FASM. Full graphical desktop, apps, games.</p>
+        </div>
+        <div class="about-card">
+          <h2>Linux Quick Commands</h2>
+          <p><code>cat /dev/ttyS1</code> — watch IPC channel</p>
+          <p><code>echo hello &gt; /dev/ttyS1</code> — send to host</p>
+          <p><code>apk add nodejs npm</code> — install Node.js (Alpine ISO)</p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Status bar -->
+  <div id="statusbar">
+    <span id="sb-state">Idle</span>
+    <span class="sep">|</span>
+    <span id="sb-os">x86 · buildroot Linux</span>
+    <span class="sep">|</span>
+    <span id="sb-ram">RAM: 256 MB</span>
+  </div>
+</div>
+
+<script>
+(function(){
+'use strict';
+
+// ── State ────────────────────────────────────────────────────────────────────
+let currentMode = 'linux';   // 'linux' | 'kolibri'
+let emulator = null;
+let booted = false;
+
+// ── DOM refs ─────────────────────────────────────────────────────────────────
+const dot        = document.getElementById('status-dot');
+const statusText = document.getElementById('status-text');
+const sbState    = document.getElementById('sb-state');
+const sbOs       = document.getElementById('sb-os');
+const termWrap   = document.getElementById('terminal-wrap');
+const vgaWrap    = document.getElementById('vga-wrap');
+const vgaLoading = document.getElementById('vga-loading');
+const vgaLoadingText = document.getElementById('vga-loading-text');
+const screenCont = document.getElementById('screen_container');
+const vgaHint    = document.getElementById('vga-hint');
+const tabIpc     = document.getElementById('tab-ipc');
+const ipcLog     = document.getElementById('ipc-log');
+const ipcInput   = document.getElementById('ipc-input');
+const ipcSend    = document.getElementById('ipc-send');
+
+// ── Status ───────────────────────────────────────────────────────────────────
+function setStatus(cls, label) {
+  dot.className = cls;
+  statusText.textContent = label;
+  sbState.textContent = label;
+}
+setStatus('booting', 'Loading…');
+
+// ── Tab switching ────────────────────────────────────────────────────────────
+let ipcUnread = 0;
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    if (tab.classList.contains('hidden')) return;
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+    if (tab.dataset.tab === 'ipc') { ipcUnread = 0; updateBadge(); }
+    if (tab.dataset.tab === 'screen') setTimeout(fitTerm, 50);
+  });
+});
+
+function updateBadge() {
+  const b = document.getElementById('ipc-badge');
+  if (ipcUnread > 0) { b.textContent = ipcUnread; b.style.display = ''; }
+  else b.style.display = 'none';
+}
+
+function showTab(id) {
+  document.querySelector(`.tab[data-tab="${id}"]`).click();
+}
+
+// ── xterm.js ─────────────────────────────────────────────────────────────────
+const term = new Terminal({
+  fontFamily: '"Cascadia Code","Fira Code",Consolas,monospace',
+  fontSize: 13,
+  theme: {
+    background:'#0d1117',foreground:'#e6edf3',cursor:'#58a6ff',cursorAccent:'#0d1117',
+    black:'#21262d',red:'#f85149',green:'#3fb950',yellow:'#d29922',blue:'#58a6ff',
+    magenta:'#bc8cff',cyan:'#39c5cf',white:'#b1bac4',
+    brightBlack:'#6e7681',brightRed:'#ff7b72',brightGreen:'#56d364',
+    brightYellow:'#e3b341',brightBlue:'#79c0ff',brightMagenta:'#d2a8ff',
+    brightCyan:'#56d4dd',brightWhite:'#f0f6fc',
+  },
+  scrollback: 5000, convertEol: true, allowTransparency: false,
+});
+const fitAddon = new FitAddon.FitAddon();
+term.loadAddon(fitAddon);
+term.open(termWrap);
+
+function fitTerm() {
+  if (currentMode !== 'linux') return;
+  try { fitAddon.fit(); } catch(e){}
+}
+new ResizeObserver(() => fitTerm()).observe(termWrap);
+fitTerm();
+
+// ── IPC log ──────────────────────────────────────────────────────────────────
+function logIpc(dir, text) {
+  const ts = new Date().toLocaleTimeString('en-GB',{hour12:false});
+  const row = document.createElement('div');
+  row.className = 'ipc-msg';
+  row.innerHTML =
+    `<span class="dir ${dir}">${dir==='out'?'HOST→':'←GUEST'}</span>` +
+    `<span class="ts">${ts}</span>` +
+    `<span class="body">${esc(text)}</span>`;
+  ipcLog.appendChild(row);
+  ipcLog.scrollTop = ipcLog.scrollHeight;
+  const active = document.querySelector('.tab.active');
+  if (!active || active.dataset.tab !== 'ipc') { ipcUnread++; updateBadge(); }
+}
+function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+let serial1Buf = '';
+function onSerial1Char(ch) {
+  if (ch === '\n') {
+    const line = serial1Buf.trim();
+    serial1Buf = '';
+    if (line) logIpc('in', line);
+  } else serial1Buf += ch;
+}
+
+// ── IPC send ─────────────────────────────────────────────────────────────────
+function sendIpc() {
+  const text = ipcInput.value.trim();
+  if (!text || !emulator) return;
+  logIpc('out', text);
+  const msg = text + '\n';
+  for (let i = 0; i < msg.length; i++) emulator.s.send('serial1-input', msg.charCodeAt(i));
+  ipcInput.value = '';
+}
+ipcSend.addEventListener('click', sendIpc);
+ipcInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendIpc(); });
+
+// ── Image URLs ───────────────────────────────────────────────────────────────
+// Determine base path for binary images.
+// When served via service worker the page URL is /(sw)/opt/apps/alpine-wasm/main.html,
+// but the binary images are static files under /public/mount/... not in the VFS.
+const _base = (function() {
+  let p = location.pathname;
+  p = p.substring(0, p.lastIndexOf('/') + 1);
+  // Strip /(sw)/ prefix → replace with /public/mount/ so image fetches hit static files
+  if (p.startsWith('/(sw)/')) p = '/public/mount' + p.slice('/(sw)'.length);
+  return p;
+})();
+
+// All images are served locally (same-origin, no CORS issues)
+const BIOS_URL    = _base + 'images/seabios.bin';
+const VGABIOS_URL = _base + 'images/vgabios.bin';
+
+// Buildroot Linux kernel with embedded initramfs (~5MB, same-origin)
+const LINUX_KERNEL = _base + 'images/buildroot-bzimage.bin';
+
+// KolibriOS floppy image (~1.4MB, same-origin)
+const KOLIBRI_IMG  = _base + 'images/kolibri.img';
+
+// ── Fetch helper ─────────────────────────────────────────────────────────────
+async function fetchBuf(url, label, progressCb) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`HTTP ${r.status}: ${url}`);
+  const total = parseInt(r.headers.get('content-length') || '0');
+  if (!total || !progressCb) return r.arrayBuffer();
+  // Stream with progress
+  const reader = r.body.getReader();
+  const chunks = [];
+  let received = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    received += value.length;
+    progressCb(received, total, label);
+  }
+  const buf = new Uint8Array(received);
+  let off = 0;
+  for (const c of chunks) { buf.set(c, off); off += c.length; }
+  return buf.buffer;
+}
+
+// ── Destroy current emulator ─────────────────────────────────────────────────
+function destroyEmulator() {
+  if (!emulator) return;
+  try { emulator.stop(); } catch(e){}
+  emulator = null;
+  booted = false;
+}
+
+// ── Boot: Linux mode ─────────────────────────────────────────────────────────
+async function bootLinux() {
+  term.reset();
+  term.writeln('\x1b[90m╔══════════════════════════════════════╗\x1b[0m');
+  term.writeln('\x1b[90m║\x1b[0m  \x1b[34mAlpine WASM\x1b[0m — buildroot Linux      \x1b[90m║\x1b[0m');
+  term.writeln('\x1b[90m╚══════════════════════════════════════╝\x1b[0m');
+  term.writeln('');
+
+  setStatus('booting', 'Fetching images…');
+  sbOs.textContent = 'x86 · buildroot Linux';
+
+  let bios, vgabios, kernel;
+  try {
+    [bios, vgabios] = await Promise.all([
+      fetchBuf(BIOS_URL,    'BIOS'),
+      fetchBuf(VGABIOS_URL, 'VGA BIOS'),
+    ]);
+    kernel = await fetchBuf(LINUX_KERNEL, 'kernel',
+      (r,t,l) => t > 0 && term.writeln(`\x1b[90m  ${l}: ${(r/1024/1024).toFixed(1)} / ${(t/1024/1024).toFixed(1)} MB\x1b[0m`)
+    );
+  } catch(e) {
+    term.writeln(`\n\x1b[31mFetch error: ${e.message}\x1b[0m`);
+    setStatus('', 'Error'); dot.style.background='var(--rd)'; return;
+  }
+
+  term.writeln('\n\x1b[32mImage loaded. Booting…\x1b[0m\n');
+  setStatus('booting', 'Booting Linux…');
+
+  // copy.sh's minified v86_all.js uses internal minified option names (not npm v86 public names)
+  emulator = new V86({
+    Mj              : _base + 'images/v86.wasm',  // wasm_path
+    K               : 128 * 1024 * 1024,           // memory_size
+    La              : 8   * 1024 * 1024,           // vga_memory_size
+    Rb              : { buffer: bios },             // bios
+    ye              : { buffer: vgabios },          // vga_bios
+    hc              : { buffer: kernel },           // bzimage
+    ic              : 'tsc=reliable mitigations=off random.trust_cpu=on console=ttyS0', // cmdline
+    Xm              : true,                         // disable DOM keyboard handler — we use xterm→serial0
+    ak              : true,                         // autostart
+  });
+
+  // copy.sh build uses emulator.s (bus) for events instead of add_listener
+  // serial0-output-byte fires with a byte value (not char)
+  emulator.s.register('serial0-output-byte', byte => term.write(String.fromCharCode(byte)));
+  emulator.s.register('serial1-output-byte', byte => onSerial1Char(String.fromCharCode(byte)));
+  term.onData(data => { for (let i=0;i<data.length;i++) emulator.s.send('serial0-input', data.charCodeAt(i)); });
+
+  // Detect ready
+  let bootLog = '';
+  emulator.s.register('serial0-output-byte', byte => {
+    if (booted) return;
+    bootLog += String.fromCharCode(byte);
+    if (bootLog.length > 30000) bootLog = bootLog.slice(-5000);
+    if (/login:\s*$|#\s*$|\$\s*$/.test(bootLog)) { booted = true; onLinuxReady(); }
+  });
+
+  fitTerm();
+}
+
+function onLinuxReady() {
+  setStatus('ready', 'Ready');
+  document.getElementById('btn-setup-bridge').disabled = false;
+  document.getElementById('btn-setup-node').disabled   = false;
+  ipcInput.disabled = false;
+  ipcSend.disabled  = false;
+}
+
+// ── Boot: KolibriOS mode ─────────────────────────────────────────────────────
+async function bootKolibri() {
+  vgaLoading.style.display = 'flex';
+  screenCont.style.visibility = 'hidden';
+  vgaHint.style.opacity = '0';
+  vgaLoadingText.textContent = 'Fetching BIOS…';
+  setStatus('booting', 'Fetching images…');
+  sbOs.textContent = 'x86 · KolibriOS';
+
+  let bios, vgabios, koliImg;
+  try {
+    vgaLoadingText.textContent = 'Fetching BIOS…';
+    [bios, vgabios] = await Promise.all([
+      fetchBuf(BIOS_URL, 'BIOS'),
+      fetchBuf(VGABIOS_URL, 'VGA BIOS'),
+    ]);
+    vgaLoadingText.textContent = 'Fetching KolibriOS image…';
+    koliImg = await fetchBuf(KOLIBRI_IMG, 'kolibrios.img',
+      (r, t, l) => { vgaLoadingText.textContent = `KolibriOS: ${(r/1024).toFixed(0)} / ${(t/1024).toFixed(0)} KB`; }
+    );
+  } catch(e) {
+    vgaLoadingText.textContent = 'Error: ' + e.message;
+    setStatus('', 'Error'); dot.style.background='var(--rd)'; return;
+  }
+
+  vgaLoadingText.textContent = 'Starting emulator…';
+  setStatus('booting', 'Booting KolibriOS…');
+
+  // copy.sh's minified v86_all.js uses internal minified option names
+  emulator = new V86({
+    Mj              : _base + 'images/v86.wasm',   // wasm_path
+    K               : 128 * 1024 * 1024,            // memory_size
+    La              : 8   * 1024 * 1024,            // vga_memory_size
+    screen          : { Rc: screenCont },            // screen_container
+    Rb              : { buffer: bios },              // bios
+    ye              : { buffer: vgabios },           // vga_bios
+    ea              : { buffer: koliImg },           // fda
+    ak              : true,                          // autostart
+  });
+  window.dbgEmu = emulator;
+
+  // copy.sh build fires 'screen-set-size' with [width, height, bpp]; bpp > 0 = graphics mode
+  emulator.s.register('screen-set-size', dims => {
+    if (!dims[2]) return;  // text mode, not graphics
+    vgaLoading.style.display = 'none';
+    screenCont.style.visibility = 'visible';
+    setTimeout(() => { vgaHint.style.opacity = '1'; }, 500);
+    if (!booted) { booted = true; setStatus('ready', 'Running'); }
+  });
+
+  // Fallback: hide loader after 8s regardless
+  setTimeout(() => {
+    if (vgaLoading.style.display !== 'none') {
+      vgaLoading.style.display = 'none';
+      screenCont.style.visibility = 'visible';
+      vgaHint.style.opacity = '1';
+      if (!booted) { booted = true; setStatus('ready', 'Running'); }
+    }
+  }, 8000);
+}
+
+// ── Mode switching ───────────────────────────────────────────────────────────
+function applyMode(mode) {
+  currentMode = mode;
+  destroyEmulator();
+
+  // Reset IPC UI
+  ipcInput.disabled = true;
+  ipcSend.disabled  = true;
+  document.getElementById('btn-setup-bridge').disabled = true;
+  document.getElementById('btn-setup-node').disabled   = true;
+
+  // Update mode buttons
+  document.querySelectorAll('.mode-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.mode === mode);
+  });
+
+  if (mode === 'linux') {
+    // Show xterm, hide VGA — use style.display because #vga-wrap{display:flex} beats [hidden]
+    termWrap.style.display = 'flex';
+    vgaWrap.style.display  = 'none';
+    tabIpc.classList.remove('hidden');
+    document.querySelector('.tab[data-tab="screen"]').textContent = '⌨ Terminal';
+    document.getElementById('topbar-logo').textContent = '🐧';
+    document.getElementById('topbar-title').textContent = 'Alpine WASM';
+    document.getElementById('topbar-sub').textContent   = 'Linux in WebAssembly · v86';
+    sbRam.textContent = 'RAM: 128 MB';
+    showTab('screen');
+    bootLinux();
+  } else {
+    // Show VGA, hide xterm
+    termWrap.style.display = 'none';
+    vgaWrap.style.display  = 'flex';
+    tabIpc.classList.add('hidden');
+    if (document.querySelector('.tab.active')?.dataset.tab === 'ipc') showTab('screen');
+    document.querySelector('.tab[data-tab="screen"]').textContent = '🖥 Screen';
+    document.getElementById('topbar-logo').textContent = '🌸';
+    document.getElementById('topbar-title').textContent = 'KolibriOS';
+    document.getElementById('topbar-sub').textContent   = 'Graphical OS in WebAssembly · v86';
+    sbRam.textContent = 'RAM: 128 MB';
+    showTab('screen');
+    bootKolibri();
+  }
+}
+
+const sbRam = document.getElementById('sb-ram');
+
+document.querySelectorAll('.mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (btn.dataset.mode === currentMode) return;
+    applyMode(btn.dataset.mode);
+  });
+});
+
+document.getElementById('btn-restart').addEventListener('click', () => {
+  applyMode(currentMode);
+});
+
+// ── Bridge injection (Linux only) ─────────────────────────────────────────────
+const BRIDGE_SH = `cat > /root/bridge.sh << 'EOF'\n#!/bin/sh\necho '{"status":"bridge_started"}' > /dev/ttyS1\nwhile IFS= read -r line < /dev/ttyS1; do\n  [ -z "$line" ] && continue\n  ts=$(date +%s 2>/dev/null || echo 0)\n  echo '{"ok":true,"echo":"'\"$line\"'","ts":'"$ts"'}' > /dev/ttyS1\ndone\nEOF\nchmod +x /root/bridge.sh`;
+
+function typeToTerminal(text) {
+  return new Promise(resolve => {
+    const lines = text.split('\n');
+    let li = 0;
+    function nextLine() {
+      if (li >= lines.length) { resolve(); return; }
+      const line = lines[li++];
+      let ci = 0;
+      function nextChar() {
+        if (ci >= line.length) {
+          setTimeout(() => { emulator.s.send('serial0-input',13); setTimeout(nextLine, 100); }, 30);
+          return;
+        }
+        emulator.s.send('serial0-input',line.charCodeAt(ci++));
+        setTimeout(nextChar, 10);
+      }
+      nextChar();
+    }
+    nextLine();
+  });
+}
+
+document.getElementById('btn-setup-bridge').addEventListener('click', async function() {
+  this.disabled = true; this.textContent = 'Injecting…';
+  await typeToTerminal(BRIDGE_SH);
+  await new Promise(r => setTimeout(r, 600));
+  await typeToTerminal('/root/bridge.sh &');
+  this.textContent = '✓ Bridge running';
+  showTab('screen');
+});
+
+document.getElementById('btn-setup-node').addEventListener('click', async function() {
+  this.disabled = true; this.textContent = 'Checking…';
+  await typeToTerminal('which node 2>/dev/null || echo "not found; try: apk add nodejs-current"');
+  this.textContent = '✓ Done';
+  showTab('screen');
+});
+
+// ── Start ─────────────────────────────────────────────────────────────────────
+applyMode('linux');
+
+})();
+</script>
+</body>
+</html>

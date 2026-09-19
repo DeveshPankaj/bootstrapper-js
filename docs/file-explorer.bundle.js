@@ -29443,8 +29443,10 @@ class Namespace {
     }
     bestMatch(path) {
         // Find the most-specific ACL entry whose path is a prefix of the target path.
+        // Special-case e.path === '/' so the catch-all works: any '/foo' starts with '/'
+        // without adding an extra slash (which would require '//').
         return this.acl
-            .filter(e => path === e.path || path.startsWith(e.path + '/'))
+            .filter(e => path === e.path || e.path === '/' || path.startsWith(e.path + '/'))
             .sort((a, b) => b.path.length - a.path.length)[0];
     }
     checkRead(path) {
@@ -30038,6 +30040,7 @@ class Host {
         this.modulesMap = modulesMap;
         this.settingsSections = settingsSections;
         this.widgetTypes = widgetTypes;
+        this.fileTypeIcons = {};
         this.commands$ = this.commands.asObservable();
         this.widgets$ = this.widgets.asObservable();
         this.settingsSections$ = this.settingsSections.asObservable();
@@ -30295,6 +30298,12 @@ class Host {
         if (!srv)
             console.warn(`Service: [${moduleName}/${serviceName}] not found`);
         return srv;
+    }
+    registerFileTypeIcon(ext, iconUrl) {
+        this.fileTypeIcons[ext] = iconUrl;
+    }
+    getFileTypeIcons() {
+        return Object.assign({}, this.fileTypeIcons);
     }
     getFS() {
         this.platform.requestedServices.add('fs');
@@ -156719,42 +156728,9 @@ const App = (props) => {
         })()));
 };
 const ListDirComponent = ({ dir, openFile, showFileActions, showDirActions, handleDragOver, handleDrop }) => {
-    var _a;
+    var _a, _b, _c, _d;
     dir !== null && dir !== void 0 ? dir : (dir = _shared_utils__WEBPACK_IMPORTED_MODULE_3__.DESKTOP_PATH);
-    const extIconMap = {
-        '.js': '/usr/share/icons/js-icon.png',
-        '.ts': '/usr/share/icons/ts-icon.png',
-        '.proj': '/usr/share/icons/game-icon.png',
-        '.html': '/usr/share/icons/html-icon.png',
-        '.png': '/usr/share/icons/png-icon.png',
-        '.jpg': '/usr/share/icons/png-icon.png',
-        '.jpeg': '/usr/share/icons/png-icon.png',
-        '.gif': '/usr/share/icons/png-icon.png',
-        '.webp': '/usr/share/icons/png-icon.png',
-        '.svg': '/usr/share/icons/png-icon.png',
-        '.bmp': '/usr/share/icons/png-icon.png',
-        '.ico': '/usr/share/icons/png-icon.png',
-        '.avif': '/usr/share/icons/png-icon.png',
-        '.run': '/usr/share/icons/bash.png',
-        '.md': '/usr/share/icons/note-icon.webp',
-        '.json': '/usr/share/icons/json.png',
-        '.db': '/usr/share/icons/db-icon.svg',
-        '.sqlite': '/usr/share/icons/db-icon.svg',
-        '.sqlite3': '/usr/share/icons/db-icon.svg',
-        '.ipynb': '/usr/share/icons/ipynb-icon.png',
-        '.mp3': '/usr/share/icons/audio-icon.png',
-        '.wav': '/usr/share/icons/audio-icon.png',
-        '.ogg': '/usr/share/icons/audio-icon.png',
-        '.flac': '/usr/share/icons/audio-icon.png',
-        '.m4a': '/usr/share/icons/audio-icon.png',
-        '.aac': '/usr/share/icons/audio-icon.png',
-        '.opus': '/usr/share/icons/audio-icon.png',
-        '.mp4': '/usr/share/icons/video-icon.svg',
-        '.mkv': '/usr/share/icons/video-icon.svg',
-        '.webm': '/usr/share/icons/video-icon.svg',
-        '.': '/usr/share/icons/folder-icon.png',
-        '': '/usr/share/icons/invalid-file-icon.png'
-    };
+    const extIconMap = Object.assign({ '.js': '/usr/share/icons/js-icon.png', '.ts': '/usr/share/icons/ts-icon.png', '.proj': '/usr/share/icons/game-icon.png', '.html': '/usr/share/icons/html-icon.png', '.png': '/usr/share/icons/png-icon.png', '.jpg': '/usr/share/icons/png-icon.png', '.jpeg': '/usr/share/icons/png-icon.png', '.gif': '/usr/share/icons/png-icon.png', '.webp': '/usr/share/icons/png-icon.png', '.svg': '/usr/share/icons/png-icon.png', '.bmp': '/usr/share/icons/png-icon.png', '.ico': '/usr/share/icons/png-icon.png', '.avif': '/usr/share/icons/png-icon.png', '.run': '/usr/share/icons/bash.png', '.md': '/usr/share/icons/note-icon.webp', '.json': '/usr/share/icons/json.png', '.db': '/usr/share/icons/db-icon.svg', '.sqlite': '/usr/share/icons/db-icon.svg', '.sqlite3': '/usr/share/icons/db-icon.svg', '.ipynb': '/usr/share/icons/ipynb-icon.png', '.mp3': '/usr/share/icons/audio-icon.png', '.wav': '/usr/share/icons/audio-icon.png', '.ogg': '/usr/share/icons/audio-icon.png', '.flac': '/usr/share/icons/audio-icon.png', '.m4a': '/usr/share/icons/audio-icon.png', '.aac': '/usr/share/icons/audio-icon.png', '.opus': '/usr/share/icons/audio-icon.png', '.mp4': '/usr/share/icons/video-icon.svg', '.mkv': '/usr/share/icons/video-icon.svg', '.webm': '/usr/share/icons/video-icon.svg', '.': '/usr/share/icons/folder-icon.png', '': '/usr/share/icons/invalid-file-icon.png' }, ((_c = (_b = (_a = platform.host).getFileTypeIcons) === null || _b === void 0 ? void 0 : _b.call(_a)) !== null && _c !== void 0 ? _c : {}));
     const imageExtensions = new Set([
         '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.ico', '.avif',
     ]);
@@ -156814,6 +156790,10 @@ const ListDirComponent = ({ dir, openFile, showFileActions, showDirActions, hand
         const urls = [];
         const next = {};
         Object.entries(extIconMap).forEach(([ext, path]) => {
+            if (path.startsWith('data:')) {
+                next[ext] = path;
+                return;
+            }
             try {
                 const data = fs.readFileSync(path);
                 const blob = new Blob([data], { type: path.endsWith('.webp') ? 'image/webp' : path.endsWith('.svg') ? 'image/svg+xml' : 'image/png' });
@@ -156927,7 +156907,7 @@ const ListDirComponent = ({ dir, openFile, showFileActions, showDirActions, hand
         if (window.top)
             window.top.__vfsDragPath = file.path;
     };
-    const clipboard = (_a = window.top) === null || _a === void 0 ? void 0 : _a.__vfsClipboard;
+    const clipboard = (_d = window.top) === null || _d === void 0 ? void 0 : _d.__vfsClipboard;
     const cutPaths = (clipboard === null || clipboard === void 0 ? void 0 : clipboard.op) === 'cut' ? new Set(clipboard.paths) : new Set();
     return (react__WEBPACK_IMPORTED_MODULE_0___default().createElement("main", { className: `${_core_window_manager__WEBPACK_IMPORTED_MODULE_4__.DESKTOP_CONTAINER_CLASS}-files ${mainDragOver ? 'drag-over' : ''}`, ref: containerRef, onContextMenu: ev => { ev.preventDefault(); showDirActions && showDirActions(ev); }, onDragOver: ev => { handleDragOver(ev); setMainDragOver(true); }, onDragLeave: () => setMainDragOver(false), onDrop: ev => { setMainDragOver(false); handleDrop(ev, dir); } }, files.map(file => {
         var _a, _b;

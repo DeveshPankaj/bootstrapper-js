@@ -212,6 +212,23 @@
       "main": "main.js"
     },
     {
+      "id": "graph-editor",
+      "name": "Graph Editor",
+      "description": "Visual node-graph editor with drag-to-connect edges, multiple shapes, force-directed layout, and Mermaid/PNG export.",
+      "version": "1.0.0",
+      "icon": "hub",
+      "category": "Dev",
+      "author": "bootstrapper-js",
+      "commandName": "ui.graph-editor",
+      "files": [
+        {
+          "dest": "main.js",
+          "src": "/public/mount/opt/apps/graph-editor/main.js"
+        }
+      ],
+      "main": "main.js"
+    },
+    {
       "id": "mermaid-viewer",
       "name": "Diagram",
       "description": "Mermaid diagram editor and renderer with zoom, pan, pin overlay, and PNG export.",
@@ -471,8 +488,14 @@
       "author": "bootstrapper-js",
       "commandName": "ui.snake-game",
       "files": [
-        { "dest": "main.js",   "src": "/public/mount/opt/apps/snake-game/main.js" },
-        { "dest": "main.html", "src": "/public/mount/opt/apps/snake-game/main.html" }
+        {
+          "dest": "main.js",
+          "src": "/public/mount/opt/apps/snake-game/main.js"
+        },
+        {
+          "dest": "main.html",
+          "src": "/public/mount/opt/apps/snake-game/main.html"
+        }
       ],
       "main": "main.js"
     },
@@ -486,8 +509,14 @@
       "author": "bootstrapper-js",
       "commandName": "ui.snake-lstm",
       "files": [
-        { "dest": "main.js",   "src": "/public/mount/opt/apps/snake-lstm/main.js" },
-        { "dest": "main.html", "src": "/public/mount/opt/apps/snake-lstm/main.html" }
+        {
+          "dest": "main.js",
+          "src": "/public/mount/opt/apps/snake-lstm/main.js"
+        },
+        {
+          "dest": "main.html",
+          "src": "/public/mount/opt/apps/snake-lstm/main.html"
+        }
       ],
       "main": "main.js"
     },
@@ -501,8 +530,14 @@
       "author": "bootstrapper-js",
       "commandName": "ui.snake-qlearning",
       "files": [
-        { "dest": "main.js",   "src": "/public/mount/opt/apps/snake-qlearning/main.js" },
-        { "dest": "main.html", "src": "/public/mount/opt/apps/snake-qlearning/main.html" }
+        {
+          "dest": "main.js",
+          "src": "/public/mount/opt/apps/snake-qlearning/main.js"
+        },
+        {
+          "dest": "main.html",
+          "src": "/public/mount/opt/apps/snake-qlearning/main.html"
+        }
       ],
       "main": "main.js"
     },
@@ -516,8 +551,14 @@
       "author": "bootstrapper-js",
       "commandName": "ui.snake-cnn3d",
       "files": [
-        { "dest": "main.js",   "src": "/public/mount/opt/apps/snake-cnn3d/main.js" },
-        { "dest": "main.html", "src": "/public/mount/opt/apps/snake-cnn3d/main.html" }
+        {
+          "dest": "main.js",
+          "src": "/public/mount/opt/apps/snake-cnn3d/main.js"
+        },
+        {
+          "dest": "main.html",
+          "src": "/public/mount/opt/apps/snake-cnn3d/main.html"
+        }
       ],
       "main": "main.js"
     },
@@ -749,8 +790,14 @@
       "author": "bootstrapper-js",
       "commandName": "ui.trainboard",
       "files": [
-        { "dest": "main.js",   "src": "/public/mount/opt/apps/trainboard/main.js" },
-        { "dest": "main.html", "src": "/public/mount/opt/apps/trainboard/main.html" }
+        {
+          "dest": "main.js",
+          "src": "/public/mount/opt/apps/trainboard/main.js"
+        },
+        {
+          "dest": "main.html",
+          "src": "/public/mount/opt/apps/trainboard/main.html"
+        }
       ],
       "main": "main.js"
     },
@@ -806,8 +853,77 @@
       "author": "bootstrapper-js",
       "commandName": "ui.colleps",
       "files": [
-        { "dest": "main.js",     "src": "/public/mount/opt/apps/colleps/main.js" },
-        { "dest": "colleps.html", "src": "/public/mount/opt/apps/colleps/colleps.html" }
+        {
+          "dest": "main.js",
+          "src": "/public/mount/opt/apps/colleps/main.js"
+        },
+        {
+          "dest": "colleps.html",
+          "src": "/public/mount/opt/apps/colleps/colleps.html"
+        }
+      ],
+      "main": "main.js"
+    },
+    {
+      "id": "vector-store",
+      "name": "Vector Store",
+      "description": "In-browser vector database: add text rows, embed with Transformers.js, visualize in 3D (PCA), and run KNN semantic queries. Projects persisted to VFS.",
+      "version": "1.0.0",
+      "icon": "scatter_plot",
+      "category": "AI",
+      "author": "bootstrapper-js",
+      "commandName": "ui.vector-store",
+      "files": [
+        {
+          "dest": "main.js",
+          "src": "/public/mount/opt/apps/vector-store/main.js"
+        },
+        {
+          "dest": "main.html",
+          "src": "/public/mount/opt/apps/vector-store/main.html"
+        }
+      ],
+      "main": "main.js"
+    },
+    {
+      "id": "ai-dom-lens",
+      "name": "AI DOM Lens",
+      "description": "Semantic DOM analyzer: type a natural-language query, the model finds the most relevant page elements, highlights them, and shows their CSS selectors. Integrates with Vector Store.",
+      "version": "1.0.0",
+      "icon": "manage_search",
+      "category": "AI",
+      "author": "bootstrapper-js",
+      "commandName": "ui.ai-dom-lens",
+      "files": [
+        {
+          "dest": "main.js",
+          "src": "/public/mount/opt/apps/ai-dom-lens/main.js"
+        },
+        {
+          "dest": "main.html",
+          "src": "/public/mount/opt/apps/ai-dom-lens/main.html"
+        }
+      ],
+      "main": "main.js"
+    },
+    {
+      "id": "alpine-wasm",
+      "name": "Alpine WASM",
+      "description": "Run Linux in WebAssembly: v86 x86 emulator with xterm.js terminal, IPC bridge via serial1, and Node.js support inside the VM.",
+      "version": "1.0.0",
+      "icon": "terminal",
+      "category": "Dev",
+      "author": "bootstrapper-js",
+      "commandName": "ui.alpine-wasm",
+      "files": [
+        {
+          "dest": "main.js",
+          "src": "/public/mount/opt/apps/alpine-wasm/main.js"
+        },
+        {
+          "dest": "main.html",
+          "src": "/public/mount/opt/apps/alpine-wasm/main.html"
+        }
       ],
       "main": "main.js"
     }

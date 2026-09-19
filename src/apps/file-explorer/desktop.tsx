@@ -43,7 +43,8 @@ export const ListDirComponent = ({ dir, openFile, showFileActions, customClass }
         '.mkv': '/(sw)/usr/share/icons/video-icon.svg',
         '.webm': '/(sw)/usr/share/icons/video-icon.svg',
         '.': '/(sw)/usr/share/icons/folder-icon.png',
-        '': '/(sw)/usr/share/icons/invalid-file-icon.png'
+        '': '/(sw)/usr/share/icons/invalid-file-icon.png',
+        ...(platform.host.getFileTypeIcons?.() ?? {}),
     }
 
     const imageExtensions = new Set([

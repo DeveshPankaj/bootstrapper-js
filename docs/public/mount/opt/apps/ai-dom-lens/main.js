@@ -22,4 +22,7 @@ platform.host.registerCommand('ui.ai-dom-lens', function(body, props) {
   if (props && typeof props.setTitle === 'function') {
     props.setTitle('AI DOM Lens');
   }
+  if (props && typeof props.setWindowView === 'function') {
+    props.setWindowView(true);
+  }
 });
