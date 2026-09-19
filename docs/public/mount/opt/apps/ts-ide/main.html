@@ -38,6 +38,8 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0d1117;color:#e2e8f
 .sb-item.active{background:#1f2937;color:#e2e8f0;border-left:2px solid #3b82f6;padding-left:14px}
 .sb-item .ic{font-size:12px;flex-shrink:0;opacity:.8}
 .sb-item .nm{flex:1;overflow:hidden;text-overflow:ellipsis}
+.sb-item .sb-mod-dot{width:6px;height:6px;border-radius:50%;background:transparent;flex-shrink:0;margin:0 1px}
+.sb-item .sb-mod-dot.show{background:#e3b341}
 .sb-item .sb-del{opacity:0;color:#6e7681;font-size:11px;flex-shrink:0;padding:0 2px}
 .sb-item .sb-del:hover{color:#f85149}
 #center-panel{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
@@ -60,6 +62,20 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0d1117;color:#e2e8f
 .log{padding:1px 0}.log.out{color:#c9d1d9}.log.err{color:#f85149}.log.info{color:#3b82f6}.log.ok{color:#3fb950}.log.dim{color:#6e7681;font-style:italic}.log.warn{color:#e3b341}
 #status-bar{height:22px;background:#0f172a;border-top:1px solid #21262d;display:flex;align-items:center;padding:0 10px;gap:8px;font-size:10px;color:#6e7681;flex-shrink:0}
 .st-ok{color:#3fb950}.st-err{color:#f85149}.st-run{color:#3b82f6}
+.diff-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:50}
+.diff-overlay.show{display:flex}
+.diff-panel{width:680px;max-width:92vw;max-height:82vh;background:#0d1117;border:1px solid #30363d;border-radius:8px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.5)}
+.diff-panel-head{height:36px;background:#161b22;border-bottom:1px solid #30363d;display:flex;align-items:center;padding:0 10px;gap:8px;flex-shrink:0}
+.diff-title{font-size:12px;font-weight:700;color:#e2e8f0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.diff-close{cursor:pointer;color:#8b949e;font-size:14px;line-height:1;padding:3px 7px;border-radius:4px;border:1px solid #30363d}
+.diff-close:hover{color:#f85149;background:#21262d}
+.diff-body{flex:1;overflow:auto;padding:6px 0;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11.5px;line-height:1.6}
+.diff-empty{padding:24px;color:#8b949e;font-size:12px;text-align:center}
+.diff-line{padding:0 12px;white-space:pre-wrap;word-break:break-all}
+.diff-line.add{background:rgba(63,185,80,.15);color:#7ee787}
+.diff-line.del{background:rgba(248,81,73,.15);color:#ff7b72}
+.diff-line.ctx{color:#8b949e}
+.diff-line .dp{display:inline-block;width:14px;opacity:.8}
 </style>
 </head>
 <body>
@@ -73,6 +89,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0d1117;color:#e2e8f
     <button class="btn btn-secondary" onclick="openProject()">Open</button>
     <button class="btn btn-secondary" onclick="openFolder()">Open Folder</button>
     <button class="btn btn-secondary" onclick="saveProject()">Save</button>
+    <button class="btn btn-secondary" onclick="showDiff()" title="Compare current buffer to last-saved snapshot">Diff</button>
     <button class="btn btn-run" id="run-btn" onclick="runCode()">▶ Run</button>
     <button class="btn btn-danger" onclick="clearAll()">Clear</button>
   </div>
@@ -105,6 +122,15 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0d1117;color:#e2e8f
           <div id="console-lines"></div>
         </div>
       </div>
+    </div>
+  </div>
+  <div class="diff-overlay" id="diff-overlay" onclick="if(event.target===this)closeDiff()">
+    <div class="diff-panel">
+      <div class="diff-panel-head">
+        <span class="diff-title" id="diff-title">Diff</span>
+        <span class="diff-close" onclick="closeDiff()" title="Close">✕</span>
+      </div>
+      <div class="diff-body" id="diff-body"></div>
     </div>
   </div>
 </div>
@@ -214,10 +240,45 @@ var isDirty = false;
 var curPvTab = 'canvas';
 var tsReady = typeof ts !== 'undefined';
 
+// --- Git-lite: a lightweight last-saved-snapshot diff, NOT real git ---
+// `gitLiteSnapshots[name]` holds the file's content as of the last time it
+// was written to disk (mirrored under `<projectDir>/.git-lite/<name>` by
+// saveProject(), and restored from there by loadProjectFromDir()). A file
+// with no entry here has no baseline to compare against (a brand-new file
+// added via "+"/New, or a file in an opened project that predates this
+// feature / was never saved) and always reads as modified. Loading an
+// example or template seeds the baseline to the content just loaded, so
+// browsing examples doesn't show as "modified" until you actually edit.
+var GIT_LITE_DIR = '.git-lite';
+var gitLiteSnapshots = {};
+
+function isFileModified(name){
+  if (name == null || files[name] == null) return false;
+  var snap = gitLiteSnapshots[name];
+  if (snap === undefined) return true;
+  return files[name] !== snap;
+}
+
+// Live-updates just one file's sidebar dot without rebuilding the whole
+// (async, listProjects()-dependent) sidebar — cheap enough to call on
+// every keystroke, unlike refreshSidebar().
+function updateModifiedIndicator(name){
+  if (!name) return;
+  var items = document.querySelectorAll('#sb-content .sb-item[data-file]');
+  for (var i=0;i<items.length;i++){
+    if (items[i].getAttribute('data-file') === name){
+      var dot = items[i].querySelector('.sb-mod-dot');
+      if (dot) dot.classList.toggle('show', isFileModified(name));
+      break;
+    }
+  }
+}
+
 editor.on('change', function(){
   isDirty = true;
   if (activeFile) files[activeFile] = editor.getValue();
   updateBadge();
+  updateModifiedIndicator(activeFile);
 });
 
 function projectName(){ return projectDir ? projectDir.split('/').filter(Boolean).pop() : null; }
@@ -573,6 +634,18 @@ async function loadProjectFromDir(dir){
 
   files = newFiles;
   projectDir = dir;
+
+  // Git-lite: restore each file's last-saved snapshot from .git-lite/ (if
+  // any) so the modified indicator/diff reflect real history instead of
+  // treating every file as freshly modified just because it was opened.
+  gitLiteSnapshots = {};
+  var snapNames = Object.keys(files);
+  for (var gi=0; gi<snapNames.length; gi++){
+    var gn = snapNames[gi];
+    try { gitLiteSnapshots[gn] = await sdk().readText(dir+'/'+GIT_LITE_DIR+'/'+gn); }
+    catch(e){ /* no snapshot yet for this file — it reads as modified */ }
+  }
+
   var pick = names.indexOf('index.html')!==-1 ? 'index.html'
     : (names.filter(function(n){ return /^main\./.test(n); })[0])
     || Object.keys(files).sort()[0];
@@ -598,6 +671,19 @@ async function saveProject(){
     for (var i=0;i<names.length;i++){
       await sdk().writeText(dir+'/'+names[i], files[names[i]]);
     }
+
+    // Git-lite: snapshot each just-saved file into <projectDir>/.git-lite/
+    // — "what the file looked like at last save" — so future edits can be
+    // diffed against it. Best-effort: a snapshot failure shouldn't fail
+    // the actual save.
+    try {
+      await sdk().mkdir(dir+'/'+GIT_LITE_DIR);
+      for (var k=0;k<names.length;k++){
+        await sdk().writeText(dir+'/'+GIT_LITE_DIR+'/'+names[k], files[names[k]]);
+        gitLiteSnapshots[names[k]] = files[names[k]];
+      }
+    } catch(e){ log('Git-lite snapshot failed: '+e.message,'warn'); }
+
     projectDir = dir;
     isDirty = false;
     updateBadge();
@@ -617,6 +703,9 @@ function newProject(){
   if (!name) return;
   files = {};
   files[name] = '';
+  // Brand-new, never-saved file: intentionally no gitLiteSnapshots entry,
+  // so it reads as modified until the first Save.
+  gitLiteSnapshots = {};
   projectDir = null;
   activeFile = null;
   switchFile(name);
@@ -631,6 +720,7 @@ async function addFileToProject(){
   if (!name) return;
   if (files[name] != null){ log('A file named "'+name+'" already exists','warn'); switchFile(name); return; }
   files[name] = '';
+  // No gitLiteSnapshots entry for this name yet -> shows modified until saved.
   if (projectDir){
     try { await sdk().writeText(projectDir+'/'+name, ''); } catch(e){}
   }
@@ -641,8 +731,10 @@ async function addFileToProject(){
 async function deleteFile(name){
   if (!confirm('Delete "'+name+'"? This cannot be undone.')) return;
   delete files[name];
+  delete gitLiteSnapshots[name];
   if (projectDir){
     try { await sdk().remove(projectDir+'/'+name); } catch(e){}
+    try { await sdk().remove(projectDir+'/'+GIT_LITE_DIR+'/'+name); } catch(e){}
   }
   if (activeFile === name){
     var remaining = Object.keys(files);
@@ -660,11 +752,16 @@ async function renameFile(oldName){
   if (files[newName] != null){ log('A file named "'+newName+'" already exists','warn'); return; }
   files[newName] = files[oldName];
   delete files[oldName];
+  if (Object.prototype.hasOwnProperty.call(gitLiteSnapshots, oldName)){
+    gitLiteSnapshots[newName] = gitLiteSnapshots[oldName];
+  }
+  delete gitLiteSnapshots[oldName];
   if (projectDir){
     try { await sdk().rename(projectDir+'/'+oldName, projectDir+'/'+newName); }
     catch(e){
       try { await sdk().writeText(projectDir+'/'+newName, files[newName]); await sdk().remove(projectDir+'/'+oldName); } catch(_){}
     }
+    try { await sdk().rename(projectDir+'/'+GIT_LITE_DIR+'/'+oldName, projectDir+'/'+GIT_LITE_DIR+'/'+newName); } catch(e){}
   }
   if (activeFile === oldName) activeFile = newName;
   refreshSidebar();
@@ -704,8 +801,9 @@ async function refreshSidebar(){
   if (fileNames.length){
     html += '<div class="sb-group" style="margin-top:8px"><span>Files'+(projectName()?' — '+projectName():'')+'</span><span class="sb-action" onclick="addFileToProject()" title="Add file">＋</span></div>';
     fileNames.sort().forEach(function(fn){
-      html += '<div class="sb-item'+(activeFile===fn?' active':'')+'" onclick="switchFile(\''+fn+'\')" ondblclick="renameFile(\''+fn+'\')" title="'+fn+' (double-click to rename)">'
+      html += '<div class="sb-item'+(activeFile===fn?' active':'')+'" data-file="'+fn+'" onclick="switchFile(\''+fn+'\')" ondblclick="renameFile(\''+fn+'\')" title="'+fn+' (double-click to rename)">'
             + '<span class="ic">'+iconFor(fn)+'</span><span class="nm">'+fn+'</span>'
+            + '<span class="sb-mod-dot'+(isFileModified(fn)?' show':'')+'" title="Modified since last save"></span>'
             + '<span class="sb-del" onclick="event.stopPropagation();deleteFile(\''+fn+'\')" title="Delete">✕</span></div>';
     });
   }
@@ -720,12 +818,80 @@ async function refreshSidebar(){
   sb.innerHTML = html;
 }
 
+// --- Git-lite diff view ---
+// Small self-contained LCS line-diff (no external lib, no build step
+// available to this file). O(n*m) DP table — fine for the file sizes this
+// toy IDE deals with. Returns an array of {type:'ctx'|'add'|'del', line}.
+function computeLineDiff(oldStr, newStr){
+  var a = (oldStr==null?'':oldStr).split('\n');
+  var b = (newStr==null?'':newStr).split('\n');
+  var n = a.length, m = b.length;
+  var dp = new Array(n+1);
+  for (var i=0;i<=n;i++){ dp[i] = new Array(m+1).fill(0); }
+  for (i=n-1;i>=0;i--){
+    for (var j=m-1;j>=0;j--){
+      dp[i][j] = (a[i]===b[j]) ? dp[i+1][j+1]+1 : Math.max(dp[i+1][j], dp[i][j+1]);
+    }
+  }
+  var result = [];
+  i = 0; var jj = 0;
+  while (i<n && jj<m){
+    if (a[i]===b[jj]){ result.push({type:'ctx', line:a[i]}); i++; jj++; }
+    else if (dp[i+1][jj] >= dp[i][jj+1]){ result.push({type:'del', line:a[i]}); i++; }
+    else { result.push({type:'add', line:b[jj]}); jj++; }
+  }
+  while (i<n){ result.push({type:'del', line:a[i]}); i++; }
+  while (jj<m){ result.push({type:'add', line:b[jj]}); jj++; }
+  return result;
+}
+
+function escapeHtml(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function showDiff(){
+  if (activeFile) files[activeFile] = editor.getValue();
+  var name = activeFile;
+  document.getElementById('diff-title').textContent = 'Diff' + (name ? ' — '+name : '');
+  var body = document.getElementById('diff-body');
+
+  if (!name){
+    body.innerHTML = '<div class="diff-empty">No file open.</div>';
+  } else {
+    var snap = gitLiteSnapshots[name];
+    if (snap === undefined){
+      body.innerHTML = '<div class="diff-empty">No saved snapshot yet — save the file first.</div>';
+    } else {
+      var current = files[name] || '';
+      var diff = computeLineDiff(snap, current);
+      var changed = diff.some(function(d){ return d.type !== 'ctx'; });
+      if (!changed){
+        body.innerHTML = '<div class="diff-empty">No differences since last save.</div>';
+      } else {
+        body.innerHTML = diff.map(function(d){
+          var prefix = d.type==='add' ? '+' : (d.type==='del' ? '-' : ' ');
+          return '<div class="diff-line '+d.type+'"><span class="dp">'+prefix+'</span>'+escapeHtml(d.line)+'</div>';
+        }).join('');
+      }
+    }
+  }
+  document.getElementById('diff-overlay').classList.add('show');
+}
+
+function closeDiff(){
+  document.getElementById('diff-overlay').classList.remove('show');
+}
+
 function loadExample(i){
   if(isDirty && !confirm('Discard unsaved changes?')) return;
   var ex = EXAMPLES[i];
   var fn = 'scratch.'+(ex.lang||'ts');
   files = {};
   files[fn] = ex.code;
+  // Git-lite: baseline = the content just loaded, so browsing an example
+  // doesn't itself show as "modified" — only actual edits after this do.
+  gitLiteSnapshots = {};
+  gitLiteSnapshots[fn] = ex.code;
   projectDir = null;
   activeFile = null;
   switchFile(fn);
@@ -740,6 +906,8 @@ function loadTemplate(i){
   if(isDirty && !confirm('Discard unsaved changes?')) return;
   var t = TEMPLATES[i];
   files = Object.assign({}, t.files);
+  // Git-lite: baseline = the freshly loaded template content (see loadExample).
+  gitLiteSnapshots = Object.assign({}, t.files);
   projectDir = null;
   var pick = files['index.html'] != null ? 'index.html' : Object.keys(files)[0];
   activeFile = null;
