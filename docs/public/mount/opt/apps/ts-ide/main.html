@@ -458,8 +458,15 @@ function runScript(btn){
   // The inner canvas sizes itself to the iframe's OWN window, which is
   // already CSS-responsive (position:absolute;inset:0;width/height:100%)
   // — so it tracks the real preview area continuously, including later
-  // resizes (dragging the panel dividers, resizing the whole window),
-  // rather than a size baked in once at Run time.
+  // resizes (dragging the panel dividers, resizing the whole window).
+  // BUT: for canvas-only scripts (see usesCanvas below) this iframe is
+  // immediately set to display:none — it's only used as an offscreen
+  // render source that copyFrame() mirrors onto the visible cv canvas —
+  // and a display:none iframe's own window.innerWidth/innerHeight collapse
+  // to 0, which made every canvas-based script draw onto a 0x0 canvas
+  // ("Canvas rendered! W=0 H=0", nothing visible). Fall back to the mirror
+  // canvas's current size (already correct — fitCanvasPreview() just ran
+  // above) whenever the iframe's own window size reads as 0.
   var srcdoc = `<!doctype html><html><head><meta charset="utf-8"><style>
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{width:100%;height:100%;background:#0a0d13;overflow:hidden;font-family:system-ui,sans-serif;color:#e2e8f0}
@@ -472,7 +479,10 @@ ${CONSOLE_SHIM}
 <script>
 (function(){
   var c = document.getElementById('preview');
-  function fit(){ c.width = window.innerWidth; c.height = window.innerHeight; }
+  function fit(){
+    c.width = window.innerWidth || ${cv.width || 800};
+    c.height = window.innerHeight || ${cv.height || 600};
+  }
   fit();
   window.addEventListener('resize', fit);
 })();
