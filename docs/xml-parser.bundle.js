@@ -29188,7 +29188,10 @@ __webpack_require__.r(__webpack_exports__);
 
 class ProcessManager {
     constructor() {
-        this._pidCounter = 1;
+        // Starts at 2, not 1 - PID 1 is reserved for systemd (src/core/systemd.ts),
+        // the init system that starts before any GUI window can open, matching
+        // real Linux where PID 1 is always init/systemd.
+        this._pidCounter = 2;
         this._processes = new Map();
         this._processes$ = new rxjs__WEBPACK_IMPORTED_MODULE_1__.BehaviorSubject([]);
         this.processes$ = this._processes$.asObservable();
@@ -29236,7 +29239,7 @@ class ProcessManager {
         return Array.from(this._processes.values());
     }
     reset() {
-        this._pidCounter = 1;
+        this._pidCounter = 2;
         this._processes.clear();
         this._processes$.next([]);
     }

@@ -1,0 +1,11 @@
+# Core unit — started by systemd (PID 1) at boot. Previously a hardcoded
+# loadWidgets() call in src/remote.ts; now a real systemd-managed service.
+[Unit]
+Description=Loads desktop widget scripts from /etc/widgets
+
+[Service]
+ExecStart=/opt/systemd/lib/widgets-init.js
+Restart=no
+
+[Install]
+WantedBy=multi-user.target

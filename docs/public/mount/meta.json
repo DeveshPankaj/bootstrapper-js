@@ -442,6 +442,21 @@
     "force_reload": false
   },
   {
+    "path": "/etc/systemd/system/cron.service",
+    "file": "/etc/systemd/system/cron.service",
+    "force_reload": false
+  },
+  {
+    "path": "/etc/systemd/system/widgets.service",
+    "file": "/etc/systemd/system/widgets.service",
+    "force_reload": false
+  },
+  {
+    "path": "/etc/systemd/system/shell.service",
+    "file": "/etc/systemd/system/shell.service",
+    "force_reload": false
+  },
+  {
     "path": "/etc/systemd/enabled.json",
     "file": "/etc/systemd/enabled.json",
     "force_reload": false
@@ -454,6 +469,21 @@
   {
     "path": "/opt/systemd/disk-usage-logger.js",
     "file": "/opt/systemd/disk-usage-logger.js",
+    "force_reload": false
+  },
+  {
+    "path": "/opt/systemd/lib/cron-daemon.js",
+    "file": "/opt/systemd/lib/cron-daemon.js",
+    "force_reload": false
+  },
+  {
+    "path": "/opt/systemd/lib/widgets-init.js",
+    "file": "/opt/systemd/lib/widgets-init.js",
+    "force_reload": false
+  },
+  {
+    "path": "/opt/systemd/lib/shell-init.js",
+    "file": "/opt/systemd/lib/shell-init.js",
     "force_reload": false
   },
   {

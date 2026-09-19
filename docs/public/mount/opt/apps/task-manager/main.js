@@ -41,11 +41,28 @@ const STATE_LABELS = {
   failed: 'Failed',
 };
 
-// Merges GUI window processes (`process.list`) and systemd-style units
-// (`systemd.list`, see src/core/systemd.ts) into one row shape so both can
-// be sorted/grouped together - "processes started from systemd" show up
-// as their own group in tree view instead of being a separate app.
+// Merges systemd itself (`systemd.self`, PID 1 - the reserved pid no GUI
+// window can ever get, see ProcessManager in src/platform/process-manager.ts),
+// GUI window processes (`process.list`), and systemd-managed units
+// (`systemd.list`, see src/core/systemd.ts) into one row shape so all three
+// can be sorted/grouped together - cron/widgets/shell now boot as real
+// units (see /etc/systemd/system/), so they show up here as systemd's own
+// children rather than invisible hardcoded boot steps.
 const buildRows = () => {
+  const self = platform.host.getCommand('systemd.self')?.exec();
+  const systemd = self ? [{
+    id: 'systemd-1',
+    kind: 'system',
+    pid: self.pid,
+    name: self.name,
+    title: self.name,
+    icon: 'dns',
+    state: 'active',
+    memory: null,
+    startedAt: self.startedAt,
+    detail: self.description,
+  }] : [];
+
   const processes = platform.host.getCommand('process.list')?.exec() ?? [];
   const apps = processes.map(p => ({
     id: `app-${p.pid}`,
@@ -74,7 +91,7 @@ const buildRows = () => {
     detail: `Restart=${u.restart}${u.enabled ? ' · enabled at boot' : ''}`,
   }));
 
-  return { apps, services };
+  return { systemd, apps, services };
 };
 
 const COLUMNS = [
@@ -119,30 +136,32 @@ const SortHeader = ({ col, sortKey, sortDir, onSort }) => {
   );
 };
 
-const Row = ({ row, onAction }) => {
+const KIND_LABELS = { app: 'App', service: 'Service', system: 'System' };
+
+const Row = ({ row, onAction, indent }) => {
   const isRunning = row.state === 'active' || row.state === 'activating' || row.kind === 'app';
   const actionLabel = row.kind === 'app' ? 'End task' : (isRunning ? 'Stop' : 'Start');
   return (
     <tr className="tm-row">
-      <td className="tm-name-cell">
+      <td className="tm-name-cell" style={indent ? { paddingLeft: 14 + indent } : undefined}>
         <span className="material-symbols-outlined tm-row-icon">{row.icon}</span>
         <span className="tm-row-title">{row.title}</span>
         {row.title !== row.name ? <span className="tm-row-subname">{row.name}</span> : null}
       </td>
-      <td className="tm-muted tm-capitalize">{row.kind === 'app' ? 'App' : 'Service'}</td>
+      <td className="tm-muted tm-capitalize">{KIND_LABELS[row.kind] || row.kind}</td>
       <td className="tm-muted tm-tabular">{row.pid ?? '—'}</td>
       <td><StatePill state={row.state} /></td>
       <td className="tm-muted tm-tabular">{fmtMemory(row.memory)}</td>
       <td className="tm-muted tm-tabular">{fmtUptime(row.startedAt)}</td>
       <td className="tm-muted tm-detail">{row.detail}</td>
-      <td><button className="tm-action" onClick={() => onAction(row)}>{actionLabel}</button></td>
+      <td>{row.kind !== 'system' && <button className="tm-action" onClick={() => onAction(row)}>{actionLabel}</button>}</td>
     </tr>
   );
 };
 
-const GroupHeader = ({ label, count, collapsed, onToggle }) => (
+const GroupHeader = ({ label, count, collapsed, onToggle, indent }) => (
   <tr className="tm-group-row" onClick={onToggle}>
-    <td colSpan={8}>
+    <td colSpan={8} style={indent ? { paddingLeft: 14 + indent } : undefined}>
       <span className="material-symbols-outlined tm-chevron">{collapsed ? 'chevron_right' : 'expand_more'}</span>
       <span className="tm-group-label">{label}</span>
       <span className="tm-group-count">{count}</span>
@@ -187,9 +206,12 @@ const TaskManagerShell = ({ view, setView, totalMemory, isEmpty, children }) => 
 );
 
 const TaskManagerApp = () => {
-  const [rows, setRows] = React.useState({ apps: [], services: [] });
+  const [rows, setRows] = React.useState({ systemd: [], apps: [], services: [] });
   const [view, setView] = React.useState('flat');
-  const [sortKey, setSortKey] = React.useState('title');
+  // Default sort is PID ascending, not name: with systemd reserved as PID 1
+  // (see ProcessManager in src/platform/process-manager.ts), this puts it
+  // first the way it would appear in a real `ps`/`htop` PID-ordered list.
+  const [sortKey, setSortKey] = React.useState('pid');
   const [sortDir, setSortDir] = React.useState('asc');
   const [collapsed, setCollapsed] = React.useState({});
 
@@ -216,7 +238,7 @@ const TaskManagerApp = () => {
     setTimeout(refresh, 200);
   };
 
-  const all = [...rows.apps, ...rows.services];
+  const all = [...rows.systemd, ...rows.apps, ...rows.services];
   const memReading = all.find(r => r.memory != null);
   const totalMemory = memReading ? memReading.memory : null;
 
@@ -232,6 +254,10 @@ const TaskManagerApp = () => {
     );
   }
 
+  // Tree view: systemd (PID 1) is the root - everything else boots under it
+  // (cron/widgets/shell as real units, GUI apps as windows it didn't
+  // directly spawn but which couldn't exist before it started IPC/services).
+  // Apps/Background Services render as indented, collapsible groups beneath it.
   const groups = [
     { key: 'apps', label: 'Apps', rows: sortRows(rows.apps, sortKey, sortDir) },
     { key: 'services', label: 'Background Services (systemd)', rows: sortRows(rows.services, sortKey, sortDir) },
@@ -241,14 +267,15 @@ const TaskManagerApp = () => {
     <TaskManagerShell view={view} setView={setView} totalMemory={totalMemory} isEmpty={!all.length}>
       <HeaderRow sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
       <tbody>
+        {rows.systemd.map(row => <Row key={row.id} row={row} onAction={onAction} />)}
         {groups.map(g => (
           <React.Fragment key={g.key}>
             <GroupHeader
-              label={g.label} count={g.rows.length}
+              label={g.label} count={g.rows.length} indent={18}
               collapsed={!!collapsed[g.key]}
               onToggle={() => setCollapsed(c => ({ ...c, [g.key]: !c[g.key] }))}
             />
-            {!collapsed[g.key] && g.rows.map(row => <Row key={row.id} row={row} onAction={onAction} />)}
+            {!collapsed[g.key] && g.rows.map(row => <Row key={row.id} row={row} onAction={onAction} indent={18} />)}
           </React.Fragment>
         ))}
       </tbody>
