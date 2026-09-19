@@ -1022,6 +1022,16 @@
     "force_reload": true
   },
   {
+    "path": "/opt/apps/dock/sidebar.html",
+    "file": "/opt/apps/dock/sidebar.html",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/dock/minimal.html",
+    "file": "/opt/apps/dock/minimal.html",
+    "force_reload": true
+  },
+  {
     "path": "/opt/desktop/manager.js",
     "file": "/opt/desktop/manager.js",
     "force_reload": true
