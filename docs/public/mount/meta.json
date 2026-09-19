@@ -342,6 +342,11 @@
     "force_reload": true
   },
   {
+    "path": "/etc/widgets/notifications.js",
+    "file": "/etc/widgets/notifications.js",
+    "force_reload": true
+  },
+  {
     "path": "/etc/widgets/toolbar.js",
     "file": "/etc/widgets/toolbar.js",
     "force_reload": true

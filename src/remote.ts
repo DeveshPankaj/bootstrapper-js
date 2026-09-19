@@ -1,5 +1,5 @@
 import { Command, Host, Platform, PlatformEvent, SettingsSectionDef, WidgetDef } from "@shared/index";
-import { removeRecursive, VFS } from "@shared/fs-utils";
+import { removeRecursive, VFS, readJsonFile, writeJsonFile } from "@shared/fs-utils";
 import { KEYBINDINGS_FILE, WIDGETS_DIR } from "@shared/constants";
 import { BehaviorSubject, Subject } from "rxjs";
 import { Module, modules } from "./modules/modules";
@@ -263,6 +263,36 @@ const launchFromQueryParams = () => {
 // Run after initd.run and widget/settings scripts have had time to register commands.
 setTimeout(launchFromQueryParams, 4000);
 
+// Persistent notification history backing the notification-center widget
+// (/etc/widgets/notifications.js) — every `notify` call below also appends an
+// entry here, capped at the most recent 50. `notifications.list`/
+// `notifications.mark-all-read` let a widget read/mutate the log without
+// duplicating this file I/O.
+const NOTIFICATIONS_LOG_PATH = '/var/log/notifications.json';
+const MAX_NOTIFICATION_HISTORY = 50;
+
+type NotificationEntry = { id: number; title: string; body: string; timestamp: number; read: boolean };
+
+const readNotificationHistory = (): NotificationEntry[] => {
+  return readJsonFile<NotificationEntry[]>(platform.host.getFS(), NOTIFICATIONS_LOG_PATH, []) || [];
+};
+
+const writeNotificationHistory = (entries: NotificationEntry[]) => {
+  try {
+    writeJsonFile(platform.host.getFS(), NOTIFICATIONS_LOG_PATH, entries, true);
+  } catch (err) { console.error('[notifications] failed to persist history:', err); }
+};
+
+platform.host.registerCommand('notifications.list', (): NotificationEntry[] => {
+  return readNotificationHistory().slice().reverse();
+});
+
+platform.host.registerCommand('notifications.mark-all-read', (): NotificationEntry[] => {
+  const history = readNotificationHistory().map(entry => ({ ...entry, read: true }));
+  writeNotificationHistory(history);
+  return history.slice().reverse();
+});
+
 // Toast notification system — platform.host.callCommand('notify', {title, body, duration})
 const TOAST_CONTAINER_ID = '__toast_container__';
 const ensureToastContainer = () => {
@@ -315,6 +345,13 @@ platform.host.registerCommand('notify', ({ title = '', body = '', duration = 400
   toast.addEventListener('click', dismiss);
   requestAnimationFrame(() => { toast.style.opacity = '1'; toast.style.transform = 'translateY(0)'; });
   setTimeout(dismiss, duration);
+
+  // Additive side effect: persist to the notification-center history log.
+  // Doesn't affect the toast behavior above in any way.
+  const history = readNotificationHistory();
+  history.push({ id: Date.now() + Math.random(), title, body, timestamp: Date.now(), read: false });
+  while (history.length > MAX_NOTIFICATION_HISTORY) history.shift();
+  writeNotificationHistory(history);
 });
 
 // systemctl-style service management commands, backing /bin/systemctl.run and
