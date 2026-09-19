@@ -101,6 +101,117 @@ const fmtDate = (ts) => {
   return new Date(ts).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 };
 
+// Compare two dotted version strings numerically per-segment (e.g. "1.10.0" > "1.9.0").
+// Returns -1 / 0 / 1. Non-numeric segments fall back to 0.
+const parseVersionParts = (v) => String(v || '0').split('.').map(n => parseInt(n, 10) || 0);
+const compareVersions = (a, b) => {
+  const pa = parseVersionParts(a);
+  const pb = parseVersionParts(b);
+  const len = Math.max(pa.length, pb.length);
+  for (let i = 0; i < len; i++) {
+    const x = pa[i] || 0;
+    const y = pb[i] || 0;
+    if (x !== y) return x < y ? -1 : 1;
+  }
+  return 0;
+};
+
+// Find the registry entry matching an installed pkg — prefer the registry it was
+// originally installed from, fall back to any registry that has the same app id.
+const findRegistryMatch = (pkg, registryApps) => {
+  const sameReg = registryApps.find(a => a.id === pkg.id && a._registryUrl === pkg.registryUrl);
+  if (sameReg) return sameReg;
+  return registryApps.find(a => a.id === pkg.id) || null;
+};
+
+// ── Backups / rollback ──────────────────────────────────────────────────────
+
+const BACKUPS_DIR = '/etc/pkg/backups';
+
+const readBackupManifest = (id) => {
+  try { return JSON.parse(fs.readFileSync(`${BACKUPS_DIR}/${id}/manifest.json`, 'utf8') || '[]'); }
+  catch (_) { return []; }
+};
+
+const writeBackupManifest = (id, list) => {
+  const dir = `${BACKUPS_DIR}/${id}`;
+  mkdirpSync(dir);
+  fs.writeFileSync(`${dir}/manifest.json`, JSON.stringify(list, null, 2));
+};
+
+// Most recently backed-up version for an app, or null if none exists.
+const getLatestBackup = (id) => {
+  const list = readBackupManifest(id);
+  if (!list.length) return null;
+  return list[list.length - 1];
+};
+
+// Snapshot an installed app's CURRENT on-disk files (as named by the registry entry's
+// `files` array, i.e. the files an update is about to overwrite) into
+// /etc/pkg/backups/<id>/<old-version>/<relative-filename>, and record it in that app's
+// manifest.json. Best-effort — skips files that don't currently exist.
+const backupAppFiles = (pkg, registryApp) => {
+  const oldVersion = pkg.version;
+  const backupDir = `${BACKUPS_DIR}/${pkg.id}/${oldVersion}`;
+  let backedUpAny = false;
+  for (const file of (registryApp.files || [])) {
+    const srcPath = `${pkg.appDir}/${file.dest}`;
+    if (!fs.existsSync(srcPath)) continue;
+    try {
+      const data = fs.readFileSync(srcPath);
+      const destPath = `${backupDir}/${file.dest}`;
+      const parentDir = destPath.split('/').slice(0, -1).join('/');
+      mkdirpSync(parentDir);
+      fs.writeFileSync(destPath, data);
+      backedUpAny = true;
+    } catch (e) { console.warn('[pkg-manager] backup failed for', srcPath, e); }
+  }
+  if (backedUpAny) {
+    const manifest = readBackupManifest(pkg.id).filter(b => b.version !== oldVersion);
+    manifest.push({ version: oldVersion, backedUpAt: Date.now() });
+    writeBackupManifest(pkg.id, manifest);
+  }
+  return backedUpAny;
+};
+
+// Recursively copy every file under `dir` back into `pkg.appDir`, preserving relative paths.
+const restoreFilesInto = (dir, appDir, relBase = '') => {
+  let entries = [];
+  try { entries = fs.readdirSync(dir); } catch (_) { return; }
+  for (const entry of entries) {
+    const full = `${dir}/${entry}`;
+    let stat;
+    try { stat = fs.statSync(full); } catch (_) { continue; }
+    if (stat.isDirectory()) {
+      restoreFilesInto(full, appDir, `${relBase}${entry}/`);
+    } else {
+      const destPath = `${appDir}/${relBase}${entry}`;
+      const parentDir = destPath.split('/').slice(0, -1).join('/');
+      try {
+        mkdirpSync(parentDir);
+        const data = fs.readFileSync(full);
+        fs.writeFileSync(destPath, data);
+      } catch (e) { console.warn('[pkg-manager] restore failed for', full, e); }
+    }
+  }
+};
+
+// Restore the most recently backed-up version's files over the current ones and revert
+// the installed.json version field to match.
+const rollbackApp = (pkg) => {
+  const latest = getLatestBackup(pkg.id);
+  if (!latest) throw new Error('No backup available to roll back to.');
+  const backupDir = `${BACKUPS_DIR}/${pkg.id}/${latest.version}`;
+  restoreFilesInto(backupDir, pkg.appDir);
+
+  const installed = readInstalled();
+  const idx = installed.findIndex(p => p.id === pkg.id);
+  if (idx >= 0) {
+    installed[idx] = { ...installed[idx], version: latest.version };
+    writeInstalled(installed);
+  }
+};
+
 // ── Install / Uninstall ──────────────────────────────────────────────────────
 
 const installApp = async (appMeta, registryUrl) => {
@@ -201,7 +312,60 @@ const CSS = `
   color: #1c1c1e;
   background: #fff;
   overflow: hidden;
+  position: relative;
 }
+
+/* Confirm modal */
+.pkg-modal-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(20, 18, 14, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+.pkg-modal {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.25);
+  width: 340px;
+  max-width: calc(100% - 32px);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pkg-modal-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1c1c1e;
+}
+
+.pkg-modal-body { font-size: 13px; color: #555; line-height: 1.5; }
+.pkg-modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+
+/* Update awareness */
+.pkg-update-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 700;
+  background: #fff4de;
+  color: #a8710a;
+  vertical-align: middle;
+}
+.pkg-update-version { color: #a8710a; font-weight: 600; }
+.pkg-btn.update { background: #fff4de; border-color: #f0d9a8; color: #a8710a; }
+.pkg-btn.update:hover { background: #fbe8c4; }
 
 /* Sidebar */
 .pkg-sidebar {
@@ -566,9 +730,29 @@ const Icon = ({ name, style }) => (
   <span className="material-symbols-outlined" style={style}>{name}</span>
 );
 
+// Small custom confirm modal, matching the app's card/button styling (used instead of
+// a native confirm() so it stays visually consistent with the rest of the UI).
+const ConfirmModal = ({ icon, title, message, confirmLabel = 'Confirm', danger, busy, onConfirm, onCancel }) => (
+  <div className="pkg-modal-overlay" onClick={onCancel}>
+    <div className="pkg-modal" onClick={e => e.stopPropagation()}>
+      <div className="pkg-modal-title">
+        {icon && <Icon name={icon} style={{ fontSize: 18, color: danger ? '#d63b3b' : '#c4a478' }} />}
+        {title}
+      </div>
+      <div className="pkg-modal-body">{message}</div>
+      <div className="pkg-modal-actions">
+        <button className="pkg-btn" onClick={onCancel} disabled={busy}>Cancel</button>
+        <button className={`pkg-btn ${danger ? 'danger' : 'primary'}`} onClick={onConfirm} disabled={busy}>
+          {busy ? <><Spinner /> Working…</> : confirmLabel}
+        </button>
+      </div>
+    </div>
+  </div>
+);
+
 // Discover view ───────────────────────────────────────────────────────────────
 
-const DiscoverView = ({ registryApps, installed, loading, fetchError, onInstall, onUninstall, installingId, uninstallingId, search, setSearch }) => {
+const DiscoverView = ({ registryApps, installed, loading, fetchError, onInstall, onRequestUninstall, installingId, uninstallingId, search, setSearch }) => {
 
   const installedIds = new Set(installed.map(p => p.id));
   const [regFilter, setRegFilter] = useState('');
@@ -677,7 +861,7 @@ const DiscoverView = ({ registryApps, installed, loading, fetchError, onInstall,
                       <button
                         className="pkg-btn danger"
                         disabled={uninstallingId === app.id}
-                        onClick={() => onUninstall(installed.find(p => p.id === app.id))}
+                        onClick={() => onRequestUninstall(installed.find(p => p.id === app.id))}
                         style={{ display: 'flex', alignItems: 'center', gap: 5 }}
                       >
                         {uninstallingId === app.id ? <><Spinner /> Removing…</> : <><Icon name="delete" /> Uninstall</>}
@@ -705,8 +889,7 @@ const DiscoverView = ({ registryApps, installed, loading, fetchError, onInstall,
 
 // Installed view ──────────────────────────────────────────────────────────────
 
-const InstalledView = ({ installed, onUninstall, uninstallingId, search, setSearch }) => {
-  const [confirmId, setConfirmId] = useState(null);
+const InstalledView = ({ installed, registryApps, onRequestUninstall, onUpdate, onRollback, uninstallingId, updatingId, rollingBackId, search, setSearch }) => {
 
   const filtered = search
     ? installed.filter(p => p.name?.toLowerCase().includes(search.toLowerCase()) || p.id?.toLowerCase().includes(search.toLowerCase()) || p.category?.toLowerCase().includes(search.toLowerCase()))
@@ -728,15 +911,6 @@ const InstalledView = ({ installed, onUninstall, uninstallingId, search, setSear
     }
   };
 
-  const handleUninstall = (pkg) => {
-    if (confirmId === pkg.id) {
-      setConfirmId(null);
-      onUninstall(pkg);
-    } else {
-      setConfirmId(pkg.id);
-    }
-  };
-
   return (
     <>
       <div className="pkg-toolbar">
@@ -755,51 +929,65 @@ const InstalledView = ({ installed, onUninstall, uninstallingId, search, setSear
           <div className="pkg-list">
             {filtered.map(pkg => {
               const isUninstalling = uninstallingId === pkg.id;
-              const isConfirming = confirmId === pkg.id;
+              const isUpdating = updatingId === pkg.id;
+              const isRollingBack = rollingBackId === pkg.id;
+              const match = findRegistryMatch(pkg, registryApps);
+              const hasUpdate = !!match && compareVersions(match.version, pkg.version) > 0;
+              const backup = getLatestBackup(pkg.id);
+              const canRollback = !!backup && backup.version !== pkg.version;
               return (
                 <div className="pkg-list-row" key={pkg.id}>
                   <div className="pkg-list-icon">
                     <Icon name={pkg.icon || 'apps'} />
                   </div>
                   <div className="pkg-list-info">
-                    <div className="pkg-list-name">{pkg.name}</div>
+                    <div className="pkg-list-name">
+                      {pkg.name}
+                      {hasUpdate && <span className="pkg-update-badge">Update available</span>}
+                    </div>
                     <div className="pkg-list-meta">
                       v{pkg.version}
+                      {hasUpdate && <span className="pkg-update-version"> → v{match.version}</span>}
                       {pkg.category && <> · {pkg.category}</>}
                       {pkg.author && <> · {pkg.author}</>}
                       {pkg.installedAt && <> · Installed {fmtDate(pkg.installedAt)}</>}
                     </div>
                   </div>
-                  {isConfirming ? (
-                    <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                      <span style={{ fontSize: 12, color: '#d63b3b', alignSelf: 'center' }}>Remove?</span>
+                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                    {hasUpdate && (
                       <button
-                        className="pkg-btn danger"
-                        disabled={isUninstalling}
-                        onClick={() => handleUninstall(pkg)}
+                        className="pkg-btn update"
+                        disabled={isUpdating}
+                        onClick={() => onUpdate(pkg, match)}
                         style={{ display: 'flex', alignItems: 'center', gap: 5 }}
                       >
-                        {isUninstalling ? <><Spinner /> Removing…</> : 'Confirm'}
+                        {isUpdating ? <><Spinner /> Updating…</> : <><Icon name="upgrade" style={{ fontSize: 15 }} />Update</>}
                       </button>
-                      <button className="pkg-btn" onClick={() => setConfirmId(null)}>Cancel</button>
-                    </div>
-                  ) : (
-                    <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                    )}
+                    {canRollback && (
                       <button
                         className="pkg-btn"
-                        onClick={() => handleOpen(pkg)}
+                        disabled={isRollingBack}
+                        onClick={() => onRollback(pkg)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 5 }}
                       >
-                        Open
+                        {isRollingBack ? <><Spinner /> Rolling back…</> : `Rollback to v${backup.version}`}
                       </button>
-                      <button
-                        className="pkg-btn danger"
-                        disabled={isUninstalling}
-                        onClick={() => handleUninstall(pkg)}
-                      >
-                        Uninstall
-                      </button>
-                    </div>
-                  )}
+                    )}
+                    <button
+                      className="pkg-btn"
+                      onClick={() => handleOpen(pkg)}
+                    >
+                      Open
+                    </button>
+                    <button
+                      className="pkg-btn danger"
+                      disabled={isUninstalling}
+                      onClick={() => onRequestUninstall(pkg)}
+                    >
+                      {isUninstalling ? <><Spinner /> Removing…</> : 'Uninstall'}
+                    </button>
+                  </div>
                 </div>
               );
             })}
@@ -907,8 +1095,11 @@ const App = ({ initialSearch = '' }) => {
   const [fetchError, setFetchError] = useState('');
   const [installingId, setInstallingId] = useState(null);
   const [uninstallingId, setUninstallingId] = useState(null);
+  const [updatingId, setUpdatingId] = useState(null);
+  const [rollingBackId, setRollingBackId] = useState(null);
   const [installError, setInstallError] = useState('');
   const [search, setSearch] = useState(initialSearch);
+  const [confirmTarget, setConfirmTarget] = useState(null); // pkg pending uninstall confirmation
 
   const fetchRegistries = useCallback(async (regs) => {
     const userRegs = regs !== undefined ? regs : registries;
@@ -939,7 +1130,9 @@ const App = ({ initialSearch = '' }) => {
   }, [registries]);
 
   useEffect(() => {
-    if (activeTab === 'discover' && registryApps.length === 0) {
+    // Installed view also needs registry data (to detect available updates), so fetch
+    // eagerly the first time either tab is visited, reusing the same fetch logic.
+    if ((activeTab === 'discover' || activeTab === 'installed') && registryApps.length === 0) {
       fetchRegistries(registries);
     }
   }, [activeTab]);
@@ -966,6 +1159,47 @@ const App = ({ initialSearch = '' }) => {
       console.warn('[pkg-manager] uninstall error:', e);
     } finally {
       setUninstallingId(null);
+    }
+  };
+
+  // Uninstall always goes through a confirmation step first (native-style modal,
+  // matching the app's own UI) rather than removing files immediately.
+  const requestUninstall = (pkg) => { if (pkg) setConfirmTarget(pkg); };
+  const cancelUninstall = () => setConfirmTarget(null);
+  const confirmUninstall = async () => {
+    const pkg = confirmTarget;
+    setConfirmTarget(null);
+    if (pkg) await handleUninstall(pkg);
+  };
+
+  // Update re-runs the same install logic against the matching registry entry, after
+  // snapshotting the app's current files so it can be rolled back.
+  const handleUpdate = async (pkg, registryApp) => {
+    const match = registryApp || findRegistryMatch(pkg, registryApps);
+    if (!match) return;
+    setUpdatingId(pkg.id);
+    setInstallError('');
+    try {
+      backupAppFiles(pkg, match);
+      await installApp(match, match._registryUrl || pkg.registryUrl);
+      setInstalled(readInstalled());
+    } catch (e) {
+      setInstallError(`Update failed for "${pkg.name}": ${e.message}`);
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const handleRollback = async (pkg) => {
+    setRollingBackId(pkg.id);
+    setInstallError('');
+    try {
+      rollbackApp(pkg);
+      setInstalled(readInstalled());
+    } catch (e) {
+      setInstallError(`Rollback failed for "${pkg.name}": ${e.message}`);
+    } finally {
+      setRollingBackId(null);
     }
   };
 
@@ -1021,7 +1255,7 @@ const App = ({ initialSearch = '' }) => {
             loading={loading}
             fetchError={fetchError}
             onInstall={handleInstall}
-            onUninstall={handleUninstall}
+            onRequestUninstall={requestUninstall}
             installingId={installingId}
             uninstallingId={uninstallingId}
             search={search}
@@ -1031,8 +1265,13 @@ const App = ({ initialSearch = '' }) => {
         {activeTab === 'installed' && (
           <InstalledView
             installed={installed}
-            onUninstall={handleUninstall}
+            registryApps={registryApps}
+            onRequestUninstall={requestUninstall}
+            onUpdate={handleUpdate}
+            onRollback={handleRollback}
             uninstallingId={uninstallingId}
+            updatingId={updatingId}
+            rollingBackId={rollingBackId}
             search={search}
             setSearch={setSearch}
           />
@@ -1047,6 +1286,18 @@ const App = ({ initialSearch = '' }) => {
           />
         )}
       </div>
+      {confirmTarget && (
+        <ConfirmModal
+          icon="warning"
+          title="Uninstall app?"
+          message={<>This will remove <strong>{confirmTarget.name}</strong> (v{confirmTarget.version}) and delete its files from the filesystem. This can't be undone.</>}
+          confirmLabel="Uninstall"
+          danger
+          busy={uninstallingId === confirmTarget.id}
+          onConfirm={confirmUninstall}
+          onCancel={cancelUninstall}
+        />
+      )}
     </div>
   );
 };
