@@ -197,6 +197,11 @@
     "force_reload": true
   },
   {
+    "path": "/bin/journalctl.run",
+    "file": "/bin/journalctl.run",
+    "force_reload": true
+  },
+  {
     "path": "/home/user1/tools/speed-test.html",
     "file": "/home/user1/tools/speed-test.html",
     "force_reload": false
