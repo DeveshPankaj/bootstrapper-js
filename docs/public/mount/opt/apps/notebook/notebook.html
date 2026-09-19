@@ -940,6 +940,91 @@ for i in range(steps):
 
 print('Done!')`, [], false);
 
+    addCell('markdown', '## Autograd & Model Building (mini_torch)', [], true);
+
+    addCell('code', `# 8. mini_torch — load a tiny PyTorch-like autograd + nn library from the VFS
+# (real PyTorch itself can't run here: its libtorch backend is C++/CUDA
+# with no WebAssembly build, so \`pip install torch\` has no matching wheel
+# inside a browser Python runtime — mini_torch is pure Python + numpy, so
+# it just runs). Edit /usr/lib/py/mini_torch.py directly to change it.
+import micropip
+await micropip.install('numpy')   # mini_torch's only dependency
+
+from js import window
+bridge = window.__nbBridge
+
+src = str(bridge.readFile('/usr/lib/py/mini_torch.py'))
+exec(src, globals())
+
+print('mini_torch loaded.')
+print('Available:', ', '.join(n for n in
+    ['Tensor', 'Module', 'BaseModel', 'Sequential', 'Linear', 'Conv2d', 'Conv3d', 'ReLU', 'Sigmoid', 'Flatten', 'SGD', 'mse_loss']
+    if n in globals()))`, [], true);
+
+    addCell('code', `# 9. Basic autograd — Tensor.backward() computes gradients automatically
+# y = x^2 + 3x + 1  =>  dy/dx = 2x + 3, which is 7 at x=2 — verified below
+# without anyone writing that derivative by hand, the same "auto gradient"
+# idea as PyTorch's loss.backward().
+x = Tensor([2.0], requires_grad=True)
+y = x**2 + 3*x + 1
+y.backward()
+
+print(f'x     = {x.data}')
+print(f'y     = {y.data}')
+print(f'dy/dx = {x.grad}   (analytic: 2x+3 = {2*x.data+3})')`, [], true);
+
+    addCell('code', `# 10. Model building + training — BaseModel, Sequential, Conv2d, Linear, SGD
+# Same shape as real PyTorch: subclass BaseModel, define layers in
+# __init__ and the forward pass in forward(), then train with the usual
+# zero_grad() / backward() / step() loop.
+import numpy as np
+
+class TinyCNN(BaseModel):
+    def __init__(self):
+        self.features = Sequential(
+            Conv2d(1, 4, kernel_size=3, padding=1),
+            ReLU(),
+            Flatten(),
+        )
+        self.head = Linear(4 * 8 * 8, 1)
+
+    def forward(self, x):
+        return self.head(self.features(x)).sigmoid()
+
+# Synthetic task: classify whether an 8x8 "image"'s mean pixel value is
+# above 0 — simple, but genuinely exercises conv -> relu -> flatten -> linear.
+np.random.seed(0)
+N = 64
+X = np.random.randn(N, 1, 8, 8)
+y = (X.mean(axis=(1, 2, 3)) > 0).astype(np.float64).reshape(N, 1)
+
+model = TinyCNN()
+opt = SGD(model.parameters(), lr=0.5)
+x_t, y_t = Tensor(X), Tensor(y)
+
+for epoch in range(60):
+    opt.zero_grad()
+    pred = model(x_t)
+    loss = mse_loss(pred, y_t)
+    loss.backward()
+    opt.step()
+    if (epoch + 1) % 15 == 0:
+        print(f'epoch {epoch+1:3d}  loss = {loss.data:.4f}')
+
+accuracy = ((model(x_t).data > 0.5).astype(np.float64) == y).mean()
+print(f'\\nfinal training accuracy: {accuracy*100:.1f}%')`, [], true);
+
+    addCell('code', `# 11. Conv3d — same idea, one dimension higher (video/volumetric data)
+vol_layer = Conv3d(1, 2, kernel_size=3, padding=1)
+volume = Tensor(np.random.randn(1, 1, 6, 6, 6))   # (N, C, D, H, W)
+
+out = vol_layer(volume)
+print('input  shape:', volume.shape)
+print('output shape:', out.shape)   # channels 1 -> 2, spatial dims unchanged (padding=1)
+
+out.sum().backward()
+print('conv3d weight grad populated:', not np.allclose(vol_layer.weight.grad, 0))`, [], false);
+
     dirty = false; updateTitle();
   }
 }

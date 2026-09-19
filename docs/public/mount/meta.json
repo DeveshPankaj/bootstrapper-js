@@ -877,6 +877,11 @@
     "force_reload": true
   },
   {
+    "path": "/usr/lib/py/mini_torch.py",
+    "file": "/usr/lib/py/mini_torch.py",
+    "force_reload": true
+  },
+  {
     "path": "/usr/share/icons/audio-icon.png",
     "file": "/usr/share/icons/audio-icon.png",
     "force_reload": true
