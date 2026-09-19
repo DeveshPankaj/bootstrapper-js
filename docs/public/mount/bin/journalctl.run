@@ -1,0 +1,106 @@
+/** /bin/journalctl.run */
+const terminal = platform.getService('terminal')
+const fs = platform.host.getFS()
+const write = terminal ? terminal.write.bind(terminal) : console.log
+const [pwd, ...rest] = $args
+
+const LOG_DIR = '/var/log/systemd'
+
+const usage = () => {
+  write('usage: journalctl [-u|--unit <unit>] [-n <N>] [-f|--follow]\r\n')
+  write('  -u, --unit <unit>   show only this unit\'s log entries\r\n')
+  write('  -n <N>              show last N lines (default 50)\r\n')
+  write('  -f, --follow        keep streaming new entries (q or Ctrl+C to stop)\r\n')
+}
+
+const normalize = (name) => name.endsWith('.service') ? name : `${name}.service`
+
+const allUnitNames = () => (platform.host.getCommand('systemd.list')?.exec() ?? []).map(u => u.name)
+
+const readUnitLines = (name) => {
+  const path = `${LOG_DIR}/${name}.log`
+  if (!fs.existsSync(path)) return []
+  const content = fs.readFileSync(path, 'utf-8')
+  return content.split('\n').filter(Boolean)
+}
+
+// Reads current lines for each unit and returns them merged, prefixed with
+// "unit.name: ", and sorted chronologically. Sorting happens on the raw line
+// (which starts with an ISO-8601 timestamp) rather than the prefixed string,
+// since sorting the prefixed string would group by unit name instead of time.
+const buildEntries = (unitNames) => {
+  const entries = []
+  unitNames.forEach(name => {
+    readUnitLines(name).forEach(raw => entries.push({ raw, formatted: `${name}: ${raw}` }))
+  })
+  entries.sort((a, b) => (a.raw < b.raw ? -1 : a.raw > b.raw ? 1 : 0))
+  return entries
+}
+
+let unit = null
+let count = 50
+let follow = false
+
+for (let i = 0; i < rest.length; i++) {
+  const arg = rest[i]
+  if (arg === '-u' || arg === '--unit') {
+    unit = normalize(rest[++i] || '')
+  } else if (arg === '-n') {
+    const n = parseInt(rest[++i], 10)
+    if (!Number.isNaN(n) && n > 0) count = n
+  } else if (arg === '-f' || arg === '--follow') {
+    follow = true
+  } else {
+    write(`journalctl: unknown option "${arg}"\r\n`)
+    usage()
+    return
+  }
+}
+
+const unitNames = unit ? [unit] : allUnitNames()
+
+const entries = buildEntries(unitNames)
+if (!entries.length) {
+  write(unit ? `No entries for unit ${unit}.\r\n` : 'No log entries found.\r\n')
+  return
+}
+
+entries.slice(-count).forEach(e => write(e.formatted + '\r\n'))
+
+if (!follow) return
+
+// -f/--follow: keep polling the journal files for newly appended lines and
+// stream them as they arrive, mirroring htop.run's terminal.onData + polling
+// loop pattern (this whole .run body executes inside an async IIFE, so
+// top-level await/loops are fine here).
+const seen = new Map(unitNames.map(name => [name, readUnitLines(name).length]))
+
+let stopped = false
+const subscription = terminal.onData(data => {
+  if (data === 'q' || data === 'Q' || data === '') stopped = true
+})
+
+try {
+  while (!stopped) {
+    const fresh = []
+    unitNames.forEach(name => {
+      const lines = readUnitLines(name)
+      const already = seen.get(name) || 0
+      if (lines.length > already) {
+        lines.slice(already).forEach(raw => fresh.push({ raw, formatted: `${name}: ${raw}` }))
+        seen.set(name, lines.length)
+      }
+    })
+    if (fresh.length) {
+      fresh.sort((a, b) => (a.raw < b.raw ? -1 : a.raw > b.raw ? 1 : 0))
+      fresh.forEach(e => write(e.formatted + '\r\n'))
+    }
+
+    const waitUntil = Date.now() + 500
+    while (!stopped && Date.now() < waitUntil) {
+      await new Promise(resolve => setTimeout(resolve, 50))
+    }
+  }
+} finally {
+  subscription.dispose()
+}
