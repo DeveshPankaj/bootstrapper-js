@@ -24,6 +24,8 @@ const DOCK_OPTIONS = [
     { id: 'macos',   label: 'macOS Style',     icon: 'dock',                    desc: 'Frosted full-width bar with icon magnification and labels.' },
     { id: 'windows', label: 'Windows 11',      icon: 'desktop_windows',         desc: 'Dark centered icon bar — Windows 11 taskbar look.' },
     { id: 'gnome',   label: 'GNOME',           icon: 'apps',                    desc: 'Dark full-width bar, left-aligned, active-app label.' },
+    { id: 'sidebar', label: 'Sidebar',         icon: 'dock_to_left',            desc: 'Vertical icon dock on the left edge — elementary/Plank style.' },
+    { id: 'minimal', label: 'Minimal',         icon: 'minimize',                desc: 'Tiny monochrome pill that fades to near-invisible until the cursor gets close.' },
 ]
 
 // Desktop-icon variants — /opt/desktop/<id>.js for every id but 'default',

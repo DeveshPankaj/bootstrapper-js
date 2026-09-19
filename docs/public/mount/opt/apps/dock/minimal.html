@@ -1,0 +1,206 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<!-- dock:height=40 -->
+<title>Dock</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: system-ui, sans-serif;
+}
+#dock {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  height: 26px;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 13px;
+  opacity: 0.35;
+  transition: opacity 0.25s ease;
+}
+#dock:hover { opacity: 1; }
+.sep {
+  width: 1px;
+  height: 14px;
+  background: rgba(255,255,255,0.18);
+  margin: 0 2px;
+  flex-shrink: 0;
+}
+.item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+  flex-shrink: 0;
+}
+.item .icon {
+  font-family: 'Material Symbols Outlined', sans-serif;
+  font-size: 17px;
+  line-height: 1;
+  color: rgba(255,255,255,0.62);
+  font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 20;
+  transition: color 0.12s;
+}
+.item:hover .icon,
+.item.active .icon { color: rgba(255,255,255,0.98); }
+.item.minimized .icon { color: rgba(255,255,255,0.38); }
+/* Monochrome running indicator: a 1px underline, not a dot or bounce anim */
+.line {
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 1px;
+  background: rgba(255,255,255,0.9);
+  transition: width 0.12s;
+}
+.item.running .line { width: 10px; }
+</style>
+</head>
+<body>
+<div id="dock"></div>
+<script>
+(function () {
+  var pending = new Map(), counter = 0, listeners = new Map();
+  window.addEventListener('message', function(e) {
+    if (!e.data) return;
+    if (e.data.type === 'wos-ipc-response') {
+      var cb = pending.get(e.data.id);
+      if (!cb) return;
+      pending.delete(e.data.id);
+      e.data.error ? cb.reject(new Error(e.data.error)) : cb.resolve(e.data.result);
+    } else if (e.data.type === 'wos-ipc-event') {
+      (listeners.get(e.data.event) || []).forEach(function(h) { h(e.data.data); });
+    }
+  });
+  var ipc = {
+    call: function(ev, data) {
+      return new Promise(function(resolve, reject) {
+        var id = 'wos-' + (++counter);
+        pending.set(id, { resolve: resolve, reject: reject });
+        var target = window !== window.parent ? window.parent : window.top;
+        target.postMessage({ type: 'wos-ipc', id: id, event: ev, data: data }, '*');
+      });
+    },
+    on: function(ev, handler) {
+      if (!listeners.has(ev)) listeners.set(ev, []);
+      listeners.get(ev).push(handler);
+    }
+  };
+
+  var DOCK_ID = 'minimal';
+  // Monochrome by design - no color/theme knobs, just idle-fade tuning.
+  var SCHEMA = [
+    { key: 'idle-opacity', label: 'Idle opacity', type: 'range', value: 0.35, min: 0.1, max: 0.8, step: 0.05 },
+    { key: 'near-distance', label: 'Reveal distance (px)', type: 'range', value: 60, min: 10, max: 200, step: 10 },
+  ];
+
+  var dock = document.getElementById('dock');
+  var launchItems = [];
+  var openWindows  = [];
+  var launching = {};
+  var near = false;
+
+  function applyIdle() {
+    var idle = SCHEMA.find(function(e){return e.key==='idle-opacity';}).value;
+    dock.style.opacity = near ? 1 : idle;
+  }
+
+  ipc.on('dock.settingChanged', function(d) {
+    var entry = SCHEMA.find(function(e){return e.key===d.key;});
+    if (entry) entry.value = d.value;
+    applyIdle();
+  });
+
+  ipc.call('fs.readText', { path: '/etc/dock/' + DOCK_ID + '.json' })
+    .then(function(txt) {
+      var saved = JSON.parse(txt);
+      SCHEMA.forEach(function(e) { if (saved[e.key] !== undefined) e.value = saved[e.key]; });
+    })
+    .catch(function() {})
+    .then(function() {
+      applyIdle();
+      ipc.call('dock.registerSettings', { dockId: DOCK_ID, schema: SCHEMA }).catch(function(){});
+    });
+
+  // Proximity-based fade: full opacity when the cursor is near the pill
+  // (not just literally hovering it), idle/near-invisible otherwise. This is
+  // on top of (and independent from) the host's own bottom-edge auto-hide
+  // slide, giving this variant an extra always-subtle "ambient" feel even
+  // while the host has it slid into view.
+  document.addEventListener('mousemove', function (e) {
+    var d = SCHEMA.find(function(e){return e.key==='near-distance';}).value;
+    var r = dock.getBoundingClientRect();
+    var dx = Math.max(r.left - e.clientX, 0, e.clientX - r.right);
+    var dy = Math.max(r.top - e.clientY, 0, e.clientY - r.bottom);
+    var dist = Math.sqrt(dx * dx + dy * dy);
+    var wasNear = near;
+    near = dist <= d;
+    if (near !== wasNear) applyIdle();
+  });
+  document.addEventListener('mouseleave', function () { near = false; applyIdle(); });
+
+  function render() {
+    dock.innerHTML = '';
+
+    launchItems.forEach(function(item) {
+      var win = openWindows.find(function(w) { return w.name === item.name; });
+      var el = document.createElement('div');
+      el.className = 'item' + (win ? ' running' : '') + (win && win.active ? ' active' : '') + (win && win.minimized ? ' minimized' : '');
+      el.title = item.label;
+      el.innerHTML = '<span class="icon">' + item.icon + '</span><span class="line"></span>';
+      el.onclick = function() {
+        if (win) { ipc.call('wm.toggleWindow', { pid: win.pid }); return; }
+        var now = Date.now();
+        if (launching[item.name] && now - launching[item.name] < 1200) return;
+        launching[item.name] = now;
+        ipc.call('wm.launch', { name: item.name });
+      };
+      dock.appendChild(el);
+    });
+
+    var pinned = launchItems.map(function(i) { return i.name; });
+    var extras = openWindows.filter(function(w) { return pinned.indexOf(w.name) === -1; });
+    if (extras.length && launchItems.length) {
+      var sep = document.createElement('div'); sep.className = 'sep'; dock.appendChild(sep);
+    }
+    extras.forEach(function(w) {
+      var el = document.createElement('div');
+      el.className = 'item running' + (w.active ? ' active' : '') + (w.minimized ? ' minimized' : '');
+      el.title = w.title || w.name;
+      el.innerHTML = '<span class="icon">' + (w.icon || 'apps') + '</span><span class="line"></span>';
+      el.onclick = function() { ipc.call('wm.toggleWindow', { pid: w.pid }); };
+      dock.appendChild(el);
+    });
+  }
+
+  Promise.all([
+    ipc.call('wm.getLaunchItems').catch(function() { return []; }),
+    ipc.call('wm.getWindows').catch(function() { return []; })
+  ]).then(function(results) {
+    launchItems  = results[0] || [];
+    openWindows  = results[1] || [];
+    render();
+  });
+
+  ipc.on('wm.windowsChanged', function(wins) {
+    openWindows = wins || [];
+    render();
+  });
+})();
+</script>
+</body>
+</html>
