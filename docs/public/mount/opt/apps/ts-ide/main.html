@@ -1134,6 +1134,121 @@ async function main() {
 main().catch((e: Error) => console.error('Error:', e.message));
 `},
 
+{name:'TF.js — Autograd Regression', lang:'ts', icon:'📈', code:
+`// TensorFlow.js — Linear regression via RAW autograd (no model.fit)
+// Demonstrates tf.variableGrads(): automatic differentiation of a loss
+// function with respect to trainable tf.variable()s — the same idea as
+// PyTorch's loss.backward() + optimizer.step(), just through TF.js's
+// functional API instead of an imperative tape object. No tf.sequential
+// model here — just tensors, variables, and gradients.
+// @script https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.15.0/dist/tf.min.js
+
+declare var tf: any;
+
+async function main() {
+  console.log('TensorFlow.js version: ' + tf.version.tfjs);
+
+  // Synthetic data: y = 2x + 1 + noise
+  const trueW = 2, trueB = 1;
+  const n = 50;
+  const xsData: number[] = [];
+  const ysData: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const x = Math.random() * 10;
+    const noise = (Math.random() - 0.5) * 3;
+    xsData.push(x);
+    ysData.push(trueW * x + trueB + noise);
+  }
+  const xs = tf.tensor1d(xsData);
+  const ys = tf.tensor1d(ysData);
+
+  // Trainable parameters — plain tf.variable()s, not a tf.sequential model.
+  const w = tf.variable(tf.scalar(Math.random() - 0.5), true, 'w');
+  const b = tf.variable(tf.scalar(Math.random() - 0.5), true, 'b');
+
+  const predict = (x: any) => x.mul(w).add(b);
+  const loss = (predY: any, trueY: any) => predY.sub(trueY).square().mean();
+
+  const canvas = document.getElementById('preview') as HTMLCanvasElement;
+  const ctx = canvas.getContext('2d')!;
+
+  function draw(wVal: number, bVal: number, epoch: number) {
+    const W = canvas.width, H = canvas.height;
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(0, 0, W, H);
+
+    const pad = 32, xMax = 10, yMax = 26;
+    const toPx = (x: number, y: number): [number, number] =>
+      [pad + (x / xMax) * (W - 2 * pad), H - pad - (y / yMax) * (H - 2 * pad)];
+
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(pad, H - pad); ctx.lineTo(W - pad, H - pad);
+    ctx.moveTo(pad, pad); ctx.lineTo(pad, H - pad);
+    ctx.stroke();
+
+    ctx.fillStyle = '#38bdf8';
+    for (let i = 0; i < xsData.length; i++) {
+      const [px, py] = toPx(xsData[i], ysData[i]);
+      ctx.beginPath(); ctx.arc(px, py, 3, 0, Math.PI * 2); ctx.fill();
+    }
+
+    ctx.strokeStyle = '#f59e0b';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    const [x1, y1] = toPx(0, bVal);
+    const [x2, y2] = toPx(xMax, wVal * xMax + bVal);
+    ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
+    ctx.stroke();
+
+    ctx.fillStyle = '#e2e8f0';
+    ctx.font = '13px monospace';
+    ctx.fillText(\`epoch \${epoch}  w=\${wVal.toFixed(3)}  b=\${bVal.toFixed(3)}\`, pad, 18);
+  }
+
+  const lr = 0.01;
+  const epochs = 150;
+
+  console.log(\`True parameters: w=\${trueW}, b=\${trueB}\`);
+  console.log(\`Start: w=\${(await w.data())[0].toFixed(4)}, b=\${(await b.data())[0].toFixed(4)}\`);
+  console.log('\\nTraining via tf.variableGrads() — raw autograd, no optimizer.minimize()...');
+
+  for (let epoch = 0; epoch < epochs; epoch++) {
+    // tf.variableGrads() differentiates the loss with respect to every
+    // tf.variable() it touches — this call IS the "auto gradient" step,
+    // computed without anyone writing a derivative by hand.
+    const { value, grads } = tf.variableGrads(() => loss(predict(xs), ys));
+
+    // Manual SGD update — same "apply the gradient yourself" step as
+    // PyTorch's \`param -= lr * param.grad\`.
+    w.assign(w.sub(grads['w'].mul(lr)));
+    b.assign(b.sub(grads['b'].mul(lr)));
+    tf.dispose(grads);
+
+    if (epoch % 5 === 0 || epoch === epochs - 1) {
+      const [wVal, bVal] = await Promise.all([w.data(), b.data()]);
+      draw(wVal[0], bVal[0], epoch);
+      if ((epoch + 1) % 30 === 0 || epoch === epochs - 1) {
+        const lossVal = (await value.data())[0];
+        console.log(\`Epoch \${epoch + 1}/\${epochs} — loss: \${lossVal.toFixed(5)}\`);
+      }
+      await new Promise(r => setTimeout(r, 20));
+    }
+    value.dispose();
+  }
+
+  const finalW = (await w.data())[0];
+  const finalB = (await b.data())[0];
+  console.log(\`\\n✓ Training complete!\`);
+  console.log(\`Learned: w=\${finalW.toFixed(4)} (true \${trueW}), b=\${finalB.toFixed(4)} (true \${trueB})\`);
+
+  xs.dispose(); ys.dispose();
+}
+
+main().catch((e: Error) => console.error('Error:', e.message));
+`},
+
 {name:'SQLite — CRUD Demo', lang:'ts', icon:'🗄️', code:
 `// SQLite in browser — sql.js (WASM) CRUD demo
 // @script https://cdn.jsdelivr.net/npm/sql.js@1.10.3/dist/sql-wasm.js
