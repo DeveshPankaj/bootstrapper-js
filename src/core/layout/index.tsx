@@ -15,6 +15,7 @@ import { ListDirComponent } from '../../apps/file-explorer/desktop'
 import { Header } from './header'
 import { RESET_CSS, MATERIAL_SYMBOLS_CSS } from './styles/base'
 import { layoutCss } from './styles/layout'
+import { updateAmbientColor } from './ambient-color'
 import { WINDOW_CSS } from './styles/window'
 import { TASKBAR_CSS } from './styles/taskbar'
 import { WIDGETS_CSS } from './styles/widgets'
@@ -407,6 +408,7 @@ const applyCss = ({wallpaper, grid}: {wallpaper: string, grid: LayoutDef['grid']
             CONTEXTMENU_CSS,
             DESKTOP_ENV_CSS,
         ].join('\n'))
+        updateAmbientColor(platform.window.document, wallpaper, '')
         return
     }
     unmountCanvasWallpaper()
@@ -421,6 +423,7 @@ const applyCss = ({wallpaper, grid}: {wallpaper: string, grid: LayoutDef['grid']
         CONTEXTMENU_CSS,
         DESKTOP_ENV_CSS,
     ].join('\n'))
+    updateAmbientColor(platform.window.document, wallpaper, wallpaperUrl)
 }
 
 const userPrefWallpaper = platform.userPref.getWallpaper()

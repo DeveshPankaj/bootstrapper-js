@@ -54,6 +54,13 @@ exports.getStyles = (containerId, items) => {
       border-radius: 8px;
       padding: 0 14px;
       font-size: 13px;
+      /* <button> is a form control - browsers reset its text color via the
+         UA stylesheet instead of inheriting it, so without this the menu's
+         ambient text color (--ambient-fg, set on .contextmenu, see
+         src/core/layout/styles/contextmenu.ts) never reaches the buttons
+         themselves no matter how the container is styled. */
+      color: inherit;
+      font: inherit;
     }
 
     .ctx-child-btn {
