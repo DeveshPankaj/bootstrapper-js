@@ -44,7 +44,7 @@
   <div id="header">
     <span class="logo">py</span>
     <span class="title">Python Todo</span>
-    <span class="subtitle">Pyodide · localStorage</span>
+    <span class="subtitle">Pyodide · vfs</span>
   </div>
   <div id="app-root">
     <div class="spinner-wrap" id="loading-msg">
@@ -61,6 +61,18 @@
         const pyodide = await loadPyodide({ indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/' });
         pyodide.setStdout({ batched: (t) => console.log(t) });
         pyodide.setStderr({ batched: (t) => console.error(t) });
+
+        // Multi-file support: write every sibling .py module (e.g.
+        // storage.py) into Pyodide's own FS and put it on sys.path, so the
+        // entry point below can `import` it like a normal local module —
+        // window.__todoFS is injected by main.js (see its listModules()).
+        const APP_FS_DIR = '/home/pyodide/todo_app';
+        const modules = (window.__todoFS && window.__todoFS.listModules) ? window.__todoFS.listModules() : [];
+        if (modules.length) {
+          pyodide.FS.mkdirTree(APP_FS_DIR);
+          for (const mod of modules) pyodide.FS.writeFile(APP_FS_DIR + '/' + mod.name, mod.content);
+          pyodide.runPython('import sys; sys.path.insert(0, ' + JSON.stringify(APP_FS_DIR) + ')');
+        }
 
         const resp = await fetch('todo.py');
         if (!resp.ok) throw new Error('Could not load todo.py (HTTP ' + resp.status + ')');

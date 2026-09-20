@@ -1,28 +1,12 @@
-# Python Todo — the entire UI (styling, DOM tree, events) and all state
-# management is done here in Python, running in-browser via Pyodide.
-# todo.html just boots Pyodide and hands control to this file.
+# Python Todo — the entire UI (styling, DOM tree, events) is built here in
+# Python, running in-browser via Pyodide. todo.html boots Pyodide, writes
+# storage.py into Pyodide's own FS alongside this file, and runs this file
+# as the entry point — so a plain `import storage` below works like any
+# normal local Python module.
 
-import json
-from js import document, window
+from js import document
 from pyodide.ffi import create_proxy
-
-STORAGE_KEY = 'py-todo-items'
-
-
-def load_items():
-    raw = window.localStorage.getItem(STORAGE_KEY)
-    if not raw:
-        return []
-    try:
-        items = json.loads(raw)
-        return [it for it in items if isinstance(it, dict) and 'text' in it]
-    except Exception:
-        return []
-
-
-def save_items():
-    window.localStorage.setItem(STORAGE_KEY, json.dumps(items))
-
+from storage import load_items, save_items
 
 items = load_items()
 
@@ -130,14 +114,14 @@ def render():
         def make_toggle(idx):
             def toggle(e):
                 items[idx]['done'] = not items[idx]['done']
-                save_items()
+                save_items(items)
                 render()
             return create_proxy(toggle)
 
         def make_delete(idx):
             def delete(e):
                 del items[idx]
-                save_items()
+                save_items(items)
                 render()
             return create_proxy(delete)
 
@@ -161,13 +145,13 @@ def add_item(e=None):
         return
     items.append({'text': text, 'done': False})
     inp.value = ''
-    save_items()
+    save_items(items)
     render()
 
 
 def clear_completed(e=None):
     items[:] = [it for it in items if not it['done']]
-    save_items()
+    save_items(items)
     render()
 
 

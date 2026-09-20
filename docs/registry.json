@@ -331,7 +331,7 @@
     {
       "id": "todo-python",
       "name": "Python Todo",
-      "description": "A simple todo list app with its UI and logic written entirely in Python, run in-browser via Pyodide. Tasks persist via localStorage.",
+      "description": "A simple todo list app with its UI and logic written entirely in Python, run in-browser via Pyodide. Tasks persist to the vfs at ~/.local/share/todo-python/todos.json.",
       "version": "1.0.0",
       "icon": "checklist",
       "category": "Tools",
@@ -349,6 +349,10 @@
         {
           "dest": "todo.py",
           "src": "/public/mount/opt/apps/todo-python/todo.py"
+        },
+        {
+          "dest": "storage.py",
+          "src": "/public/mount/opt/apps/todo-python/storage.py"
         }
       ],
       "main": "main.js"

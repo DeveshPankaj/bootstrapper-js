@@ -6,6 +6,7 @@ const PORT = process.env.PORT || 8090;
   const page = await browser.newPage();
   const errors = [];
   page.on('pageerror', err => errors.push(err.message));
+  page.on('console', msg => { if (msg.type() === 'error' || msg.type() === 'warning') console.log('PAGE-CONSOLE:', msg.type(), msg.text()); });
   await page.goto(`http://localhost:${PORT}`);
   await page.reload({ waitUntil: 'load' });
   await page.waitForTimeout(3000);
@@ -75,9 +76,13 @@ const PORT = process.env.PORT || 8090;
   const afterDelete = await f.evaluate(() => [...document.querySelectorAll('.todo-text')].map(t => t.textContent));
   console.log('Remaining after delete:', JSON.stringify(afterDelete));
 
-  console.log('=== Persistence: localStorage has the saved items ===');
-  const storageRaw = await f.evaluate(() => window.localStorage.getItem('py-todo-items'));
-  console.log('Stored:', storageRaw);
+  console.log('=== Persistence: real vfs file has the saved items ===');
+  const vfsRaw = await page.evaluate(() => {
+    const fs = window.platform.host.getFS();
+    try { return fs.readFileSync('/home/user1/.local/share/todo-python/todos.json', 'utf8'); }
+    catch (e) { return 'ERROR: ' + e.message; }
+  });
+  console.log('vfs file contents:', vfsRaw);
 
   console.log('=== Reload the window fresh — items should persist from localStorage ===');
   await f.evaluate(() => location.reload());

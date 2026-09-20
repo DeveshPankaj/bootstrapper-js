@@ -677,6 +677,11 @@
     "force_reload": true
   },
   {
+    "path": "/opt/apps/todo-python/storage.py",
+    "file": "/opt/apps/todo-python/storage.py",
+    "force_reload": true
+  },
+  {
     "path": "/opt/apps/nn-ide/main.js",
     "file": "/opt/apps/nn-ide/main.js",
     "force_reload": true
