@@ -32,6 +32,8 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0d1117;color:#e2e8f
 .sb-action{cursor:pointer;color:#3b82f6;font-size:13px;line-height:1;font-weight:400;flex-shrink:0}
 .sb-section{flex:1;overflow-y:auto;padding:4px 0}
 .sb-group{font-size:10px;color:#3b82f6;font-weight:600;padding:6px 10px 2px;text-transform:uppercase;letter-spacing:.3px;display:flex;align-items:center;justify-content:space-between}
+.sb-project-head{padding:9px 10px 8px;font-size:12.5px;font-weight:700;color:#e2e8f0;display:flex;align-items:center;gap:6px;border-bottom:1px solid #21262d;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sb-project-head .ic{font-size:13px;opacity:.9;flex-shrink:0}
 .sb-item{padding:5px 10px 5px 16px;font-size:11.5px;color:#c9d1d9;cursor:pointer;display:flex;align-items:center;gap:5px;white-space:nowrap;overflow:hidden}
 .sb-item:hover{background:#161b22}
 .sb-item:hover .sb-del{opacity:1}
@@ -76,6 +78,15 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0d1117;color:#e2e8f
 .diff-line.del{background:rgba(248,81,73,.15);color:#ff7b72}
 .diff-line.ctx{color:#8b949e}
 .diff-line .dp{display:inline-block;width:14px;opacity:.8}
+.newproj-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:50}
+.newproj-overlay.show{display:flex}
+.newproj-panel{width:420px;max-width:92vw;max-height:80vh;background:#0d1117;border:1px solid #30363d;border-radius:8px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.5)}
+.newproj-body{flex:1;overflow-y:auto;padding:6px}
+.newproj-group-label{padding:8px 10px 4px;font-size:10.5px;font-weight:700;color:#6e7681;text-transform:uppercase;letter-spacing:.04em}
+.newproj-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;cursor:pointer;font-size:12.5px;color:#c9d1d9}
+.newproj-item:hover{background:#1f2937}
+.newproj-item .ic{font-size:15px;flex-shrink:0}
+.newproj-item .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -85,7 +96,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0d1117;color:#e2e8f
     <span class="file-badge" id="file-badge">untitled.ts</span>
     <span class="lang-tag" id="lang-tag">TS</span>
     <span class="spacer"></span>
-    <button class="btn btn-secondary" onclick="newProject()">New</button>
+    <button class="btn btn-secondary" onclick="openNewProjectModal()">New</button>
     <button class="btn btn-secondary" onclick="openProject()">Open</button>
     <button class="btn btn-secondary" onclick="openFolder()">Open Folder</button>
     <button class="btn btn-secondary" onclick="saveProject()">Save</button>
@@ -131,6 +142,15 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0d1117;color:#e2e8f
         <span class="diff-close" onclick="closeDiff()" title="Close">✕</span>
       </div>
       <div class="diff-body" id="diff-body"></div>
+    </div>
+  </div>
+  <div class="newproj-overlay" id="newproj-overlay" onclick="if(event.target===this)closeNewProjectModal()">
+    <div class="newproj-panel">
+      <div class="diff-panel-head">
+        <span class="diff-title">New Project</span>
+        <span class="diff-close" onclick="closeNewProjectModal()" title="Close">✕</span>
+      </div>
+      <div class="newproj-body" id="newproj-body"></div>
     </div>
   </div>
 </div>
@@ -281,7 +301,21 @@ editor.on('change', function(){
   updateModifiedIndicator(activeFile);
 });
 
-function projectName(){ return projectDir ? projectDir.split('/').filter(Boolean).pop() : null; }
+function readPackageJson(){
+  var raw = files['package.json'];
+  if (raw == null) return null;
+  try { return JSON.parse(raw); } catch(e){ return null; }
+}
+
+// Prefers a real external project's own package.json "name" (so opening
+// someone else's JS/TS project shows their name, not just the folder's)
+// over the vfs directory basename.
+function projectName(){
+  if (!projectDir) return null;
+  var pkg = readPackageJson();
+  if (pkg && pkg.name) return pkg.name;
+  return projectDir.split('/').filter(Boolean).pop();
+}
 
 function updateBadge(){
   var name = activeFile ? (projectName() ? projectName()+'/'+activeFile : activeFile) : 'untitled';
@@ -368,20 +402,142 @@ function ensureMsgHandler(btn){
   });
 }
 
+// --- tsconfig.json: a real, visible, per-project file the compiler
+// actually reads (target/jsx/strict) — see readTsConfigCompilerOptions().
+// `module` is decided per call-site below instead (ts.ModuleKind.None for
+// the standalone single-file runScript() path with no exports/require in
+// scope, ts.ModuleKind.CommonJS for the webapp bundler, which relies on
+// require()/exports being emitted so project files can genuinely import
+// each other — see buildModuleBundle/__require) rather than trusting
+// whatever "module" a project's own tsconfig.json declares; that field is
+// still meaningful there for a real editor/type-checker, this app's own
+// in-browser build step just doesn't have one to hand it to.
+var TS_TARGET_MAP = { es3:'ES3', es5:'ES5', es6:'ES2015', es2015:'ES2015', es2016:'ES2016', es2017:'ES2017', es2018:'ES2018', es2019:'ES2019', es2020:'ES2020', es2021:'ES2021', esnext:'ESNext' };
+var TS_JSX_MAP = { none:'None', preserve:'Preserve', react:'React', 'react-jsx':'ReactJSX', 'react-native':'ReactNative' };
+
+function readTsConfigCompilerOptions(){
+  var raw = files['tsconfig.json'];
+  var opts = {};
+  if (raw != null) {
+    try { opts = (JSON.parse(raw).compilerOptions) || {}; }
+    catch(e){ log('tsconfig.json is invalid JSON, using default compiler options: '+e.message, 'warn'); }
+  }
+  var targetKey = TS_TARGET_MAP[String(opts.target||'es2017').toLowerCase()] || 'ES2017';
+  var jsxKey = TS_JSX_MAP[String(opts.jsx||'none').toLowerCase()] || 'None';
+  return {
+    target: ts.ScriptTarget[targetKey],
+    jsx: ts.JsxEmit[jsxKey],
+    strict: !!opts.strict,
+    noEmitOnError: false,
+  };
+}
+
+// Standalone single-file transpile (no exports/require in scope) — used by
+// runScript()/runGLSL()'s fallback path for a project with no index.html.
 function transpileTs(code, label){
   if(!tsReady){ throw new Error('TypeScript compiler not loaded yet, try again...'); }
-  var result = ts.transpileModule(code, {
-    compilerOptions:{ target: ts.ScriptTarget.ES2017, module: ts.ModuleKind.None, jsx: ts.JsxEmit.None, strict: false, noEmitOnError: false }
-  });
+  var options = Object.assign({module: ts.ModuleKind.None}, readTsConfigCompilerOptions());
+  var result = ts.transpileModule(code, { compilerOptions: options, fileName: label });
   return result.outputText;
 }
 
+// CommonJS transpile for the webapp module bundler (see buildModuleBundle).
+function transpileToCommonJS(code, filename){
+  if(!tsReady){ throw new Error('TypeScript compiler not loaded yet, try again...'); }
+  var options = Object.assign({}, readTsConfigCompilerOptions(), {module: ts.ModuleKind.CommonJS});
+  var result = ts.transpileModule(code, { compilerOptions: options, fileName: filename });
+  return result.outputText;
+}
+
+// --- In-browser CommonJS-style module bundler ---
+// Lets project files genuinely `import`/`require` each other with no real
+// build step: each local file is transpiled to CommonJS (require()/
+// exports.x = ...), wrapped in its own factory function, and resolved at
+// run time by a tiny __require() shim mirroring Node's own module.exports
+// convention (and this same app's platform's own Host.execString
+// require/module/exports pattern) — just enough for a flat (no
+// subdirectories yet) project to wire files together.
+function resolveModuleId(spec){
+  var clean = spec.replace(/^\.\//, '');
+  var candidates = [clean, clean+'.ts', clean+'.tsx', clean+'.js', clean+'.jsx'];
+  for (var i=0;i<candidates.length;i++){
+    if (files[candidates[i]] != null) return candidates[i];
+  }
+  return null;
+}
+
+// Regex-based import/require scanning — deliberately simple (this is a
+// teaching-scale IDE feature, not a real parser): matches `import ... from
+// '...'`, bare `import '...'`, and `require('...')`, multi-line named
+// imports included. Doesn't understand `export ... from '...'` re-exports
+// or specifiers inside strings/comments — a real edge case, not hit by
+// any bundled example.
+function findLocalImportSpecs(src){
+  var specs = [];
+  var re = /(?:^|[^.\w])import\s+(?:[\s\S]*?\sfrom\s*)?['"]([^'"]+)['"]|require\(\s*['"]([^'"]+)['"]\s*\)/g;
+  var m;
+  while ((m = re.exec(src))) { specs.push(m[1] || m[2]); }
+  return specs.filter(function(s){ return /^\.\//.test(s); });
+}
+
+function buildModuleBundle(entryFile){
+  var visited = {};
+  var order = [];
+  function visit(name){
+    if (visited[name]) return;
+    visited[name] = true;
+    var src = files[name];
+    if (src == null) throw new Error('Module not found: '+name);
+    findLocalImportSpecs(src).forEach(function(spec){
+      var resolved = resolveModuleId(spec);
+      if (!resolved) throw new Error('Cannot resolve import "'+spec+'" in '+name);
+      visit(resolved);
+    });
+    order.push(name);
+  }
+  visit(entryFile);
+  return order;
+}
+
+// Rewrites `require('./utils')` (as emitted by ts.ModuleKind.CommonJS for
+// an `import ... from './utils'`) to the fully-resolved filename
+// (`require('utils.ts')`) so the __modules registry below — keyed by full
+// filename, resolved once at build time — doesn't need its own runtime
+// extension-resolution logic.
+function rewriteRequirePaths(code){
+  return code.replace(/require\((["'])([^"']+)\1\)/g, function(m, q, spec){
+    if (!/^\.\//.test(spec)) return m;
+    var resolved = resolveModuleId(spec);
+    return resolved ? 'require('+JSON.stringify(resolved)+')' : m;
+  });
+}
+
+// Injected once per built document, before any bundled module — a minimal
+// require()/module.exports runtime, same shape as Node's own.
+var MODULE_RUNTIME_SHIM = [
+  'var __modules = {};',
+  'var __cache = {};',
+  'function __require(id){',
+  '  if (__cache[id]) return __cache[id].exports;',
+  '  if (typeof __modules[id] !== "function") throw new Error("Cannot find module: " + id);',
+  '  var module = { exports: {} };',
+  '  __cache[id] = module;',
+  '  __modules[id](module, module.exports, __require);',
+  '  return module.exports;',
+  '}'
+].join('\n');
+
 // --- Webapp mode: build one real HTML document out of every file the
-// project's index.html references, transpiling local .ts/.tsx scripts
-// inline. External http(s) URLs (CDN <script>/<link> tags) are left
-// untouched so @script-style dependencies still work. ---
+// project's index.html references. External http(s) URLs (CDN
+// <script>/<link> tags) are left untouched so @script-style dependencies
+// still work; local .ts/.tsx/.js/.jsx <script src> entries are bundled
+// (see buildModuleBundle) so they can import each other; local
+// <script type="x-shader/..." src="..."> tags (the classic "shader source
+// lives in its own script tag" convention) get their raw file text
+// inlined as inert (non-executed) script content instead. ---
 function buildWebappDoc(){
   var html = files['index.html'];
+  var bundleInjected = false;
 
   html = html.replace(/<link([^>]+)href=["']([^"']+)["']([^>]*)>/gi, function(m, pre, href, post){
     if (!/rel=["']stylesheet["']/i.test(pre+post)) return m;
@@ -391,16 +547,41 @@ function buildWebappDoc(){
     return '<style>\n'+files[fn]+'\n</style>';
   });
 
+  // Shader/data <script type="..." src="...">: inline raw text, preserving
+  // the type attribute, so runtime code can read it via .textContent
+  // rather than having it executed as JS.
+  html = html.replace(/<script([^>]*\stype=["'](?:x-shader[^"']*|glsl|x-[^"']*)["'][^>]*)\ssrc=["']([^"']+)["']([^>]*)><\/script>/gi,
+    function(m, attrs, src, post){
+      if (/^https?:\/\//i.test(src)) return m;
+      var fn = src.replace(/^\.\//,'');
+      if (files[fn] == null) return m;
+      return '<script'+attrs+post+'>\n'+files[fn]+'\n<\/script>';
+    });
+
   html = html.replace(/<script([^>]*)\ssrc=["']([^"']+)["']([^>]*)><\/script>/gi, function(m, pre, src, post){
     if (/^https?:\/\//i.test(src)) return m;
+    if (/\stype=["']/.test(pre+post)) return m; // non-JS script tags (shaders etc.) already handled above
     var fn = src.replace(/^\.\//,'');
     if (files[fn] == null) return m;
-    var code = files[fn];
-    if (/\.tsx?$/.test(fn)) {
-      try { code = transpileTs(code, fn); }
-      catch(e){ code = 'console.error('+JSON.stringify('Compile error in '+fn+': '+e.message)+');'; }
+
+    if (!/\.tsx?$|\.jsx?$/.test(fn)) {
+      return '<script>\n'+files[fn]+'\n<\/script>';
     }
-    return '<script>\n'+code+'\n<\/script>';
+
+    var order;
+    try { order = buildModuleBundle(fn); }
+    catch(e){ return '<script>console.error('+JSON.stringify('Bundle error: '+e.message)+');<\/script>'; }
+
+    var parts = [];
+    if (!bundleInjected) { parts.push(MODULE_RUNTIME_SHIM); bundleInjected = true; }
+    order.forEach(function(name){
+      var js;
+      try { js = rewriteRequirePaths(transpileToCommonJS(files[name], name)); }
+      catch(e){ js = 'throw new Error('+JSON.stringify('Compile error in '+name+': '+e.message)+');'; }
+      parts.push('__modules['+JSON.stringify(name)+'] = function(module, exports, require){\n'+js+'\n};');
+    });
+    parts.push('__require('+JSON.stringify(fn)+');');
+    return '<script>\n'+parts.join('\n')+'\n<\/script>';
   });
 
   if (/<head[^>]*>/i.test(html)) html = html.replace(/<head([^>]*)>/i, '<head$1>'+CONSOLE_SHIM);
@@ -617,9 +798,39 @@ function runGLSL(fragSrc){
 }
 
 // --- Project management ---
+// The sandboxed AppSDK bridge (window.AppSDK, injected into this page by
+// the service worker on load — see src/sw.ts's APPSDK_BOOTSTRAP) depends
+// on a postMessage handshake completing before any call can ever resolve;
+// if that handshake is missed (a class of SW-timing flakiness this
+// project's own testing docs already call out), every AppSDK call queues
+// forever and never settles — not a rejection try/catch can see, an
+// actual hang. Race it against a timeout so a stuck bridge degrades to
+// "no saved projects shown" instead of leaving refreshSidebar() (which
+// awaits this before ever touching sb.innerHTML — see below) hung
+// forever, blocking the Files/Starters sections too.
+function withTimeout(promise, ms, fallback){
+  return Promise.race([
+    promise,
+    new Promise(function(resolve){ setTimeout(function(){ resolve(fallback); }, ms); })
+  ]);
+}
+
+// Like withTimeout, but rejects instead of resolving with a fallback — for
+// write/list operations that already have a try/catch around them and should
+// surface a clear "timed out" error rather than silently pretending to
+// succeed. Guards against the same AppSDK postMessage-handshake hang that
+// listProjects() works around above (see withTimeout call in listProjects).
+function withDeadline(promise, ms, message){
+  return Promise.race([
+    promise,
+    new Promise(function(_, reject){ setTimeout(function(){ reject(new Error(message)); }, ms); })
+  ]);
+}
+var SDK_TIMEOUT_MS = 5000;
+
 async function listProjects(){
   try {
-    var items = await sdk().list(VFS_BASE);
+    var items = await withTimeout(sdk().list(VFS_BASE), 3000, []);
     return (items||[]).map(function(x){ return typeof x==='string'?x:(x.name||x); }).filter(function(n){ return n && !n.startsWith('.'); });
   } catch(e){ return []; }
 }
@@ -629,18 +840,22 @@ async function listProjects(){
 // "Open Folder" — both just end up as a directory full of files.
 async function loadProjectFromDir(dir){
   var items;
-  try { items = await sdk().list(dir); }
+  try { items = await withDeadline(sdk().list(dir), SDK_TIMEOUT_MS, 'Timed out listing: '+dir); }
   catch(e){ log('Could not open folder: '+e.message,'err'); return; }
   var names = (items||[]).map(function(x){ return typeof x==='string'?x:(x.name||x); }).filter(function(n){ return n && !n.startsWith('.'); });
   if (!names.length){ log('Folder is empty: '+dir,'warn'); return; }
 
   var newFiles = {};
+  var skipped = [];
   for (var i=0;i<names.length;i++){
     var n = names[i];
-    try { newFiles[n] = await sdk().readText(dir+'/'+n); }
-    catch(e){ /* skip subdirectories / unreadable entries */ }
+    try { newFiles[n] = await withDeadline(sdk().readText(dir+'/'+n), SDK_TIMEOUT_MS, 'Timed out reading: '+n); }
+    catch(e){ skipped.push(n); /* subdirectory (e.g. node_modules/.git) or unreadable entry */ }
   }
   if (!Object.keys(newFiles).length){ log('No readable files in: '+dir,'warn'); return; }
+  if (skipped.length){
+    log('Skipped '+skipped.length+' subdirector'+(skipped.length===1?'y':'ies')+'/unreadable entr'+(skipped.length===1?'y':'ies')+' (nested folders like node_modules aren\'t opened — this IDE reads one flat directory of files): '+skipped.join(', '),'warn');
+  }
 
   files = newFiles;
   projectDir = dir;
@@ -652,18 +867,24 @@ async function loadProjectFromDir(dir){
   var snapNames = Object.keys(files);
   for (var gi=0; gi<snapNames.length; gi++){
     var gn = snapNames[gi];
-    try { gitLiteSnapshots[gn] = await sdk().readText(dir+'/'+GIT_LITE_DIR+'/'+gn); }
+    try { gitLiteSnapshots[gn] = await withDeadline(sdk().readText(dir+'/'+GIT_LITE_DIR+'/'+gn), SDK_TIMEOUT_MS, 'timeout'); }
     catch(e){ /* no snapshot yet for this file — it reads as modified */ }
   }
 
+  // Generic folder support: a real external JS/TS project has no index.html,
+  // so fall back to package.json's "main"/"module" entrypoint (if that file
+  // is actually among what was read), then a bare main.*, then alphabetical.
+  var pkg = readPackageJson();
+  var pkgEntry = pkg && (pkg.main || pkg.module);
   var pick = names.indexOf('index.html')!==-1 ? 'index.html'
-    : (names.filter(function(n){ return /^main\./.test(n); })[0])
+    : (pkgEntry && files[pkgEntry] != null ? pkgEntry : null)
+    || (names.filter(function(n){ return /^main\./.test(n); })[0])
     || Object.keys(files).sort()[0];
   activeFile = null; // force switchFile to treat this as a real switch
   switchFile(pick);
   isDirty = false;
   updateBadge();
-  log('Opened: '+dir+' ('+Object.keys(files).length+' files)','info');
+  log('Opened: '+(projectName()||dir)+' ('+Object.keys(files).length+' files)','info');
 }
 
 async function saveProject(){
@@ -676,10 +897,10 @@ async function saveProject(){
     dir = VFS_BASE+'/'+name;
   }
   try {
-    await sdk().mkdir(dir);
+    await withDeadline(sdk().mkdir(dir), SDK_TIMEOUT_MS, 'Timed out creating: '+dir);
     var names = Object.keys(files);
     for (var i=0;i<names.length;i++){
-      await sdk().writeText(dir+'/'+names[i], files[names[i]]);
+      await withDeadline(sdk().writeText(dir+'/'+names[i], files[names[i]]), SDK_TIMEOUT_MS, 'Timed out writing: '+names[i]);
     }
 
     // Git-lite: snapshot each just-saved file into <projectDir>/.git-lite/
@@ -687,9 +908,9 @@ async function saveProject(){
     // diffed against it. Best-effort: a snapshot failure shouldn't fail
     // the actual save.
     try {
-      await sdk().mkdir(dir+'/'+GIT_LITE_DIR);
+      await withDeadline(sdk().mkdir(dir+'/'+GIT_LITE_DIR), SDK_TIMEOUT_MS, 'timeout');
       for (var k=0;k<names.length;k++){
-        await sdk().writeText(dir+'/'+GIT_LITE_DIR+'/'+names[k], files[names[k]]);
+        await withDeadline(sdk().writeText(dir+'/'+GIT_LITE_DIR+'/'+names[k], files[names[k]]), SDK_TIMEOUT_MS, 'timeout');
         gitLiteSnapshots[names[k]] = files[names[k]];
       }
     } catch(e){ log('Git-lite snapshot failed: '+e.message,'warn'); }
@@ -723,6 +944,7 @@ function newProject(){
   updateBadge();
   clearAll();
   log('New project: '+name,'dim');
+  if (typeof closeNewProjectModal === 'function') closeNewProjectModal();
 }
 
 async function addFileToProject(){
@@ -732,7 +954,7 @@ async function addFileToProject(){
   files[name] = '';
   // No gitLiteSnapshots entry for this name yet -> shows modified until saved.
   if (projectDir){
-    try { await sdk().writeText(projectDir+'/'+name, ''); } catch(e){}
+    try { await withDeadline(sdk().writeText(projectDir+'/'+name, ''), SDK_TIMEOUT_MS, 'timeout'); } catch(e){}
   }
   switchFile(name);
   log('Added file: '+name,'ok');
@@ -743,8 +965,8 @@ async function deleteFile(name){
   delete files[name];
   delete gitLiteSnapshots[name];
   if (projectDir){
-    try { await sdk().remove(projectDir+'/'+name); } catch(e){}
-    try { await sdk().remove(projectDir+'/'+GIT_LITE_DIR+'/'+name); } catch(e){}
+    try { await withDeadline(sdk().remove(projectDir+'/'+name), SDK_TIMEOUT_MS, 'timeout'); } catch(e){}
+    try { await withDeadline(sdk().remove(projectDir+'/'+GIT_LITE_DIR+'/'+name), SDK_TIMEOUT_MS, 'timeout'); } catch(e){}
   }
   if (activeFile === name){
     var remaining = Object.keys(files);
@@ -767,11 +989,14 @@ async function renameFile(oldName){
   }
   delete gitLiteSnapshots[oldName];
   if (projectDir){
-    try { await sdk().rename(projectDir+'/'+oldName, projectDir+'/'+newName); }
+    try { await withDeadline(sdk().rename(projectDir+'/'+oldName, projectDir+'/'+newName), SDK_TIMEOUT_MS, 'timeout'); }
     catch(e){
-      try { await sdk().writeText(projectDir+'/'+newName, files[newName]); await sdk().remove(projectDir+'/'+oldName); } catch(_){}
+      try {
+        await withDeadline(sdk().writeText(projectDir+'/'+newName, files[newName]), SDK_TIMEOUT_MS, 'timeout');
+        await withDeadline(sdk().remove(projectDir+'/'+oldName), SDK_TIMEOUT_MS, 'timeout');
+      } catch(_){}
     }
-    try { await sdk().rename(projectDir+'/'+GIT_LITE_DIR+'/'+oldName, projectDir+'/'+GIT_LITE_DIR+'/'+newName); } catch(e){}
+    try { await withDeadline(sdk().rename(projectDir+'/'+GIT_LITE_DIR+'/'+oldName, projectDir+'/'+GIT_LITE_DIR+'/'+newName), SDK_TIMEOUT_MS, 'timeout'); } catch(e){}
   }
   if (activeFile === oldName) activeFile = newName;
   refreshSidebar();
@@ -797,33 +1022,44 @@ async function openFolder(){
 
 async function refreshSidebar(){
   var sb = document.getElementById('sb-content');
-  var html = '<div class="sb-group">Examples</div>';
-  EXAMPLES.forEach(function(ex,i){
-    html += '<div class="sb-item" onclick="loadExample('+i+')" title="'+ex.name+'"><span class="ic">'+ex.icon+'</span><span class="nm">'+ex.name+'</span></div>';
-  });
 
-  html += '<div class="sb-group" style="margin-top:8px">Templates</div>';
-  TEMPLATES.forEach(function(t,i){
-    html += '<div class="sb-item" onclick="loadTemplate('+i+')" title="'+t.name+'"><span class="ic">'+t.icon+'</span><span class="nm">'+t.name+'</span></div>';
-  });
-
+  var filesHtml = '';
   var fileNames = Object.keys(files);
   if (fileNames.length){
-    html += '<div class="sb-group" style="margin-top:8px"><span>Files'+(projectName()?' — '+projectName():'')+'</span><span class="sb-action" onclick="addFileToProject()" title="Add file">＋</span></div>';
+    filesHtml += '<div class="sb-group" style="margin-top:8px"><span>Files</span><span class="sb-action" onclick="addFileToProject()" title="Add file">＋</span></div>';
     fileNames.sort().forEach(function(fn){
-      html += '<div class="sb-item'+(activeFile===fn?' active':'')+'" data-file="'+fn+'" onclick="switchFile(\''+fn+'\')" ondblclick="renameFile(\''+fn+'\')" title="'+fn+' (double-click to rename)">'
+      filesHtml += '<div class="sb-item'+(activeFile===fn?' active':'')+'" data-file="'+fn+'" onclick="switchFile(\''+fn+'\')" ondblclick="renameFile(\''+fn+'\')" title="'+fn+' (double-click to rename)">'
             + '<span class="ic">'+iconFor(fn)+'</span><span class="nm">'+fn+'</span>'
             + '<span class="sb-mod-dot'+(isFileModified(fn)?' show':'')+'" title="Modified since last save"></span>'
             + '<span class="sb-del" onclick="event.stopPropagation();deleteFile(\''+fn+'\')" title="Delete">✕</span></div>';
     });
   }
 
+  var startersHtml = '<div class="sb-group" style="margin-top:8px">Starters</div>';
+  STARTERS.forEach(function(st,i){
+    startersHtml += '<div class="sb-item" onclick="loadStarter('+i+')" title="'+st.name+'"><span class="ic">'+st.icon+'</span><span class="nm">'+st.name+'</span></div>';
+  });
+
   var projects = await listProjects();
-  html += '<div class="sb-group" style="margin-top:8px"><span>Projects</span><span class="sb-action" onclick="openFolder()" title="Open any folder">📂</span></div>';
+  var projectsHtml = '<div class="sb-group" style="margin-top:8px"><span>Projects</span><span class="sb-action" onclick="openFolder()" title="Open any folder">📂</span></div>';
   if (projects.length){
     projects.forEach(function(n){
-      html += '<div class="sb-item'+(projectName()===n?' active':'')+'" onclick="loadProjectFromDir(VFS_BASE+\'/\'+\''+n+'\')" title="'+n+'"><span class="ic">📁</span><span class="nm">'+n+'</span></div>';
+      projectsHtml += '<div class="sb-item'+(projectName()===n?' active':'')+'" onclick="loadProjectFromDir(VFS_BASE+\'/\'+\''+n+'\')" title="'+n+'"><span class="ic">📁</span><span class="nm">'+n+'</span></div>';
     });
+  }
+
+  var html;
+  if (projectDir) {
+    // A real project is open — VSCode Explorer order: the open folder's
+    // own name as a prominent header, directly followed by its file tree.
+    // Starters/other-projects move below, de-emphasized — they're "switch
+    // away from this" actions, not what you came here to look at.
+    html = '<div class="sb-project-head" title="'+projectDir+'"><span class="ic">📁</span><span>'+projectName()+'</span></div>'
+         + filesHtml + projectsHtml + startersHtml;
+  } else {
+    // No real project yet (a freshly-loaded starter, or an unsaved scratch
+    // buffer) — starters are the primary action here, so they lead.
+    html = startersHtml + filesHtml + projectsHtml;
   }
   sb.innerHTML = html;
 }
@@ -892,45 +1128,11 @@ function closeDiff(){
   document.getElementById('diff-overlay').classList.remove('show');
 }
 
-function loadExample(i){
-  if(isDirty && !confirm('Discard unsaved changes?')) return;
-  var ex = EXAMPLES[i];
-  var fn = 'scratch.'+(ex.lang||'ts');
-  files = {};
-  files[fn] = ex.code;
-  // Git-lite: baseline = the content just loaded, so browsing an example
-  // doesn't itself show as "modified" — only actual edits after this do.
-  gitLiteSnapshots = {};
-  gitLiteSnapshots[fn] = ex.code;
-  projectDir = null;
-  activeFile = null;
-  switchFile(fn);
-  isDirty = false;
-  updateBadge();
-  clearAll();
-  log('Loaded: '+ex.name,'dim');
-  refreshSidebar();
-}
+// loadExample/loadTemplate were replaced by the unified loadStarter() -
+// see the STARTERS array built right after TEMPLATES below.
 
-function loadTemplate(i){
-  if(isDirty && !confirm('Discard unsaved changes?')) return;
-  var t = TEMPLATES[i];
-  files = Object.assign({}, t.files);
-  // Git-lite: baseline = the freshly loaded template content (see loadExample).
-  gitLiteSnapshots = Object.assign({}, t.files);
-  projectDir = null;
-  var pick = files['index.html'] != null ? 'index.html' : Object.keys(files)[0];
-  activeFile = null;
-  switchFile(pick);
-  isDirty = false;
-  updateBadge();
-  clearAll();
-  log('Loaded template: '+t.name+' ('+Object.keys(files).length+' files)','dim');
-  refreshSidebar();
-  if (files['index.html'] != null) runCode();
-}
-
-// --- Examples (single-file scratch snippets) ---
+// --- Examples (single-file scratch snippets, wrapped into real projects
+// by exampleToProject() — see STARTERS below) ---
 var EXAMPLES = [
 {name:'Hello Canvas', lang:'ts', icon:'🎨', code:
 `// Hello Canvas — TypeScript canvas rendering
@@ -1399,15 +1601,224 @@ console.log('Webapp started');
 }}
 ];
 
+// --- Starters: unified list combining Examples + Templates into real,
+// multi-file mini-projects — every one gets a visible, editable
+// index.html (no more hidden auto-generated HTML scaffold) plus a
+// tsconfig.json. exampleToProject() adapts each single-file EXAMPLES
+// entry into that shape without rewriting its actual code — it still just
+// references document.getElementById('preview') exactly as before; that
+// canvas now comes from a real index.html instead of an invisible
+// runScript()-generated one, so nothing about the example code changes. ---
+var SHARED_TSCONFIG = `{
+  "compilerOptions": {
+    "target": "ES2017",
+    "module": "ESNext",
+    "jsx": "none",
+    "strict": false
+  }
+}
+`;
+
+function mkCanvasIndexHtml(title){
+  return '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
+    + '<meta name="viewport" content="width=device-width,initial-scale=1">\n'
+    + '<title>'+title+'</title>\n<style>\n'
+    + '  html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #0a0d13; }\n'
+    + '  #preview { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }\n'
+    + '</style>\n</head>\n<body>\n<canvas id="preview"></canvas>\n'
+    + '<script>\n(function(){\n  var c = document.getElementById("preview");\n'
+    + '  function fit(){ c.width = window.innerWidth; c.height = window.innerHeight; }\n'
+    + '  fit();\n  window.addEventListener("resize", fit);\n})();\n<\/script>\n'
+    + '<script src="app.ts"><\/script>\n</body>\n</html>\n';
+}
+
+var GLSL_INDEX_HTML = mkCanvasIndexHtml('GLSL Shader')
+  .replace('<script src="app.ts">', '<script id="fragShader" type="x-shader/x-fragment" src="shader.frag"><\/script>\n<script src="app.ts">');
+
+var GLSL_APP_TS =
+`// app.ts — compiles shader.frag (inlined into index.html as a
+// <script type="x-shader/x-fragment">, the classic "shader source lives in
+// its own script tag" convention) and animates it on the canvas.
+const canvas = document.getElementById('preview') as HTMLCanvasElement;
+const gl = canvas.getContext('webgl') as WebGLRenderingContext;
+if (!gl) throw new Error('WebGL not supported');
+
+const fragSrc = (document.getElementById('fragShader') as HTMLScriptElement).textContent || '';
+
+const vertSrc = \`
+  attribute vec2 a_pos;
+  void main(){ gl_Position = vec4(a_pos,0.0,1.0); }
+\`;
+
+function mkShader(src: string, type: number): WebGLShader {
+  const s = gl.createShader(type)!;
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s) || 'shader error');
+  return s;
+}
+
+const prog = gl.createProgram()!;
+gl.attachShader(prog, mkShader(vertSrc, gl.VERTEX_SHADER));
+gl.attachShader(prog, mkShader(fragSrc, gl.FRAGMENT_SHADER));
+gl.linkProgram(prog);
+if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog) || 'link error');
+gl.useProgram(prog);
+
+const quad = new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]);
+const buf = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+gl.bufferData(gl.ARRAY_BUFFER, quad, gl.STATIC_DRAW);
+
+const posLoc = gl.getAttribLocation(prog, 'a_pos');
+gl.enableVertexAttribArray(posLoc);
+gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+
+const uTime = gl.getUniformLocation(prog, 'u_time');
+const uRes = gl.getUniformLocation(prog, 'u_resolution');
+
+const t0 = Date.now();
+function frame() {
+  const t = (Date.now() - t0) / 1000;
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  if (uTime) gl.uniform1f(uTime, t);
+  if (uRes) gl.uniform2f(uRes, canvas.width, canvas.height);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  requestAnimationFrame(frame);
+}
+frame();
+
+console.log('Shader compiled and running. Edit shader.frag and press ▶ Run to see changes.');
+`;
+
+function exampleToProject(ex){
+  if (ex.lang === 'glsl') {
+    return { 'index.html': GLSL_INDEX_HTML, 'shader.frag': ex.code, 'app.ts': GLSL_APP_TS, 'tsconfig.json': SHARED_TSCONFIG };
+  }
+  var ext = ex.lang === 'js' ? 'js' : 'ts';
+  var proj = { 'index.html': mkCanvasIndexHtml(ex.name), 'tsconfig.json': SHARED_TSCONFIG };
+  proj['app.'+ext] = ex.code;
+  return proj;
+}
+
+// "Cross-File Imports" — written directly as a project (no single-file
+// EXAMPLES entry to wrap) to demonstrate that project files can genuinely
+// import from each other: utils.ts is pulled in only because app.ts's
+// import statement references it (see buildModuleBundle/__require in
+// buildWebappDoc()).
+var CROSS_FILE_IMPORTS_FILES = {
+  'index.html': mkCanvasIndexHtml('Cross-File Imports'),
+  'tsconfig.json': SHARED_TSCONFIG,
+  'utils.ts':
+`// utils.ts — a small module with no side effects, imported by app.ts.
+// Proves project files can genuinely import from each other: each file is
+// transpiled to CommonJS and wired up by a tiny require()/module.exports
+// runtime (see this app's own buildModuleBundle/__require), so relative
+// imports resolve at run time, in-browser, with no real bundler/build step.
+
+export function add(a: number, b: number): number {
+  return a + b;
+}
+
+export function greet(name: string): string {
+  return \`Hello, \${name}! 👋\`;
+}
+
+export const PI_APPROX = 3.14159;
+`,
+  'app.ts':
+`// app.ts — imports from ./utils to prove cross-file imports work.
+// index.html loads only this file (<script src="app.ts">); utils.ts is
+// pulled in transitively because this import statement references it —
+// open utils.ts in the sidebar to see what it exports.
+import { add, greet, PI_APPROX } from './utils';
+
+const canvas = document.getElementById('preview') as HTMLCanvasElement;
+const ctx = canvas.getContext('2d')!;
+const W = canvas.width, H = canvas.height;
+
+ctx.fillStyle = '#0f172a';
+ctx.fillRect(0, 0, W, H);
+
+ctx.fillStyle = '#e2e8f0';
+ctx.font = 'bold 20px monospace';
+ctx.textAlign = 'center';
+ctx.fillText('Cross-File Imports', W / 2, H / 2 - 40);
+
+ctx.font = '14px monospace';
+ctx.fillStyle = '#94a3b8';
+ctx.fillText(greet('project'), W / 2, H / 2 - 10);
+ctx.fillText(\`add(2, 3) = \${add(2, 3)}\`, W / 2, H / 2 + 14);
+ctx.fillText(\`PI_APPROX = \${PI_APPROX}\`, W / 2, H / 2 + 38);
+
+console.log(greet('console'));
+console.log('add(2, 3) =', add(2, 3));
+console.log('PI_APPROX =', PI_APPROX);
+console.log('');
+console.log('utils.ts exported add/greet/PI_APPROX; app.ts imported them with a normal ES import statement.');
+`
+};
+
+// Webapp Starter didn't have a tsconfig.json before — add one so every
+// starter consistently has a real, visible, respected compiler config.
+TEMPLATES[0].files['tsconfig.json'] = SHARED_TSCONFIG;
+
+// The single unified list New Project / the sidebar show — every entry is
+// {name, icon, files}, no more separate Examples/Templates shape.
+var STARTERS = EXAMPLES.map(function(ex){ return { name: ex.name, icon: ex.icon, files: exampleToProject(ex) }; })
+  .concat([{ name: 'Cross-File Imports', icon: '🔗', files: CROSS_FILE_IMPORTS_FILES }])
+  .concat(TEMPLATES.map(function(t){ return { name: t.name, icon: t.icon, files: t.files }; }));
+
+// "New" toolbar button opens this dropdown-style modal instead of going
+// straight to a filename prompt, so starters are browsable/picked visually
+// (requirement: examples live in the New Project flow, not a bare prompt()).
+function openNewProjectModal(){
+  // No isDirty/confirm check here — just browsing the list isn't destructive.
+  // newProject()/loadStarter() (fired by an actual selection) each already
+  // guard the real discard.
+  var body = document.getElementById('newproj-body');
+  var html = '<div class="newproj-group-label">Blank</div>'
+    + '<div class="newproj-item" onclick="newProject()"><span class="ic">📄</span><span class="nm">Blank File…</span></div>'
+    + '<div class="newproj-group-label">Starters</div>';
+  STARTERS.forEach(function(st,i){
+    html += '<div class="newproj-item" onclick="loadStarter('+i+')"><span class="ic">'+st.icon+'</span><span class="nm">'+st.name+'</span></div>';
+  });
+  body.innerHTML = html;
+  document.getElementById('newproj-overlay').classList.add('show');
+}
+function closeNewProjectModal(){
+  document.getElementById('newproj-overlay').classList.remove('show');
+}
+
+function loadStarter(i){
+  if(isDirty && !confirm('Discard unsaved changes?')) return;
+  var st = STARTERS[i];
+  files = Object.assign({}, st.files);
+  // Git-lite: baseline = the content just loaded, so browsing a starter
+  // doesn't itself show as "modified" — only actual edits after this do.
+  gitLiteSnapshots = Object.assign({}, st.files);
+  projectDir = null;
+  var pick = files['index.html'] != null ? 'index.html' : Object.keys(files)[0];
+  activeFile = null;
+  switchFile(pick);
+  isDirty = false;
+  updateBadge();
+  clearAll();
+  log('Loaded: '+st.name+' ('+Object.keys(files).length+' files)','dim');
+  refreshSidebar();
+  if (typeof closeNewProjectModal === 'function') closeNewProjectModal();
+  if (files['index.html'] != null) runCode();
+}
+
 // --- Boot ---
 // Defined AFTER EXAMPLES/TEMPLATES so the initial load below can
 // actually see them — loading the very first example synchronously at
 // CodeMirror-setup time (before this data existed) used to throw and
 // silently abort the rest of the boot script.
-loadExample(0);
+loadStarter(0);
 log('TypeScript / WebGL IDE ready', 'info');
 log('Files are per-extension: .ts/.js/.glsl/.html/.css all edit and run correctly in the same project.', 'dim');
-log('Pick "Webapp Starter" under Templates for a multi-file HTML/CSS/TS starter with live preview.', 'dim');
+log('Click "New" for the full list of starters — including multi-file webapp, cross-file import, and GLSL shader examples — or "Open Folder" to open any real JS/TS project.', 'dim');
 setPvTab('canvas');
 </script>
 </body>
