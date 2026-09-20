@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Python Todo</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #1e1e2e;
+      color: #cdd6f4;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    #header {
+      background: #181825;
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border-bottom: 1px solid #313244;
+      flex-shrink: 0;
+    }
+    #header .logo { color: #a6e3a1; font-size: 15px; font-weight: bold; }
+    #header .title { font-weight: 600; color: #cdd6f4; font-size: 13px; }
+    #header .subtitle { color: #6c7086; font-size: 11px; margin-left: 2px; }
+    #app-root { flex: 1; overflow-y: auto; padding-top: 8px; }
+    .spinner-wrap {
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      color: #6c7086; padding: 40px 0; font-size: 12.5px;
+    }
+    .spinner {
+      width: 14px; height: 14px;
+      border: 2px solid #313244; border-top-color: #a6e3a1;
+      border-radius: 50%; animation: spin 0.8s linear infinite; flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .load-error { color: #f38ba8; text-align: center; padding: 24px 18px; font-size: 12.5px; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <div id="header">
+    <span class="logo">py</span>
+    <span class="title">Python Todo</span>
+    <span class="subtitle">Pyodide · localStorage</span>
+  </div>
+  <div id="app-root">
+    <div class="spinner-wrap" id="loading-msg">
+      <div class="spinner"></div>
+      Loading Pyodide (first load ~5 s)…
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
+  <script>
+    async function main() {
+      const root = document.getElementById('app-root');
+      try {
+        const pyodide = await loadPyodide({ indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/' });
+        pyodide.setStdout({ batched: (t) => console.log(t) });
+        pyodide.setStderr({ batched: (t) => console.error(t) });
+
+        const resp = await fetch('todo.py');
+        if (!resp.ok) throw new Error('Could not load todo.py (HTTP ' + resp.status + ')');
+        const src = await resp.text();
+
+        await pyodide.runPythonAsync(src);
+      } catch (e) {
+        root.innerHTML = '';
+        const el = document.createElement('div');
+        el.className = 'load-error';
+        el.textContent = 'Failed to start Python Todo:\n' + (e.message || e);
+        root.appendChild(el);
+      }
+    }
+    main();
+  </script>
+</body>
+</html>
