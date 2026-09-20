@@ -1,11 +1,12 @@
 import { chromium } from 'playwright';
+const PORT = process.env.PORT || 8080;
 
 (async () => {
   const browser = await chromium.launch();
   const page = await browser.newPage();
   const errors = [];
   page.on('pageerror', err => errors.push(err.message));
-  await page.goto('http://localhost:8080');
+  await page.goto(`http://localhost:${PORT}`);
   await page.reload({ waitUntil: 'networkidle' });
   await page.reload({ waitUntil: 'networkidle' });
   await page.waitForTimeout(2000);
@@ -42,9 +43,11 @@ import { chromium } from 'playwright';
   }));
   console.log(JSON.stringify(run1));
 
-  console.log('=== Test 3: Load GLSL example by name, confirm lang tag + run ===');
-  const glslIdx = await f.evaluate(() => EXAMPLES.findIndex(e => e.lang === 'glsl'));
-  await f.evaluate((i) => loadExample(i), glslIdx);
+  console.log('=== Test 3: Load GLSL starter by name, confirm lang tag + run ===');
+  // EXAMPLES/TEMPLATES were unified into STARTERS (each a real {index.html,
+  // tsconfig.json, ...} project) — loadExample/loadTemplate no longer exist.
+  const glslIdx = await f.evaluate(() => STARTERS.findIndex(s => s.name === 'GLSL Shader'));
+  await f.evaluate((i) => loadStarter(i), glslIdx);
   await page.waitForTimeout(300);
   const glslCheck = await f.evaluate(() => document.getElementById('lang-tag').textContent);
   console.log('Lang tag for GLSL file:', glslCheck);
@@ -53,8 +56,9 @@ import { chromium } from 'playwright';
   const glslStatus = await f.evaluate(() => document.getElementById('status-msg').textContent);
   console.log('GLSL run status:', glslStatus);
 
-  console.log('=== Test 4: Load Webapp Starter template (multi-file) ===');
-  await f.evaluate(() => loadTemplate(0));
+  console.log('=== Test 4: Load Webapp Starter (multi-file) ===');
+  const webappIdx = await f.evaluate(() => STARTERS.findIndex(s => s.name === 'Webapp Starter'));
+  await f.evaluate((i) => loadStarter(i), webappIdx);
   await page.waitForTimeout(1500);
   const tplCheck = await f.evaluate(() => ({
     filesKeys: Object.keys(files),
