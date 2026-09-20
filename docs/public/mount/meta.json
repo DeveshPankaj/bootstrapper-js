@@ -532,8 +532,8 @@
     "force_reload": true
   },
   {
-    "path": "/home/user1/dashboard.json",
-    "file": "/home/user1/dashboard.json",
+    "path": "/home/user1/.local/share/dashboard/dashboard.json",
+    "file": "/home/user1/.local/share/dashboard/dashboard.json",
     "force_reload": false
   },
   {
