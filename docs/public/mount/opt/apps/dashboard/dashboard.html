@@ -192,7 +192,8 @@
 </div>
 
 <script>
-  const CONFIG_PATH = '/home/user1/dashboard.json';
+  const CONFIG_DIR = '/home/user1/.local/share/dashboard';
+  const CONFIG_PATH = CONFIG_DIR + '/dashboard.json';
   const COLORS = ['#4dabf7','#74c0fc','#69db7c','#a9e34b','#ffd43b','#ff922b','#f783ac','#cc5de8','#845ef7','#20c997','#ff6b6b','#909296'];
   const WIDGET_TYPES = {
     clock:  { label: 'Clock',    icon: '🕐', color: '#4dabf7' },
@@ -317,6 +318,17 @@
 
   // ── FS ─────────────────────────────────────────────────────
   function getFS() { return window.platform.host.getFS(); }
+  // BrowserFS's mkdirSync(dir, {recursive:true}) doesn't reliably create
+  // multi-level paths — create each segment by hand instead.
+  function mkdirpSync(dirPath) {
+    const fs = getFS();
+    const parts = dirPath.split('/').filter(Boolean);
+    let cur = '';
+    for (const part of parts) {
+      cur += '/' + part;
+      try { fs.mkdirSync(cur); } catch (e) { if (e.code !== 'EEXIST') throw e; }
+    }
+  }
   function loadConfig() {
     try {
       const fs = getFS();
@@ -325,7 +337,11 @@
     return JSON.parse(JSON.stringify(DEFAULT_CONFIG));
   }
   function saveConfig() {
-    try { getFS().writeFileSync(CONFIG_PATH, JSON.stringify(state, null, 2)); }
+    try {
+      const fs = getFS();
+      if (!fs.existsSync(CONFIG_DIR)) mkdirpSync(CONFIG_DIR);
+      fs.writeFileSync(CONFIG_PATH, JSON.stringify(state, null, 2));
+    }
     catch (e) { console.error('dashboard: save failed', e); }
   }
 

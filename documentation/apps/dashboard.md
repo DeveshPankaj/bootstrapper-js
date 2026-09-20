@@ -2,7 +2,7 @@
 
 **Source:** `docs/public/mount/opt/apps/dashboard/dashboard.html` (VFS, `force_reload: true`)  
 **Launcher script:** `docs/public/mount/opt/apps/dashboard/main.js` (VFS, `force_reload: true`)  
-**Config:** `docs/public/mount/home/user1/dashboard.json` (VFS, `force_reload: false` — user-editable)  
+**Config:** `docs/public/mount/home/user1/.local/share/dashboard/dashboard.json` (VFS, `force_reload: false` — user-editable)  
 **Command:** `ui.dashboard`
 
 ## Overview
@@ -35,7 +35,7 @@ The dashboard is a personal bookmark and card manager. It opens as a standard wi
 }
 ```
 
-Config is read from and written to `/home/user1/dashboard.json` on the VFS. Changes are saved automatically on edit.
+Config is read from and written to `/home/user1/.local/share/dashboard/dashboard.json` on the VFS. Changes are saved automatically on edit.
 
 ## Bookmarks tab
 
