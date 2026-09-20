@@ -30,10 +30,10 @@ icons) and a set of bundled mini-apps that run inside iframe "windows".
   - Parent directories are created with `mkdirSync(..., { recursive: true })`
     automatically, so a dir doesn't need to be in `defaultDirs` for a meta.json file to
     land there (e.g. `/opt` is not in `defaultDirs` but `/opt/window-manager.js` works).
-- `normalizePath()` (duplicated in `explorer.js` and `src/apps/file-explorer/index.tsx`)
-  resolves `.`/`..`/`//` manually — don't use `fs.realpathSync`, it returns paths
-  relative to the mounted filesystem's own root under `MountableFileSystem` (e.g.
-  `realpathSync('/tmp')` → `/`, not the global path).
+- `normalizePath()` (duplicated in `docs/public/mount/opt/apps/file-explorer/main.js` and
+  `src/apps/file-explorer/index.tsx`) resolves `.`/`..`/`//` manually — don't use
+  `fs.realpathSync`, it returns paths relative to the mounted filesystem's own root
+  under `MountableFileSystem` (e.g. `realpathSync('/tmp')` → `/`, not the global path).
 
 ### "FHS-lite" vfs layout
 
@@ -54,9 +54,9 @@ follow these existing conventions (all bootstrapped via `meta.json`, all current
 - `/opt/window-manager.js` — per-window behavior, re-read on every `createWindow`
   (see "Window manager appearance & behavior").
 - `/opt/cron/*.js` — cron job scripts (`force_reload: false`).
-- `/home/user1/` — user home: `apps/` (explorer, terminal, etc.), `settings.html`,
-  `initd.run` (boot script run by `initd`), user content dirs (`projects/`, `quotes/`,
-  `tools/`, `welcome/`).
+- `/home/user1/` — user home: `settings.html`, `initd.run` (boot script run by
+  `initd`), user content dirs (`projects/`, `welcome/`). All apps live under
+  `/opt/apps/<name>/` now (see below) — there is no more `/home/user1/apps/`.
 - `/tmp`, `/mnt` — ephemeral / mounted-folder space, not part of `meta.json`.
 
 Rule of thumb: files under `/usr`, `/etc`, `/opt`, `/bin` are "system" — not meant for
@@ -79,12 +79,13 @@ direct user editing (`force_reload: true`); files under `/home/user1` and `/etc/
   `StorageSettings` component) lets the user pick a backend and reloads
   (`top.location.href` with the query param set) to apply it. Keep its
   `FS_BACKEND_STORAGE_KEY`/`FS_BACKEND_QUERY_PARAM` constants in sync with `src/index.ts`.
-- **Gotcha**: a LocalStorage-backend fs may contain a *stale* copy of
-  `/home/user1/apps/explorer.js` from an older app version (it has `force_reload`
-  absent, so it's never overwritten). If that stale copy doesn't call
-  `registerCommand("explorer", ...)`, every `command('explorer')` call (opening a
-  folder, desktop "Explorer" context menu) throws an uncaught `Command: [explorer] not
-  found`. Mitigated by a fallback `'explorer'` command — see Platform/Host section.
+- **Gotcha (legacy data only)**: apps used to live at `/home/user1/apps/*.js` with
+  `force_reload` absent, so a LocalStorage-backend fs from an old app version may still
+  contain a stale copy of `/home/user1/apps/explorer.js` that never gets overwritten.
+  If that stale copy calls `registerCommand("explorer", ...)` with an outdated
+  implementation, it can shadow the real one. All apps now live under `/opt/apps/`
+  (`force_reload: true`, always refreshed) — new installs are unaffected. A fallback
+  `'explorer'` command still exists as a safety net — see Platform/Host section.
 
 ## Platform / Host architecture (`src/shared/index.ts`)
 
@@ -118,10 +119,11 @@ direct user editing (`force_reload: true`); files under `/home/user1` and `/etc/
 - `UserPreference` — reads/writes `/user-preferences.json` (wallpaper, etc.).
 - `src/remote.ts` registers a fallback `'explorer'` command (delegates to the always-
   available compiled `ui.file-explorer` command) at boot, before `initd.run` runs.
-  The real `/home/user1/apps/explorer.js` registers its own `'explorer'` command later
-  via `initd.run` and (being prepended) takes precedence when present — the fallback
-  only matters if that file is missing/stale/fails to register one (see Storage backend
-  switch gotcha above).
+  `docs/public/mount/opt/apps/file-explorer/main.js` registers its own `'explorer'`
+  command later, when `pkg-manager/loader.js` loads it as a `CORE_APP`, and (being
+  prepended) takes precedence when present — the fallback only matters for the brief
+  window before that loads, or if it's ever missing (see Storage backend switch gotcha
+  above).
 
 ## Layout & window manager (`src/core/layout/index.tsx`, `src/core/window-manager.ts`)
 
@@ -202,15 +204,20 @@ Two **parallel, hand-kept-in-sync** implementations (no shared module — this i
 established convention in this repo, mirroring how `/opt/window-manager.js` vs.
 compiled TS are kept separate):
 
-- `docs/public/mount/home/user1/apps/explorer.js` — **the active runtime file
-  explorer** (virtual fs, `force_reload` absent so user edits persist). This is what
-  actually renders when you open "Files" from the desktop. Local component name
-  `ListDirConponent` (typo preserved intentionally — it's this file's own copy, distinct
-  from `desktop.tsx`'s `ListDirComponent`).
-- `src/apps/file-explorer/index.tsx` — compiled TS/TSX counterpart, **not used at
-  runtime**, kept structurally in sync with `explorer.js` for when/if it's wired back
-  in. Has its own local `ListDirComponent` (correctly spelled) — also a separate copy,
-  not the one from `./desktop`.
+- `docs/public/mount/opt/apps/file-explorer/main.js` — **the active runtime file
+  explorer**. Loaded as the first entry in `CORE_APPS`
+  (`docs/public/mount/opt/apps/pkg-manager/loader.js`), so it registers the `explorer`
+  command on every boot and (registrations are prepended) takes precedence over the
+  fallback below. This is what actually renders when you open "Files" from the desktop.
+  Local component name `ListDirConponent` (typo preserved intentionally — it's this
+  file's own copy, distinct from `desktop.tsx`'s `ListDirComponent`).
+- `src/apps/file-explorer/index.tsx` — compiled TS/TSX counterpart, registers
+  `ui.file-explorer`, kept structurally in sync with `main.js` above. Reached via
+  `src/remote.ts`'s fallback `'explorer'` command registration (a safety net for before
+  `main.js` loads, or if it's ever missing) and via direct `ui.file-explorer` calls
+  (layout icon map, "Open in explorer" context-menu actions). Has its own local
+  `ListDirComponent` (correctly spelled) — also a separate copy, not the one from
+  `./desktop`.
 - `src/apps/file-explorer/desktop.tsx` exports the `ListDirComponent` used for **desktop
   icons** (rendered by `LayoutShell` in `src/core/layout/index.tsx`) — a third, distinct
   usage. Its `.desktop-icons` class must stay `height: 100%` (not `100vh`) to avoid
@@ -224,7 +231,7 @@ The icon images used for `extIconMap` (per-extension file icons, e.g. `.js`, `.j
 sourced from `docs/public/mount/usr/share/icons/*`, mirroring the existing
 `/usr/lib/ui/menuItem.js` "system dir" convention) rather than as `/public/*.png`
 webpack static assets.
-- In `explorer.js` and `index.tsx` (which render inside an `about:blank` iframe, so
+- In `main.js` and `index.tsx` (which render inside an `about:blank` iframe, so
   `/(sw)/...` sub-resource URLs don't reach the SW — same reason thumbnails use blob
   URLs), `extIconMap` maps extensions to `/usr/share/icons/...` vfs paths, and a
   mount-only `useEffect` (`[]` deps) reads each via `fs.readFileSync` and converts to a
@@ -271,7 +278,7 @@ Both explorer copies support dragging files in two directions, implemented in `A
 
 When changing one explorer file's structure/behavior, mirror the change in the other.
 
-## Terminal (`docs/public/mount/home/user1/apps/xtermjs.html`)
+## Terminal (`docs/public/mount/opt/apps/terminal/main.html`)
 
 - xterm.js 5.3.0 from `https://unpkg.com/xterm/lib/xterm.js`, DOM renderer (no canvas
   addon — was tried and reverted, see below), `convertEol: true`.

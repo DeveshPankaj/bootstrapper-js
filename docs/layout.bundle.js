@@ -30768,8 +30768,7 @@ function mkdirRecursive(fs, path) {
     }
 }
 const DEFAULT_DIRS = [
-    '/home', '/home/user1', '/home/user1/apps', '/home/user1/tools',
-    '/home/user1/projects', '/home/user1/quotes',
+    '/home', '/home/user1', '/home/user1/projects',
     '/mnt', '/usr', '/usr/bin', '/usr/lib', '/usr/local',
     '/usr/share', '/usr/share/icons',
     '/bin', '/etc', '/etc/wm', '/etc/pkg',

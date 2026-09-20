@@ -1,6 +1,6 @@
 const platform = window.platform;
 const _APP_DIR = platform._appDir || null;
-const PYTHON_HTML = _APP_DIR ? `/(sw)${_APP_DIR}/python.html` : '/(sw)/home/user1/apps/python.html';
+const PYTHON_HTML = `/(sw)${_APP_DIR || '/opt/apps/python-repl'}/python.html`;
 
 const run = (body, props, filepath) => {
   if (!body) {

@@ -46,7 +46,7 @@ Each mount is an **AsyncMirror** pairing an IndexedDB backend (persistent, GB-sc
 
 The backend is selected at boot via the `__app_fs_backend__` localStorage key, overridable with `?fsBackend=indexeddb|localstorage`. The Settings → Storage page lets the user switch and reload. The two backends are completely separate filesystems — switching does not migrate data.
 
-**LocalStorage gotcha**: the LocalStorage backend may contain a stale `/home/user1/apps/explorer.js` that doesn't register the `'explorer'` command. A fallback is registered in `src/remote.ts` to handle this.
+**LocalStorage gotcha (legacy data only)**: apps used to live at `/home/user1/apps/*.js`, so a LocalStorage backend from an old app version may contain a stale `/home/user1/apps/explorer.js` that doesn't register the `'explorer'` command. All apps now live under `/opt/apps/<name>/` (new installs are unaffected). A fallback is registered in `src/remote.ts` to handle this.
 
 ## File execution
 

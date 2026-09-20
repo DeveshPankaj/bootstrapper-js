@@ -400,10 +400,12 @@ platform.host.registerCommand('ui.settings', (body: any, props: any, initialSect
 }, { icon: 'settings', title: 'Settings' })
 
 // Fallback 'explorer' command, delegating to the compiled ui.file-explorer module.
-// /home/user1/apps/explorer.js registers the real 'explorer' command on boot via
-// initd.run (prepended, so it takes precedence). This fallback handles two cases:
-// 1. Stale/missing explorer.js (localStorage backend gotcha) — ensures 'explorer'
-//    always resolves.
+// docs/public/mount/opt/apps/file-explorer/main.js registers the real 'explorer'
+// command when pkg-manager/loader.js loads it as a CORE_APP (prepended, so it takes
+// precedence). This fallback handles two cases:
+// 1. The brief window before that loads, or a stale/missing legacy copy from an old
+//    LocalStorage-backend fs (see CLAUDE.md's Storage backend switch gotcha) — ensures
+//    'explorer' always resolves.
 // 2. Called with no args (e.g. from a keybinding or Spotlight) — routes through
 //    open-window so the window manager sets up body/props correctly.
 platform.host.registerCommand('explorer', (...args: unknown[]) => {

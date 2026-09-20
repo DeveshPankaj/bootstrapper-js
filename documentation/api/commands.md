@@ -219,7 +219,7 @@ platform.host.callCommand('reload-keybindings');
 
 ### `explorer(...args)`
 
-Open the file explorer. This is a fallback registration — `/home/user1/apps/explorer.js` registers a higher-priority `explorer` command on boot via `initd.run`. The fallback ensures the command always resolves even if `explorer.js` is missing or stale.
+Open the file explorer. This is a fallback registration — `docs/public/mount/opt/apps/file-explorer/main.js` registers a higher-priority `explorer` command when `pkg-manager/loader.js` loads it as a `CORE_APP`. The fallback ensures the command always resolves even if that's missing or hasn't loaded yet.
 
 - Called with no args: opens a new explorer window at the default path via `open-window`.
 - Called with a path arg: delegates to `ui.file-explorer`.
@@ -264,7 +264,7 @@ platform.host.execCommand(
 
 Open a URL or VFS HTML file in a sandboxed iframe window. The `url` can be:
 - A web URL: `'https://example.com'`
-- A VFS path served via the service worker: `'/(sw)/home/user1/apps/myapp.html'` or `'/cache/home/user1/apps/myapp.html'`
+- A VFS path served via the service worker: `'/(sw)/opt/apps/myapp/main.html'` or `'/cache/opt/apps/myapp/main.html'`
 
 Source: `src/core/iframe/index.tsx`
 
@@ -370,4 +370,4 @@ Source: `src/modules/index.tsx`
 
 WAMP (WebSocket Application Messaging Protocol) client.
 
-Source: VFS app (`/home/user1/apps/wamp.js`)
+Source: VFS app (`/opt/apps/wamp-client/main.js`)

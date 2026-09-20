@@ -1,7 +1,7 @@
 # Dashboard
 
-**Source:** `docs/public/mount/home/user1/apps/dashboard.html` (VFS, `force_reload: true`)  
-**Launcher script:** `docs/public/mount/home/user1/apps/dashboard.js` (VFS, `force_reload: true`)  
+**Source:** `docs/public/mount/opt/apps/dashboard/dashboard.html` (VFS, `force_reload: true`)  
+**Launcher script:** `docs/public/mount/opt/apps/dashboard/main.js` (VFS, `force_reload: true`)  
 **Config:** `docs/public/mount/home/user1/dashboard.json` (VFS, `force_reload: false` — user-editable)  
 **Command:** `ui.dashboard`
 
@@ -85,11 +85,6 @@ The clock render function uses `container.ownerDocument` (main document) for DOM
 From the desktop context menu: right-click → **Dashboard**.  
 Programmatically: `platform.host.callCommand('ui.dashboard')`.
 
-## Adding the dashboard to initd
+## Installing the dashboard
 
-`/home/user1/initd.run` contains:
-```
-service('root', 'exec')('/home/user1/apps/dashboard.js');
-```
-
-This registers the `ui.dashboard` command at boot so the desktop context menu entry works immediately.
+Dashboard isn't a `CORE_APP` (see `docs/public/mount/opt/apps/pkg-manager/loader.js`) — it's a registry app. Install it via App Manager (`ui.pkg-manager`), which adds it to `/etc/pkg/installed.json`; `pkg-manager/loader.js` then execs `/opt/apps/dashboard/main.js` at every boot, registering `ui.dashboard` so the desktop context menu entry works.
