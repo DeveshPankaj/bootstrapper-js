@@ -329,6 +329,31 @@
       "main": "main.js"
     },
     {
+      "id": "todo-python",
+      "name": "Python Todo",
+      "description": "A simple todo list app with its UI and logic written entirely in Python, run in-browser via Pyodide. Tasks persist via localStorage.",
+      "version": "1.0.0",
+      "icon": "checklist",
+      "category": "Tools",
+      "author": "bootstrapper-js",
+      "commandName": "ui.py-todo",
+      "files": [
+        {
+          "dest": "main.js",
+          "src": "/public/mount/opt/apps/todo-python/main.js"
+        },
+        {
+          "dest": "todo.html",
+          "src": "/public/mount/opt/apps/todo-python/todo.html"
+        },
+        {
+          "dest": "todo.py",
+          "src": "/public/mount/opt/apps/todo-python/todo.py"
+        }
+      ],
+      "main": "main.js"
+    },
+    {
       "id": "nn-ide",
       "name": "NN IDE",
       "description": "Neural network IDE for designing and training models visually in the browser.",

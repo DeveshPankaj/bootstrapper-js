@@ -662,6 +662,21 @@
     "force_reload": true
   },
   {
+    "path": "/opt/apps/todo-python/main.js",
+    "file": "/opt/apps/todo-python/main.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/todo-python/todo.html",
+    "file": "/opt/apps/todo-python/todo.html",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/todo-python/todo.py",
+    "file": "/opt/apps/todo-python/todo.py",
+    "force_reload": true
+  },
+  {
     "path": "/opt/apps/nn-ide/main.js",
     "file": "/opt/apps/nn-ide/main.js",
     "force_reload": true
