@@ -11,7 +11,7 @@ The `Platform` and `Host` classes form the backbone of the bootstrapper-js modul
 Accessed as `window.platform` inside any VFS script, or via `Platform.getInstance()` in compiled TS modules.
 
 ```javascript
-// Inside a VFS script (e.g. /etc/widgets/clock.js or /home/user1/apps/explorer.js):
+// Inside a VFS script (e.g. /etc/widgets/clock.js or /opt/apps/file-explorer/main.js):
 const platform = window.platform;
 // or equivalently:
 const platform = Platform.getInstance();
@@ -165,7 +165,7 @@ Execute a VFS file by its extension. Routing table:
 | directory | Opens with `explorer` |
 
 ```javascript
-platform.host.exec(platform, '/home/user1/apps/explorer.js');
+platform.host.exec(platform, '/opt/apps/file-explorer/main.js');
 platform.host.exec(platform, '/home/user1/initd.run');
 ```
 
@@ -334,7 +334,7 @@ platform.userPref.setWallpaper('/(sw)/home/user1/photos/bg.jpg');
 ### Registering a command from `initd.run` or a boot script
 
 ```javascript
-// /home/user1/apps/explorer.js (loaded by initd.run)
+// /opt/apps/file-explorer/main.js (loaded as a CORE_APP by pkg-manager/loader.js)
 const { remove } = platform.host.registerCommand('explorer', (body, props, path) => {
   // render file explorer into body
 }, { icon: 'folder', title: 'Files' });

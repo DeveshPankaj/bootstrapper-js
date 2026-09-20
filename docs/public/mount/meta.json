@@ -128,11 +128,6 @@
     "file": "/home/user1/projects/temp.js"
   },
   {
-    "path": "/home/user1/quotes/my.md",
-    "file": "/home/user1/quotes/my.md",
-    "force_reload": true
-  },
-  {
     "path": "/home/user1/Notes.md",
     "file": "/home/user1/Notes.md"
   },
@@ -200,11 +195,6 @@
     "path": "/bin/journalctl.run",
     "file": "/bin/journalctl.run",
     "force_reload": true
-  },
-  {
-    "path": "/home/user1/tools/speed-test.html",
-    "file": "/home/user1/tools/speed-test.html",
-    "force_reload": false
   },
   {
     "path": "/lib/utils.js",

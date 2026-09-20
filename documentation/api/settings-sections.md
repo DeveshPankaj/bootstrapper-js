@@ -80,8 +80,8 @@ The `api` object passed to the render function:
 Settings sections registered at boot time (e.g. from scripts loaded by `initd.run`) are available as soon as the Settings window opens:
 
 ```javascript
-// /home/user1/apps/my-settings-plugin.js
-// (loaded via initd.run or /etc/widgets/ mechanism)
+// /opt/apps/my-settings-plugin/main.js
+// (loaded via pkg-manager/loader.js or /etc/widgets/ mechanism)
 
 platform.host.registerSettingsSection(
   'developer',

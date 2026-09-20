@@ -1,7 +1,7 @@
 # File Explorer
 
-**Runtime file:** `docs/public/mount/home/user1/apps/explorer.js` (VFS, `force_reload` absent — user edits persist)  
-**Compiled counterpart:** `src/apps/file-explorer/index.tsx` (kept in sync, not used at runtime)  
+**Runtime file:** `docs/public/mount/opt/apps/file-explorer/main.js` (VFS, `force_reload: true`, loaded as a `CORE_APP` by `pkg-manager/loader.js`)  
+**Compiled counterpart:** `src/apps/file-explorer/index.tsx` (kept in sync, registers `ui.file-explorer` — reached via `src/remote.ts`'s `'explorer'` fallback and direct calls)  
 **Desktop icons:** `src/apps/file-explorer/desktop.tsx` (separate usage, compiled)
 
 ## Architecture
@@ -10,8 +10,8 @@ There are **three parallel implementations** — each is a distinct copy:
 
 | File | Usage |
 |---|---|
-| `explorer.js` | Active runtime explorer opened as a window |
-| `src/apps/file-explorer/index.tsx` | Structural reference (compiled TS, not wired at runtime) |
+| `opt/apps/file-explorer/main.js` | Active runtime explorer opened as a window (registers `explorer`, prepended so it takes precedence) |
+| `src/apps/file-explorer/index.tsx` | Fallback/structural reference (compiled TS, registers `ui.file-explorer`) |
 | `src/apps/file-explorer/desktop.tsx` | Desktop icon grid rendered by `LayoutShell` |
 
 When changing behavior in one, mirror the change in the other two.
@@ -27,7 +27,7 @@ The explorer renders a macOS Finder–style UI:
 
 ## File-type icons
 
-Icons live in the VFS under `/usr/share/icons/` (bootstrapped via `meta.json` with `force_reload: true`). In `explorer.js` and `index.tsx`, icons are read via `fs.readFileSync` and converted to blob URLs (revoked on unmount) — this is required because those files run inside `about:blank` iframes where `/(sw)/...` URLs are not intercepted by the service worker. `desktop.tsx` uses `/(sw)/usr/share/icons/...` directly since it runs in the main document.
+Icons live in the VFS under `/usr/share/icons/` (bootstrapped via `meta.json` with `force_reload: true`). In `main.js` and `index.tsx`, icons are read via `fs.readFileSync` and converted to blob URLs (revoked on unmount) — this is required because those files run inside `about:blank` iframes where `/(sw)/...` URLs are not intercepted by the service worker. `desktop.tsx` uses `/(sw)/usr/share/icons/...` directly since it runs in the main document.
 
 ## Drag and drop
 

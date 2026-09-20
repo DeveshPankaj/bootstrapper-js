@@ -1,7 +1,7 @@
 # Terminal
 
-**Source:** `docs/public/mount/home/user1/apps/xtermjs.html`  
-**Opened via:** `command('ui.xtermjs')` or Alt+T shortcut
+**Source:** `docs/public/mount/opt/apps/terminal/main.html`  
+**Opened via:** `command('ui.terminal')` or Alt+T shortcut
 
 ## Architecture
 

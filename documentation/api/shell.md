@@ -1,6 +1,6 @@
 # Shell Command Reference
 
-**Sources:** `docs/public/mount/home/user1/apps/xtermjs.html` (built-ins, parsing, history), `docs/public/mount/bin/*.run` (all file commands)
+**Sources:** `docs/public/mount/opt/apps/terminal/main.html` (built-ins, parsing, history), `docs/public/mount/bin/*.run` (all file commands)
 
 The bootstrapper-js terminal is an xterm.js 5.3.0 session that executes commands in two ways:
 1. **Built-in commands** — handled directly by `handleInternalCommands` in the terminal app.
@@ -218,11 +218,10 @@ Print a recursive directory tree. Directories are shown in blue. Summary line sh
 ```
 root@pankajdevesh.com: ~/home/user1$ tree
 /home/user1
-├── apps/
-│   ├── explorer.js
-│   └── xtermjs.html
+├── projects/
+│   └── temp.js
 └── notes.txt
-1 directories, 3 files
+1 directories, 2 files
 ```
 
 ### `edit file`

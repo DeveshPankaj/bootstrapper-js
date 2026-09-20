@@ -1334,8 +1334,4 @@ const { remove } = platform.host.registerCommand("explorer", run, {
   header: {style: {backgroundColor: ''}}
 });
 
-// Load image viewer and spotlight on boot
-platform.host.exec(platform, '/home/user1/apps/imageviewer.js');
-platform.host.exec(platform, '/opt/spotlight.js');
-
 // setTimeout(remove, 6000)

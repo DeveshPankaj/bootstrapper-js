@@ -186,7 +186,7 @@ platform.host.registerCommand('my-app', (body, props, filePath) => {
 Apps loaded as HTML files via `ui.iframe` receive their own `window` context and have no direct access to `props`. They can still handle SIGTERM via `postMessage`:
 
 ```javascript
-// Inside an HTML app's <script> (e.g. /home/user1/apps/myapp.html)
+// Inside an HTML app's <script> (e.g. /opt/apps/myapp/main.html)
 window.addEventListener('message', (e) => {
   if (e.data?.type === 'signal' && e.data?.name === 'SIGTERM') {
     // Cleanup before the window is removed

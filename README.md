@@ -46,7 +46,7 @@ isolated iframes/windows.
 - **XML parser** – parse and inspect XML documents.
 - **Game of Life** – Conway's Game of Life demo app.
 - **Webamp** – embedded Winamp-style media player.
-- **WAMP / FS / TOTP / WebRTC tools** – small utility apps under `/home/user1/apps`.
+- **WAMP / FS / TOTP / WebRTC tools** – small utility apps under `/opt/apps`.
 
 ## Development
 
