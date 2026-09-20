@@ -28831,9 +28831,9 @@ const applyAmbient = (doc, rgb, variance) => {
     // soften it into a calmer backdrop for menu text; a flat/plain
     // wallpaper needs less blur to still read as intentional depth rather
     // than a fog. 600 is a representative variance for a fairly busy photo.
-    const blur = clamp(12 + (variance / 600) * 16, 10, 28);
+    const blur = clamp(6 + (variance / 600) * 8, 4, 14);
     const root = doc.documentElement.style;
-    root.setProperty('--ambient-bg', `rgba(${br}, ${bg}, ${bb}, 0.35)`);
+    root.setProperty('--ambient-bg', `rgba(${br}, ${bg}, ${bb}, 0.18)`);
     root.setProperty('--ambient-fg', fg);
     root.setProperty('--ambient-blur', `${blur.toFixed(0)}px`);
 };
@@ -29156,7 +29156,7 @@ const CONTEXTMENU_CSS = `
         backdrop-filter: blur(var(--ambient-blur, 10px));
         color: var(--ambient-fg, inherit);
         border-radius: 15px;
-        box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+        box-shadow: inset 0 0px 40px -54px rgba(31, 38, 135, 0.37);
         border: 1px solid rgba(255, 255, 255, 0.18);
     }
 

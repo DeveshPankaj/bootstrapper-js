@@ -141,10 +141,10 @@ const applyAmbient = (doc: Document, rgb: [number, number, number], variance: nu
     // soften it into a calmer backdrop for menu text; a flat/plain
     // wallpaper needs less blur to still read as intentional depth rather
     // than a fog. 600 is a representative variance for a fairly busy photo.
-    const blur = clamp(12 + (variance / 600) * 16, 10, 28)
+    const blur = clamp(6 + (variance / 600) * 8, 4, 14)
 
     const root = doc.documentElement.style
-    root.setProperty('--ambient-bg', `rgba(${br}, ${bg}, ${bb}, 0.35)`)
+    root.setProperty('--ambient-bg', `rgba(${br}, ${bg}, ${bb}, 0.18)`)
     root.setProperty('--ambient-fg', fg)
     root.setProperty('--ambient-blur', `${blur.toFixed(0)}px`)
 }
