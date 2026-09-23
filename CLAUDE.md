@@ -296,6 +296,46 @@ When changing one explorer file's structure/behavior, mirror the change in the o
   terminal to scroll, one row can briefly show leftover/overlapping text from a row
   that scrolled past. Left unfixed per explicit instruction — revisit only if asked.
 
+## Deep links (`src/kernel/deeplink.ts`, `/usr/bin/deeplink.js`)
+
+URL hash `#open=<command>&app=<appId>&arg=<string>` opens a command with a string arg (used for
+WebRTC invite/answer links). Two halves:
+- **Pre-boot** (`src/index.ts`, `tryHandoffDeepLink`): if the hash has a link, ask other tabs over
+  `BroadcastChannel('wos-deeplink')`; if one acks, this tab shows "Opened in your other tab" and doesn't boot.
+- **Post-boot** (`/usr/bin/deeplink.js`, run from `initd.run` after the pkg loader): receives handoffs and
+  handles this tab's own hash (consumed via `history.replaceState`). Waits for `.content-area` before
+  `open-window` (it silently no-ops until the desktop is mounted).
+- **Opt-in security**: a command is reachable only if its `registerCommand` meta has `deepLink: true`;
+  optional `hasDeepLinkTarget()` / `onDeepLink(arg)` route the link to a running window instead of a new one.
+  Names are regex-validated, `arg` is capped, and passed only as `$args` (never interpolated).
+- `ui.iframe` only treats `/`-prefixed strings as vfs paths, so apps needing `?query` params pass an absolute
+  `origin/(sw)/...?x=y` URL (the SW ignores the search part).
+
+## Runtime vfs mounts (`FS.mount`/`FS.umount`/`FS.createBackend`, added in `src/kernel/vfs.ts`)
+
+The top-level `fs` (== `platform.host.getFS()`, one object shared across every same-origin
+iframe) gained three extra methods beyond BrowserFS's normal Node-`fs`-like surface:
+- `fs.mount(path, backend)` / `fs.umount(path)` — thin wrappers around the real, boot-time
+  `MountableFileSystem`'s own `.mount()`/`.umount()` (BrowserFS 2.0 supports grafting backends in
+  after `initialize()`; the mount point auto-appears in its parent's `readdirSync` via the
+  library's own internal bookkeeping — no manual placeholder directory needed).
+- `fs.createBackend(name, opts)` — Promise-wrapped `window.BrowserFS.FileSystem[name].Create(...)`
+  (e.g. `'InMemory'`), for building a new backend to mount.
+Used by the WebRTC app (see "Mounting a remote folder" in `documentation/apps/webrtc.md`) to graft
+a remote peer's shared folder into `/mnt/webrtc/<label>` as a real, synchronous, editable
+filesystem — every existing app (file explorer, notepad, terminal) reads and writes it exactly
+like any local folder, no special-casing anywhere else in the codebase.
+
+## Modal width vs. a CSS Grid overlay (webrtc app, `openModal`)
+
+`.overlay` (the backdrop behind every modal in `docs/public/mount/opt/apps/webrtc/main.html`) is
+`display:grid; place-items:center`. `place-items:center` sizes the grid track to the item's
+max-content width rather than the viewport — so a modal's `width: min(100%, Xpx)` doesn't actually
+clamp to the window once its content (e.g. a wrapping toolbar) *wants* to be wider than the window:
+"100%" resolves against that content-sized track, not the real viewport, and the modal silently
+overflows the window's edge. Anchor to the real viewport instead: `min(calc(100vw - 28px), Xpx)`.
+Affects any sufficiently wide modal content, not just one call site — fixed once in `openModal`.
+
 ## Testing conventions
 
 - **Never run ad-hoc test scripts from `/tmp`** — create them in the repo (now under

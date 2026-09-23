@@ -506,19 +506,24 @@
     },
     {
       "id": "webrtc",
-      "name": "WebRTC",
-      "description": "Peer-to-peer video/audio communication using WebRTC.",
-      "version": "1.0.0",
-      "icon": "video_call",
+      "name": "WebRTC Chat",
+      "description": "Peer-to-peer chat over WebRTC: invite/answer links, groups, direct messages, file transfer with image previews, and VFS folder sharing with read-only/read-write access. Controllable from the terminal (webrtc help).",
+      "version": "2.0.0",
+      "icon": "forum",
       "category": "Web",
       "author": "bootstrapper-js",
+      "commandName": "ui.webrtc",
       "files": [
+        {
+          "dest": "main.js",
+          "src": "/public/mount/opt/apps/webrtc/main.js"
+        },
         {
           "dest": "main.html",
           "src": "/public/mount/opt/apps/webrtc/main.html"
         }
       ],
-      "main": "main.html"
+      "main": "main.js"
     },
     {
       "id": "totp-auth",

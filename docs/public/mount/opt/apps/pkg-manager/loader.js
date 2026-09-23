@@ -36,6 +36,7 @@ const CORE_APPS = [
   { id: 'app-launcher',   appDir: '/opt/apps/app-launcher',   mainFile: '/opt/apps/app-launcher/main.js' },
   { id: 'vector-store',   appDir: '/opt/apps/vector-store',   mainFile: '/opt/apps/vector-store/main.js' },
   { id: 'ai-dom-lens',    appDir: '/opt/apps/ai-dom-lens',    mainFile: '/opt/apps/ai-dom-lens/main.js' },
+  { id: 'webrtc',         appDir: '/opt/apps/webrtc',         mainFile: '/opt/apps/webrtc/main.js' },
   // python-demo is not a core app — install via App Manager
 ];
 

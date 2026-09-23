@@ -124,6 +124,25 @@ const findRegistryMatch = (pkg, registryApps) => {
   return registryApps.find(a => a.id === pkg.id) || null;
 };
 
+// Launches an already-installed app — shared by InstalledView and (so an
+// installed app can also be opened straight from its Discover card, not
+// just from the Installed tab) DiscoverView.
+const openInstalledApp = (pkg) => {
+  try {
+    if (pkg.commandName) {
+      platform.host.execCommand(
+        `service('001-core.layout','open-window')(command('${pkg.commandName}'))`,
+        platform
+      );
+    } else {
+      // HTML apps or apps without a registered command: exec the main file directly
+      platform.host.exec(platform, pkg.mainFile);
+    }
+  } catch (e) {
+    console.warn('[pkg-manager] open failed:', pkg.id, e);
+  }
+};
+
 // ── Backups / rollback ──────────────────────────────────────────────────────
 
 const BACKUPS_DIR = '/etc/pkg/backups';
@@ -545,7 +564,9 @@ const CSS = `
   display: flex;
   align-items: center;
   gap: 6px;
+  row-gap: 8px;
   margin-top: 2px;
+  flex-wrap: wrap;
 }
 
 .pkg-tag {
@@ -752,7 +773,7 @@ const ConfirmModal = ({ icon, title, message, confirmLabel = 'Confirm', danger, 
 
 // Discover view ───────────────────────────────────────────────────────────────
 
-const DiscoverView = ({ registryApps, installed, loading, fetchError, onInstall, onRequestUninstall, installingId, uninstallingId, search, setSearch }) => {
+const DiscoverView = ({ registryApps, installed, loading, fetchError, onInstall, onRequestUninstall, onUpdate, installingId, uninstallingId, updatingId, search, setSearch }) => {
 
   const installedIds = new Set(installed.map(p => p.id));
   const [regFilter, setRegFilter] = useState('');
@@ -839,6 +860,9 @@ const DiscoverView = ({ registryApps, installed, loading, fetchError, onInstall,
             {visible.map(app => {
               const isInstalled = installedIds.has(app.id);
               const isInstalling = installingId === app.id;
+              const installedPkg = isInstalled ? installed.find(p => p.id === app.id) : null;
+              const isUpdating = updatingId === app.id;
+              const hasUpdate = !!installedPkg && compareVersions(app.version, installedPkg.version) > 0;
               return (
                 <div className="pkg-card" key={`${app._registryUrl}::${app.id}`}>
                   <div className="pkg-card-header">
@@ -858,14 +882,34 @@ const DiscoverView = ({ registryApps, installed, loading, fetchError, onInstall,
                     <span className="pkg-version">v{app.version}</span>
                     <div style={{ flex: 1 }} />
                     {isInstalled ? (
-                      <button
-                        className="pkg-btn danger"
-                        disabled={uninstallingId === app.id}
-                        onClick={() => onRequestUninstall(installed.find(p => p.id === app.id))}
-                        style={{ display: 'flex', alignItems: 'center', gap: 5 }}
-                      >
-                        {uninstallingId === app.id ? <><Spinner /> Removing…</> : <><Icon name="delete" /> Uninstall</>}
-                      </button>
+                      <>
+                        <button
+                          className="pkg-btn"
+                          onClick={() => openInstalledApp(installedPkg)}
+                          style={{ display: 'flex', alignItems: 'center', gap: 5 }}
+                        >
+                          <Icon name="open_in_new" style={{ fontSize: 15 }} /> Open
+                        </button>
+                        <button
+                          className="pkg-btn update"
+                          disabled={isUpdating}
+                          onClick={() => onUpdate(installedPkg, app)}
+                          style={{ display: 'flex', alignItems: 'center', gap: 5 }}
+                          title={hasUpdate ? `Update to v${app.version}` : 'Reinstall this app\'s files from the registry'}
+                        >
+                          {isUpdating
+                            ? <><Spinner /> {hasUpdate ? 'Updating…' : 'Reinstalling…'}</>
+                            : <><Icon name="upgrade" style={{ fontSize: 15 }} /> {hasUpdate ? 'Update' : 'Reinstall'}</>}
+                        </button>
+                        <button
+                          className="pkg-btn danger"
+                          disabled={uninstallingId === app.id}
+                          onClick={() => onRequestUninstall(installedPkg)}
+                          style={{ display: 'flex', alignItems: 'center', gap: 5 }}
+                        >
+                          {uninstallingId === app.id ? <><Spinner /> Removing…</> : <><Icon name="delete" /> Uninstall</>}
+                        </button>
+                      </>
                     ) : (
                       <button
                         className="pkg-btn primary"
@@ -894,22 +938,6 @@ const InstalledView = ({ installed, registryApps, onRequestUninstall, onUpdate, 
   const filtered = search
     ? installed.filter(p => p.name?.toLowerCase().includes(search.toLowerCase()) || p.id?.toLowerCase().includes(search.toLowerCase()) || p.category?.toLowerCase().includes(search.toLowerCase()))
     : installed;
-
-  const handleOpen = (pkg) => {
-    try {
-      if (pkg.commandName) {
-        platform.host.execCommand(
-          `service('001-core.layout','open-window')(command('${pkg.commandName}'))`,
-          platform
-        );
-      } else {
-        // HTML apps or apps without a registered command: exec the main file directly
-        platform.host.exec(platform, pkg.mainFile);
-      }
-    } catch (e) {
-      console.warn('[pkg-manager] open failed:', pkg.id, e);
-    }
-  };
 
   return (
     <>
@@ -976,7 +1004,7 @@ const InstalledView = ({ installed, registryApps, onRequestUninstall, onUpdate, 
                     )}
                     <button
                       className="pkg-btn"
-                      onClick={() => handleOpen(pkg)}
+                      onClick={() => openInstalledApp(pkg)}
                     >
                       Open
                     </button>
@@ -1256,8 +1284,10 @@ const App = ({ initialSearch = '' }) => {
             fetchError={fetchError}
             onInstall={handleInstall}
             onRequestUninstall={requestUninstall}
+            onUpdate={handleUpdate}
             installingId={installingId}
             uninstallingId={uninstallingId}
+            updatingId={updatingId}
             search={search}
             setSearch={setSearch}
           />

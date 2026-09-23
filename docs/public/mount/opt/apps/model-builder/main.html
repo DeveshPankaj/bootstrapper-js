@@ -37,7 +37,9 @@
   .port-in { left: -7px; }
   .port-out { right: -7px; }
 
-  .side { width: 270px; flex-shrink: 0; border-left: 1px solid #37373f; display: flex; flex-direction: column; overflow-y: auto; }
+  .side { width: 270px; flex-shrink: 0; border-left: 1px solid #37373f; display: flex; flex-direction: column; overflow-y: auto; overflow-x: hidden; }
+  .side-resizer { width: 5px; flex-shrink: 0; cursor: col-resize; background: #26262c; border-left: 1px solid #37373f; border-right: 1px solid #37373f; }
+  .side-resizer:hover, .side-resizer.dragging { background: #3d7fff; }
   .card { padding: 10px 12px; border-bottom: 1px solid #37373f; }
   .card h3 { margin: 0 0 8px; font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 0.04em; }
   #stats { font-variant-numeric: tabular-nums; line-height: 1.7; font-size: 12px; }
@@ -47,7 +49,7 @@
   .badge.err { background: #5c1f1f; color: #ff9d9d; }
   canvas { display: block; background: #16161a; border-radius: 6px; }
   #lossChart { width: 100%; height: 60px; }
-  #plot { width: 200px; height: 200px; }
+  #plot, #plot3d { display: block; width: 100%; aspect-ratio: 1 / 1; }
   .legend { display: flex; gap: 8px; font-size: 10.5px; color: #aaa; margin-top: 6px; flex-wrap: wrap; }
   .legend span { display: inline-flex; align-items: center; gap: 3px; }
   .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
@@ -62,16 +64,38 @@
 
   .status { padding: 5px 10px; font-size: 11.5px; color: #999; border-top: 1px solid #37373f; min-height: 16px; flex-shrink: 0; }
   .status.error { color: #ff8080; }
+
+  .dsOverlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: none; align-items: center; justify-content: center; z-index: 50; }
+  .dsOverlay.show { display: flex; }
+  .dsModal { width: 580px; max-width: 92vw; max-height: 84vh; background: #1e1e22; border: 1px solid #3d3d46; border-radius: 10px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }
+  .dsModalHeader { padding: 10px 14px; background: #26262c; border-bottom: 1px solid #3d3d46; display: flex; align-items: center; justify-content: space-between; font-weight: 600; font-size: 13px; }
+  .dsClose { cursor: pointer; color: #999; }
+  .dsClose:hover { color: #ff6b6b; }
+  .dsModalBody { flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; font-size: 12px; }
+  .dsModalFooter { padding: 10px 14px; border-top: 1px solid #3d3d46; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .dsColRow { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 6px; background: #26262c; }
+  .dsColRow .dsColName { flex: 1; font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dsColRow .dsColSample { flex: 1.3; font-size: 10.5px; color: #999; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dsColRow select { flex-shrink: 0; }
+  .dsSection h4 { margin: 0 0 6px; font-size: 10.5px; color: #999; text-transform: uppercase; letter-spacing: 0.04em; }
+  .dsHint { font-size: 11px; color: #888; line-height: 1.5; }
+  .dsError { color: #ff8080; font-size: 12px; padding: 4px 0; }
+  .dsRow2 { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .dsRow2 label { font-size: 11px; color: #999; display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+  .dsRow2 input[type="number"] { width: 64px; }
 </style>
 </head>
 <body>
   <div class="toolbar">
     <select id="task"></select>
+    <button id="uploadDatasetBtn" type="button">Upload Dataset…</button>
+    <input id="datasetFileInput" type="file" accept=".csv,.json,.db,.sqlite,.sqlite3" style="display:none" />
     <select id="nodeTypeSel">
       <option value="dense">Dense</option>
       <option value="conv2d">Conv2D</option>
       <option value="conv3d">Conv3D</option>
       <option value="skip">Skip Connection</option>
+      <option value="norm">Normalization</option>
     </select>
     <button id="addLayer">+ Add Node</button>
     <button id="clearGraph">Clear Graph</button>
@@ -83,7 +107,7 @@
     <button id="build" class="primary">Build &amp; Train</button>
   </div>
   <div class="hint">
-    Drag a node by its header to move it. Drag from the dot on a node's right edge to the dot on another node's left edge to connect them; click an edge to delete it. A trainable model needs an unbroken chain: Input → Dense/Conv2D/Conv3D/Skip layer(s) → Output → Loss → Optimizer.
+    Drag a node by its header to move it. Drag from the dot on a node's right edge to the dot on another node's left edge to connect them; click an edge to delete it. A trainable model needs an unbroken chain: Input → Dense/Conv2D/Conv3D/Skip/Normalization layer(s) → Output → Loss → Optimizer.
     Conv2D/Conv3D need a same-shape tensor flowing in (the image tasks below provide one — a flat-vector task still "works" with Conv layers, just degenerately, since there's nothing to slide the kernel over). A Skip layer adds an earlier node's output back in — its dropdown only accepts a source whose shape matches the point it's added at.
   </div>
   <div class="main">
@@ -93,7 +117,8 @@
         <div id="nodesLayer"></div>
       </div>
     </div>
-    <div class="side">
+    <div class="side-resizer" id="sideResizer" title="Drag to resize"></div>
+    <div class="side" id="sidePanel">
       <div class="card">
         <h3>Training</h3>
         <div id="stats">
@@ -106,6 +131,7 @@
       <div class="card">
         <h3 id="plotCardTitle">Decision surface</h3>
         <canvas id="plot" width="200" height="200"></canvas>
+        <canvas id="plot3d" width="200" height="200" style="display:none;cursor:grab;" title="Drag to rotate"></canvas>
         <div id="plotLegend" class="legend">
           <span><span class="dot" style="background:#3d7fff"></span>class 0</span>
           <span><span class="dot" style="background:#ff5f7e"></span>class 1</span>
@@ -123,6 +149,21 @@
     </div>
   </div>
   <div class="status" id="status">Add layers, wire the chain, then Build &amp; Train.</div>
+
+  <div class="dsOverlay" id="dsOverlay">
+    <div class="dsModal">
+      <div class="dsModalHeader">
+        <span>Upload Dataset</span>
+        <span class="dsClose" id="dsClose">✕</span>
+      </div>
+      <div class="dsModalBody" id="dsModalBody"></div>
+      <div class="dsModalFooter">
+        <span id="dsSummary" style="flex:1;font-size:11px;color:#999;"></span>
+        <button id="dsCancelBtn" type="button">Cancel</button>
+        <button id="dsConfirmBtn" class="primary" type="button">Load Dataset</button>
+      </div>
+    </div>
+  </div>
 
 <script>
 // ============================== numeric engine ==============================
@@ -177,6 +218,7 @@ const LOSSES = {
 };
 
 const ADAM_BETA1 = 0.9, ADAM_BETA2 = 0.999, ADAM_EPS = 1e-8;
+const NORM_EPS = 1e-5;
 
 function optimizerStep(optimizer, mArr, vArr, idx, grad, lr, t) {
   switch (optimizer) {
@@ -251,6 +293,71 @@ function denseBackwardFlat(cache, dOut, layer) {
       layer.dWeights[base + i] += dz * input[i];
       dInput[i] += dz * layer.weights[base + i];
     }
+  }
+  return dInput;
+}
+
+// ---------- Layer Normalization ----------
+// Normalizes across a SINGLE sample's own flat feature vector (not across a
+// batch — this app trains one sample at a time, so there's no batch axis to
+// normalize over; that rules out true BatchNorm, but LayerNorm needs no
+// batch statistics and drops in cleanly). Operates on `t.data` the exact
+// same way Dense does, so it can sit after any layer type (Dense, Conv, or
+// straight after Input) regardless of whether that flat array represents a
+// real image or a degenerate 1x1x1xC vector. gamma/beta are learnable,
+// per-element (same size as the flat vector), reusing the weights/biases
+// naming so this layer is picked up by the shared zeroGrads/applyOptimizer
+// loops without any special-casing there.
+function makeNormLayer(nodeId, size) {
+  const weights = new Float64Array(size).fill(1); // gamma, starts as identity scale
+  return {
+    kind: 'norm',
+    nodeId,
+    weights, // gamma
+    biases: new Float64Array(size), // beta, starts at 0
+    mW: new Float64Array(size),
+    vW: new Float64Array(size),
+    mb: new Float64Array(size),
+    vb: new Float64Array(size),
+    dWeights: new Float64Array(size),
+    dBiases: new Float64Array(size),
+  };
+}
+function normForward(input, layer) {
+  const n = input.length;
+  let mean = 0;
+  for (let i = 0; i < n; i++) mean += input[i];
+  mean /= n;
+  let variance = 0;
+  for (let i = 0; i < n; i++) { const d = input[i] - mean; variance += d * d; }
+  variance /= n;
+  const invStd = 1 / Math.sqrt(variance + NORM_EPS);
+  const normalized = new Float64Array(n);
+  const out = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    normalized[i] = (input[i] - mean) * invStd;
+    out[i] = normalized[i] * layer.weights[i] + layer.biases[i];
+  }
+  return { out, cache: { normalized, invStd, n } };
+}
+// Closed-form LayerNorm gradient (verified against finite differences —
+// see testing/scripts/verify-layernorm-grad.mjs): dGamma/dBeta are the
+// usual per-element products, and dInput accounts for how both the mean
+// and variance used to normalize this sample also depend on every element
+// of it.
+function normBackward(cache, dOut, layer) {
+  const { normalized, invStd, n } = cache;
+  const dxhat = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    layer.dWeights[i] += dOut[i] * normalized[i];
+    layer.dBiases[i] += dOut[i];
+    dxhat[i] = dOut[i] * layer.weights[i];
+  }
+  let sumDxhat = 0, sumDxhatXhat = 0;
+  for (let i = 0; i < n; i++) { sumDxhat += dxhat[i]; sumDxhatXhat += dxhat[i] * normalized[i]; }
+  const dInput = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    dInput[i] = (invStd / n) * (n * dxhat[i] - sumDxhat - normalized[i] * sumDxhatXhat);
   }
   return dInput;
 }
@@ -375,6 +482,10 @@ function compileChain(task, inputNode, middleNodes, outputActivation, optimizer)
       const layer = makeParamLayer('conv', { nodeId: node.id, filters: node.filters, kd, khw, activation: node.activation }, fanIn, weightCount, node.filters);
       middle.push(layer);
       shape = { D: shape.D, H: shape.H, W: shape.W, C: node.filters };
+    } else if (node.type === 'norm') {
+      const layer = makeNormLayer(node.id, shapeSize(shape));
+      middle.push(layer);
+      // shape passes through unchanged
     } else if (node.type === 'skip') {
       if (!node.skipFrom) throw new Error(`"${labelFor(node)}" has no skip source selected.`);
       const srcShape = shapeByNodeId.get(node.skipFrom);
@@ -416,6 +527,10 @@ function runForward(compiled, inputTensor) {
       const res = convForward(t, layer);
       out = res.out;
       cache = res.cache;
+    } else if (layer.kind === 'norm') {
+      const res = normForward(t.data, layer);
+      out = { data: res.out, D: t.D, H: t.H, W: t.W, C: t.C };
+      cache = res.cache;
     } else {
       // skip
       const src = tensorByNodeId.get(layer.skipFromId);
@@ -456,6 +571,8 @@ function runBackward(compiled, caches, dOutput) {
       dNext = denseBackwardFlat(cache, dNext, layer);
     } else if (layer.kind === 'conv') {
       dNext = convBackward(cache, dNext, layer);
+    } else if (layer.kind === 'norm') {
+      dNext = normBackward(cache, dNext, layer);
     } else {
       // skip: identity to the main path, ALSO accumulate onto the source
       if (!skipExtra.has(layer.skipFromId)) skipExtra.set(layer.skipFromId, new Float64Array(dNext.length));
@@ -660,8 +777,601 @@ const TASKS = {
   },
 };
 
+// ============================== custom dataset upload ==============================
+// Lets a user upload their own CSV / JSON / SQLite (.db) file and train on it,
+// covering any input/output pairing (image-image, image-text, text-image,
+// text-text, numbers-number, numbers-class, ...) — but honestly: this app's
+// engine only ever produces a fixed-size flat numeric vector, so every column
+// gets reduced to one of exactly three conversions, and "image"/"text" as an
+// OUTPUT type mean precisely what that conversion says, not real image/text
+// generation:
+//   number -> min-max normalized scalar (same as the built-in iris/housePrice tasks)
+//   text   -> bag-of-words count vector over a frequency-capped vocabulary built
+//             from the column itself (as INPUT), or classification over the
+//             column's own distinct string values (as OUTPUT — "predict which
+//             text label", not generate new text)
+//   image  -> resized-to-a-grid grayscale vector (as INPUT, same as MNIST above);
+//             as OUTPUT, a flat pixel-regression target (an autoencoder-style
+//             "predict this image" task — real, trained with MSE, just not a
+//             convolutional decoder, so expect blurry reconstructions)
+// Multiple input columns are concatenated into one flat vector, UNLESS
+// exactly one input column is type "image", in which case the whole input
+// stays a real D×H×W×C tensor so Conv2D/Conv3D layers have something
+// meaningful to slide over.
+let dsParsed = null; // { columns, records, __sourceLabel }
+let dsColumnConfig = {}; // colName -> { role: 'input'|'output'|'ignore', type: 'number'|'text'|'image'|'class', imageEncoding? }
+
+// ---------- CSV ----------
+function parseCSV(text) {
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else inQuotes = false; }
+      else field += c;
+    } else if (c === '"') inQuotes = true;
+    else if (c === ',') { row.push(field); field = ''; }
+    else if (c === '\n' || c === '\r') {
+      if (c === '\r' && text[i + 1] === '\n') i++;
+      row.push(field); field = '';
+      if (row.length > 1 || row[0] !== '') rows.push(row);
+      row = [];
+    } else field += c;
+  }
+  if (field !== '' || row.length) { row.push(field); rows.push(row); }
+  if (!rows.length) return { columns: [], records: [] };
+  const columns = rows[0];
+  const records = rows.slice(1).filter(r => r.length === columns.length).map(r => {
+    const obj = {};
+    columns.forEach((c, i) => { obj[c] = r[i]; });
+    return obj;
+  });
+  return { columns, records };
+}
+
+// ---------- JSON ----------
+function parseJSONDataset(text) {
+  const data = JSON.parse(text);
+  const records = Array.isArray(data) ? data
+    : Array.isArray(data.rows) ? data.rows
+    : Array.isArray(data.records) ? data.records
+    : null;
+  if (!records) throw new Error('JSON dataset must be an array of row objects, or {"rows":[...]} / {"records":[...]}.');
+  const columnSet = new Set();
+  records.forEach(r => Object.keys(r || {}).forEach(k => columnSet.add(k)));
+  return { columns: [...columnSet], records };
+}
+
+// ---------- SQLite (.db) ----------
+// Loaded directly with no extra indirection — unlike sqlite-browser/main.js
+// (a React component living inside the TOP document's own webpack bundle,
+// which confuses sql.js's Node-environment detection and needs a hidden
+// helper iframe to dodge it), this file IS ALREADY its own separate HTML
+// document with no webpack bundle in it, so that confusion never happens
+// here. Same cdnjs version as sqlite-browser/sqlite-charts, for consistency.
+const SQL_JS_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js';
+const SQL_WASM_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.wasm';
+let sqlJsPromise = null;
+function loadSqlJs() {
+  if (sqlJsPromise) return sqlJsPromise;
+  sqlJsPromise = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = SQL_JS_CDN;
+    script.onload = () => { window.initSqlJs({ locateFile: () => SQL_WASM_CDN }).then(resolve).catch(reject); };
+    script.onerror = () => reject(new Error('Failed to load sql.js'));
+    document.head.appendChild(script);
+  });
+  return sqlJsPromise;
+}
+async function parseSQLiteDataset(arrayBuffer) {
+  const SQL = await loadSqlJs();
+  const db = new SQL.Database(new Uint8Array(arrayBuffer));
+  try {
+    const tableRows = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'");
+    const tables = tableRows.length ? tableRows[0].values.map(v => v[0]) : [];
+    if (!tables.length) throw new Error('No tables found in this SQLite database.');
+    // Uses the first table only — picking among multiple tables is out of
+    // scope for this upload flow (export/re-upload the table you want).
+    const table = tables[0];
+    const res = db.exec(`SELECT * FROM "${table}"`);
+    if (!res.length) return { columns: [], records: [], table, tableCount: tables.length };
+    const columns = res[0].columns;
+    const records = res[0].values.map(row => {
+      const obj = {};
+      columns.forEach((c, i) => { obj[c] = row[i]; });
+      return obj;
+    });
+    return { columns, records, table, tableCount: tables.length };
+  } finally {
+    db.close();
+  }
+}
+
+// ---------- text featurization: bag-of-words ----------
+// A frequency-capped vocabulary built from the uploaded column itself, then
+// a per-row word-count vector over it — this is genuinely all "text input"
+// means here, no embeddings or real NLP.
+function tokenize(text) { return String(text == null ? '' : text).toLowerCase().match(/[a-z0-9]+/g) || []; }
+function buildVocab(records, col, maxVocab) {
+  const freq = new Map();
+  for (const r of records) for (const tok of tokenize(r[col])) freq.set(tok, (freq.get(tok) || 0) + 1);
+  return [...freq.entries()].sort((a, b) => b[1] - a[1]).slice(0, Math.max(1, maxVocab)).map(([w]) => w);
+}
+function bagOfWordsVector(text, vocab, vocabIndex) {
+  const counts = new Float64Array(vocab.length);
+  for (const t of tokenize(text)) { const i = vocabIndex.get(t); if (i !== undefined) counts[i]++; }
+  return counts;
+}
+
+// ---------- display helpers for user-uploaded text ----------
+// Column names, cell samples, and class-label strings all come straight
+// from an uploaded file and get inserted via innerHTML (for column-name
+// ellipsis truncation and the confusion-matrix table markup) — escape them
+// so a crafted CSV/JSON column name or label (e.g. "<img src=x onerror=..>")
+// can't inject markup/script into the app, and truncate anything absurdly
+// long (a stray image/blob value that slipped through as a "class") so it
+// can't blow up a table layout either.
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function truncateLabel(s, maxLen) {
+  s = String(s == null ? '' : s);
+  return s.length > maxLen ? s.slice(0, maxLen) + '…' : s;
+}
+
+// Palette for the multi-class scatter plots (2D/3D) below — cycles if there
+// are more classes than colors, same as any qualitative categorical palette.
+const CLASS_COLORS = ['#3d7fff', '#ff5f7e', '#3fb950', '#ffd23d', '#a78bfa', '#fb923c', '#22d3ee', '#f472b6', '#84cc16', '#f87171'];
+function colorForClass(idx) { return CLASS_COLORS[((idx % CLASS_COLORS.length) + CLASS_COLORS.length) % CLASS_COLORS.length]; }
+
+// ---------- image featurization ----------
+function minMax(values) {
+  let min = Infinity, max = -Infinity;
+  for (const v of values) { if (v < min) min = v; if (v > max) max = v; }
+  return { min, max };
+}
+// Heuristic used to default a freshly-uploaded column's type to "image"
+// instead of "number" — a SQLite BLOB, an explicit data: URI, or a long
+// base64-alphabet-only string (bare base64 with no data: prefix).
+function looksLikeImageValue(value) {
+  if (value instanceof Uint8Array) return true;
+  const s = String(value == null ? '' : value).trim();
+  if (s.startsWith('data:image')) return true;
+  return s.length > 100 && /^[A-Za-z0-9+/=]+$/.test(s);
+}
+// Uint8Array (a SQLite BLOB cell) -> object URL; string -> passed through if
+// already a data: URI, or assumed bare base64 PNG otherwise.
+function decodeImageCellToDataURL(value) {
+  if (value instanceof Uint8Array) return URL.createObjectURL(new Blob([value]));
+  const s = String(value == null ? '' : value).trim();
+  if (s.startsWith('data:')) return s;
+  if (s) return 'data:image/png;base64,' + s;
+  return null;
+}
+function decodeImageDataURLToGray(dataUrl, grid) {
+  return new Promise((resolve, reject) => {
+    if (!dataUrl) { reject(new Error('Empty image cell')); return; }
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = grid; canvas.height = grid;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, grid, grid);
+      const { data } = ctx.getImageData(0, 0, grid, grid);
+      const out = new Float64Array(grid * grid);
+      for (let p = 0; p < grid * grid; p++) {
+        out[p] = (0.299 * data[p * 4] + 0.587 * data[p * 4 + 1] + 0.114 * data[p * 4 + 2]) / 255;
+      }
+      resolve(out);
+    };
+    img.onerror = () => reject(new Error('Could not decode image cell as an image'));
+    img.src = dataUrl;
+  });
+}
+// A "raw pixel array" cell: a real JS array (JSON datasets) or a bracketed/
+// comma-separated string of 0-255 grayscale ints (CSV/SQLite text columns) —
+// the classic "one column holds pixel0..pixelN as one field" export shape.
+function parsePixelArrayCell(value, grid) {
+  let arr;
+  if (Array.isArray(value)) arr = value;
+  else {
+    const s = String(value == null ? '' : value).trim();
+    arr = JSON.parse(s.startsWith('[') ? s : '[' + s + ']');
+  }
+  if (arr.length !== grid * grid) throw new Error(`Pixel array length ${arr.length} doesn't match grid ${grid}×${grid} (${grid * grid}).`);
+  return Float64Array.from(arr, v => Math.max(0, Math.min(1, v / 255)));
+}
+async function extractImageVector(cfg, value, grid) {
+  if (cfg.imageEncoding === 'pixels') return parsePixelArrayCell(value, grid);
+  return decodeImageDataURLToGray(decodeImageCellToDataURL(value), grid);
+}
+
+// ---------- turn the uploaded + configured dataset into a TASKS-shaped entry ----------
+// Every existing piece of UI/training/plotting machinery (compileChain,
+// buildAndTrain, drawPlot, predictBtn, ...) only ever depends on the shape
+// of a TASKS entry, never on where it came from — so a successfully-built
+// custom task drops into TASKS.custom and everything downstream just works,
+// unchanged.
+async function buildCustomTask(parsed, columnConfig, options) {
+  const { records } = parsed;
+  const inputCols = Object.keys(columnConfig).filter(c => columnConfig[c].role === 'input');
+  const outputCols = Object.keys(columnConfig).filter(c => columnConfig[c].role === 'output');
+  if (!inputCols.length) throw new Error('Pick at least one Input column.');
+  if (outputCols.length !== 1) throw new Error('Pick exactly one Output column.');
+  const outputCol = outputCols[0];
+  const outCfg = columnConfig[outputCol];
+
+  const singleImageInput = inputCols.length === 1 && columnConfig[inputCols[0]].type === 'image' ? inputCols[0] : null;
+
+  const inputFeaturizers = [];
+  for (const col of inputCols) {
+    const cfg = columnConfig[col];
+    if (cfg.type === 'number') {
+      const values = records.map(r => parseFloat(r[col])).filter(v => !Number.isNaN(v));
+      const { min, max } = minMax(values);
+      inputFeaturizers.push({ col, size: 1, extract: (r) => {
+        const v = parseFloat(r[col]);
+        const n = Number.isNaN(v) ? 0 : v;
+        return Promise.resolve(Float64Array.from([max > min ? ((n - min) / (max - min)) * 2 - 1 : 0]));
+      } });
+    } else if (cfg.type === 'text') {
+      const vocab = buildVocab(records, col, options.maxVocab);
+      const vocabIndex = new Map(vocab.map((w, i) => [w, i]));
+      inputFeaturizers.push({ col, size: vocab.length, extract: (r) => Promise.resolve(bagOfWordsVector(r[col], vocab, vocabIndex)) });
+    } else if (cfg.type === 'image') {
+      inputFeaturizers.push({ col, size: options.gridSize * options.gridSize, extract: (r) => extractImageVector(cfg, r[col], options.gridSize) });
+    } else {
+      throw new Error(`Column "${col}": unsupported input type "${cfg.type}".`);
+    }
+  }
+
+  let outputSize, outputActivation, classNames = null, isRegression = false, isImageOutput = false, outExtract;
+  if (outCfg.type === 'class' || outCfg.type === 'text') {
+    classNames = [...new Set(records.map(r => String(r[outputCol])))];
+    if (classNames.length < 2) throw new Error(`Output column "${outputCol}" needs at least 2 distinct values to classify.`);
+    // Guards against picking an image/blob-valued column as a class label by
+    // mistake (or leaving its type at the default) — without this, every
+    // distinct base64 blob becomes its own "class name", which then shows
+    // up verbatim (and unreadably) as a confusion-matrix row/column header.
+    const looksLikeImageData = classNames.some(c => c.length > 80 || c.startsWith('data:image'));
+    if (looksLikeImageData) {
+      throw new Error(`Output column "${outputCol}" looks like it contains image/blob data, not short class labels (e.g. "${classNames[0].slice(0, 40)}…"). Pick a plain label column for Output, or set this column's type to "image" instead.`);
+    }
+    outputSize = classNames.length;
+    outputActivation = 'sigmoid';
+    outExtract = (r) => {
+      const idx = classNames.indexOf(String(r[outputCol]));
+      const y = new Array(classNames.length).fill(0);
+      if (idx >= 0) y[idx] = 1;
+      return { y, classIndex: idx };
+    };
+  } else if (outCfg.type === 'number') {
+    const values = records.map(r => parseFloat(r[outputCol])).filter(v => !Number.isNaN(v));
+    const { min, max } = minMax(values);
+    outputSize = 1;
+    outputActivation = 'linear';
+    isRegression = true;
+    outExtract = (r) => {
+      const v = parseFloat(r[outputCol]);
+      const n = Number.isNaN(v) ? 0 : v;
+      return { y: [max > min ? ((n - min) / (max - min)) * 2 - 1 : 0] };
+    };
+  } else if (outCfg.type === 'image') {
+    outputSize = options.gridSize * options.gridSize;
+    outputActivation = 'linear';
+    isRegression = true;
+    isImageOutput = true;
+    outExtract = async (r) => ({ y: Array.from(await extractImageVector(outCfg, r[outputCol], options.gridSize)) });
+  } else {
+    throw new Error(`Output column "${outputCol}": unsupported output type "${outCfg.type}".`);
+  }
+
+  const samples = [];
+  let skipped = 0;
+  for (const r of records) {
+    try {
+      let x;
+      if (singleImageInput) {
+        const grid = options.gridSize;
+        x = { data: await inputFeaturizers[0].extract(r), D: 1, H: grid, W: grid, C: 1 };
+      } else {
+        const parts = [];
+        for (const f of inputFeaturizers) parts.push(await f.extract(r));
+        const total = parts.reduce((s, p) => s + p.length, 0);
+        const flat = new Float64Array(total);
+        let off = 0;
+        for (const p of parts) { flat.set(p, off); off += p.length; }
+        x = flat;
+      }
+      const outResult = await outExtract(r);
+      samples.push({ x, y: outResult.y, classIndex: outResult.classIndex });
+    } catch (e) {
+      skipped++;
+      // A handful of malformed rows (bad image cell, non-numeric field,
+      // ...) in a real-world upload shouldn't block using the rest of it.
+      console.warn('model-builder: skipping row —', e.message);
+    }
+  }
+  if (!samples.length) throw new Error('No usable rows after parsing/featurizing — check your column type choices.');
+
+  const inputShape = singleImageInput
+    ? { D: 1, H: options.gridSize, W: options.gridSize, C: 1 }
+    : { D: 1, H: 1, W: 1, C: inputFeaturizers.reduce((s, f) => s + f.size, 0) };
+
+  const flatInputSize = inputFeaturizers.reduce((s, f) => s + f.size, 0);
+
+  // The decision-surface heatmap (drawPlot()'s plot2D branch) only makes
+  // sense for exactly 2 flat numeric inputs and BINARY classification — it
+  // colors points/regions by a single out[0] > 0.5 threshold, matching the
+  // shape of the built-in xor/and/or/classify/circle/spirals tasks.
+  const plot2D = !singleImageInput && flatInputSize === 2 && !isRegression && classNames && classNames.length === 2;
+
+  // The more general interactive scatter (any class count, 2 OR 3 numeric
+  // inputs) — a plain per-class-colored point cloud, no decision-region
+  // heatmap (that doesn't generalize past 2 classes without an argmax-
+  // colored region per class, which this doesn't attempt). Deliberately
+  // NOT set for the plot2D binary case above, so a 2-class/2-input upload
+  // keeps the richer existing heatmap view instead of "downgrading" to a
+  // bare scatter.
+  const plotDims = (!singleImageInput && !isRegression && classNames && !plot2D && (flatInputSize === 2 || flatInputSize === 3))
+    ? flatInputSize
+    : 0;
+
+  return {
+    inputSize: shapeSize(inputShape),
+    outputSize, inputShape, outputActivation,
+    isImage: !!singleImageInput,
+    isImageOutput,
+    outputGrid: isImageOutput ? options.gridSize : undefined,
+    isRegression,
+    classNames,
+    plot2D,
+    plotDims,
+    epochs: 300,
+    // A wide, unbounded (linear) output layer like an image-pixel-regression
+    // task reliably diverges to NaN loss at this app's default lr=0.5 SGD
+    // (confirmed: single-unit regression tasks are fine at that default;
+    // this is specific to many simultaneous linear output units) — applied
+    // automatically to the Optimizer node when this task is first loaded
+    // (see dsConfirmBtn.onclick), not just left as a hint the user has to
+    // act on themselves.
+    suggestedLr: isImageOutput ? 0.03 : undefined,
+    hint: `Custom dataset (${parsed.__sourceLabel}) — ${inputCols.join(' + ')} → ${outputCol}. ${samples.length} usable row(s)${skipped ? `, ${skipped} skipped` : ''}.`
+      + (isImageOutput ? ` Learning rate defaulted to 0.03 (the Optimizer node's own default is too high for this wide, unbounded output layer and reliably diverges to NaN — feel free to tune it further).` : ''),
+    gen: () => samples,
+  };
+}
+
+// ---------- upload modal wiring ----------
+const uploadDatasetBtn = document.getElementById('uploadDatasetBtn');
+const datasetFileInput = document.getElementById('datasetFileInput');
+const dsOverlay = document.getElementById('dsOverlay');
+const dsModalBody = document.getElementById('dsModalBody');
+const dsSummaryEl = document.getElementById('dsSummary');
+const dsConfirmBtn = document.getElementById('dsConfirmBtn');
+
+function openDatasetModal() { dsOverlay.classList.add('show'); }
+function closeDatasetModal() { dsOverlay.classList.remove('show'); }
+
+function sampleValuesFor(col) {
+  const vals = dsParsed.records.slice(0, 3).map(r => {
+    const v = r[col];
+    if (v instanceof Uint8Array) return `<binary, ${v.length}B>`;
+    const s = String(v == null ? '' : v);
+    return s.length > 24 ? s.slice(0, 24) + '…' : s;
+  });
+  return vals.join('  |  ');
+}
+
+function anyColumnOfType(type) { return Object.values(dsColumnConfig).some(c => c.role !== 'ignore' && c.type === type); }
+
+function renderDatasetModal() {
+  const { columns } = dsParsed;
+  let html = `<div class="dsHint">${dsParsed.__sourceLabel}${dsParsed.table ? ` — table "${dsParsed.table}"${dsParsed.tableCount > 1 ? ` (of ${dsParsed.tableCount}, first one used)` : ''}` : ''} — ${dsParsed.records.length} row(s), ${columns.length} column(s). Pick exactly one Output column and at least one Input column.</div>`;
+  html += `<div class="dsSection"><h4>Columns</h4>`;
+  for (const col of columns) {
+    const cfg = dsColumnConfig[col];
+    const typeOptions = cfg.role === 'output'
+      ? ['number', 'class', 'text', 'image']
+      : ['number', 'text', 'image'];
+    html += `<div class="dsColRow" data-col="${col}">
+      <span class="dsColName" title="${escapeHtml(col)}">${escapeHtml(col)}</span>
+      <span class="dsColSample" title="${escapeHtml(sampleValuesFor(col))}">${escapeHtml(sampleValuesFor(col))}</span>
+      <select class="dsRole">
+        <option value="ignore" ${cfg.role === 'ignore' ? 'selected' : ''}>Ignore</option>
+        <option value="input" ${cfg.role === 'input' ? 'selected' : ''}>Input</option>
+        <option value="output" ${cfg.role === 'output' ? 'selected' : ''}>Output</option>
+      </select>
+      <select class="dsType" ${cfg.role === 'ignore' ? 'disabled' : ''}>
+        ${typeOptions.map(t => `<option value="${t}" ${t === cfg.type ? 'selected' : ''}>${t}</option>`).join('')}
+      </select>
+      ${cfg.type === 'image' && cfg.role !== 'ignore' ? `
+        <select class="dsImgEncoding">
+          <option value="dataUri" ${cfg.imageEncoding !== 'pixels' ? 'selected' : ''}>Data-URI / base64</option>
+          <option value="pixels" ${cfg.imageEncoding === 'pixels' ? 'selected' : ''}>Flat pixel array (0-255)</option>
+        </select>` : ''}
+    </div>`;
+  }
+  html += `</div>`;
+
+  html += `<div class="dsSection"><h4>Options</h4><div class="dsRow2">`;
+  if (anyColumnOfType('image')) {
+    html += `<label>Image grid size <input type="number" id="dsGridSize" min="4" max="64" step="1" value="${options_gridSize}" /> <span style="color:#888">${gridSizeManuallySet ? '' : '(auto-detected from a sample — edit to override)'}</span></label>`;
+  }
+  if (anyColumnOfType('text')) {
+    html += `<label>Max text vocabulary <input type="number" id="dsMaxVocab" min="5" max="1000" step="1" value="${options_maxVocab}" /></label>`;
+  }
+  if (!anyColumnOfType('image') && !anyColumnOfType('text')) {
+    html += `<span class="dsHint">No extra options needed for plain numeric columns.</span>`;
+  }
+  html += `</div></div>`;
+
+  html += `<div class="dsError" id="dsErrorMsg" style="display:none;"></div>`;
+  dsModalBody.innerHTML = html;
+
+  dsModalBody.querySelectorAll('.dsColRow').forEach(row => {
+    const col = row.dataset.col;
+    const roleSel = row.querySelector('.dsRole');
+    const typeSel = row.querySelector('.dsType');
+    roleSel.onchange = () => {
+      dsColumnConfig[col].role = roleSel.value;
+      if (roleSel.value === 'output' && dsColumnConfig[col].type === 'text') dsColumnConfig[col].type = 'class';
+      renderDatasetModal();
+      maybeAutoDetectGridSize();
+    };
+    typeSel.onchange = () => { dsColumnConfig[col].type = typeSel.value; renderDatasetModal(); maybeAutoDetectGridSize(); };
+    const encSel = row.querySelector('.dsImgEncoding');
+    if (encSel) encSel.onchange = () => { dsColumnConfig[col].imageEncoding = encSel.value; maybeAutoDetectGridSize(); };
+  });
+  const gridInput = document.getElementById('dsGridSize');
+  if (gridInput) gridInput.oninput = () => { gridSizeManuallySet = true; options_gridSize = Math.max(4, parseInt(gridInput.value, 10) || 14); };
+  const vocabInput = document.getElementById('dsMaxVocab');
+  if (vocabInput) vocabInput.oninput = () => { options_maxVocab = Math.max(5, parseInt(vocabInput.value, 10) || 50); };
+
+  const inputCount = Object.values(dsColumnConfig).filter(c => c.role === 'input').length;
+  const outputCount = Object.values(dsColumnConfig).filter(c => c.role === 'output').length;
+  dsSummaryEl.textContent = `${inputCount} input column(s), ${outputCount} output column(s) selected.`;
+}
+
+let options_gridSize = 14;
+let options_maxVocab = 50;
+let gridSizeManuallySet = false;
+
+// Reads one real sample's actual dimensions instead of making the user
+// guess a grid size up front — a data-URI/base64 image's natural
+// width/height (via a real decode), or a flat pixel array's length (if
+// it's a perfect square). Only ever adjusts options_gridSize when the user
+// hasn't typed their own value into the field yet.
+function detectImageGridSize(col, encoding) {
+  const sample = dsParsed.records.find(r => r[col] != null && r[col] !== '');
+  if (!sample) return Promise.resolve(null);
+  if (encoding === 'pixels') {
+    try {
+      let arr = sample[col];
+      if (!Array.isArray(arr)) {
+        const s = String(arr).trim();
+        arr = JSON.parse(s.startsWith('[') ? s : '[' + s + ']');
+      }
+      const side = Math.sqrt(arr.length);
+      return Promise.resolve(Number.isInteger(side) ? side : null);
+    } catch (e) { return Promise.resolve(null); }
+  }
+  return new Promise((resolve) => {
+    const dataUrl = decodeImageCellToDataURL(sample[col]);
+    if (!dataUrl) { resolve(null); return; }
+    const img = new Image();
+    img.onload = () => resolve(Math.max(img.naturalWidth, img.naturalHeight) || null);
+    img.onerror = () => resolve(null);
+    img.src = dataUrl;
+  });
+}
+async function maybeAutoDetectGridSize() {
+  if (gridSizeManuallySet) return;
+  const imageCol = Object.keys(dsColumnConfig).find(c => dsColumnConfig[c].role !== 'ignore' && dsColumnConfig[c].type === 'image');
+  if (!imageCol) return;
+  const cfg = dsColumnConfig[imageCol];
+  const detected = await detectImageGridSize(imageCol, cfg.imageEncoding === 'pixels' ? 'pixels' : 'dataUri');
+  if (detected && !gridSizeManuallySet && detected !== options_gridSize) {
+    options_gridSize = detected;
+    renderDatasetModal();
+  }
+}
+
+function detectFileFormat(name) {
+  const lower = name.toLowerCase();
+  if (lower.endsWith('.csv')) return 'csv';
+  if (lower.endsWith('.json')) return 'json';
+  if (lower.endsWith('.db') || lower.endsWith('.sqlite') || lower.endsWith('.sqlite3')) return 'sqlite';
+  throw new Error('Unrecognized file extension — use .csv, .json, or .db/.sqlite/.sqlite3.');
+}
+
+uploadDatasetBtn.onclick = () => datasetFileInput.click();
+
+datasetFileInput.onchange = async () => {
+  const file = datasetFileInput.files && datasetFileInput.files[0];
+  datasetFileInput.value = '';
+  if (!file) return;
+  try {
+    const format = detectFileFormat(file.name);
+    let parsed;
+    if (format === 'csv') parsed = parseCSV(await file.text());
+    else if (format === 'json') parsed = parseJSONDataset(await file.text());
+    else parsed = await parseSQLiteDataset(await file.arrayBuffer());
+    parsed.__sourceLabel = file.name;
+    if (!parsed.columns.length || !parsed.records.length) throw new Error('No rows/columns found in this file.');
+    dsParsed = parsed;
+    dsColumnConfig = {};
+    for (const col of parsed.columns) {
+      // Default image-looking columns to type "image" instead of the usual
+      // "number" default — otherwise it's easy to leave a base64/data-URI
+      // image column at its default type (or pick "class"/"text" for it by
+      // mistake), which used to silently turn every distinct base64 blob
+      // into its own "class name" in the confusion matrix.
+      const sample = parsed.records.find(r => r[col] != null && r[col] !== '');
+      const looksImage = sample && looksLikeImageValue(sample[col]);
+      dsColumnConfig[col] = { role: 'ignore', type: looksImage ? 'image' : 'number' };
+    }
+    gridSizeManuallySet = false; // fresh file — re-detect the grid size once an image column gets a role
+    renderDatasetModal();
+    openDatasetModal();
+  } catch (e) {
+    setStatus('Could not read dataset: ' + e.message, true);
+  }
+};
+
+document.getElementById('dsClose').onclick = closeDatasetModal;
+document.getElementById('dsCancelBtn').onclick = closeDatasetModal;
+dsOverlay.onclick = (e) => { if (e.target === dsOverlay) closeDatasetModal(); };
+
+dsConfirmBtn.onclick = async () => {
+  const errEl = document.getElementById('dsErrorMsg');
+  errEl.style.display = 'none';
+  dsConfirmBtn.disabled = true;
+  dsConfirmBtn.textContent = 'Loading…';
+  try {
+    const task = await buildCustomTask(dsParsed, dsColumnConfig, { gridSize: options_gridSize, maxVocab: options_maxVocab });
+    TASKS.custom = task;
+    let opt = taskSel.querySelector('option[value="custom"]');
+    if (!opt) { opt = document.createElement('option'); opt.value = 'custom'; taskSel.appendChild(opt); }
+    opt.textContent = `Custom: ${dsParsed.__sourceLabel}`;
+    taskSel.value = 'custom';
+    // Apply this task's suggested learning rate (e.g. image-output tasks —
+    // see buildCustomTask's own comment) to the current Optimizer node
+    // BEFORE taskSel.onchange()'s render() below, so the node's displayed
+    // value and actual training behavior agree from the start. Only done
+    // here (new upload), never on plain task-switching, so it can't clobber
+    // a learning rate the user already hand-tuned for some other task.
+    if (task.suggestedLr != null) {
+      const optNode = nodes.find(n => n.type === 'optimizer');
+      if (optNode) optNode.lr = task.suggestedLr;
+    }
+    // Bug fix: trainData is normally only populated inside buildAndTrain(),
+    // so right after an upload — before the user ever clicks Build & Train —
+    // it's still empty/stale from whatever ran before. A custom task's
+    // gen() just returns its already-parsed in-memory samples (no async
+    // work), so populate it BEFORE calling taskSel.onchange() below, which
+    // itself calls buildTestInputs()/drawPlot() — otherwise both the
+    // "Random Test Sample" preview and the new scatter-plot views render
+    // against stale/empty data instead of this dataset's actual samples.
+    trainData = task.gen();
+    net = null; // any previously-trained model doesn't match this task's shape
+    predictBtn.disabled = true;
+    taskSel.onchange();
+    if (task.isImage) pickRandomSample();
+    closeDatasetModal();
+    setStatus(task.hint);
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.style.display = '';
+  } finally {
+    dsConfirmBtn.disabled = false;
+    dsConfirmBtn.textContent = 'Load Dataset';
+  }
+};
+
 // ============================== graph state ==============================
-const MIDDLE_TYPES = new Set(['dense', 'conv2d', 'conv3d', 'skip']);
+const MIDDLE_TYPES = new Set(['dense', 'conv2d', 'conv3d', 'skip', 'norm']);
 let nodes = [];
 let edges = []; // { from: nodeId, to: nodeId }
 let nextNodeId = 1;
@@ -720,7 +1430,7 @@ function extractChain() {
     const next = nodeById(edge.to);
     if (!next) throw new Error('Dangling connection — reconnect that edge.');
     if (next.type === 'output') { cur = next.id; break; }
-    if (!MIDDLE_TYPES.has(next.type)) throw new Error(`Expected a Dense/Conv2D/Conv3D/Skip layer or the Output node after "${labelFor(nodeById(cur))}", found "${labelFor(next)}".`);
+    if (!MIDDLE_TYPES.has(next.type)) throw new Error(`Expected a Dense/Conv2D/Conv3D/Skip/Normalization layer or the Output node after "${labelFor(nodeById(cur))}", found "${labelFor(next)}".`);
     middle.push(next);
     visited.add(next.id);
     cur = next.id;
@@ -740,6 +1450,7 @@ function shortLabel(node) {
   if (node.type === 'conv2d') return `Conv2D(${node.filters})`;
   if (node.type === 'conv3d') return `Conv3D(${node.filters})`;
   if (node.type === 'skip') return 'Skip';
+  if (node.type === 'norm') return 'Norm';
   return node.type;
 }
 function labelFor(node) {
@@ -750,6 +1461,7 @@ function labelFor(node) {
   if (node.type === 'conv2d') return `Conv2D(${node.filters})`;
   if (node.type === 'conv3d') return `Conv3D(${node.filters})`;
   if (node.type === 'skip') return `Skip(→${shortLabel(nodeById(node.skipFrom))})`;
+  if (node.type === 'norm') return 'Normalization';
   return `Dense(${node.units})`;
 }
 
@@ -773,7 +1485,9 @@ const statLoss = document.getElementById('statLoss');
 const statBadge = document.getElementById('statBadge');
 const lossCanvas = document.getElementById('lossChart');
 const plotCanvas = document.getElementById('plot');
+const plot3dCanvas = document.getElementById('plot3d');
 const plotNoteEl = document.getElementById('plotNote');
+const plotLegendEl = document.getElementById('plotLegend');
 
 for (const id of Object.keys(TASKS)) {
   const opt = document.createElement('option');
@@ -844,6 +1558,9 @@ function nodeConfigHtml(node) {
       <select class="activation">
         ${Object.keys(ACTIVATIONS).map(a => `<option value="${a}" ${a === node.activation ? 'selected' : ''}>${a}</option>`).join('')}
       </select>`;
+  }
+  if (node.type === 'norm') {
+    return `<div class="static">Normalizes this point in the chain to zero mean / unit variance (per sample, not per batch), then applies a learnable scale &amp; shift. No settings — often helps deeper stacks train more smoothly.</div>`;
   }
   if (node.type === 'skip') {
     const others = nodes.filter(n => n.id !== node.id && (n.type === 'input' || MIDDLE_TYPES.has(n.type)));
@@ -997,11 +1714,12 @@ addLayerBtn.onclick = () => {
   else if (type === 'conv2d') addNode('conv2d', 250, y, { filters: 4, kernel: 3, activation: 'relu' });
   else if (type === 'conv3d') addNode('conv3d', 250, y, { filters: 4, kernel: 3, activation: 'relu' });
   else if (type === 'skip') addNode('skip', 250, y, { skipFrom: null });
+  else if (type === 'norm') addNode('norm', 250, y, {});
   render();
 };
 clearGraphBtn.onclick = () => { resetGraph(); render(); buildTestInputs(); };
 function syncEpochInput() { epochInput.value = currentTask().epochs || 1500; }
-taskSel.onchange = () => { syncEpochInput(); buildTestInputs(); drawPlot(); render(); };
+taskSel.onchange = () => { pcaActive = false; pcaCoords = null; syncEpochInput(); buildTestInputs(); drawPlot(); render(); };
 
 // ============================== trainboard logging ==============================
 // Same shared-log convention as nn-ide/snake-lstm/snake-qlearning: append to
@@ -1074,6 +1792,29 @@ function buildTestInputs() {
   }
 }
 
+// Renders a flat [0,1] grayscale array as a labeled thumbnail — shared by
+// the image-output Predict panel (Input/Predicted/Actual comparison) below.
+function renderGrayscaleThumb(label, flatArray, w, h) {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:3px;';
+  const cap = document.createElement('div');
+  cap.textContent = label;
+  cap.style.cssText = 'font-size:10px;color:#999;';
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  canvas.style.cssText = 'width:90px;height:90px;image-rendering:pixelated;border:1px solid #3d3d46;border-radius:4px;';
+  const ctx = canvas.getContext('2d');
+  const img = ctx.createImageData(w, h);
+  for (let p = 0; p < w * h; p++) {
+    const v = Math.round(Math.max(0, Math.min(1, flatArray[p] || 0)) * 255);
+    img.data[p * 4] = v; img.data[p * 4 + 1] = v; img.data[p * 4 + 2] = v; img.data[p * 4 + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  wrap.appendChild(cap);
+  wrap.appendChild(canvas);
+  return wrap;
+}
+
 function pickRandomSample() {
   if (!trainData.length) return;
   pendingImageSample = trainData[Math.floor(Math.random() * trainData.length)];
@@ -1141,10 +1882,10 @@ function renderConfusionMatrix(task, compiled, data) {
   let total = 0, correct = 0;
   for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) { total += matrix[i][j]; if (i === j) correct += matrix[i][j]; }
   let html = '<table><tr><td class="hdr"></td>';
-  for (let j = 0; j < n; j++) html += `<td class="hdr">${classNames[j]}</td>`;
+  for (let j = 0; j < n; j++) html += `<td class="hdr" title="${escapeHtml(classNames[j])}">${escapeHtml(truncateLabel(classNames[j], 16))}</td>`;
   html += '</tr>';
   for (let i = 0; i < n; i++) {
-    html += `<tr><td class="hdr">${classNames[i]}</td>`;
+    html += `<tr><td class="hdr" title="${escapeHtml(classNames[i])}">${escapeHtml(truncateLabel(classNames[i], 16))}</td>`;
     for (let j = 0; j < n; j++) {
       const v = matrix[i][j];
       const isDiag = i === j;
@@ -1158,6 +1899,190 @@ function renderConfusionMatrix(task, compiled, data) {
   return html;
 }
 
+// Shared by the plotDims scatter views (2D and 3D) below — rebuilds the
+// legend from the task's actual class names/colors instead of the static
+// 2-class "class 0 / class 1" markup baked into the page for plot2D.
+function renderClassLegend(classNames) {
+  plotLegendEl.innerHTML = classNames.map((name, i) =>
+    `<span><span class="dot" style="background:${colorForClass(i)}"></span>${escapeHtml(truncateLabel(name, 14))}</span>`
+  ).join('') + '<span><span class="dot" style="background:#ffd23d;border-radius:2px;"></span>test</span>';
+}
+
+function drawScatter2D(task) {
+  const ctx = plotCanvas.getContext('2d');
+  const w = plotCanvas.width, h = plotCanvas.height;
+  ctx.fillStyle = '#16161a';
+  ctx.fillRect(0, 0, w, h);
+  const toPx = (x1, x2) => [((x1 + 1) / 2) * w, h - ((x2 + 1) / 2) * h];
+  trainData.forEach(d => {
+    const [px, py] = toPx(d.x[0], d.x[1]);
+    ctx.fillStyle = colorForClass(d.classIndex != null ? d.classIndex : 0);
+    ctx.beginPath();
+    ctx.arc(px, py, 3, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  if (lastTestPoint) {
+    const [px, py] = toPx(lastTestPoint[0], lastTestPoint[1]);
+    ctx.fillStyle = '#ffd23d';
+    ctx.fillRect(px - 4, py - 4, 8, 8);
+  }
+}
+
+// ---------- interactive 3D scatter (drag to rotate) ----------
+// Simple yaw-then-pitch rotation + orthographic projection, hand-rolled
+// (no Three.js/WebGL) to match this app's existing "no external ML/graphics
+// library, everything visible in this file" convention — this is genuinely
+// small as plain rotation-matrix math, not worth a ~600KB dependency for.
+// ---------- PCA (for viewing >3D classification input in 3D) ----------
+// Standard PCA via power iteration + Hotelling deflation — the same
+// hand-rolled, documented, no-linear-algebra-library approach as the rest
+// of this file's numeric engine. Verified against a synthetic dataset with
+// known dominant directions in testing/scripts/verify-pca.mjs (orthonormal
+// components, decreasing eigenvalues, correct dominant-axis recovery)
+// before being pasted in here.
+let pcaActive = false;
+let pcaCoords = null; // parallel array to trainData: [{x,y,z}, ...] once computed
+function pcaMean(vectors, dims) {
+  const mean = new Float64Array(dims);
+  for (const v of vectors) for (let i = 0; i < dims; i++) mean[i] += v[i];
+  for (let i = 0; i < dims; i++) mean[i] /= vectors.length;
+  return mean;
+}
+function pcaCovariance(vectors, mean, dims) {
+  const cov = Array.from({ length: dims }, () => new Float64Array(dims));
+  for (const v of vectors) {
+    for (let i = 0; i < dims; i++) {
+      const di = v[i] - mean[i];
+      for (let j = 0; j < dims; j++) cov[i][j] += di * (v[j] - mean[j]);
+    }
+  }
+  const n = vectors.length - 1 || 1;
+  for (let i = 0; i < dims; i++) for (let j = 0; j < dims; j++) cov[i][j] /= n;
+  return cov;
+}
+function pcaMatVec(mat, vec, dims) {
+  const out = new Float64Array(dims);
+  for (let i = 0; i < dims; i++) { let s = 0; for (let j = 0; j < dims; j++) s += mat[i][j] * vec[j]; out[i] = s; }
+  return out;
+}
+function pcaNormalize(v) {
+  let norm = 0;
+  for (const x of v) norm += x * x;
+  norm = Math.sqrt(norm) || 1;
+  return Array.from(v, x => x / norm);
+}
+function pcaDot(a, b) { let s = 0; for (let i = 0; i < a.length; i++) s += a[i] * b[i]; return s; }
+function pcaPowerIteration(mat, dims, iterations) {
+  let v = pcaNormalize(Array.from({ length: dims }, () => Math.random()));
+  for (let it = 0; it < iterations; it++) v = pcaNormalize(pcaMatVec(mat, v, dims));
+  const value = pcaDot(v, pcaMatVec(mat, v, dims));
+  return { vector: v, value };
+}
+function pcaTopKEigenvectors(cov, dims, k, iterations = 200) {
+  let mat = cov.map(row => Float64Array.from(row));
+  const components = [];
+  for (let c = 0; c < k; c++) {
+    const { vector, value } = pcaPowerIteration(mat, dims, iterations);
+    components.push(vector);
+    for (let i = 0; i < dims; i++) for (let j = 0; j < dims; j++) mat[i][j] -= value * vector[i] * vector[j];
+  }
+  return components;
+}
+// Projects every training sample's flat input vector down to 3D, then
+// rescales so coordinates roughly fill [-1,1] (matching the projection
+// math's/depth-cue's assumed scale — PCA output is otherwise in raw,
+// dataset-dependent units).
+function computePCA3D(samples, dims) {
+  const vectors = samples.map(s => Array.from(s.x.data || s.x));
+  const mean = pcaMean(vectors, dims);
+  const cov = pcaCovariance(vectors, mean, dims);
+  const components = pcaTopKEigenvectors(cov, dims, Math.min(3, dims));
+  const raw = vectors.map(v => {
+    const centered = v.map((val, i) => val - mean[i]);
+    const coords = components.map(comp => pcaDot(centered, comp));
+    while (coords.length < 3) coords.push(0);
+    return { x: coords[0], y: coords[1], z: coords[2] };
+  });
+  let maxAbs = 1e-9;
+  raw.forEach(p => { maxAbs = Math.max(maxAbs, Math.abs(p.x), Math.abs(p.y), Math.abs(p.z)); });
+  return raw.map(p => ({ x: p.x / maxAbs, y: p.y / maxAbs, z: p.z / maxAbs }));
+}
+
+let plot3dRotation = { yaw: 0.6, pitch: -0.3 };
+function project3D(x, y, z, rot) {
+  const cy = Math.cos(rot.yaw), sy = Math.sin(rot.yaw);
+  const x1 = x * cy + z * sy;
+  const z1 = -x * sy + z * cy;
+  const cp = Math.cos(rot.pitch), sp = Math.sin(rot.pitch);
+  const y2 = y * cp - z1 * sp;
+  const z2 = y * sp + z1 * cp;
+  return { x: x1, y: y2, z: z2 };
+}
+function drawScatter3D(task) {
+  const ctx = plot3dCanvas.getContext('2d');
+  const w = plot3dCanvas.width, h = plot3dCanvas.height;
+  ctx.fillStyle = '#16161a';
+  ctx.fillRect(0, 0, w, h);
+  const scale = Math.min(w, h) * 0.35;
+  const cx = w / 2, cy = h / 2;
+  const toPx = (p) => [cx + p.x * scale, cy - p.y * scale];
+
+  // Faint axis lines through the origin, purely for orientation while dragging.
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+  ctx.lineWidth = 1;
+  [[1, 0, 0], [0, 1, 0], [0, 0, 1]].forEach(([ax, ay, az]) => {
+    const a = project3D(ax, ay, az, plot3dRotation);
+    const b = project3D(-ax, -ay, -az, plot3dRotation);
+    const [ax2, ay2] = toPx(a), [bx2, by2] = toPx(b);
+    ctx.beginPath(); ctx.moveTo(bx2, by2); ctx.lineTo(ax2, ay2); ctx.stroke();
+  });
+
+  // Depth-sort far-to-near so nearer points draw over farther ones, and
+  // give nearer points a touch more size/opacity — a cheap depth cue
+  // without any real lighting/z-buffer. When a PCA projection is active
+  // (>3D input reduced to 3D), plot those coordinates instead of the raw
+  // (only-ever-3-long-anyway) input vector.
+  const projected = trainData.map((d, i) => {
+    const coords = pcaActive && pcaCoords ? pcaCoords[i] : { x: d.x[0], y: d.x[1], z: d.x[2] };
+    return { p: project3D(coords.x, coords.y, coords.z, plot3dRotation), idx: d.classIndex != null ? d.classIndex : 0 };
+  });
+  projected.sort((a, b) => a.p.z - b.p.z);
+  projected.forEach(({ p, idx }) => {
+    const [px, py] = toPx(p);
+    const depth = Math.max(0, Math.min(1, (p.z + 1.5) / 3));
+    ctx.fillStyle = colorForClass(idx);
+    ctx.globalAlpha = 0.5 + depth * 0.5;
+    ctx.beginPath();
+    ctx.arc(px, py, 2 + depth * 2, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+}
+(function setupPlot3dDrag() {
+  let dragging = false, lastX = 0, lastY = 0;
+  plot3dCanvas.addEventListener('pointerdown', (e) => {
+    dragging = true; lastX = e.clientX; lastY = e.clientY;
+    plot3dCanvas.style.cursor = 'grabbing';
+    plot3dCanvas.setPointerCapture(e.pointerId);
+  });
+  plot3dCanvas.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const dx = e.clientX - lastX, dy = e.clientY - lastY;
+    lastX = e.clientX; lastY = e.clientY;
+    plot3dRotation.yaw += dx * 0.012;
+    plot3dRotation.pitch = Math.max(-1.5, Math.min(1.5, plot3dRotation.pitch + dy * 0.012));
+    // Bug fix: this only checked task.plotDims === 3 (the NATIVE 3D-input
+    // case), so dragging silently updated plot3dRotation with no visible
+    // effect whenever the canvas was showing a PCA projection instead
+    // (plotDims is 0 there — PCA only ever activates precisely when the
+    // native plot doesn't apply). Checking the canvas's own visibility
+    // covers both cases without hardcoding which one is currently active.
+    if (plot3dCanvas.style.display !== 'none') drawScatter3D(currentTask());
+  });
+  plot3dCanvas.addEventListener('pointerup', () => { dragging = false; plot3dCanvas.style.cursor = 'grab'; });
+  plot3dCanvas.addEventListener('pointerleave', () => { dragging = false; plot3dCanvas.style.cursor = 'grab'; });
+})();
+
 function drawPlot() {
   const task = currentTask();
   const confusionWrap = document.getElementById('confusionWrap');
@@ -1167,9 +2092,14 @@ function drawPlot() {
   if (task.plot2D) {
     plotTitle.textContent = 'Decision surface';
     plotCanvas.style.display = '';
+    plot3dCanvas.style.display = 'none';
     plotLegend.style.display = '';
     confusionWrap.style.display = 'none';
     plotNoteEl.textContent = '';
+    plotLegend.innerHTML =
+      '<span><span class="dot" style="background:#3d7fff"></span>class 0</span>' +
+      '<span><span class="dot" style="background:#ff5f7e"></span>class 1</span>' +
+      '<span><span class="dot" style="background:#ffd23d;border-radius:2px;"></span>test</span>';
 
     const ctx = plotCanvas.getContext('2d');
     const w = plotCanvas.width, h = plotCanvas.height;
@@ -1205,21 +2135,79 @@ function drawPlot() {
     return;
   }
 
+  if (task.plotDims === 2 || task.plotDims === 3) {
+    plotTitle.textContent = task.plotDims === 3 ? 'Sample scatter (3D — drag to rotate)' : 'Sample scatter (2D)';
+    plotCanvas.style.display = task.plotDims === 2 ? '' : 'none';
+    plot3dCanvas.style.display = task.plotDims === 3 ? '' : 'none';
+    plotLegend.style.display = '';
+    confusionWrap.style.display = 'none';
+    plotNoteEl.textContent = '';
+    renderClassLegend(task.classNames);
+    if (task.plotDims === 2) drawScatter2D(task); else drawScatter3D(task);
+    return;
+  }
+
   plotCanvas.style.display = 'none';
   plotLegend.style.display = 'none';
+
+  // >3 numeric inputs, classification — no native 2D/3D plot, but PCA can
+  // project it down to 3D for viewing (see the "PCA" section above).
+  const canPCA = !task.isImage && !task.isRegression && !!task.classNames && task.inputSize > 3;
+
+  if (pcaActive && canPCA && trainData.length) {
+    plotTitle.textContent = 'Sample scatter (3D — PCA projection, drag to rotate)';
+    plot3dCanvas.style.display = '';
+    plotLegend.style.display = '';
+    confusionWrap.style.display = 'none';
+    renderClassLegend(task.classNames);
+    if (!pcaCoords) pcaCoords = computePCA3D(trainData, task.inputSize);
+    drawScatter3D(task);
+    setPlotNote(null, false, true);
+    return;
+  }
+  plot3dCanvas.style.display = 'none';
+
   if (task.isRegression) {
     plotTitle.textContent = 'Decision surface';
     confusionWrap.style.display = 'none';
-    plotNoteEl.textContent = 'Not shown for regression tasks (no discrete classes to confuse).';
+    setPlotNote('Not shown for regression tasks (no discrete classes to confuse).', false, false);
   } else if (net && trainData.length) {
     plotTitle.textContent = 'Confusion matrix';
     confusionWrap.style.display = '';
-    plotNoteEl.textContent = '';
     confusionWrap.innerHTML = renderConfusionMatrix(task, net, trainData);
+    setPlotNote(null, canPCA && trainData.length > 0, false);
   } else {
     plotTitle.textContent = 'Confusion matrix';
     confusionWrap.style.display = 'none';
-    plotNoteEl.textContent = 'Train the model to see a confusion matrix (input isn’t 2D, so there’s no decision surface to draw instead).';
+    setPlotNote('Train the model to see a confusion matrix (input isn’t 2D, so there’s no decision surface to draw instead).', canPCA && trainData.length > 0, false);
+  }
+}
+
+// Builds plotNoteEl's content: an optional text note, an optional "View in
+// 3D (PCA)" button (>3D classification input), and an optional "back to
+// confusion matrix" button (shown instead, once a PCA view is active).
+function setPlotNote(text, showPCAButton, showBackButton) {
+  plotNoteEl.innerHTML = '';
+  if (text) {
+    const span = document.createElement('span');
+    span.textContent = text;
+    plotNoteEl.appendChild(span);
+  }
+  if (showPCAButton) {
+    const btn = document.createElement('button');
+    btn.textContent = 'View in 3D (PCA) →';
+    btn.type = 'button';
+    btn.style.cssText = 'font-size:11px;padding:3px 8px;cursor:pointer;margin-top:6px;display:block;';
+    btn.onclick = () => { pcaActive = true; pcaCoords = null; drawPlot(); };
+    plotNoteEl.appendChild(btn);
+  }
+  if (showBackButton) {
+    const btn = document.createElement('button');
+    btn.textContent = '← Back to confusion matrix';
+    btn.type = 'button';
+    btn.style.cssText = 'font-size:11px;padding:3px 8px;cursor:pointer;margin-top:6px;display:block;';
+    btn.onclick = () => { pcaActive = false; drawPlot(); };
+    plotNoteEl.appendChild(btn);
   }
 }
 
@@ -1259,6 +2247,7 @@ async function buildAndTrain() {
 
   net = compiled;
   trainData = await task.gen();
+  pcaCoords = null; // stale vs. the just-refreshed trainData (some built-in tasks re-randomize their generator each call)
   setStatus('Training…');
   lossHistory = [];
   lossTypeForTraining = chain.loss.lossType;
@@ -1311,14 +2300,30 @@ predictBtn.onclick = () => {
     inputTensor = toInputTensor(task, inputs);
   }
   const { output } = runForward(net, inputTensor);
-  if (task.isRegression) {
+  if (task.isRegression && task.isImageOutput) {
+    // "Image output" is real pixel regression, not generation — render it
+    // as an actual Input / Predicted / Actual comparison (the natural way
+    // to sanity-check a segmentation-style task) instead of just printing
+    // output[0] or a single bare thumbnail.
+    testResultEl.innerHTML = '';
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:10px;flex-wrap:wrap;margin-top:4px;';
+    if (task.isImage && pendingImageSample) {
+      row.appendChild(renderGrayscaleThumb('Input', pendingImageSample.x.data, pendingImageSample.x.W, pendingImageSample.x.H));
+    }
+    row.appendChild(renderGrayscaleThumb('Predicted', output, task.outputGrid, task.outputGrid));
+    if (pendingImageSample && pendingImageSample.y) {
+      row.appendChild(renderGrayscaleThumb('Actual', pendingImageSample.y, task.outputGrid, task.outputGrid));
+    }
+    testResultEl.appendChild(row);
+  } else if (task.isRegression) {
     testResultEl.innerHTML = `Predicted (normalized): <b>${output[0].toFixed(4)}</b>`;
   } else if (task.classNames) {
     const maxIdx = output.indexOf(Math.max(...output));
-    const rows = task.classNames.map((name, i) => `${name}: ${(output[i] * 100).toFixed(1)}%`).join('<br/>');
+    const rows = task.classNames.map((name, i) => `${escapeHtml(truncateLabel(name, 30))}: ${(output[i] * 100).toFixed(1)}%`).join('<br/>');
     testResultEl.innerHTML =
-      `Predicted: <b>${task.classNames[maxIdx]}</b>` +
-      (actualClass !== null ? ` (actual: ${task.classNames[actualClass]})` : '') +
+      `Predicted: <b>${escapeHtml(truncateLabel(task.classNames[maxIdx], 30))}</b>` +
+      (actualClass !== null ? ` (actual: ${escapeHtml(truncateLabel(task.classNames[actualClass], 30))})` : '') +
       `<br/><span style="font-size:11px;color:#999">${rows}</span>`;
   } else {
     const cls = output[0] > 0.5 ? 1 : 0;
@@ -1328,14 +2333,47 @@ predictBtn.onclick = () => {
 };
 
 buildBtn.onclick = buildAndTrain;
-window.addEventListener('resize', drawLossChart);
+
+// ---------- expandable right panel ----------
+// Drag the resizer to widen/narrow the training/plot/test sidebar — useful
+// once the plot card can show a full 2D/3D scatter instead of just a
+// confusion-matrix table. #plot/#plot3d are styled at width:100% (see CSS),
+// so widening the panel alone stretches their CSS box; resizePlotCanvases()
+// additionally updates their actual backing-buffer size to match, so the
+// drawing stays crisp instead of just being a blurry upscale.
+const sidePanel = document.getElementById('sidePanel');
+const sideResizer = document.getElementById('sideResizer');
+function resizePlotCanvases() {
+  [plotCanvas, plot3dCanvas].forEach(c => {
+    const w = Math.round(c.clientWidth) || 200;
+    if (c.width !== w) c.width = w;
+    if (c.height !== w) c.height = w;
+  });
+  drawLossChart();
+  drawPlot();
+}
+(function setupSideResize() {
+  let dragging = false, startX = 0, startWidth = 0;
+  sideResizer.addEventListener('pointerdown', (e) => {
+    dragging = true; startX = e.clientX; startWidth = sidePanel.getBoundingClientRect().width;
+    sideResizer.classList.add('dragging');
+    sideResizer.setPointerCapture(e.pointerId);
+  });
+  sideResizer.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const delta = startX - e.clientX; // dragging left grows the panel (it's on the right edge)
+    sidePanel.style.width = Math.max(230, Math.min(700, startWidth + delta)) + 'px';
+    resizePlotCanvases();
+  });
+  sideResizer.addEventListener('pointerup', () => { dragging = false; sideResizer.classList.remove('dragging'); });
+})();
+window.addEventListener('resize', resizePlotCanvases);
 
 resetGraph();
 render();
 syncEpochInput();
 buildTestInputs();
-drawLossChart();
-drawPlot();
+resizePlotCanvases(); // also draws the loss chart + plot at their initial size
 </script>
 </body>
 </html>

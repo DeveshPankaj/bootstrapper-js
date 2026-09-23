@@ -8,5 +8,8 @@
 // Load all installed apps (reads /etc/pkg/installed.json, exec's JS apps)
 service('root', 'exec')('/opt/apps/pkg-manager/loader.js');
 
+// Deep links (#open=<command>&arg=...): cross-tab handoff + opening this tab's own link
+service('root', 'exec')('/usr/bin/deeplink.js');
+
 // User custom startup script
 service('root', 'exec')('/.initd.run');

@@ -1,6 +1,7 @@
 //@ts-nocheck
 import { initVFS } from './kernel/vfs'
 import { initSwBridge } from './kernel/sw-bridge'
+import { tryHandoffDeepLink, showHandoffNotice } from './kernel/deeplink'
 
 const __BOOTSTRAP_SCRIPT_PATH_KEY__ = '__BOOTSTRAP_SCRIPT_PATH__';
 
@@ -13,6 +14,13 @@ const loadBootstrapScript = (storage: Storage) => {
 }
 
 window.addEventListener('load', async () => {
+    // Deep link opened in a fresh tab while another tab already runs the OS
+    // and can handle it: hand it over and skip booting entirely.
+    if (await tryHandoffDeepLink()) {
+        showHandoffNotice()
+        return
+    }
+
     // Boot log — phases pushed here; readable from Settings > Boot Log.
     window.__bootLog = []
     const bootLog = (label: string, startMs: number, error?: string) => {

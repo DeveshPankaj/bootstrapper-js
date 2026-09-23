@@ -76,6 +76,16 @@ export async function initVFS(bootLog: (label: string, t0: number, err?: string)
     const fs = window.require('fs') as typeof _fs
     window.fs = fs
 
+    // Expose runtime (un)mount + backend creation so apps can graft extra backends into
+    // the tree after boot (e.g. WebRTC's live remote-folder mounts under /mnt/webrtc/<label> —
+    // see docs/public/mount/opt/apps/webrtc/main.html). `mfs` is the top-level
+    // MountableFileSystem; any code holding `platform.host.getFS()` (always this exact `fs`
+    // object, even from a different same-origin iframe) gets these too.
+    ;(fs as any).mount = (mountPoint: string, backend: any) => mfs.mount(mountPoint, backend)
+    ;(fs as any).umount = (mountPoint: string) => mfs.umount(mountPoint)
+    ;(fs as any).createBackend = (name: string, opts: Record<string, unknown> = {}) =>
+        createBackend((window.BrowserFS.FileSystem as any)[name], opts)
+
     // Wire IPC fs handlers so service worker / iframes can call fs via postMessage
     initIpcBus(fs)
 

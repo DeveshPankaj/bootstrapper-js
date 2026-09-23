@@ -43,6 +43,7 @@ const commands = [
     { name: 'systemctl <cmd> [unit]',       message: 'Manage systemd-style services' },
     { name: 'journalctl [-u unit] [-n N] [-f]', message: 'View systemd unit logs' },
     { name: 'msg <pid> <message>',          message: 'Send a message to a process' },
+    { name: 'webrtc <cmd>',                 message: 'Control WebRTC Chat: users, kick, grant, shares, mounts, messages, listen, ice/TURN (webrtc help)' },
     { name: 'sleep <seconds>',              message: 'Pause for N seconds' },
     { name: 'date',                          message: 'Show current date and time' },
     { name: 'ifconfig',                      message: 'Show network interface info' },

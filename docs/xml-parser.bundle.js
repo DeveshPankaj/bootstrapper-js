@@ -28948,6 +28948,9 @@ function initVFS(bootLog) {
         bootLog(`VFS init (${fsBackend})`, t0);
         const fs = window.require('fs');
         window.fs = fs;
+        fs.mount = (mountPoint, backend) => mfs.mount(mountPoint, backend);
+        fs.umount = (mountPoint) => mfs.umount(mountPoint);
+        fs.createBackend = (name, opts = {}) => createBackend(window.BrowserFS.FileSystem[name], opts);
         // Wire IPC fs handlers so service worker / iframes can call fs via postMessage
         (0,_ipc_bus__WEBPACK_IMPORTED_MODULE_0__.initIpcBus)(fs);
         DEFAULT_DIRS.forEach(dir => {

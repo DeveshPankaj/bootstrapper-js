@@ -1,0 +1,122 @@
+[
+  {
+    "review": "happy love excellent",
+    "sentiment": "positive"
+  },
+  {
+    "review": "sad awful hate",
+    "sentiment": "negative"
+  },
+  {
+    "review": "excellent love great",
+    "sentiment": "positive"
+  },
+  {
+    "review": "terrible awful bad",
+    "sentiment": "negative"
+  },
+  {
+    "review": "great happy excellent",
+    "sentiment": "positive"
+  },
+  {
+    "review": "terrible awful hate",
+    "sentiment": "negative"
+  },
+  {
+    "review": "great excellent good",
+    "sentiment": "positive"
+  },
+  {
+    "review": "sad awful hate",
+    "sentiment": "negative"
+  },
+  {
+    "review": "love great happy",
+    "sentiment": "positive"
+  },
+  {
+    "review": "bad hate awful",
+    "sentiment": "negative"
+  },
+  {
+    "review": "love great good",
+    "sentiment": "positive"
+  },
+  {
+    "review": "awful terrible sad",
+    "sentiment": "negative"
+  },
+  {
+    "review": "great love excellent",
+    "sentiment": "positive"
+  },
+  {
+    "review": "terrible bad hate",
+    "sentiment": "negative"
+  },
+  {
+    "review": "love good great",
+    "sentiment": "positive"
+  },
+  {
+    "review": "hate terrible sad",
+    "sentiment": "negative"
+  },
+  {
+    "review": "happy great love",
+    "sentiment": "positive"
+  },
+  {
+    "review": "hate awful bad",
+    "sentiment": "negative"
+  },
+  {
+    "review": "great love good",
+    "sentiment": "positive"
+  },
+  {
+    "review": "terrible bad awful",
+    "sentiment": "negative"
+  },
+  {
+    "review": "happy great excellent",
+    "sentiment": "positive"
+  },
+  {
+    "review": "awful bad hate",
+    "sentiment": "negative"
+  },
+  {
+    "review": "good happy love",
+    "sentiment": "positive"
+  },
+  {
+    "review": "awful terrible sad",
+    "sentiment": "negative"
+  },
+  {
+    "review": "happy excellent great",
+    "sentiment": "positive"
+  },
+  {
+    "review": "sad terrible hate",
+    "sentiment": "negative"
+  },
+  {
+    "review": "love excellent happy",
+    "sentiment": "positive"
+  },
+  {
+    "review": "hate awful sad",
+    "sentiment": "negative"
+  },
+  {
+    "review": "excellent great happy",
+    "sentiment": "positive"
+  },
+  {
+    "review": "terrible bad sad",
+    "sentiment": "negative"
+  }
+]

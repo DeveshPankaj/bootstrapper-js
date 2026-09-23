@@ -1,0 +1,16 @@
+/** /bin/webrtc.run — control the running WebRTC Chat app (users, access, shared folders) */
+const terminal = platform.getService('terminal')
+const write = terminal ? terminal.write.bind(terminal) : console.log
+const [pwd, ...rest] = $args
+
+const api = platform.host.getCommand('webrtc.api')
+if (!api) {
+  write('webrtc: the WebRTC Chat app is not running — open it first (files/desktop: "WebRTC Chat")\r\n')
+  return
+}
+// Relative folder arguments (share add) are resolved against the terminal's cwd.
+if (rest[0] === 'share' && rest[1] === 'add' && rest[2] && !rest[2].startsWith('/')) {
+  rest[2] = (pwd === '/' ? '' : pwd) + '/' + rest[2]
+}
+const result = await api.exec(...rest)
+write(String(result.out).replace(/\r?\n/g, '\r\n') + '\r\n')
