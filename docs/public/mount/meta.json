@@ -35,6 +35,11 @@
     "force_reload": true
   },
   {
+    "path": "/bin/webrtc.run",
+    "file": "/bin/webrtc.run",
+    "force_reload": true
+  },
+  {
     "path": "/bin/sleep.run",
     "file": "/bin/sleep.run",
     "force_reload": true
@@ -199,6 +204,11 @@
   {
     "path": "/lib/utils.js",
     "file": "/lib/utils.js",
+    "force_reload": true
+  },
+  {
+    "path": "/usr/bin/deeplink.js",
+    "file": "/usr/bin/deeplink.js",
     "force_reload": true
   },
   {
@@ -702,6 +712,51 @@
     "force_reload": true
   },
   {
+    "path": "/opt/apps/model-builder/sample-datasets/classification.csv",
+    "file": "/opt/apps/model-builder/sample-datasets/classification.csv",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/model-builder/sample-datasets/image-classification.csv",
+    "file": "/opt/apps/model-builder/sample-datasets/image-classification.csv",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/model-builder/sample-datasets/image-segmentation.csv",
+    "file": "/opt/apps/model-builder/sample-datasets/image-segmentation.csv",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/model-builder/sample-datasets/classification-4class.csv",
+    "file": "/opt/apps/model-builder/sample-datasets/classification-4class.csv",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/model-builder/sample-datasets/image-classification-4class.csv",
+    "file": "/opt/apps/model-builder/sample-datasets/image-classification-4class.csv",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/model-builder/sample-datasets/iris-real.csv",
+    "file": "/opt/apps/model-builder/sample-datasets/iris-real.csv",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/model-builder/sample-datasets/penguins.csv",
+    "file": "/opt/apps/model-builder/sample-datasets/penguins.csv",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/model-builder/sample-datasets/penguins-3d.csv",
+    "file": "/opt/apps/model-builder/sample-datasets/penguins-3d.csv",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/model-builder/sample-datasets/car-evaluation.csv",
+    "file": "/opt/apps/model-builder/sample-datasets/car-evaluation.csv",
+    "force_reload": true
+  },
+  {
     "path": "/opt/apps/markdown-reader/main.js",
     "file": "/opt/apps/markdown-reader/main.js",
     "force_reload": true
@@ -724,6 +779,11 @@
   {
     "path": "/opt/apps/dashboard/dashboard.html",
     "file": "/opt/apps/dashboard/dashboard.html",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/webrtc/main.js",
+    "file": "/opt/apps/webrtc/main.js",
     "force_reload": true
   },
   {

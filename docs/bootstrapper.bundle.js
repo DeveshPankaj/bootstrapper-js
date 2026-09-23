@@ -2,6 +2,120 @@
 /******/ 	"use strict";
 /******/ 	var __webpack_modules__ = ({
 
+/***/ "./src/kernel/deeplink.ts":
+/*!********************************!*\
+  !*** ./src/kernel/deeplink.ts ***!
+  \********************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   DEEPLINK_CHANNEL: () => (/* binding */ DEEPLINK_CHANNEL),
+/* harmony export */   parseDeepLink: () => (/* binding */ parseDeepLink),
+/* harmony export */   showHandoffNotice: () => (/* binding */ showHandoffNotice),
+/* harmony export */   tryHandoffDeepLink: () => (/* binding */ tryHandoffDeepLink)
+/* harmony export */ });
+// Ring 0 — Deep links (pre-boot half).
+//
+// A deep link is a URL whose *hash* asks the OS to open a command with one
+// string argument once it has booted:
+//
+//   https://host/path/#open=<command>&app=<appId>&arg=<string>
+//
+// The hash (not the query) is used on purpose: it is never sent to the web
+// server, and args such as WebRTC session descriptions contain IP addresses.
+//
+// This file only implements the part that has to run BEFORE anything else
+// boots: if another tab of this same origin is already running the OS and
+// has a handler for the command (see /usr/bin/deeplink.js, which installs
+// the receiving side and does the actual command dispatch), the link is
+// handed to that tab over a BroadcastChannel and this tab need not boot at
+// all. Anything not acknowledged within the timeout falls through to a
+// normal boot, where /usr/bin/deeplink.js opens the command locally.
+//
+// Deep links are only ever honored for commands that opt in by setting
+// `deepLink: true` in their registerCommand meta - the URL is untrusted
+// input, so it must not be able to launch arbitrary commands.
+const DEEPLINK_CHANNEL = 'wos-deeplink';
+const NAME_RE = /^[A-Za-z0-9._-]{1,64}$/;
+const MAX_ARG = 20000;
+const SKIP_HANDOFF_KEY = '__wosNoHandoff';
+function parseDeepLink(hash) {
+    if (!hash || hash.length < 2)
+        return null;
+    const params = new URLSearchParams(hash.slice(1));
+    const command = params.get('open');
+    if (!command || !NAME_RE.test(command))
+        return null;
+    const app = params.get('app');
+    return {
+        command,
+        app: app && NAME_RE.test(app) ? app : null,
+        arg: (params.get('arg') || '').slice(0, MAX_ARG),
+    };
+}
+// Resolves true if another tab took ownership of the link.
+function tryHandoffDeepLink(timeoutMs = 800) {
+    const link = parseDeepLink(window.location.hash);
+    if (!link || typeof BroadcastChannel === 'undefined')
+        return Promise.resolve(false);
+    try {
+        if (sessionStorage.getItem(SKIP_HANDOFF_KEY)) {
+            sessionStorage.removeItem(SKIP_HANDOFF_KEY);
+            return Promise.resolve(false);
+        }
+    }
+    catch (_) { }
+    const id = Math.random().toString(36).slice(2) + Date.now().toString(36);
+    const channel = new BroadcastChannel(DEEPLINK_CHANNEL);
+    return new Promise(resolve => {
+        let settled = false;
+        const finish = (handedOff) => {
+            if (settled)
+                return;
+            settled = true;
+            channel.close();
+            resolve(handedOff);
+        };
+        channel.onmessage = (e) => {
+            if (e.data && e.data.t === 'ack' && e.data.id === id)
+                finish(true);
+        };
+        channel.postMessage({ t: 'open', id, command: link.command, arg: link.arg });
+        setTimeout(() => finish(false), timeoutMs);
+    });
+}
+// Replaces the page with a short notice once a link has been handed off.
+function showHandoffNotice() {
+    try {
+        window.close();
+    }
+    catch (_) { }
+    document.body.innerHTML = '';
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'font:14px/1.5 system-ui,sans-serif;max-width:420px;margin:18vh auto;padding:0 20px;text-align:center;color:#333';
+    const title = document.createElement('h2');
+    title.textContent = 'Opened in your other tab';
+    title.style.cssText = 'margin:0 0 8px;font-size:18px';
+    const text = document.createElement('p');
+    text.textContent = 'This link was handed to the tab where the app is already open. You can close this tab.';
+    const button = document.createElement('button');
+    button.textContent = 'Open here instead';
+    button.style.cssText = 'margin-top:10px;padding:8px 14px;border-radius:8px;border:1px solid #bbb;background:#f5f5f5;cursor:pointer';
+    button.onclick = () => {
+        try {
+            sessionStorage.setItem(SKIP_HANDOFF_KEY, '1');
+        }
+        catch (_) { }
+        window.location.reload();
+    };
+    wrap.append(title, text, button);
+    document.body.append(wrap);
+}
+
+
+/***/ }),
+
 /***/ "./src/kernel/ipc-bus.ts":
 /*!*******************************!*\
   !*** ./src/kernel/ipc-bus.ts ***!
@@ -282,6 +396,9 @@ function initVFS(bootLog) {
         bootLog(`VFS init (${fsBackend})`, t0);
         const fs = window.require('fs');
         window.fs = fs;
+        fs.mount = (mountPoint, backend) => mfs.mount(mountPoint, backend);
+        fs.umount = (mountPoint) => mfs.umount(mountPoint);
+        fs.createBackend = (name, opts = {}) => createBackend(window.BrowserFS.FileSystem[name], opts);
         // Wire IPC fs handlers so service worker / iframes can call fs via postMessage
         (0,_ipc_bus__WEBPACK_IMPORTED_MODULE_0__.initIpcBus)(fs);
         DEFAULT_DIRS.forEach(dir => {
@@ -390,6 +507,7 @@ var __webpack_exports__ = {};
 __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _kernel_vfs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./kernel/vfs */ "./src/kernel/vfs.ts");
 /* harmony import */ var _kernel_sw_bridge__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./kernel/sw-bridge */ "./src/kernel/sw-bridge.ts");
+/* harmony import */ var _kernel_deeplink__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./kernel/deeplink */ "./src/kernel/deeplink.ts");
 var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -402,6 +520,7 @@ var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _argume
 //@ts-nocheck
 
 
+
 const __BOOTSTRAP_SCRIPT_PATH_KEY__ = '__BOOTSTRAP_SCRIPT_PATH__';
 const loadBootstrapScript = (storage) => {
     const path = storage.getItem(__BOOTSTRAP_SCRIPT_PATH_KEY__) || '/remote.bundle.js';
@@ -412,6 +531,12 @@ const loadBootstrapScript = (storage) => {
     window.document.head.appendChild(script);
 };
 window.addEventListener('load', () => __awaiter(void 0, void 0, void 0, function* () {
+    // Deep link opened in a fresh tab while another tab already runs the OS
+    // and can handle it: hand it over and skip booting entirely.
+    if (yield (0,_kernel_deeplink__WEBPACK_IMPORTED_MODULE_2__.tryHandoffDeepLink)()) {
+        (0,_kernel_deeplink__WEBPACK_IMPORTED_MODULE_2__.showHandoffNotice)();
+        return;
+    }
     // Boot log — phases pushed here; readable from Settings > Boot Log.
     window.__bootLog = [];
     const bootLog = (label, startMs, error) => {
