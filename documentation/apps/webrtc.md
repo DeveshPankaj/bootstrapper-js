@@ -124,6 +124,23 @@ drawing before starting blank.
 
 CLI: none — this one's UI-only.
 
+## Voice calls (direct messages)
+
+A DM header has a **Call** button. It rides the *same* peer connection already used for
+that person's chat/files — starting a call just adds a microphone track to the existing
+`RTCPeerConnection` and renegotiates (a fresh offer/answer, sent over the data channel
+already open) instead of opening a second connection or needing a new invite link.
+
+A persistent call bar (visible regardless of which conversation you're viewing) shows:
+**Calling…** with Cancel while it rings out, **Incoming call** with Accept/Decline on
+the other end, and once connected, **On call with X**, a duration timer, a **mute**
+toggle (local only — muting yourself doesn't affect the other side's audio, but they're
+told so their own bar can show "(muted)"), and **Hang up**. Only one call at a time; the
+other side gets `busy` if you're already on a call. An unanswered call auto-cancels
+after 30s. If the other person disconnects mid-call, it ends locally with a toast.
+
+CLI: `webrtc call <@user>`, `answer`, `decline`, `hangup`, `call-status`.
+
 ## CLI (`webrtc help`)
 
 The running app registers `webrtc.api`; `/bin/webrtc.run` forwards to it.
@@ -138,6 +155,7 @@ webrtc chats | messages <everyone|@user|#group> [n] | say <everyone|@user|#group
 webrtc invite [name] | join <link> [name] | answer <link>
 webrtc mount <user> <share> [--ro] | mounts | unmount <mount> | sync <mount>
 webrtc listen <#group> <vfs-path> | listen-stop <#group>
+webrtc call <@user> | answer | decline | hangup | call-status
 webrtc ice | ice add <url> [user] [pass] | ice rm <n> | ice relay on|off | ice test
 ```
 
@@ -160,4 +178,10 @@ stop-for-everyone.
 painted canvas pixels, not just state), eraser compositing, per-author undo (and that it propagates
 without touching the other author's strokes), a late joiner getting caught up via sync request, and
 both save paths.
+`node testing/scripts/test-webrtc-call.mjs` (needs
+`--use-fake-ui-for-media-stream --use-fake-device-for-media-stream` + granted `microphone`
+permission) covers ringing → accept → active with a *genuinely live* remote audio track on both
+sides (not just state), mute notifying the other side without affecting their own mute state,
+hang up leaving the underlying connection intact for chat, decline, re-calling on the same
+connection without stale senders, and CLI parity.
 Known gap: symlink hardening isn't exercised — the mounted BrowserFS returns ENOTSUP for `symlinkSync`.

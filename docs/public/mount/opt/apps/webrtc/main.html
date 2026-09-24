@@ -62,6 +62,9 @@
   #head { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--line); min-height: 52px; }
   #now-playing { display: flex; align-items: center; gap: 10px; padding: 6px 16px; border-bottom: 1px solid var(--line); background: var(--panel2); font-size: 12.5px; }
   #now-playing:empty { display: none; }
+  #call-bar { display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-bottom: 1px solid var(--line); background: #1d3324; font-size: 13px; }
+  #call-bar:empty { display: none; }
+  #call-bar .btn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
   .np-bar { flex: 1; min-width: 60px; height: 5px; border-radius: 3px; background: var(--panel3); cursor: pointer; overflow: hidden; }
   .np-bar > i { display: block; height: 100%; background: var(--accent); pointer-events: none; }
   .wb-toolbar { padding: 10px 14px; border-bottom: 1px solid var(--line); }
@@ -153,6 +156,7 @@
     <div class="side-foot" id="side-foot"></div>
   </aside>
   <main id="main">
+    <div id="call-bar"></div>
     <header id="head"></header>
     <div id="now-playing"></div>
     <div id="messages"></div>
@@ -213,6 +217,10 @@ const ICONS = {
   more: '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
   hash: '<line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/>',
   music: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
+  phone: '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.362 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>',
+  phoneOff: '<path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0 1 22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.362 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91"/><line x1="1" y1="1" x2="23" y2="23"/>',
+  mic: '<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>',
+  micOff: '<line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V5a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2"/><path d="M19 10v2a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>',
   play: '<polygon points="5 3 19 12 5 21 5 3" fill="currentColor" stroke="none"/>',
   pause: '<rect x="6" y="4" width="4" height="16" fill="currentColor" stroke="none"/><rect x="14" y="4" width="4" height="16" fill="currentColor" stroke="none"/>',
   volume: '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/>',
@@ -470,6 +478,10 @@ function onFrame(conn, data) {
     case 'wb-undo': return onWbUndo(peer, m);
     case 'wb-cursor': return onWbCursor(peer, m);
     case 'wb-clear': return onWbClear(peer, m);
+    case 'call-offer': return onCallOffer(peer, m);
+    case 'call-answer': return onCallAnswer(peer, m);
+    case 'call-end': return onCallEnd(peer, m);
+    case 'call-mute': return onCallMute(peer, m);
     case 'vfs': return handleVfsRequest(peer, m);
     case 'vfs-res': return onVfsResponse(peer, m);
     case 'bye': toast(m.reason === 'blocked' ? `${peer.name} blocked you` : `${peer.name} disconnected you`, 'warn'); closeConn(conn); return;
@@ -509,6 +521,7 @@ function removePeer(peer) {
   for (const [rid, w] of vfsWaiters) if (w.peerId === peer.id) { vfsWaiters.delete(rid); w.reject(new Error('Connection closed')); }
   sysNote('all', `${peer.name} left`);
   const dm = convs.get('dm:' + peer.id); if (dm) sysNote(dm.key, `${peer.name} is offline`);
+  if (activeCall && activeCall.peerId === peer.id) { endCallLocal('disconnected'); toast(`Call ended — ${peer.name} disconnected`, 'warn'); }
   if (!settings.autoMesh) return renderAll();
   renderAll();
 }
@@ -1201,6 +1214,138 @@ function openWhiteboard(gid) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// 6d. Voice calls (direct messages) — one call at a time, riding the SAME peer
+// connection already used for chat/files/everything else. Starting a call just adds
+// a local microphone track to the existing RTCPeerConnection and renegotiates
+// (createOffer/answer again) over the data channel we already have — no new invite
+// link, no second connection. This is deliberately the same {offer → answer, then a
+// small in-band control message} shape as the rest of this app's signaling, and the
+// same shape Listen Together's clock message anticipated reusing for live audio.
+// ════════════════════════════════════════════════════════════════════════════
+let activeCall = null;   // { peerId, pc, localStream, remoteAudioEl, status: 'calling'|'ringing'|'active', startedAt, muted, remoteMuted, offerSdp, ringTimer }
+const validCallSdp = (sdp) => typeof sdp === 'string' && sdp.length > 0 && sdp.length < 20000 && sdp.startsWith('v=0');
+function wireCallTrackHandler(pc) {
+  if (pc.__callTrackWired) return; pc.__callTrackWired = true;
+  pc.ontrack = (ev) => {
+    if (!activeCall || activeCall.pc !== pc) return;
+    if (!activeCall.remoteAudioEl) activeCall.remoteAudioEl = new Audio();
+    activeCall.remoteAudioEl.srcObject = ev.streams[0] || new MediaStream([ev.track]);
+    activeCall.remoteAudioEl.autoplay = true;
+    activeCall.remoteAudioEl.play().catch(() => {});
+  };
+}
+async function startCall(peerId) {
+  if (activeCall) return toast('You are already in a call', 'warn');
+  const peer = peers.get(peerId); if (!peer) return toast('That person is offline', 'warn');
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  catch (e) { return toast('Could not access the microphone: ' + (e.message || e), 'bad'); }
+  const pc = peer.conn.ctx.pc;
+  wireCallTrackHandler(pc);
+  for (const track of stream.getAudioTracks()) pc.addTrack(track, stream);
+  activeCall = { peerId, pc, localStream: stream, remoteAudioEl: null, status: 'calling', startedAt: null, muted: false, remoteMuted: false, offerSdp: null };
+  renderAll();
+  try {
+    await pc.setLocalDescription(await pc.createOffer());
+    await waitGather(pc);
+    sendPeer(peer, { t: 'call-offer', sdp: pc.localDescription.sdp });
+  } catch (e) { toast('Could not start the call: ' + (e.message || e), 'bad'); endCallLocal('failed'); return; }
+  activeCall.ringTimer = setTimeout(() => {
+    if (activeCall && activeCall.status === 'calling') { sendPeer(peer, { t: 'call-end', reason: 'no-answer' }); toast(`${peer.name} didn't answer`, 'warn'); endCallLocal('no-answer'); }
+  }, 30000);
+}
+function onCallOffer(peer, m) {
+  if (!validCallSdp(m.sdp)) return;
+  if (activeCall) { if (activeCall.peerId !== peer.id) sendPeer(peer, { t: 'call-end', reason: 'busy' }); return; }
+  activeCall = { peerId: peer.id, pc: peer.conn.ctx.pc, localStream: null, remoteAudioEl: null, status: 'ringing', startedAt: null, muted: false, remoteMuted: false, offerSdp: m.sdp };
+  toast(`${peer.name} is calling you`, 'ok');
+  renderAll();
+}
+async function acceptCall() {
+  if (!activeCall || activeCall.status !== 'ringing') return;
+  const peer = peers.get(activeCall.peerId); if (!peer) return endCallLocal('peer gone');
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  catch (e) { sendPeer(peer, { t: 'call-end', reason: 'no-mic' }); toast('Could not access the microphone: ' + (e.message || e), 'bad'); endCallLocal('no-mic'); return; }
+  const pc = activeCall.pc;
+  wireCallTrackHandler(pc);
+  for (const track of stream.getAudioTracks()) pc.addTrack(track, stream);
+  activeCall.localStream = stream;
+  try {
+    await pc.setRemoteDescription({ type: 'offer', sdp: activeCall.offerSdp });
+    await pc.setLocalDescription(await pc.createAnswer());
+    await waitGather(pc);
+    sendPeer(peer, { t: 'call-answer', sdp: pc.localDescription.sdp });
+  } catch (e) { toast('Could not answer the call: ' + (e.message || e), 'bad'); endCallLocal('failed'); return; }
+  activeCall.status = 'active'; activeCall.startedAt = Date.now();
+  renderAll();
+}
+function declineCall() {
+  if (!activeCall || activeCall.status !== 'ringing') return;
+  const peer = peers.get(activeCall.peerId); if (peer) sendPeer(peer, { t: 'call-end', reason: 'declined' });
+  endCallLocal('declined');
+}
+async function onCallAnswer(peer, m) {
+  if (!activeCall || activeCall.peerId !== peer.id || activeCall.status !== 'calling') return;
+  if (!validCallSdp(m.sdp)) return;
+  clearTimeout(activeCall.ringTimer);
+  try { await activeCall.pc.setRemoteDescription({ type: 'answer', sdp: m.sdp }); }
+  catch (e) { toast('Call failed: ' + (e.message || e), 'bad'); endCallLocal('failed'); return; }
+  activeCall.status = 'active'; activeCall.startedAt = Date.now();
+  renderAll();
+}
+function onCallEnd(peer, m) {
+  if (!activeCall || activeCall.peerId !== peer.id) return;
+  const wasActive = activeCall.status === 'active';
+  endCallLocal(m.reason || 'ended');
+  const reason = m.reason === 'declined' ? 'declined the call' : m.reason === 'busy' ? 'is on another call' : m.reason === 'no-mic' ? 'has no microphone available' : wasActive ? 'ended the call' : m.reason === 'no-answer' ? "didn't answer" : 'ended the call';
+  toast(`${peer.name} ${reason}`, wasActive ? 'ok' : 'warn');
+}
+function onCallMute(peer, m) { if (activeCall && activeCall.peerId === peer.id) { activeCall.remoteMuted = m.muted === true; renderCallBar(); } }
+function toggleCallMute() {
+  if (!activeCall || !activeCall.localStream) return;
+  activeCall.muted = !activeCall.muted;
+  activeCall.localStream.getAudioTracks().forEach(t => { t.enabled = !activeCall.muted; });
+  const peer = peers.get(activeCall.peerId); if (peer) sendPeer(peer, { t: 'call-mute', muted: activeCall.muted });
+  renderCallBar();
+}
+function endCallLocal(reason) {
+  if (!activeCall) return;
+  clearTimeout(activeCall.ringTimer);
+  try { activeCall.localStream && activeCall.localStream.getTracks().forEach((t) => t.stop()); } catch (_) {}
+  // Free the sender slots so the next call on this connection doesn't accumulate stale
+  // audio m-lines — the underlying pc itself stays open (it's still carrying chat/files).
+  try { activeCall.pc.getSenders().filter((s) => s.track && s.track.kind === 'audio').forEach((s) => { try { activeCall.pc.removeTrack(s); } catch (_) {} }); } catch (_) {}
+  if (activeCall.remoteAudioEl) { try { activeCall.remoteAudioEl.pause(); activeCall.remoteAudioEl.srcObject = null; } catch (_) {} }
+  activeCall = null;
+  renderAll();
+}
+function hangUp() {
+  if (!activeCall) return;
+  const peer = peers.get(activeCall.peerId); if (peer) sendPeer(peer, { t: 'call-end', reason: 'hangup' });
+  endCallLocal('hangup');
+}
+function renderCallBar() {
+  const box = $('#call-bar'); if (!box) return;
+  if (!activeCall) { box.replaceChildren(); return; }
+  const peer = peers.get(activeCall.peerId), name = peer ? peer.name : 'Unknown';
+  if (activeCall.status === 'ringing') {
+    box.replaceChildren(ic('phone', 16), h('div', { class: 'grow' }, `Incoming call — ${name}`),
+      h('button', { class: 'btn sm primary', onclick: acceptCall }, ic('phone', 14), 'Accept'),
+      h('button', { class: 'btn sm danger', onclick: declineCall }, ic('phoneOff', 14), 'Decline'));
+  } else if (activeCall.status === 'calling') {
+    box.replaceChildren(ic('phone', 16), h('div', { class: 'grow' }, `Calling ${name}…`),
+      h('button', { class: 'btn sm danger', onclick: hangUp }, ic('phoneOff', 14), 'Cancel'));
+  } else {
+    box.replaceChildren(ic('phone', 16),
+      h('div', { class: 'grow' }, `On call with ${name}` + (activeCall.remoteMuted ? ' (muted)' : ''), h('span', { class: 'small', style: { opacity: .8, marginLeft: '8px' } }, fmtClock((Date.now() - activeCall.startedAt) / 1000))),
+      h('button', { class: 'btn sm' + (activeCall.muted ? ' on' : ''), title: activeCall.muted ? 'Unmute' : 'Mute', onclick: toggleCallMute }, ic(activeCall.muted ? 'micOff' : 'mic', 14)),
+      h('button', { class: 'btn sm danger', onclick: hangUp }, ic('phoneOff', 14), 'Hang up'));
+  }
+}
+setInterval(() => { if (activeCall && activeCall.status === 'active') renderCallBar(); }, 1000);
+
+// ════════════════════════════════════════════════════════════════════════════
 // 7. shared VFS folders (owner side — every check runs HERE, on every request)
 // ════════════════════════════════════════════════════════════════════════════
 // Trust model: the remote peer is untrusted. Its identity is the channel a request arrived on
@@ -1599,6 +1744,9 @@ const HELP = `usage: webrtc <command>
   messages <everyone|@user|#group> [n]  show the last n messages (default 20)
   sendfile <everyone|@user|#group> <vfs-path>   send a file from the VFS
   listen <#group> <vfs-path>          start Listen Together with a track from the VFS
+  call <@user>                        start a voice call (DM only, one at a time)
+  answer | decline | hangup           answer / decline / end the current call
+  call-status                         show the current call state
   listen-stop <#group>                 stop Listen Together for everyone in that group
   name <new name>                     change your display name
   invite [name]                       create a join link
@@ -1704,6 +1852,15 @@ async function runCli(args) {
         const g = [...groups.values()].find(x => x.name.toLowerCase() === target.slice(1).toLowerCase() || x.gid === target.slice(1)); if (!g) throw new Error('no such group');
         const sess = listenSessions.get(g.gid); if (!sess) throw new Error('nobody is listening together there right now');
         listenStopForEveryone(sess); return { ok: true, out: 'stopped' };
+      }
+      case 'call': { const p = findPeer(a[0]); await startCall(p.id); return { ok: true, out: activeCall ? 'calling ' + p.name : 'could not start the call' }; }
+      case 'answer': { if (!activeCall || activeCall.status !== 'ringing') throw new Error('no incoming call to answer'); await acceptCall(); return { ok: true, out: activeCall ? 'answered' : 'could not answer' }; }
+      case 'decline': { if (!activeCall || activeCall.status !== 'ringing') throw new Error('no incoming call to decline'); declineCall(); return { ok: true, out: 'declined' }; }
+      case 'hangup': { if (!activeCall) throw new Error('not in a call'); hangUp(); return { ok: true, out: 'hung up' }; }
+      case 'call-status': {
+        if (!activeCall) return { ok: true, out: 'not in a call' };
+        const p = peers.get(activeCall.peerId);
+        return { ok: true, out: `${activeCall.status} with ${p ? p.name : '?'}` + (activeCall.status === 'active' ? ` · ${fmtClock((Date.now() - activeCall.startedAt) / 1000)}${activeCall.muted ? ' · muted' : ''}${activeCall.remoteMuted ? ` · ${p ? p.name : 'they'} muted` : ''}` : '') };
       }
       case 'name': { const n = a.join(' '); if (!cleanText(n, 40)) throw new Error('usage: name <new name>'); setMyName(n); return { ok: true, out: 'you are now ' + settings.name }; }
       case 'invite': { const inv = await createInvite(a.join(' ') || settings.name || 'Guest-' + shortId(myId)); return { ok: true, out: `Send this link to the person you want to invite:\n\n${inv.link}\n\nThey will send back an answer link; then run:  webrtc answer <answer link>` }; }
@@ -1841,7 +1998,7 @@ function renderHeader() {
   const c = convs.get(active); const head = $('#head');
   let sub = '', actions = [];
   if (c.kind === 'all') { sub = `${peers.size + 1} in this room`; actions = [h('button', { class: 'btn sm', onclick: () => openConnect('invite') }, ic('userplus', 14), 'Invite')]; }
-  if (c.kind === 'dm') { const p = peers.get(c.peerId); sub = p ? `online · connected ${fmtAgo(p.since)} ago${p.via === 'mesh' ? ' · via mesh' : ''}` : 'offline'; if (p) actions = [h('button', { class: 'btn sm', onclick: () => openAccess(p.id) }, ic('shield', 14), 'Permissions')]; }
+  if (c.kind === 'dm') { const p = peers.get(c.peerId); sub = p ? `online · connected ${fmtAgo(p.since)} ago${p.via === 'mesh' ? ' · via mesh' : ''}` : 'offline'; if (p) actions = [h('button', { class: 'btn sm', disabled: !!activeCall, title: activeCall ? 'Already in a call' : 'Voice call', onclick: () => startCall(p.id) }, ic('phone', 14), 'Call'), h('button', { class: 'btn sm', onclick: () => openAccess(p.id) }, ic('shield', 14), 'Permissions')]; }
   if (c.kind === 'group') { const g = groups.get(c.gid); sub = g ? `${g.members.size} members · ${[...g.members].filter(id => id === myId || peers.has(id)).length} online` : ''; actions = [h('button', { class: 'btn sm', onclick: () => openWhiteboard(c.gid) }, ic('board', 14), 'Whiteboard'), h('button', { class: 'btn sm', onclick: () => openMembers(c.gid) }, ic('users', 14), 'Members')]; }
   head.replaceChildren(h('div', { class: 'grow' }, h('div', { class: 'h-title' }, convTitle(c)), h('div', { class: 'h-sub' }, sub)), ...actions);
 }
@@ -1868,7 +2025,7 @@ function renderComposer() {
     file, ta,
     h('button', { class: 'btn primary', title: 'Send', disabled: chatBlocked, onclick: send }, ic('send')));
 }
-function renderAll() { renderSidebar(); renderHeader(); renderComposer(); renderNowPlaying(); refreshModals(); }
+function renderAll() { renderSidebar(); renderHeader(); renderComposer(); renderNowPlaying(); renderCallBar(); refreshModals(); }
 
 const linkify = (text) => {
   const out = []; let last = 0; const re = /https?:\/\/[^\s<>"']+/g; let m;
@@ -2119,6 +2276,7 @@ function openSettings() {
 // ════════════════════════════════════════════════════════════════════════════
 function cleanup() {
   unmountAll();
+  if (activeCall) { const p = peers.get(activeCall.peerId); if (p) sendPeer(p, { t: 'call-end', reason: 'hangup' }); endCallLocal('closed'); }
   for (const sess of listenSessions.values()) { if (sess.isOriginator) for (const p of groupRecipients(sess.gid)) sendPeer(p, { t: 'listen-stop', gid: sess.gid }); teardownSession(sess); }
   listenSessions.clear();
   for (const p of peers.values()) { sendPeer(p, { t: 'bye', reason: 'closed' }); try { p.conn.dc.close(); p.conn.ctx.pc.close(); } catch (_) {} }
@@ -2151,7 +2309,7 @@ async function init() {
   const hs = new URLSearchParams(location.hash.slice(1)).get('arg');
   if (qs || hs) deliverSignal(qs || hs);
 
-  window.__webrtcApp = { myId, peers, groups, convs, shares, invites, joins, settings, banned, activity, mounts, listenSessions, boards, runCli, handleIncomingCode, deliverSignal, createInvite, generateAnswer, sendText, createGroup, sendFilesTo, sendVfsFile, pickVfsFile, addShare, setGrant, vfsCall, vfsDownload, vfsUpload, findPeer, mountShare, unmountOne, syncMount, findMount, startListenTogether, listenTogglePlay, listenSeek, listenToggleMute, listenStopForEveryone, openWhiteboard, ensureBoard, wbUndoMine, wbClearBoard, groupUpdate, wbSaveToVfs, pickFolderDialog, get active() { return active; }, get myPid() { return MY_PID; } };
+  window.__webrtcApp = { myId, peers, groups, convs, shares, invites, joins, settings, banned, activity, mounts, listenSessions, boards, runCli, handleIncomingCode, deliverSignal, createInvite, generateAnswer, sendText, createGroup, sendFilesTo, sendVfsFile, pickVfsFile, addShare, setGrant, vfsCall, vfsDownload, vfsUpload, findPeer, mountShare, unmountOne, syncMount, findMount, startListenTogether, listenTogglePlay, listenSeek, listenToggleMute, listenStopForEveryone, openWhiteboard, ensureBoard, wbUndoMine, wbClearBoard, groupUpdate, wbSaveToVfs, pickFolderDialog, startCall, acceptCall, declineCall, hangUp, toggleCallMute, get activeCall() { return activeCall; }, get active() { return active; }, get myPid() { return MY_PID; } };
 }
 init();
 </script>
