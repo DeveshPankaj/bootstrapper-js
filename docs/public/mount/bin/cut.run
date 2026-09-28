@@ -1,0 +1,46 @@
+/** /bin/cut.run */
+const terminal = platform.getService('terminal');
+const fs = platform.host.getFS();
+const [pwd, ...args] = $args;
+const write = terminal ? terminal.write.bind(terminal) : console.log;
+
+let delim = '\t';
+let fieldsArg = null;
+const positional = [];
+
+for (let i = 0; i < args.length; i++) {
+  const a = args[i];
+  if (a === '-d') { delim = args[++i] ?? delim; }
+  else if (a.startsWith('-d') && a.length > 2) { delim = a.slice(2); }
+  else if (a === '-f') { fieldsArg = args[++i] ?? fieldsArg; }
+  else if (a.startsWith('-f') && a.length > 2) { fieldsArg = a.slice(2); }
+  else positional.push(a);
+}
+
+if (!fieldsArg || !positional.length) { write('usage: cut -d<delim> -f<fields> <file>\n'); return; }
+
+// Parse a fields spec like "1,3" or "2-4" or "1,3-5" into a flat, ordered
+// list of 1-based column indexes.
+const fieldIndexes = [];
+for (const part of fieldsArg.split(',')) {
+  const range = part.split('-');
+  if (range.length === 2 && range[0] !== '' && range[1] !== '') {
+    const start = parseInt(range[0], 10), end = parseInt(range[1], 10);
+    for (let k = start; k <= end; k++) fieldIndexes.push(k);
+  } else {
+    const n = parseInt(part, 10);
+    if (!Number.isNaN(n)) fieldIndexes.push(n);
+  }
+}
+
+for (const fp of positional) {
+  const target = fp.startsWith('/') ? fp : `${pwd}/${fp}`;
+  if (!fs.existsSync(target)) { write(`cut: ${fp}: No such file or directory\n`); continue; }
+  const lines = fs.readFileSync(target, 'utf8').split('\n');
+  if (lines.length && lines[lines.length - 1] === '') lines.pop();
+  const out = lines.map(line => {
+    const cols = line.split(delim);
+    return fieldIndexes.map(idx => cols[idx - 1] ?? '').join(delim);
+  });
+  write(out.join('\n') + '\n');
+}

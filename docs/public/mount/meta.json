@@ -40,6 +40,56 @@
     "force_reload": true
   },
   {
+    "path": "/bin/du.run",
+    "file": "/bin/du.run",
+    "force_reload": true
+  },
+  {
+    "path": "/bin/df.run",
+    "file": "/bin/df.run",
+    "force_reload": true
+  },
+  {
+    "path": "/bin/diff.run",
+    "file": "/bin/diff.run",
+    "force_reload": true
+  },
+  {
+    "path": "/bin/cut.run",
+    "file": "/bin/cut.run",
+    "force_reload": true
+  },
+  {
+    "path": "/bin/sed.run",
+    "file": "/bin/sed.run",
+    "force_reload": true
+  },
+  {
+    "path": "/bin/xargs.run",
+    "file": "/bin/xargs.run",
+    "force_reload": true
+  },
+  {
+    "path": "/bin/tar.run",
+    "file": "/bin/tar.run",
+    "force_reload": true
+  },
+  {
+    "path": "/bin/zip.run",
+    "file": "/bin/zip.run",
+    "force_reload": true
+  },
+  {
+    "path": "/bin/unzip.run",
+    "file": "/bin/unzip.run",
+    "force_reload": true
+  },
+  {
+    "path": "/bin/curl.run",
+    "file": "/bin/curl.run",
+    "force_reload": true
+  },
+  {
     "path": "/bin/sleep.run",
     "file": "/bin/sleep.run",
     "force_reload": true
@@ -789,6 +839,96 @@
   {
     "path": "/opt/apps/webrtc/main.html",
     "file": "/opt/apps/webrtc/main.html",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/youtube-player/main.js",
+    "file": "/opt/apps/youtube-player/main.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/youtube-player/main.html",
+    "file": "/opt/apps/youtube-player/main.html",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/distributed-compute/main.js",
+    "file": "/opt/apps/distributed-compute/main.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/distributed-compute/main.html",
+    "file": "/opt/apps/distributed-compute/main.html",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/distributed-compute/lib/mesh-client.js",
+    "file": "/opt/apps/distributed-compute/lib/mesh-client.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/distributed-compute/lib/scheduler.js",
+    "file": "/opt/apps/distributed-compute/lib/scheduler.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/distributed-compute/lib/task-runtime.js",
+    "file": "/opt/apps/distributed-compute/lib/task-runtime.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/distributed-compute/lib/tiny-nn.js",
+    "file": "/opt/apps/distributed-compute/lib/tiny-nn.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/distributed-compute/examples/map-reduce-demo.js",
+    "file": "/opt/apps/distributed-compute/examples/map-reduce-demo.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/distributed-compute/examples/neural-net-training.js",
+    "file": "/opt/apps/distributed-compute/examples/neural-net-training.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/distributed-compute/ui/app.js",
+    "file": "/opt/apps/distributed-compute/ui/app.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/distributed-compute/ui/editor.js",
+    "file": "/opt/apps/distributed-compute/ui/editor.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/distributed-compute/ui/chart.js",
+    "file": "/opt/apps/distributed-compute/ui/chart.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/distributed-kv/main.js",
+    "file": "/opt/apps/distributed-kv/main.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/distributed-kv/main.html",
+    "file": "/opt/apps/distributed-kv/main.html",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/distributed-kv/lib/mesh-client.js",
+    "file": "/opt/apps/distributed-kv/lib/mesh-client.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/distributed-kv/lib/kv-store.js",
+    "file": "/opt/apps/distributed-kv/lib/kv-store.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/distributed-kv/ui/app.js",
+    "file": "/opt/apps/distributed-kv/ui/app.js",
     "force_reload": true
   },
   {

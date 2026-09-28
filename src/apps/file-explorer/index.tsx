@@ -203,10 +203,105 @@ platform.host.registerCommand('ui.file-explorer', (body: HTMLBodyElement, props:
             background: rgba(0, 0, 0, 0.08);
         }
 
+        .toolbar-actions .material-symbols-outlined.active {
+            background: rgba(10, 132, 255, 0.16);
+            color: #0a84ff;
+        }
+
+        .toolbar-actions .material-symbols-outlined.disabled {
+            color: #ccc;
+            cursor: default;
+        }
+
+        .toolbar-actions .material-symbols-outlined.disabled:hover {
+            background: none;
+        }
+
         .file-explorer-body {
             display: flex;
             flex-grow: 1;
             min-height: 0;
+        }
+
+        .file-explorer-details {
+            flex: 0 0 14rem;
+            background: #f6f6f6;
+            border-left: 1px solid #e2e2e2;
+            overflow: auto;
+            padding: .85rem .9rem;
+            font-size: 12px;
+            color: #333;
+        }
+
+        .file-explorer-details h4 {
+            margin: 0 0 .85rem;
+            font-size: 11px;
+            font-weight: 600;
+            color: #9a9a9e;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+
+        .file-explorer-details .details-empty {
+            color: #9a9a9e;
+            font-size: 12px;
+            padding-top: 1rem;
+            text-align: center;
+        }
+
+        .file-explorer-details .details-thumb {
+            width: 100%;
+            height: 8rem;
+            border-radius: 8px;
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            background-color: #fff;
+            border: 1px solid #e2e2e2;
+            margin-bottom: .85rem;
+        }
+
+        .file-explorer-details .details-name {
+            font-weight: 600;
+            font-size: 13px;
+            word-break: break-all;
+            margin-bottom: .85rem;
+        }
+
+        .file-explorer-details .details-row {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            margin-bottom: .65rem;
+        }
+
+        .file-explorer-details .details-row .details-label {
+            color: #9a9a9e;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: .03em;
+        }
+
+        .file-explorer-details .details-row .details-value {
+            word-break: break-all;
+            font-size: 12px;
+        }
+
+        .file-explorer-details .details-multi-list {
+            max-height: 12rem;
+            overflow-y: auto;
+            border-top: 1px solid #e2e2e2;
+            padding-top: .5rem;
+            display: flex;
+            flex-direction: column;
+            gap: .3rem;
+        }
+
+        .file-explorer-details .details-multi-item {
+            font-size: 12px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .file-explorer-nav {
@@ -319,6 +414,171 @@ const copyEntry = (fs: any, src: string, dest: string) => {
     }
 }
 
+// Downloads a vfs file to the user's device: read raw bytes (works for both
+// text and binary), wrap in a Blob, and trigger a real browser download via a
+// temporary <a download> click. 100% local - no vfs network operations.
+const downloadFile = (fs: any, path: string) => {
+    try {
+        const data = fs.readFileSync(path)
+        const name = path.split('/').filter(Boolean).pop() || 'download'
+        const blob = new Blob([data])
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = name
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        setTimeout(() => URL.revokeObjectURL(url), 1000)
+    } catch (e: any) {
+        platform.host.callCommand('notify', { title: 'Download failed', body: e.message || String(e), duration: 4000 })
+    }
+}
+
+// Human-readable file size, e.g. "3.4 KB".
+const fmtBytes = (n: number): string => {
+    if (n < 1024) return `${n} B`
+    if (n < 1048576) return `${(n / 1024).toFixed(1)} KB`
+    if (n < 1073741824) return `${(n / 1048576).toFixed(1)} MB`
+    return `${(n / 1073741824).toFixed(2)} GB`
+}
+
+// Right-side details panel for the currently selected file/folder. Image
+// thumbnails use the same blob-URL treatment as the grid thumbnails below
+// (the explorer renders inside an `about:blank` iframe, so `/(sw)/...`
+// sub-resource URLs don't reach the SW).
+const DETAILS_PREVIEW_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.ico', '.avif'])
+const DETAILS_PREVIEW_MIME: Record<string, string> = {
+    '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif',
+    '.webp': 'image/webp', '.svg': 'image/svg+xml', '.bmp': 'image/bmp', '.ico': 'image/x-icon', '.avif': 'image/avif',
+}
+
+const DetailsPanel = ({ paths }: { paths: string[] }) => {
+    const fs = platform.host.getFS()
+    const [thumbUrl, setThumbUrl] = React.useState<string | null>(null)
+
+    const path = paths.length === 1 ? paths[0] : null
+
+    let info: { stat: any, name: string, ext: string, isDir: boolean } | null = null
+    if (path) {
+        try {
+            const stat = fs.statSync(path)
+            const name = path.split('/').filter(Boolean).pop() || path
+            info = { stat, name, ext: getFileExtension(name), isDir: stat.isDirectory() }
+        } catch (_) { info = null }
+    }
+
+    const isPreviewable = !!(info && !info.isDir && DETAILS_PREVIEW_EXTS.has(info.ext))
+
+    React.useEffect(() => {
+        if (!isPreviewable || !path || !info) { setThumbUrl(null); return }
+        let url: string | null = null
+        try {
+            const data = fs.readFileSync(path)
+            const blob = new Blob([data], { type: DETAILS_PREVIEW_MIME[info.ext] || 'application/octet-stream' })
+            url = URL.createObjectURL(blob)
+            setThumbUrl(url)
+        } catch (_) { setThumbUrl(null) }
+        return () => { if (url) URL.revokeObjectURL(url) }
+        // eslint-disable-next-line
+    }, [path, isPreviewable])
+
+    if (paths.length === 0) {
+        return (
+            <aside className="file-explorer-details">
+                <h4>Details</h4>
+                <div className="details-empty">Select a file or folder to see details</div>
+            </aside>
+        )
+    }
+
+    // Multi-selection summary: total count, combined size of files (folders'
+    // contents are not recursed into), and a scrollable list of names.
+    if (paths.length > 1) {
+        let totalSize = 0
+        const items = paths.map(p => {
+            const name = p.split('/').filter(Boolean).pop() || p
+            let isDir = false
+            try {
+                const stat = fs.statSync(p)
+                isDir = stat.isDirectory()
+                if (!isDir) totalSize += stat.size || 0
+            } catch (_) {}
+            return { path: p, name, isDir }
+        })
+        return (
+            <aside className="file-explorer-details">
+                <h4>Details</h4>
+                <div className="details-row">
+                    <span className="details-label">Selected</span>
+                    <span className="details-value">{paths.length} items</span>
+                </div>
+                <div className="details-row">
+                    <span className="details-label">Combined size</span>
+                    <span className="details-value">{fmtBytes(totalSize)}</span>
+                </div>
+                <div className="details-row">
+                    <span className="details-label">Names</span>
+                </div>
+                <div className="details-multi-list">
+                    {items.map(it => (
+                        <div key={it.path} className="details-multi-item">
+                            <span className="material-symbols-outlined" style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 4, color: '#6aa9f4' }}>
+                                {it.isDir ? 'folder' : 'insert_drive_file'}
+                            </span>
+                            {it.name}
+                        </div>
+                    ))}
+                </div>
+            </aside>
+        )
+    }
+
+    if (!info) {
+        return (
+            <aside className="file-explorer-details">
+                <h4>Details</h4>
+                <div className="details-empty">Select a file or folder to see details</div>
+            </aside>
+        )
+    }
+
+    const { stat, name, ext, isDir } = info
+    let childCount: number | null = null
+    if (isDir) { try { childCount = fs.readdirSync(path!).length } catch (_) {} }
+
+    return (
+        <aside className="file-explorer-details">
+            <h4>Details</h4>
+            {thumbUrl && <div className="details-thumb" style={{ backgroundImage: `url('${thumbUrl}')` }} />}
+            <div className="details-name">{name}</div>
+            <div className="details-row">
+                <span className="details-label">Path</span>
+                <span className="details-value">{path}</span>
+            </div>
+            <div className="details-row">
+                <span className="details-label">Type</span>
+                <span className="details-value">{isDir ? 'Folder' : (ext ? `${ext.slice(1).toUpperCase()} file` : 'File')}</span>
+            </div>
+            {isDir ? (
+                <div className="details-row">
+                    <span className="details-label">Items</span>
+                    <span className="details-value">{childCount === null ? '—' : `${childCount} item${childCount !== 1 ? 's' : ''}`}</span>
+                </div>
+            ) : (
+                <div className="details-row">
+                    <span className="details-label">Size</span>
+                    <span className="details-value">{fmtBytes(stat.size || 0)}</span>
+                </div>
+            )}
+            <div className="details-row">
+                <span className="details-label">Modified</span>
+                <span className="details-value">{stat.mtime ? new Date(stat.mtime).toLocaleString() : '—'}</span>
+            </div>
+        </aside>
+    )
+}
+
 const App = (props: UICallbackProps & { file: FileType }) => {
     const fs = platform.host.getFS()
     const dirRef = React.useRef(props.file.path || '/')
@@ -341,12 +601,59 @@ const App = (props: UICallbackProps & { file: FileType }) => {
     const setPropsFileRef = React.useRef(setPropsFile)
     setPropsFileRef.current = setPropsFile
 
+    // Currently selected files/folders (lifted up from ListDirComponent so
+    // the details panel can show it live) - a plain array, order not
+    // significant for correctness (only for range-select anchoring, tracked
+    // separately in ListDirComponent) - and whether the details panel is open.
+    const [selectedPaths, setSelectedPaths] = React.useState<string[]>([])
+    const [detailsOpen, setDetailsOpen] = React.useState(false)
+
+    // Root element ref so Escape-to-clear-selection can be scoped to this
+    // window/iframe's own document (each explorer window is its own iframe,
+    // so a keydown listener on its ownerDocument only fires while that
+    // specific window/iframe has focus).
+    const rootRef = React.useRef<HTMLDivElement>(null)
+
     const cmdPrefix = React.useRef(`__e${Date.now().toString(36)}`)
 
     React.useEffect(() => {
         const k = cmdPrefix.current
         const regs = [
             platform.host.registerCommand(`${k}.show-properties`, (path: string) => { setPropsFileRef.current(path) }),
+            platform.host.registerCommand(`${k}.download-file`, (path: string) => downloadFile(fs, path)),
+            platform.host.registerCommand(`${k}.download-files`, (paths: string | string[]) => {
+                const list = Array.isArray(paths) ? paths : [paths]
+                let skipped = 0
+                list.forEach(p => {
+                    try {
+                        if (fs.statSync(p).isDirectory()) { skipped++; return }
+                        downloadFile(fs, p)
+                    } catch (_) { skipped++ }
+                })
+                if (skipped) {
+                    platform.host.callCommand('notify', {
+                        title: 'Some items skipped',
+                        body: `${skipped} folder${skipped !== 1 ? 's' : ''} skipped (folders can't be downloaded individually)`,
+                        duration: 4000,
+                    })
+                }
+            }),
+            platform.host.registerCommand(`${k}.delete-files`, (paths: string | string[]) => {
+                const list = Array.isArray(paths) ? paths : [paths]
+                if (!list.length) return
+                if (!confirm(`Delete ${list.length} item${list.length !== 1 ? 's' : ''}?`)) return
+                const files_ = list.filter(p => { try { return !fs.statSync(p).isDirectory() } catch (_) { return false } })
+                const dirs_ = list.filter(p => { try { return fs.statSync(p).isDirectory() } catch (_) { return false } })
+                const fsService = platform.host.getService('root', 'fs') as Function
+                try {
+                    if (files_.length) fsService('rm', ...files_)
+                    if (dirs_.length) fsService('rmdir', ...dirs_)
+                } catch (e: any) {
+                    platform.host.callCommand('notify', { title: 'Delete error', body: e.message || String(e), duration: 4000 })
+                }
+                setSelectedPaths([])
+                refreshRef.current()
+            }),
             platform.host.registerCommand(`${k}.copy-file`, (paths: string | string[]) => {
                 (window.top as any).__vfsClipboard = { op: 'copy', paths: Array.isArray(paths) ? paths : [paths] }
                 refreshRef.current()
@@ -396,10 +703,26 @@ const App = (props: UICallbackProps & { file: FileType }) => {
         return () => regs.forEach(r => r.remove())
     }, [])
 
+    // Escape clears the current selection while this explorer window/iframe
+    // has focus - scoped to this window's own document via ownerDocument
+    // (each explorer window is its own iframe with its own document, so a
+    // keydown listener here only fires while that iframe is the focused frame).
+    React.useEffect(() => {
+        const node = rootRef.current
+        if (!node) return
+        const doc = node.ownerDocument
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') setSelectedPaths([])
+        }
+        doc.addEventListener('keydown', onKeyDown)
+        return () => doc.removeEventListener('keydown', onKeyDown)
+    }, [])
+
     const goTo = (path: string, { pushHistory = true }: { pushHistory?: boolean } = {}) => {
         const normalized = normalizePath(path)
         if (!fs.existsSync(normalized)) fs.mkdirSync(normalized, { recursive: true })
         dirRef.current = normalized
+        setSelectedPaths([])
 
         if (pushHistory) {
             const history = historyRef.current.slice(0, historyIndexRef.current + 1)
@@ -487,11 +810,34 @@ const App = (props: UICallbackProps & { file: FileType }) => {
     const openFile = (file: FileType) => {
         open(file.name)
     }
-    const showFileActionsHandler = (file: FileType, event: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
+    const showFileActionsHandler = (file: FileType, event: React.MouseEvent<HTMLDivElement, MouseEvent>, selection?: string[]) => {
         const openContextMenu = platform.host.getService('001-core.layout', 'show-context-menu') as Function;
         if (!openContextMenu) return;
         const rect = props.getBoundingClientRect()
         const k = cmdPrefix.current
+
+        // Batch actions for a multi-selection - shown instead of the single-item
+        // action list below when the right-clicked item is part of a selection
+        // of more than one item.
+        if (Array.isArray(selection) && selection.length > 1) {
+            const encoded = encodeURIComponent(JSON.stringify(selection))
+            const hasFolder = selection.some(p => { try { return fs.statSync(p).isDirectory() } catch (_) { return false } })
+            const batchActions = [
+                {
+                    id: 'download_selected', type: 'action',
+                    title: hasFolder ? 'Download files (skips folders)' : 'Download',
+                    cmd: `platform.host.callCommand('${k}.download-files', JSON.parse(decodeURIComponent('${encoded}')))`,
+                },
+                { id: 'div_batch', type: 'divider', title: '' },
+                {
+                    id: 'delete_selected', type: 'action',
+                    title: `Delete ${selection.length} items`,
+                    cmd: `platform.host.callCommand('${k}.delete-files', JSON.parse(decodeURIComponent('${encoded}')))`,
+                },
+            ]
+            openContextMenu(event.clientX + rect.x, event.clientY + rect.y, batchActions)
+            return
+        }
 
         const actions = [];
         file.path = file.path.replace(/\/\//g, '/')
@@ -499,6 +845,7 @@ const App = (props: UICallbackProps & { file: FileType }) => {
         if (stats.isFile()) {
             actions.push({ id: 'edit_file', type: 'action', title: 'Edit', cmd: `service('001-core.layout', 'open-window') (command('ui.notepad'), '${file.path}')` })
             actions.push({ id: 'open_file', type: 'action', title: 'Open', cmd: `service('001-core.layout', 'open-window') (command('ui.iframe'), '${file.path}')` })
+            actions.push({ id: 'download_file', type: 'action', title: 'Download', cmd: `platform.host.callCommand('${k}.download-file', '${file.path}')` })
             actions.push({ id: 'delete_file', type: 'action', title: 'Delete', cmd: `service('root', 'fs')('rm', '${file.path}')` })
             actions.push({ id: 'rename_file', type: 'action', title: 'Rename', cmd: `platform.host.callCommand('${k}.rename', '${file.path}')` })
             actions.push({ id: 'copy_file', type: 'action', title: 'Copy', cmd: `platform.host.callCommand('${k}.copy-file', '${file.path}')` })
@@ -600,15 +947,30 @@ const App = (props: UICallbackProps & { file: FileType }) => {
     const handleDragOver = (event: React.DragEvent) => {
         event.preventDefault()
         event.stopPropagation()
-        event.dataTransfer.dropEffect = event.dataTransfer.types.includes('application/x-vfs-path') ? 'move' : 'copy'
+        const isVfsMove = event.dataTransfer.types.includes('application/x-vfs-path')
+            || event.dataTransfer.types.includes('application/x-vfs-paths')
+        event.dataTransfer.dropEffect = isVfsMove ? 'move' : 'copy'
     }
 
-    // Handles a drop onto `targetDir` - either moving an item dragged from an explorer
-    // window (`application/x-vfs-path`), importing a file from FS.html (`application/x-fs-export`),
+    // Handles a drop onto `targetDir` - either moving item(s) dragged from an explorer
+    // window (`application/x-vfs-paths` for a multi-selection drag, `application/x-vfs-path`
+    // for a single item), importing a file from FS.html (`application/x-fs-export`),
     // or importing files/folders dragged from the OS.
     const handleDrop = (event: React.DragEvent, targetDir: string) => {
         event.preventDefault()
         event.stopPropagation()
+
+        const vfsPathsJson = event.dataTransfer.getData('application/x-vfs-paths')
+        if (vfsPathsJson) {
+            let paths: string[] = []
+            try { paths = JSON.parse(vfsPathsJson) } catch (_) {}
+            if (Array.isArray(paths) && paths.length) {
+                paths.forEach(p => moveEntry(p, targetDir))
+                setSelectedPaths([])
+                refresh()
+                return
+            }
+        }
 
         const vfsPath = event.dataTransfer.getData('application/x-vfs-path')
         if (vfsPath) {
@@ -652,8 +1014,24 @@ const App = (props: UICallbackProps & { file: FileType }) => {
 
     const breadcrumbs = getBreadcrumbs(dirRef.current)
 
+    const selectedFilePaths = selectedPaths.filter(p => {
+        try { return fs.statSync(p).isFile() } catch (_) { return false }
+    })
+    const canDownloadSelected = selectedFilePaths.length > 0
+    const downloadSelected = () => {
+        if (!canDownloadSelected) return
+        selectedFilePaths.forEach(p => downloadFile(fs, p))
+        if (selectedFilePaths.length !== selectedPaths.length) {
+            platform.host.callCommand('notify', {
+                title: 'Some items skipped',
+                body: `${selectedPaths.length - selectedFilePaths.length} folder(s) skipped (folders can't be downloaded individually)`,
+                duration: 4000,
+            })
+        }
+    }
+
     return (
-        <div style={{ display: 'flex', height: '100%', flexDirection: 'column', position: 'relative' }} className="file-explorer">
+        <div ref={rootRef} style={{ display: 'flex', height: '100%', flexDirection: 'column', position: 'relative' }} className="file-explorer">
             <header>
                 <div className="toolbar-nav-buttons">
                     <span
@@ -695,6 +1073,18 @@ const App = (props: UICallbackProps & { file: FileType }) => {
                     <span className="material-symbols-outlined" onClick={makeDirClick} aria-label="create_new_folder" title="create folder">create_new_folder</span>
                     <span className="material-symbols-outlined" onClick={makeFileClick} aria-label="create_file" title="create file">post_add</span>
                     <span className="material-symbols-outlined" onClick={mountLocalFolderClick} aria-label="mount_local_folder" title="mount local folder">drive_folder_upload</span>
+                    <span
+                        className={`material-symbols-outlined ${canDownloadSelected ? '' : 'disabled'}`}
+                        onClick={downloadSelected}
+                        aria-label="download"
+                        title="download selected file(s)"
+                    >download</span>
+                    <span
+                        className={`material-symbols-outlined ${detailsOpen ? 'active' : ''}`}
+                        onClick={() => setDetailsOpen(o => !o)}
+                        aria-label="details"
+                        title="toggle details panel"
+                    >info</span>
                 </div>
             </header>
             <div className="file-explorer-body">
@@ -714,9 +1104,10 @@ const App = (props: UICallbackProps & { file: FileType }) => {
                     ))}
                 </nav>
                 <section className="dir-list">
-                    <ListDirComponent key={dirRef.current} dir={dirRef.current} openFile={openFile} showFileActions={showFileActionsHandler} showDirActions={showDirActionsHandler} handleDragOver={handleDragOver} handleDrop={handleDrop} />
+                    <ListDirComponent key={dirRef.current} dir={dirRef.current} openFile={openFile} showFileActions={showFileActionsHandler} showDirActions={showDirActionsHandler} handleDragOver={handleDragOver} handleDrop={handleDrop} selectedPaths={selectedPaths} onSelect={setSelectedPaths} />
                     <div className="file-explorer-status">{dirList.length} item{dirList.length === 1 ? '' : 's'}</div>
                 </section>
+                {detailsOpen && <DetailsPanel paths={selectedPaths} />}
             </div>
             {propsFile && (() => {
                 let stat: any = null; try { stat = fs.statSync(propsFile) } catch (_) {}
@@ -750,7 +1141,7 @@ const App = (props: UICallbackProps & { file: FileType }) => {
     )
 }
 
-const ListDirComponent = ({ dir, openFile, showFileActions, showDirActions, handleDragOver, handleDrop }: { dir?: string, openFile: (file: FileType) => void, showFileActions: (file: FileType, event: React.MouseEvent<HTMLDivElement, MouseEvent>) => void, showDirActions?: (event: React.MouseEvent) => void, handleDragOver: (event: React.DragEvent) => void, handleDrop: (event: React.DragEvent, targetDir: string) => void }) => {
+const ListDirComponent = ({ dir, openFile, showFileActions, showDirActions, handleDragOver, handleDrop, selectedPaths, onSelect }: { dir?: string, openFile: (file: FileType) => void, showFileActions: (file: FileType, event: React.MouseEvent<HTMLDivElement, MouseEvent>, selection?: string[]) => void, showDirActions?: (event: React.MouseEvent) => void, handleDragOver: (event: React.DragEvent) => void, handleDrop: (event: React.DragEvent, targetDir: string) => void, selectedPaths: string[], onSelect: (paths: string[]) => void }) => {
     dir ??= DESKTOP_PATH;
 
     const extIconMap: Record<string, string> = {
@@ -815,7 +1206,47 @@ const ListDirComponent = ({ dir, openFile, showFileActions, showDirActions, hand
 
     const files: Array<FileType> = [...ls]
 
-    const [selected, setSelected] = React.useState<string | null>(null)
+    // Selection is lifted up to the parent App (so the details panel can
+    // react to it live) instead of local state. `selectedPaths` is a plain
+    // array; `selectedSet` is just a membership-check convenience for
+    // rendering.
+    const selectedSet = new Set(selectedPaths)
+
+    // Anchor for shift-click range selection - the index (in current visual/
+    // sort order) of the last item clicked without Shift. Local to this
+    // component (which remounts, via its `key={dir}` in App, on every
+    // directory change) so the anchor naturally resets when navigating.
+    const lastClickedIndexRef = React.useRef<number | null>(null)
+
+    // Standard file-manager click semantics:
+    // - plain click: select just this item.
+    // - Ctrl/Cmd-click: toggle this item's membership in the selection.
+    // - Shift-click: select the contiguous range from the last plain/ctrl
+    //   click to this item, in the current visual order.
+    const handleItemClick = (file: FileType, index: number, event: React.MouseEvent) => {
+        event.stopPropagation()
+        const isToggle = event.metaKey || event.ctrlKey
+        const isRange = event.shiftKey
+
+        if (isRange && lastClickedIndexRef.current !== null) {
+            const start = Math.min(lastClickedIndexRef.current, index)
+            const end = Math.max(lastClickedIndexRef.current, index)
+            onSelect(files.slice(start, end + 1).map(f => f.path))
+            return
+        }
+
+        if (isToggle) {
+            const next = new Set(selectedPaths)
+            if (next.has(file.path)) next.delete(file.path)
+            else next.add(file.path)
+            onSelect(Array.from(next))
+            lastClickedIndexRef.current = index
+            return
+        }
+
+        onSelect([file.path])
+        lastClickedIndexRef.current = index
+    }
 
     // Image thumbnails are generated as blob URLs read straight from the
     // virtual fs instead of `/(sw)<path>` - the explorer renders inside an
@@ -958,16 +1389,35 @@ const ListDirComponent = ({ dir, openFile, showFileActions, showDirActions, hand
     const rightClickHandler = (file: FileType, event: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
         event.preventDefault();
         event.stopPropagation();
-        setSelected(file.path)
+        // Right-clicking an item that's already part of a multi-selection keeps
+        // the whole selection (so batch actions apply); right-clicking anything
+        // else replaces the selection with just that item, as before.
+        const keepSelection = selectedPaths.length > 1 && selectedSet.has(file.path)
+        if (!keepSelection) {
+            onSelect([file.path])
+            lastClickedIndexRef.current = files.findIndex(f => f.path === file.path)
+        }
+        const effectiveSelection = keepSelection ? selectedPaths : [file.path]
         const customEvent = new CustomEvent('showmenu', { detail: {} });
         event.target.dispatchEvent(customEvent);
-        showFileActions(file, event)
+        showFileActions(file, event, effectiveSelection)
     }
 
     const [dragOverPath, setDragOverPath] = React.useState<string | null>(null)
     const [mainDragOver, setMainDragOver] = React.useState(false)
 
     const dragStartHandler = (file: FileType, event: React.DragEvent) => {
+        // Dragging an item that's part of the current multi-selection carries
+        // the whole selection along; dragging a non-selected item (even while
+        // other items are selected) only drags that one item.
+        const isMultiDrag = selectedPaths.length > 1 && selectedSet.has(file.path)
+        if (isMultiDrag) {
+            event.dataTransfer.setData('application/x-vfs-paths', JSON.stringify(selectedPaths))
+        }
+        // Always set the singular path too - the item actually under the
+        // pointer - so other single-file drop targets (audio player, desktop,
+        // fs-inspector) keep working exactly as before for both single- and
+        // multi-drag.
         event.dataTransfer.setData('application/x-vfs-path', file.path)
         event.dataTransfer.effectAllowed = 'move'
         if (window.top) (window.top as any).__vfsDragPath = file.path
@@ -980,22 +1430,23 @@ const ListDirComponent = ({ dir, openFile, showFileActions, showDirActions, hand
         <main
             className={`${DESKTOP_CONTAINER_CLASS}-files ${mainDragOver ? 'drag-over' : ''}`}
             ref={containerRef}
+            onClick={() => { onSelect([]); lastClickedIndexRef.current = null }}
             onContextMenu={ev => { ev.preventDefault(); showDirActions && showDirActions(ev) }}
             onDragOver={ev => { handleDragOver(ev); setMainDragOver(true) }}
             onDragLeave={() => setMainDragOver(false)}
             onDrop={ev => { setMainDragOver(false); handleDrop(ev, dir!) }}
         >
             {
-                files.map(file => (
+                files.map((file, index) => (
                     <div
                         key={file.path}
-                        className={`file-item ${selected === file.path ? 'selected' : ''} ${cutPaths.has(file.path) ? 'cut' : ''} ${dragOverPath === file.path ? 'drag-over' : ''}`}
+                        className={`file-item ${selectedSet.has(file.path) ? 'selected' : ''} ${cutPaths.has(file.path) ? 'cut' : ''} ${dragOverPath === file.path ? 'drag-over' : ''}`}
                         draggable
                         onDragStart={ev => dragStartHandler(file, ev)}
                         onDragOver={file.type === 'dir' ? (ev => { handleDragOver(ev); setDragOverPath(file.path) }) : undefined}
                         onDragLeave={file.type === 'dir' ? (() => setDragOverPath(null)) : undefined}
                         onDrop={file.type === 'dir' ? (ev => { setDragOverPath(null); handleDrop(ev, file.path) }) : undefined}
-                        onClick={() => setSelected(file.path)}
+                        onClick={ev => handleItemClick(file, index, ev)}
                         onDoubleClick={() => openFile(file)}
                         onContextMenu={ev => rightClickHandler(file, ev)}
                     >

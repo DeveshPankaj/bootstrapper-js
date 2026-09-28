@@ -526,6 +526,69 @@
       "main": "main.js"
     },
     {
+      "id": "youtube-player",
+      "name": "YouTube Player",
+      "description": "Paste a YouTube video or playlist link and watch it in an embedded player, with a small recently-played history.",
+      "version": "1.0.0",
+      "icon": "smart_display",
+      "category": "Media",
+      "author": "bootstrapper-js",
+      "commandName": "ui.youtube-player",
+      "files": [
+        {
+          "dest": "main.js",
+          "src": "/public/mount/opt/apps/youtube-player/main.js"
+        },
+        {
+          "dest": "main.html",
+          "src": "/public/mount/opt/apps/youtube-player/main.html"
+        }
+      ],
+      "main": "main.js"
+    },
+    {
+      "id": "distributed-compute",
+      "name": "Distributed Compute",
+      "description": "Distribute a map/reduce computation, including training a tiny neural net data-parallel, across everyone connected in a WebRTC Chat group. Falls back to running locally when no peers are connected.",
+      "version": "1.0.0",
+      "icon": "hub",
+      "category": "Network",
+      "author": "bootstrapper-js",
+      "commandName": "ui.distributed-compute",
+      "files": [
+        { "dest": "main.js", "src": "/public/mount/opt/apps/distributed-compute/main.js" },
+        { "dest": "main.html", "src": "/public/mount/opt/apps/distributed-compute/main.html" },
+        { "dest": "lib/mesh-client.js", "src": "/public/mount/opt/apps/distributed-compute/lib/mesh-client.js" },
+        { "dest": "lib/scheduler.js", "src": "/public/mount/opt/apps/distributed-compute/lib/scheduler.js" },
+        { "dest": "lib/task-runtime.js", "src": "/public/mount/opt/apps/distributed-compute/lib/task-runtime.js" },
+        { "dest": "lib/tiny-nn.js", "src": "/public/mount/opt/apps/distributed-compute/lib/tiny-nn.js" },
+        { "dest": "examples/map-reduce-demo.js", "src": "/public/mount/opt/apps/distributed-compute/examples/map-reduce-demo.js" },
+        { "dest": "examples/neural-net-training.js", "src": "/public/mount/opt/apps/distributed-compute/examples/neural-net-training.js" },
+        { "dest": "ui/app.js", "src": "/public/mount/opt/apps/distributed-compute/ui/app.js" },
+        { "dest": "ui/editor.js", "src": "/public/mount/opt/apps/distributed-compute/ui/editor.js" },
+        { "dest": "ui/chart.js", "src": "/public/mount/opt/apps/distributed-compute/ui/chart.js" }
+      ],
+      "main": "main.js"
+    },
+    {
+      "id": "distributed-kv",
+      "name": "Distributed KV",
+      "description": "A tiny peer-to-peer replicated key/value store shared over a WebRTC Chat group's mesh, with last-write-wins conflict resolution and late-joiner snapshot sync. Falls back to running locally when no peers are connected.",
+      "version": "1.0.0",
+      "icon": "hub",
+      "category": "Network",
+      "author": "bootstrapper-js",
+      "commandName": "ui.distributed-kv",
+      "files": [
+        { "dest": "main.js", "src": "/public/mount/opt/apps/distributed-kv/main.js" },
+        { "dest": "main.html", "src": "/public/mount/opt/apps/distributed-kv/main.html" },
+        { "dest": "lib/mesh-client.js", "src": "/public/mount/opt/apps/distributed-kv/lib/mesh-client.js" },
+        { "dest": "lib/kv-store.js", "src": "/public/mount/opt/apps/distributed-kv/lib/kv-store.js" },
+        { "dest": "ui/app.js", "src": "/public/mount/opt/apps/distributed-kv/ui/app.js" }
+      ],
+      "main": "main.js"
+    },
+    {
       "id": "totp-auth",
       "name": "TOTP Authenticator",
       "description": "Time-based one-time password (TOTP/2FA) authenticator. Stores secrets locally in the VFS.",

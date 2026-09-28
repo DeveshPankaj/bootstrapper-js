@@ -88,7 +88,7 @@ check('chat still works on the same connection after the call ended', await wait
 // ── another call, then hang up from CLI + call-status ──
 o = await cli(pA, 'call Bob'); check('cli call (2nd time) works — no stale state from the previous call', o.ok, o.out);
 await waitFor(() => fB.evaluate(() => window.__webrtcApp.activeCall?.status === 'ringing'));
-o = await cli(pB, 'answer'); check('cli answer works', o.ok, o.out);
+o = await cli(pB, 'answer-call'); check('cli answer-call works', o.ok, o.out);
 await waitFor(() => fA.evaluate(() => window.__webrtcApp.activeCall?.status === 'active'));
 o = await cli(pA, 'call-status'); check('cli call-status reports active with a timer', o.ok && /active with Bob/.test(o.out), o.out);
 o = await cli(pB, 'call-status'); check('cli call-status on the other side too', o.ok && /active with Alice/.test(o.out), o.out);
@@ -103,7 +103,7 @@ check('call cleared on both sides via cli hangup', await waitFor(() => fB.evalua
 // simpler: verify a caller gets 'busy' when the callee already has an activeCall with a THIRD party is out of scope
 // for a 2-peer test — instead verify the no-answer path and error cases.
 o = await cli(pA, 'hangup'); check('cli hangup with nothing active reports an error', !o.ok, o.out);
-o = await cli(pA, 'answer'); check('cli answer with nothing ringing reports an error', !o.ok, o.out);
+o = await cli(pA, 'answer-call'); check('cli answer-call with nothing ringing reports an error', !o.ok, o.out);
 o = await cli(pA, 'call Nobody'); check('cli call to an unknown user reports an error', !o.ok, o.out);
 
 check('no page errors', errs.length === 0, errs.slice(0, 5).join(' || '));

@@ -482,6 +482,9 @@ function onFrame(conn, data) {
     case 'call-answer': return onCallAnswer(peer, m);
     case 'call-end': return onCallEnd(peer, m);
     case 'call-mute': return onCallMute(peer, m);
+    case 'group-call-join': return onGroupCallJoin(peer, m);
+    case 'group-call-leave': return onGroupCallLeave(peer, m);
+    case 'app-relay': return onAppRelay(peer, m);
     case 'vfs': return handleVfsRequest(peer, m);
     case 'vfs-res': return onVfsResponse(peer, m);
     case 'bye': toast(m.reason === 'blocked' ? `${peer.name} blocked you` : `${peer.name} disconnected you`, 'warn'); closeConn(conn); return;
@@ -522,6 +525,7 @@ function removePeer(peer) {
   sysNote('all', `${peer.name} left`);
   const dm = convs.get('dm:' + peer.id); if (dm) sysNote(dm.key, `${peer.name} is offline`);
   if (activeCall && activeCall.peerId === peer.id) { endCallLocal('disconnected'); toast(`Call ended — ${peer.name} disconnected`, 'warn'); }
+  if (activeGroupCall && activeGroupCall.legs.has(peer.id)) { activeGroupCall.legs.delete(peer.id); toast(`${peer.name} disconnected from the voice chat`, 'warn'); renderCallBar(); }
   if (!settings.autoMesh) return renderAll();
   renderAll();
 }
@@ -740,7 +744,7 @@ function onGroup(peer, m) {
     g.members.delete(peer.id); sysNote('g:' + g.gid, `${peer.name} left the group`); renderAll();
   }
 }
-function removeGroupLocally(g, why) { const sess = listenSessions.get(g.gid); if (sess) { teardownSession(sess); listenSessions.delete(g.gid); } boards.delete(g.gid); groups.delete(g.gid); convs.delete('g:' + g.gid); if (active === 'g:' + g.gid) active = 'all'; toast(why, 'warn'); renderAll(); renderMessages(); }
+function removeGroupLocally(g, why) { const sess = listenSessions.get(g.gid); if (sess) { teardownSession(sess); listenSessions.delete(g.gid); } if (activeGroupCall && activeGroupCall.gid === g.gid) leaveGroupCall(); boards.delete(g.gid); groups.delete(g.gid); convs.delete('g:' + g.gid); if (active === 'g:' + g.gid) active = 'all'; toast(why, 'warn'); renderAll(); renderMessages(); }
 function leaveGroup(g) {
   for (const id of g.members) if (id !== myId && peers.has(id)) sendPeer(peers.get(id), { t: 'group', op: 'leave', gid: g.gid });
   removeGroupLocally(g, `You left "${g.name}"`);
@@ -1222,26 +1226,43 @@ function openWhiteboard(gid) {
 // small in-band control message} shape as the rest of this app's signaling, and the
 // same shape Listen Together's clock message anticipated reusing for live audio.
 // ════════════════════════════════════════════════════════════════════════════
-let activeCall = null;   // { peerId, pc, localStream, remoteAudioEl, status: 'calling'|'ringing'|'active', startedAt, muted, remoteMuted, offerSdp, ringTimer }
+let activeCall = null;        // DM call: { peerId, pc, localStream, remoteAudioEl, status: 'calling'|'ringing'|'active', startedAt, muted, remoteMuted, offerSdp, ringTimer }
+let activeGroupCall = null;   // Group call: { gid, localStream, muted, legs: Map<peerId, {status:'connecting'|'active', remoteAudioEl, remoteMuted}> } — one mesh audio leg per online member, each riding that member's own existing peer connection.
 const validCallSdp = (sdp) => typeof sdp === 'string' && sdp.length > 0 && sdp.length < 20000 && sdp.startsWith('v=0');
-function wireCallTrackHandler(pc) {
+// A leg's underlying data channel can still be finishing its OWN handshake (e.g. a peer that
+// only just finished mesh auto-connecting) right when we try to send the very first thing on
+// it — sendPeer silently returns false rather than queuing, so retry briefly instead of
+// letting the leg hang forever with nothing ever delivered.
+async function sendPeerReliable(peer, msg, tries = 12, delayMs = 250) {
+  for (let i = 0; i < tries; i++) { if (sendPeer(peer, msg)) return true; await sleep(delayMs); }
+  return false;
+}
+// A given pc can carry a DM call target OR a group-call leg (never both — only one call, of
+// either kind, is ever active at a time) — look up which, by peer id, at ontrack time.
+function findCallTarget(peerId) {
+  if (activeCall && activeCall.peerId === peerId) return activeCall;
+  if (activeGroupCall) { const leg = activeGroupCall.legs.get(peerId); if (leg) return leg; }
+  return null;
+}
+function wireCallTrackHandler(pc, peerId) {
   if (pc.__callTrackWired) return; pc.__callTrackWired = true;
   pc.ontrack = (ev) => {
-    if (!activeCall || activeCall.pc !== pc) return;
-    if (!activeCall.remoteAudioEl) activeCall.remoteAudioEl = new Audio();
-    activeCall.remoteAudioEl.srcObject = ev.streams[0] || new MediaStream([ev.track]);
-    activeCall.remoteAudioEl.autoplay = true;
-    activeCall.remoteAudioEl.play().catch(() => {});
+    const target = findCallTarget(peerId); if (!target) return;
+    if (!target.remoteAudioEl) target.remoteAudioEl = new Audio();
+    target.remoteAudioEl.srcObject = ev.streams[0] || new MediaStream([ev.track]);
+    target.remoteAudioEl.autoplay = true;
+    target.remoteAudioEl.play().catch(() => {});
+    renderCallBar();
   };
 }
 async function startCall(peerId) {
-  if (activeCall) return toast('You are already in a call', 'warn');
+  if (activeCall || activeGroupCall) return toast('You are already in a call', 'warn');
   const peer = peers.get(peerId); if (!peer) return toast('That person is offline', 'warn');
   let stream;
   try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
   catch (e) { return toast('Could not access the microphone: ' + (e.message || e), 'bad'); }
   const pc = peer.conn.ctx.pc;
-  wireCallTrackHandler(pc);
+  wireCallTrackHandler(pc, peerId);
   for (const track of stream.getAudioTracks()) pc.addTrack(track, stream);
   activeCall = { peerId, pc, localStream: stream, remoteAudioEl: null, status: 'calling', startedAt: null, muted: false, remoteMuted: false, offerSdp: null };
   renderAll();
@@ -1256,7 +1277,8 @@ async function startCall(peerId) {
 }
 function onCallOffer(peer, m) {
   if (!validCallSdp(m.sdp)) return;
-  if (activeCall) { if (activeCall.peerId !== peer.id) sendPeer(peer, { t: 'call-end', reason: 'busy' }); return; }
+  if (m.gid) return onGroupLegOffer(peer, m);
+  if (activeCall || activeGroupCall) { if (!(activeCall && activeCall.peerId === peer.id)) sendPeer(peer, { t: 'call-end', reason: 'busy' }); return; }
   activeCall = { peerId: peer.id, pc: peer.conn.ctx.pc, localStream: null, remoteAudioEl: null, status: 'ringing', startedAt: null, muted: false, remoteMuted: false, offerSdp: m.sdp };
   toast(`${peer.name} is calling you`, 'ok');
   renderAll();
@@ -1268,7 +1290,7 @@ async function acceptCall() {
   try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
   catch (e) { sendPeer(peer, { t: 'call-end', reason: 'no-mic' }); toast('Could not access the microphone: ' + (e.message || e), 'bad'); endCallLocal('no-mic'); return; }
   const pc = activeCall.pc;
-  wireCallTrackHandler(pc);
+  wireCallTrackHandler(pc, peer.id);
   for (const track of stream.getAudioTracks()) pc.addTrack(track, stream);
   activeCall.localStream = stream;
   try {
@@ -1286,8 +1308,9 @@ function declineCall() {
   endCallLocal('declined');
 }
 async function onCallAnswer(peer, m) {
-  if (!activeCall || activeCall.peerId !== peer.id || activeCall.status !== 'calling') return;
   if (!validCallSdp(m.sdp)) return;
+  if (m.gid) return onGroupLegAnswer(peer, m);
+  if (!activeCall || activeCall.peerId !== peer.id || activeCall.status !== 'calling') return;
   clearTimeout(activeCall.ringTimer);
   try { await activeCall.pc.setRemoteDescription({ type: 'answer', sdp: m.sdp }); }
   catch (e) { toast('Call failed: ' + (e.message || e), 'bad'); endCallLocal('failed'); return; }
@@ -1295,13 +1318,26 @@ async function onCallAnswer(peer, m) {
   renderAll();
 }
 function onCallEnd(peer, m) {
+  if (m.gid) {
+    // A group-call leg was rejected (the target hadn't joined that voice chat yet) or is
+    // being torn down — either way, drop our side's leg so a later, genuine join isn't
+    // blocked by a stale "connecting" entry that will never resolve on its own.
+    if (activeGroupCall && activeGroupCall.gid === m.gid) {
+      const leg = activeGroupCall.legs.get(peer.id);
+      if (leg) { teardownCallLeg(peer.conn.ctx.pc, leg); activeGroupCall.legs.delete(peer.id); renderCallBar(); }
+    }
+    return;
+  }
   if (!activeCall || activeCall.peerId !== peer.id) return;
   const wasActive = activeCall.status === 'active';
   endCallLocal(m.reason || 'ended');
   const reason = m.reason === 'declined' ? 'declined the call' : m.reason === 'busy' ? 'is on another call' : m.reason === 'no-mic' ? 'has no microphone available' : wasActive ? 'ended the call' : m.reason === 'no-answer' ? "didn't answer" : 'ended the call';
   toast(`${peer.name} ${reason}`, wasActive ? 'ok' : 'warn');
 }
-function onCallMute(peer, m) { if (activeCall && activeCall.peerId === peer.id) { activeCall.remoteMuted = m.muted === true; renderCallBar(); } }
+function onCallMute(peer, m) {
+  if (m.gid) { if (activeGroupCall && activeGroupCall.gid === m.gid) { const leg = activeGroupCall.legs.get(peer.id); if (leg) { leg.remoteMuted = m.muted === true; renderCallBar(); } } return; }
+  if (activeCall && activeCall.peerId === peer.id) { activeCall.remoteMuted = m.muted === true; renderCallBar(); }
+}
 function toggleCallMute() {
   if (!activeCall || !activeCall.localStream) return;
   activeCall.muted = !activeCall.muted;
@@ -1325,8 +1361,119 @@ function hangUp() {
   const peer = peers.get(activeCall.peerId); if (peer) sendPeer(peer, { t: 'call-end', reason: 'hangup' });
   endCallLocal('hangup');
 }
+
+// ── group voice chat: an ambient "room" per group (Discord-style), not a ring/accept dance.
+// Joining announces yourself to the group; every member ALREADY in the call independently
+// dials you (or waits to be dialed), by the same smaller-id-dials tie-break the mesh
+// auto-connect logic already uses elsewhere in this file — so it converges to a full mesh
+// with no coordinator and no double-dial, regardless of who joins in what order. ──────────
+function teardownCallLeg(pc, leg) {
+  if (leg.remoteAudioEl) { try { leg.remoteAudioEl.pause(); leg.remoteAudioEl.srcObject = null; } catch (_) {} }
+  try { pc.getSenders().filter((s) => s.track && s.track.kind === 'audio').forEach((s) => { try { pc.removeTrack(s); } catch (_) {} }); } catch (_) {}
+}
+async function dialGroupLeg(peer, gid) {
+  if (!activeGroupCall || activeGroupCall.gid !== gid || activeGroupCall.legs.has(peer.id)) return;
+  const pc = peer.conn.ctx.pc;
+  wireCallTrackHandler(pc, peer.id);
+  for (const t of activeGroupCall.localStream.getAudioTracks()) pc.addTrack(t, activeGroupCall.localStream);
+  activeGroupCall.legs.set(peer.id, { status: 'connecting', remoteAudioEl: null, remoteMuted: false });
+  try {
+    await pc.setLocalDescription(await pc.createOffer());
+    await waitGather(pc);
+    if (!(await sendPeerReliable(peer, { t: 'call-offer', sdp: pc.localDescription.sdp, gid }))) throw new Error('could not reach ' + peer.name);
+  } catch (e) { activeGroupCall.legs.delete(peer.id); }
+  renderCallBar();
+}
+async function joinGroupCall(gid) {
+  if (activeCall || activeGroupCall) return toast('You are already in a call', 'warn');
+  const g = groups.get(gid); if (!g) return;
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  catch (e) { return toast('Could not access the microphone: ' + (e.message || e), 'bad'); }
+  activeGroupCall = { gid, localStream: stream, muted: false, legs: new Map() };
+  renderAll();
+  const members = groupRecipients(gid);
+  for (const peer of members) sendPeer(peer, { t: 'group-call-join', gid });
+  for (const peer of members) if (myId < peer.id) await dialGroupLeg(peer, gid);
+  toast(members.length ? `Joined the voice chat in "${g.name}"` : `Joined "${g.name}" — nobody else is here yet`, 'ok');
+}
+function onGroupCallJoin(peer, m) {
+  const gid = m.gid; if (!/^[0-9a-f]{12}$/.test(gid || '')) return;
+  const g = groups.get(gid); if (!g || !g.members.has(peer.id) || !g.members.has(myId)) return;
+  if (!activeGroupCall || activeGroupCall.gid !== gid) { toast(`${peer.name} joined the voice chat in "${g.name}"`, 'ok'); return; }
+  if (activeGroupCall.legs.has(peer.id)) return;
+  if (myId < peer.id) dialGroupLeg(peer, gid);   // else: they'll dial me (same tie-break, their side)
+}
+function onGroupLegOffer(peer, m) {
+  const gid = m.gid; if (!/^[0-9a-f]{12}$/.test(gid || '')) return;
+  if (!activeGroupCall || activeGroupCall.gid !== gid) {
+    // We're not (or no longer) in this call — most commonly because someone else just
+    // joined and proactively dialed every online group member before we'd joined
+    // ourselves. Reject explicitly (not a silent drop) so THEIR leg gets cleaned up
+    // immediately instead of sitting stuck at "connecting" forever, which would
+    // otherwise block a real connection once we do join later (the legs.has() guard
+    // below would wrongly see that stale entry as "already in progress").
+    sendPeer(peer, { t: 'call-end', reason: 'not-in-call', gid });
+    return;
+  }
+  if (activeGroupCall.legs.has(peer.id)) return;
+  const pc = peer.conn.ctx.pc;
+  wireCallTrackHandler(pc, peer.id);
+  for (const t of activeGroupCall.localStream.getAudioTracks()) pc.addTrack(t, activeGroupCall.localStream);
+  const leg = { status: 'connecting', remoteAudioEl: null, remoteMuted: false };
+  activeGroupCall.legs.set(peer.id, leg);
+  (async () => {
+    try {
+      await pc.setRemoteDescription({ type: 'offer', sdp: m.sdp });
+      await pc.setLocalDescription(await pc.createAnswer());
+      await waitGather(pc);
+      if (!(await sendPeerReliable(peer, { t: 'call-answer', sdp: pc.localDescription.sdp, gid }))) throw new Error('could not reach ' + peer.name);
+      leg.status = 'active'; renderCallBar();
+    } catch (e) { activeGroupCall.legs.delete(peer.id); }
+  })();
+}
+async function onGroupLegAnswer(peer, m) {
+  if (!activeGroupCall || activeGroupCall.gid !== m.gid) return;
+  const leg = activeGroupCall.legs.get(peer.id); if (!leg || leg.status !== 'connecting') return;
+  try { await peer.conn.ctx.pc.setRemoteDescription({ type: 'answer', sdp: m.sdp }); leg.status = 'active'; renderCallBar(); }
+  catch (e) { activeGroupCall.legs.delete(peer.id); }
+}
+function onGroupCallLeave(peer, m) {
+  if (!activeGroupCall || activeGroupCall.gid !== m.gid) return;
+  const leg = activeGroupCall.legs.get(peer.id); if (!leg) return;
+  teardownCallLeg(peer.conn.ctx.pc, leg);
+  activeGroupCall.legs.delete(peer.id);
+  toast(`${peer.name} left the voice chat`, 'warn');
+  renderCallBar();
+}
+function leaveGroupCall() {
+  if (!activeGroupCall) return;
+  for (const [peerId, leg] of activeGroupCall.legs) {
+    const peer = peers.get(peerId);
+    if (peer) { sendPeer(peer, { t: 'group-call-leave', gid: activeGroupCall.gid }); teardownCallLeg(peer.conn.ctx.pc, leg); }
+  }
+  try { activeGroupCall.localStream.getTracks().forEach((t) => t.stop()); } catch (_) {}
+  activeGroupCall = null;
+  renderAll();
+}
+function toggleGroupCallMute() {
+  if (!activeGroupCall) return;
+  activeGroupCall.muted = !activeGroupCall.muted;
+  activeGroupCall.localStream.getAudioTracks().forEach((t) => { t.enabled = !activeGroupCall.muted; });
+  for (const peerId of activeGroupCall.legs.keys()) { const peer = peers.get(peerId); if (peer) sendPeer(peer, { t: 'call-mute', muted: activeGroupCall.muted, gid: activeGroupCall.gid }); }
+  renderCallBar();
+}
 function renderCallBar() {
   const box = $('#call-bar'); if (!box) return;
+  if (activeGroupCall) {
+    const g = groups.get(activeGroupCall.gid), name = g ? g.name : 'Group';
+    const connected = [...activeGroupCall.legs.values()].filter((l) => l.status === 'active').length;
+    box.replaceChildren(ic('phone', 16),
+      h('div', { class: 'grow' }, `Voice chat — ${name} (${connected + 1} connected)`),
+      h('button', { class: 'btn sm' + (activeGroupCall.muted ? ' on' : ''), title: activeGroupCall.muted ? 'Unmute' : 'Mute', onclick: toggleGroupCallMute }, ic(activeGroupCall.muted ? 'micOff' : 'mic', 14)),
+      h('button', { class: 'btn sm danger', onclick: leaveGroupCall }, ic('phoneOff', 14), 'Leave'));
+    return;
+  }
   if (!activeCall) { box.replaceChildren(); return; }
   const peer = peers.get(activeCall.peerId), name = peer ? peer.name : 'Unknown';
   if (activeCall.status === 'ringing') {
@@ -1343,7 +1490,50 @@ function renderCallBar() {
       h('button', { class: 'btn sm danger', onclick: hangUp }, ic('phoneOff', 14), 'Hang up'));
   }
 }
-setInterval(() => { if (activeCall && activeCall.status === 'active') renderCallBar(); }, 1000);
+setInterval(() => { if ((activeCall && activeCall.status === 'active') || activeGroupCall) renderCallBar(); }, 1000);
+
+// ════════════════════════════════════════════════════════════════════════════
+// 6e. Mesh bridge — lets OTHER apps (not this one) piggyback messages on the peer
+// connections this app already holds open, instead of standing up their own WebRTC
+// signaling. Registered as platform.host commands (see documentation/apps/webrtc.md):
+//   webrtc.mesh.available   -> boolean
+//   webrtc.mesh.myId        -> { id, name }
+//   webrtc.mesh.groups      -> [{ gid, name, members:[{id,name,online}] }]
+//   webrtc.mesh.send(gid, channel, payload) -> { ok, sentTo } | { ok:false, err }
+//   webrtc.mesh.subscribe(channel, handler) -> { unsubscribe() }, handler(gid, fromPeerId, fromName, payload)
+// A message is just a normal 'app-relay' control frame on the existing data channel,
+// namespaced by an app-chosen `channel` string so unrelated apps' traffic can't collide,
+// and validated the same way every other group message in this file is (gid must be a
+// real group both sides are actually in — identity is the connection it arrived on).
+// ════════════════════════════════════════════════════════════════════════════
+const meshSubscribers = new Map();   // channel -> Set<handler>
+function meshGroupsSnapshot() {
+  return [...groups.values()].map((g) => ({
+    gid: g.gid, name: g.name,
+    members: [...g.members].map((id) => ({ id, name: id === myId ? (settings.name || ('Guest-' + shortId(myId))) : (peers.get(id)?.name || shortId(id)), online: id === myId || peers.has(id) })),
+  }));
+}
+function meshSend(gid, channel, payload) {
+  if (typeof gid !== 'string' || typeof channel !== 'string' || !channel) return { ok: false, err: 'usage: send(gid, channel, payload)' };
+  const g = groups.get(gid); if (!g) return { ok: false, err: 'no such group' };
+  let json; try { json = JSON.stringify(payload); } catch (e) { return { ok: false, err: 'payload is not JSON-serializable' }; }
+  if (json.length > 60000) return { ok: false, err: 'payload too large (limit ~60KB per message — chunk larger data yourself)' };
+  const recipients = groupRecipients(gid);
+  for (const p of recipients) sendPeer(p, { t: 'app-relay', gid, channel, payload });
+  return { ok: true, sentTo: recipients.length };
+}
+function meshSubscribe(channel, handler) {
+  if (typeof channel !== 'string' || !channel || typeof handler !== 'function') throw new Error('usage: subscribe(channel, handler)');
+  if (!meshSubscribers.has(channel)) meshSubscribers.set(channel, new Set());
+  meshSubscribers.get(channel).add(handler);
+  return { unsubscribe: () => { meshSubscribers.get(channel)?.delete(handler); } };
+}
+function onAppRelay(peer, m) {
+  if (typeof m.channel !== 'string' || typeof m.gid !== 'string') return;
+  const g = groups.get(m.gid); if (!g || !g.members.has(peer.id) || !g.members.has(myId)) return;
+  const subs = meshSubscribers.get(m.channel); if (!subs || !subs.size) return;
+  for (const handler of subs) { try { handler(m.gid, peer.id, peer.name, m.payload); } catch (e) { console.warn('[webrtc] mesh subscriber for', m.channel, 'threw:', e); } }
+}
 
 // ════════════════════════════════════════════════════════════════════════════
 // 7. shared VFS folders (owner side — every check runs HERE, on every request)
@@ -1744,9 +1934,10 @@ const HELP = `usage: webrtc <command>
   messages <everyone|@user|#group> [n]  show the last n messages (default 20)
   sendfile <everyone|@user|#group> <vfs-path>   send a file from the VFS
   listen <#group> <vfs-path>          start Listen Together with a track from the VFS
-  call <@user>                        start a voice call (DM only, one at a time)
-  answer | decline | hangup           answer / decline / end the current call
+  call <@user>                        start a voice call (DM, one at a time)
+  answer-call | decline | hangup      answer / decline / end the current call (DM or group)
   call-status                         show the current call state
+  voice <#group>                      join that group's voice chat
   listen-stop <#group>                 stop Listen Together for everyone in that group
   name <new name>                     change your display name
   invite [name]                       create a join link
@@ -1854,13 +2045,22 @@ async function runCli(args) {
         listenStopForEveryone(sess); return { ok: true, out: 'stopped' };
       }
       case 'call': { const p = findPeer(a[0]); await startCall(p.id); return { ok: true, out: activeCall ? 'calling ' + p.name : 'could not start the call' }; }
-      case 'answer': { if (!activeCall || activeCall.status !== 'ringing') throw new Error('no incoming call to answer'); await acceptCall(); return { ok: true, out: activeCall ? 'answered' : 'could not answer' }; }
+      case 'answer-call': { if (!activeCall || activeCall.status !== 'ringing') throw new Error('no incoming call to answer'); await acceptCall(); return { ok: true, out: activeCall ? 'answered' : 'could not answer' }; }
       case 'decline': { if (!activeCall || activeCall.status !== 'ringing') throw new Error('no incoming call to decline'); declineCall(); return { ok: true, out: 'declined' }; }
-      case 'hangup': { if (!activeCall) throw new Error('not in a call'); hangUp(); return { ok: true, out: 'hung up' }; }
+      case 'hangup': {
+        if (activeGroupCall) { const g = groups.get(activeGroupCall.gid); leaveGroupCall(); return { ok: true, out: 'left the voice chat' + (g ? ` in "${g.name}"` : '') }; }
+        if (!activeCall) throw new Error('not in a call'); hangUp(); return { ok: true, out: 'hung up' };
+      }
       case 'call-status': {
+        if (activeGroupCall) { const g = groups.get(activeGroupCall.gid); const n = [...activeGroupCall.legs.values()].filter((l) => l.status === 'active').length; return { ok: true, out: `voice chat in "${g ? g.name : '?'}" — ${n + 1} connected${activeGroupCall.muted ? ' · muted' : ''}` }; }
         if (!activeCall) return { ok: true, out: 'not in a call' };
         const p = peers.get(activeCall.peerId);
         return { ok: true, out: `${activeCall.status} with ${p ? p.name : '?'}` + (activeCall.status === 'active' ? ` · ${fmtClock((Date.now() - activeCall.startedAt) / 1000)}${activeCall.muted ? ' · muted' : ''}${activeCall.remoteMuted ? ` · ${p ? p.name : 'they'} muted` : ''}` : '') };
+      }
+      case 'voice': {
+        const target = a[0]; if (!target || !target.startsWith('#')) throw new Error('usage: voice <#group>');
+        const g = [...groups.values()].find((x) => x.name.toLowerCase() === target.slice(1).toLowerCase() || x.gid === target.slice(1)); if (!g) throw new Error('no such group');
+        await joinGroupCall(g.gid); return { ok: true, out: activeGroupCall ? 'joined the voice chat in "' + g.name + '"' : 'could not join' };
       }
       case 'name': { const n = a.join(' '); if (!cleanText(n, 40)) throw new Error('usage: name <new name>'); setMyName(n); return { ok: true, out: 'you are now ' + settings.name }; }
       case 'invite': { const inv = await createInvite(a.join(' ') || settings.name || 'Guest-' + shortId(myId)); return { ok: true, out: `Send this link to the person you want to invite:\n\n${inv.link}\n\nThey will send back an answer link; then run:  webrtc answer <answer link>` }; }
@@ -1999,7 +2199,16 @@ function renderHeader() {
   let sub = '', actions = [];
   if (c.kind === 'all') { sub = `${peers.size + 1} in this room`; actions = [h('button', { class: 'btn sm', onclick: () => openConnect('invite') }, ic('userplus', 14), 'Invite')]; }
   if (c.kind === 'dm') { const p = peers.get(c.peerId); sub = p ? `online · connected ${fmtAgo(p.since)} ago${p.via === 'mesh' ? ' · via mesh' : ''}` : 'offline'; if (p) actions = [h('button', { class: 'btn sm', disabled: !!activeCall, title: activeCall ? 'Already in a call' : 'Voice call', onclick: () => startCall(p.id) }, ic('phone', 14), 'Call'), h('button', { class: 'btn sm', onclick: () => openAccess(p.id) }, ic('shield', 14), 'Permissions')]; }
-  if (c.kind === 'group') { const g = groups.get(c.gid); sub = g ? `${g.members.size} members · ${[...g.members].filter(id => id === myId || peers.has(id)).length} online` : ''; actions = [h('button', { class: 'btn sm', onclick: () => openWhiteboard(c.gid) }, ic('board', 14), 'Whiteboard'), h('button', { class: 'btn sm', onclick: () => openMembers(c.gid) }, ic('users', 14), 'Members')]; }
+  if (c.kind === 'group') {
+    const g = groups.get(c.gid); sub = g ? `${g.members.size} members · ${[...g.members].filter(id => id === myId || peers.has(id)).length} online` : '';
+    const inThisCall = activeGroupCall && activeGroupCall.gid === c.gid;
+    const busy = !inThisCall && (!!activeCall || !!activeGroupCall);
+    actions = [
+      h('button', { class: 'btn sm' + (inThisCall ? ' danger' : ''), disabled: busy, title: busy ? 'Already in a call' : inThisCall ? 'Leave the voice chat' : 'Join the voice chat', onclick: () => inThisCall ? leaveGroupCall() : joinGroupCall(c.gid) }, ic(inThisCall ? 'phoneOff' : 'phone', 14), inThisCall ? 'Leave Voice' : 'Join Voice'),
+      h('button', { class: 'btn sm', onclick: () => openWhiteboard(c.gid) }, ic('board', 14), 'Whiteboard'),
+      h('button', { class: 'btn sm', onclick: () => openMembers(c.gid) }, ic('users', 14), 'Members'),
+    ];
+  }
   head.replaceChildren(h('div', { class: 'grow' }, h('div', { class: 'h-title' }, convTitle(c)), h('div', { class: 'h-sub' }, sub)), ...actions);
 }
 function renderComposer() {
@@ -2277,6 +2486,7 @@ function openSettings() {
 function cleanup() {
   unmountAll();
   if (activeCall) { const p = peers.get(activeCall.peerId); if (p) sendPeer(p, { t: 'call-end', reason: 'hangup' }); endCallLocal('closed'); }
+  if (activeGroupCall) leaveGroupCall();
   for (const sess of listenSessions.values()) { if (sess.isOriginator) for (const p of groupRecipients(sess.gid)) sendPeer(p, { t: 'listen-stop', gid: sess.gid }); teardownSession(sess); }
   listenSessions.clear();
   for (const p of peers.values()) { sendPeer(p, { t: 'bye', reason: 'closed' }); try { p.conn.dc.close(); p.conn.ctx.pc.close(); } catch (_) {} }
@@ -2300,6 +2510,12 @@ async function init() {
     // CLI bridge (/bin/webrtc.run) and deep-link delivery (opt/apps/webrtc/main.js).
     cleanupFns.push(PLAT.host.registerCommand('webrtc.api', (...args) => runCli(args.map(String)), { callable: false, title: 'WebRTC control API' }).remove);
     cleanupFns.push(PLAT.host.registerCommand('webrtc.deliver', (arg) => deliverSignal(String(arg)), { callable: false, title: 'WebRTC signal delivery', alive: () => !!window.frameElement && window.frameElement.isConnected }).remove);
+    // Mesh bridge — lets other apps piggyback messages on these same peer connections (see section 6e above).
+    cleanupFns.push(PLAT.host.registerCommand('webrtc.mesh.available', () => true, { callable: false, title: 'WebRTC mesh bridge available' }).remove);
+    cleanupFns.push(PLAT.host.registerCommand('webrtc.mesh.myId', () => ({ id: myId, name: settings.name || ('Guest-' + shortId(myId)) }), { callable: false }).remove);
+    cleanupFns.push(PLAT.host.registerCommand('webrtc.mesh.groups', () => meshGroupsSnapshot(), { callable: false }).remove);
+    cleanupFns.push(PLAT.host.registerCommand('webrtc.mesh.send', (gid, channel, payload) => meshSend(gid, channel, payload), { callable: false }).remove);
+    cleanupFns.push(PLAT.host.registerCommand('webrtc.mesh.subscribe', (channel, handler) => meshSubscribe(channel, handler), { callable: false }).remove);
   }
   window.addEventListener('pagehide', cleanup);
   window.addEventListener('beforeunload', cleanup);
@@ -2309,7 +2525,7 @@ async function init() {
   const hs = new URLSearchParams(location.hash.slice(1)).get('arg');
   if (qs || hs) deliverSignal(qs || hs);
 
-  window.__webrtcApp = { myId, peers, groups, convs, shares, invites, joins, settings, banned, activity, mounts, listenSessions, boards, runCli, handleIncomingCode, deliverSignal, createInvite, generateAnswer, sendText, createGroup, sendFilesTo, sendVfsFile, pickVfsFile, addShare, setGrant, vfsCall, vfsDownload, vfsUpload, findPeer, mountShare, unmountOne, syncMount, findMount, startListenTogether, listenTogglePlay, listenSeek, listenToggleMute, listenStopForEveryone, openWhiteboard, ensureBoard, wbUndoMine, wbClearBoard, groupUpdate, wbSaveToVfs, pickFolderDialog, startCall, acceptCall, declineCall, hangUp, toggleCallMute, get activeCall() { return activeCall; }, get active() { return active; }, get myPid() { return MY_PID; } };
+  window.__webrtcApp = { myId, peers, groups, convs, shares, invites, joins, settings, banned, activity, mounts, listenSessions, boards, runCli, handleIncomingCode, deliverSignal, createInvite, generateAnswer, sendText, createGroup, sendFilesTo, sendVfsFile, pickVfsFile, addShare, setGrant, vfsCall, vfsDownload, vfsUpload, findPeer, mountShare, unmountOne, syncMount, findMount, startListenTogether, listenTogglePlay, listenSeek, listenToggleMute, listenStopForEveryone, openWhiteboard, ensureBoard, wbUndoMine, wbClearBoard, groupUpdate, wbSaveToVfs, pickFolderDialog, startCall, acceptCall, declineCall, hangUp, toggleCallMute, joinGroupCall, leaveGroupCall, toggleGroupCallMute, meshSend, meshSubscribe, get activeCall() { return activeCall; }, get activeGroupCall() { return activeGroupCall; }, get active() { return active; }, get myPid() { return MY_PID; } };
 }
 init();
 </script>

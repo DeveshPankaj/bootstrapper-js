@@ -1,0 +1,42 @@
+/** /bin/diff.run */
+const terminal = platform.getService('terminal');
+const fs = platform.host.getFS();
+const [pwd, file1, file2, ...rest] = $args;
+const write = terminal ? terminal.write.bind(terminal) : console.log;
+
+if (!file1 || !file2) { write('usage: diff <file1> <file2>\n'); return; }
+
+const path1 = file1.startsWith('/') ? file1 : `${pwd}/${file1}`;
+const path2 = file2.startsWith('/') ? file2 : `${pwd}/${file2}`;
+
+if (!fs.existsSync(path1)) { write(`diff: ${file1}: No such file or directory\n`); return; }
+if (!fs.existsSync(path2)) { write(`diff: ${file2}: No such file or directory\n`); return; }
+
+const a = fs.readFileSync(path1, 'utf8').split('\n');
+const b = fs.readFileSync(path2, 'utf8').split('\n');
+if (a.length && a[a.length - 1] === '') a.pop();
+if (b.length && b[b.length - 1] === '') b.pop();
+
+// Classic O(n*m) LCS table — small, correct, no external dependency. Fine
+// for terminal-sized text files; not meant for huge inputs.
+const n = a.length, m = b.length;
+const lcs = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+for (let i = n - 1; i >= 0; i--) {
+  for (let j = m - 1; j >= 0; j--) {
+    lcs[i][j] = a[i] === b[j] ? lcs[i + 1][j + 1] + 1 : Math.max(lcs[i + 1][j], lcs[i][j + 1]);
+  }
+}
+
+const out = [];
+let i = 0, j = 0;
+while (i < n && j < m) {
+  if (a[i] === b[j]) { i++; j++; }
+  else if (lcs[i + 1][j] >= lcs[i][j + 1]) { out.push(`-${a[i]}`); i++; }
+  else { out.push(`+${b[j]}`); j++; }
+}
+while (i < n) { out.push(`-${a[i]}`); i++; }
+while (j < m) { out.push(`+${b[j]}`); j++; }
+
+if (!out.length) { write('Files are identical\n'); return; }
+
+write([`--- ${file1}`, `+++ ${file2}`, ...out].join('\n') + '\n');

@@ -1,0 +1,70 @@
+/** /bin/xargs.run */
+// Scope note: this shell has no real `|` pipe operator between two commands
+// (only `<file`/`>file`/`>>file` redirects — see runWithRedirects in
+// opt/apps/terminal/main.html, which simulates `<` by appending the
+// resolved file path as a trailing arg rather than streaming real bytes).
+// So xargs' "stdin" here is always a real vfs file: either given explicitly
+// with `-a <file>`, or implicitly as the shell's `<file` redirect (which
+// lands as the last positional arg, matching how every other file-reading
+// command already receives its input in this shell).
+const terminal = platform.getService('terminal');
+const fs = platform.host.getFS();
+const context = platform.getService('context') ?? {};
+const [pwd, ...args] = $args;
+const write = terminal ? terminal.write.bind(terminal) : console.log;
+
+let inputFile = null;
+const rest = [];
+for (let i = 0; i < args.length; i++) {
+  if (args[i] === '-a' && args[i + 1]) { inputFile = args[++i]; continue; }
+  rest.push(args[i]);
+}
+
+// No -a given: if the last positional arg resolves to an existing file,
+// treat it as the token source (this is exactly what `xargs <cmd> < file`
+// produces once the shell's `<` redirect appends the resolved path).
+if (!inputFile && rest.length > 1) {
+  const last = rest[rest.length - 1];
+  const lastPath = last.startsWith('/') ? last : `${pwd}/${last}`;
+  if (fs.existsSync(lastPath) && fs.statSync(lastPath).isFile()) {
+    inputFile = last;
+    rest.pop();
+  }
+}
+
+if (!rest.length) {
+  write('usage: xargs [-a <file>] <command> [initial-args...] [<file>]\n' +
+        'note: this shell has no real `|` pipe — supply input via -a <file>, or `cmd < file`\n');
+  return;
+}
+
+if (!inputFile) {
+  write('xargs: no input source given (use `xargs -a <file> <command>`, or `xargs <command> < <file>`)\n');
+  return;
+}
+
+const inputPath = inputFile.startsWith('/') ? inputFile : `${pwd}/${inputFile}`;
+if (!fs.existsSync(inputPath)) { write(`xargs: ${inputFile}: No such file or directory\n`); return; }
+
+const tokens = fs.readFileSync(inputPath, 'utf8').split(/\s+/).filter(Boolean);
+if (!tokens.length) { return; }
+
+const [cmdName, ...initialArgs] = rest;
+
+const PATH = (context.PATH || '/bin:/usr/bin').split(':');
+function findCommandFile(name) {
+  for (const dir of PATH) {
+    const f = `${dir}/${name}.run`;
+    if (fs.existsSync(f)) return f;
+  }
+  return null;
+}
+
+const commandFile = findCommandFile(cmdName);
+if (!commandFile) { write(`xargs: ${cmdName}: command not found\n`); return; }
+
+// Run once per token (a valid, explicitly-allowed alternative to batching
+// all tokens into a single trailing-args invocation).
+for (const token of tokens) {
+  await platform.host.exec(platform, commandFile, pwd, ...initialArgs, token);
+}

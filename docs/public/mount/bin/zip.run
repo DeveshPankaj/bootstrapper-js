@@ -1,0 +1,135 @@
+/** /bin/zip.run */
+// A real, standard ZIP file: local file headers + central directory + EOCD,
+// CRC-32 per entry, method 8 (deflate, via the browser's native
+// CompressionStream('deflate-raw') — same pattern as opt/apps/webrtc/main.html's
+// encodeSignal/pipeBytes) or method 0 (store) when deflating doesn't help or
+// for directories. Writable by, and readable from, any standard unzip tool.
+const terminal = platform.getService('terminal');
+const fs = platform.host.getFS();
+const [pwd, archiveArg, ...paths] = $args;
+const write = terminal ? terminal.write.bind(terminal) : console.log;
+
+if (!archiveArg || !paths.length) { write('usage: zip <archive.zip> <path...>\n'); return; }
+
+function resolvePath(p) { return p.startsWith('/') ? p : `${pwd}/${p}`; }
+
+async function pipeBytes(bytes, transform) {
+  return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(transform)).arrayBuffer());
+}
+const HAS_STREAMS = typeof CompressionStream === 'function';
+async function deflateRaw(bytes) {
+  if (!HAS_STREAMS) return null;
+  try { return await pipeBytes(bytes, new CompressionStream('deflate-raw')); } catch (_) { return null; }
+}
+
+// CRC-32 (standard IEEE polynomial 0xEDB88320 table)
+const CRC_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    table[n] = c >>> 0;
+  }
+  return table;
+})();
+function crc32(bytes) {
+  let crc = 0xFFFFFFFF;
+  for (let i = 0; i < bytes.length; i++) crc = CRC_TABLE[(crc ^ bytes[i]) & 0xFF] ^ (crc >>> 8);
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+function toDosDateTime(date) {
+  const dosTime = ((date.getHours() & 0x1F) << 11) | ((date.getMinutes() & 0x3F) << 5) | ((Math.floor(date.getSeconds() / 2)) & 0x1F);
+  const dosDate = (((Math.max(0, date.getFullYear() - 1980)) & 0x7F) << 9) | (((date.getMonth() + 1) & 0xF) << 5) | (date.getDate() & 0x1F);
+  return { dosTime, dosDate };
+}
+function u16(n) { const b = Buffer.alloc(2); b.writeUInt16LE(n & 0xFFFF, 0); return b; }
+function u32(n) { const b = Buffer.alloc(4); b.writeUInt32LE(n >>> 0, 0); return b; }
+
+function collectEntries(root, baseName) {
+  const out = [];
+  const stat = fs.statSync(root);
+  if (stat.isDirectory()) {
+    out.push({ relPath: baseName + '/', absPath: root, isDir: true, mtime: stat.mtime });
+    let names = [];
+    try { names = fs.readdirSync(root).sort(); } catch (_) {}
+    for (const name of names) {
+      out.push(...collectEntries(`${root}/${name}`.replace(/\/+/g, '/'), `${baseName}/${name}`));
+    }
+  } else {
+    out.push({ relPath: baseName, absPath: root, isDir: false, mtime: stat.mtime });
+  }
+  return out;
+}
+
+async function createZip(archivePath, srcPaths) {
+  let entries = [];
+  for (const p of srcPaths) {
+    const abs = resolvePath(p);
+    if (!fs.existsSync(abs)) { write(`zip: ${p}: No such file or directory\n`); return; }
+    const base = p.replace(/\/+$/, '').split('/').filter(Boolean).pop() || p;
+    entries = entries.concat(collectEntries(abs, base));
+  }
+
+  const localChunks = [];
+  const centralChunks = [];
+  let offset = 0;
+  let fileCount = 0;
+
+  for (const e of entries) {
+    const nameBuf = Buffer.from(e.relPath, 'utf8');
+    const { dosTime, dosDate } = toDosDateTime(e.mtime ? new Date(e.mtime) : new Date());
+    let dataBuf, compMethod, crc, compSize, uncompSize;
+
+    if (e.isDir) {
+      dataBuf = Buffer.alloc(0);
+      compMethod = 0; crc = 0; compSize = 0; uncompSize = 0;
+    } else {
+      const raw = fs.readFileSync(e.absPath);
+      const rawBuf = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
+      uncompSize = rawBuf.length;
+      crc = crc32(rawBuf);
+      const compressed = uncompSize > 0 ? await deflateRaw(rawBuf) : null;
+      if (compressed && compressed.length < uncompSize) {
+        dataBuf = Buffer.from(compressed);
+        compMethod = 8;
+        compSize = dataBuf.length;
+      } else {
+        dataBuf = rawBuf;
+        compMethod = 0;
+        compSize = uncompSize;
+      }
+    }
+
+    const localHeader = Buffer.concat([
+      u32(0x04034b50), u16(20), u16(0), u16(compMethod), u16(dosTime), u16(dosDate),
+      u32(crc), u32(compSize), u32(uncompSize), u16(nameBuf.length), u16(0), nameBuf,
+    ]);
+    localChunks.push(localHeader, dataBuf);
+
+    const localOffset = offset;
+    offset += localHeader.length + dataBuf.length;
+
+    const centralHeader = Buffer.concat([
+      u32(0x02014b50), u16(20), u16(20), u16(0), u16(compMethod), u16(dosTime), u16(dosDate),
+      u32(crc), u32(compSize), u32(uncompSize), u16(nameBuf.length), u16(0), u16(0),
+      u16(0), u16(0), u32(e.isDir ? 0x10 : 0), u32(localOffset), nameBuf,
+    ]);
+    centralChunks.push(centralHeader);
+    fileCount++;
+  }
+
+  const centralDirStart = offset;
+  const centralDir = Buffer.concat(centralChunks);
+
+  const eocd = Buffer.concat([
+    u32(0x06054b50), u16(0), u16(0), u16(fileCount), u16(fileCount),
+    u32(centralDir.length), u32(centralDirStart), u16(0),
+  ]);
+
+  const full = Buffer.concat([...localChunks, centralDir, eocd]);
+  fs.writeFileSync(resolvePath(archivePath), full);
+  write(`zip: created ${archivePath} (${fileCount} entries, ${full.length} bytes)\n`);
+}
+
+await createZip(archiveArg, paths);

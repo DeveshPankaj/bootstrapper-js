@@ -1,0 +1,52 @@
+/** /bin/du.run */
+const terminal = platform.getService('terminal');
+const fs = platform.host.getFS();
+const [pwd, ...args] = $args;
+const write = terminal ? terminal.write.bind(terminal) : console.log;
+
+const human = args.includes('-h');
+const paths = args.filter(a => !a.startsWith('-'));
+const rootDir = (paths[0] ? (paths[0].startsWith('/') ? paths[0] : `${pwd}/${paths[0]}`) : pwd).replace(/\/+/g, '/');
+
+if (!fs.existsSync(rootDir)) { write(`du: ${paths[0] || rootDir}: No such file or directory\n`); return; }
+
+function formatSize(bytes) {
+  if (!human) return String(bytes);
+  if (bytes < 1024) return `${bytes}B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}K`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)}M`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)}G`;
+}
+
+function sizeOf(path) {
+  let stat;
+  try { stat = fs.statSync(path); } catch (_) { return 0; }
+  if (!stat.isDirectory()) return stat.size;
+  let entries = [];
+  try { entries = fs.readdirSync(path); } catch (_) { return 0; }
+  let total = 0;
+  for (const name of entries) {
+    total += sizeOf(`${path}/${name}`.replace(/\/+/g, '/'));
+  }
+  return total;
+}
+
+const rootStat = fs.statSync(rootDir);
+const lines = [];
+
+if (rootStat.isDirectory()) {
+  let entries = [];
+  try { entries = fs.readdirSync(rootDir).sort(); } catch (_) {}
+  let total = 0;
+  for (const name of entries) {
+    const full = `${rootDir}/${name}`.replace(/\/+/g, '/');
+    const size = sizeOf(full);
+    total += size;
+    lines.push(`${formatSize(size)}\t${full}`);
+  }
+  lines.push(`${formatSize(total)}\t${rootDir}`);
+} else {
+  lines.push(`${formatSize(rootStat.size)}\t${rootDir}`);
+}
+
+write(lines.join('\n') + '\n');

@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Distributed Compute</title>
+<link rel="stylesheet" href="https://unpkg.com/codemirror@5.65.16/lib/codemirror.css">
+<style>
+  :root {
+    --bg: #141517;
+    --surface: #1a1b1e;
+    --surface2: #25262b;
+    --surface3: #2c2e33;
+    --border: #373a40;
+    --text: #c1c2c5;
+    --text-dim: #909296;
+    --text-bright: #e9ecef;
+    --accent: #4dabf7;
+    --danger: #ff6b6b;
+    --ok: #51cf66;
+    --warn: #fcc419;
+    --radius: 8px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 13px; overflow: hidden; }
+  #app { display: flex; flex-direction: column; height: 100%; }
+
+  #header { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--surface); border-bottom: 1px solid var(--border); flex-wrap: wrap; flex-shrink: 0; }
+  #header h1 { font-size: 14px; font-weight: 600; color: var(--text-bright); white-space: nowrap; }
+  select, button, input[type=number] { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 5px 9px; font-size: 12px; cursor: pointer; }
+  select:hover, button:hover { border-color: #4a4d56; }
+  button.primary { background: var(--accent); color: #06131f; border-color: var(--accent); font-weight: 600; }
+  button.primary:disabled { opacity: 0.5; cursor: default; }
+  button:disabled { opacity: 0.5; cursor: default; }
+  #mesh-banner { font-size: 11.5px; color: var(--text-dim); padding: 2px 10px; }
+  #mesh-banner.ok { color: var(--ok); }
+  #mesh-banner.warn { color: var(--warn); }
+
+  .main-grid { flex: 1; display: grid; grid-template-columns: 200px 1fr 260px; min-height: 0; }
+  aside, section { min-height: 0; overflow: auto; }
+  #roster { background: var(--surface); border-right: 1px solid var(--border); padding: 10px; }
+  #roster h2, #progress-pane h2, #result-pane h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim); margin-bottom: 6px; }
+  .worker-row { display: flex; align-items: center; gap: 6px; padding: 5px 6px; border-radius: 6px; margin-bottom: 3px; background: var(--surface2); }
+  .worker-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); flex-shrink: 0; }
+  .worker-dot.self { background: var(--accent); }
+  .worker-name { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  #editor-pane { display: flex; flex-direction: column; border-right: 1px solid var(--border); }
+  #editor-toolbar { display: flex; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--border); align-items: center; }
+  #editor-host { flex: 1; min-height: 0; overflow: auto; }
+  #editor-host .CodeMirror { height: 100%; font-size: 12.5px; }
+  .plain-editor { width: 100%; height: 100%; background: var(--surface); color: var(--text); border: none; outline: none; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; padding: 10px; resize: none; }
+
+  #progress-pane, #result-pane { padding: 10px; background: var(--surface); }
+  #progress-pane { border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+  #progress-list { flex: 1; overflow: auto; }
+  .chunk-row { display: flex; align-items: center; gap: 6px; padding: 3px 4px; font-size: 11.5px; border-radius: 4px; }
+  .chunk-idx { color: var(--text-dim); width: 26px; flex-shrink: 0; }
+  .chunk-worker { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dim); }
+  .chunk-status { font-weight: 600; padding: 1px 6px; border-radius: 4px; font-size: 10.5px; }
+  .status-queued { color: var(--text-dim); background: var(--surface3); }
+  .status-running { color: #1a1b1e; background: var(--accent); }
+  .status-done { color: #06210f; background: var(--ok); }
+  .status-timeout, .status-failed { color: #2b0707; background: var(--danger); }
+
+  #result-pane { display: flex; flex-direction: column; gap: 8px; }
+  #result-value { background: var(--surface2); border-radius: 6px; padding: 8px; font-family: ui-monospace, monospace; font-size: 12px; word-break: break-all; max-height: 90px; overflow: auto; }
+  #loss-canvas { width: 100%; height: 90px; background: var(--surface2); border-radius: 6px; }
+  #log { flex: 1; overflow: auto; font-family: ui-monospace, monospace; font-size: 11px; color: var(--text-dim); white-space: pre-wrap; }
+  #log .err { color: var(--danger); }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="header">
+    <h1>Distributed Compute</h1>
+    <select id="example-select"></select>
+    <select id="group-select"></select>
+    <button id="run-btn" class="primary">Run</button>
+    <span id="mesh-banner"></span>
+  </div>
+  <div class="main-grid">
+    <aside id="roster">
+      <h2>Workers</h2>
+      <div id="roster-list"></div>
+    </aside>
+    <section id="editor-pane">
+      <div id="editor-toolbar">
+        <span style="color:var(--text-dim);font-size:11.5px;">Code (map/training step -- editable, re-read on every Run)</span>
+      </div>
+      <div id="editor-host"></div>
+    </section>
+    <aside id="progress-pane">
+      <h2>Chunks / Epochs</h2>
+      <div id="progress-list"></div>
+    </aside>
+    <aside id="result-pane">
+      <h2>Result</h2>
+      <div id="result-value">--</div>
+      <canvas id="loss-canvas" width="240" height="90"></canvas>
+      <div id="log"></div>
+    </aside>
+  </div>
+</div>
+
+<script src="https://unpkg.com/codemirror@5.65.16/lib/codemirror.js"></script>
+<script src="https://unpkg.com/codemirror@5.65.16/mode/javascript/javascript.js"></script>
+<script type="module" src="./ui/app.js"></script>
+</body>
+</html>

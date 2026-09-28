@@ -1,0 +1,132 @@
+/** /bin/unzip.run */
+// Reads a standard ZIP file (central directory + local headers), method 8
+// (deflate, via native DecompressionStream('deflate-raw')) or method 0
+// (store). Works with ZIPs produced by zip.run or by any other real zip tool.
+const terminal = platform.getService('terminal');
+const fs = platform.host.getFS();
+const [pwd, archiveArg, ...rest] = $args;
+const write = terminal ? terminal.write.bind(terminal) : console.log;
+
+if (!archiveArg) { write('usage: unzip <archive.zip> [-d dest]\n'); return; }
+
+let dest = null;
+const listOnly = rest.includes('-l');
+for (let i = 0; i < rest.length; i++) {
+  if (rest[i] === '-d' && rest[i + 1]) dest = rest[++i];
+}
+
+function resolvePath(p) { return p.startsWith('/') ? p : `${pwd}/${p}`; }
+function mkdirp(dir) {
+  if (!dir) return;
+  const parts = dir.split('/').filter(Boolean);
+  let cur = '';
+  for (const part of parts) {
+    cur += '/' + part;
+    try { fs.mkdirSync(cur); } catch (e) { if (e.code !== 'EEXIST') throw e; }
+  }
+}
+
+async function pipeBytes(bytes, transform) {
+  return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(transform)).arrayBuffer());
+}
+const HAS_STREAMS = typeof DecompressionStream === 'function';
+async function inflateRaw(bytes) { return await pipeBytes(bytes, new DecompressionStream('deflate-raw')); }
+
+const CRC_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    table[n] = c >>> 0;
+  }
+  return table;
+})();
+function crc32(bytes) {
+  let crc = 0xFFFFFFFF;
+  for (let i = 0; i < bytes.length; i++) crc = CRC_TABLE[(crc ^ bytes[i]) & 0xFF] ^ (crc >>> 8);
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+function parseCentralDirectory(buf) {
+  let eocdOffset = -1;
+  const scanFrom = Math.max(0, buf.length - 22 - 65557);
+  for (let i = buf.length - 22; i >= scanFrom; i--) {
+    if (buf.readUInt32LE(i) === 0x06054b50) { eocdOffset = i; break; }
+  }
+  if (eocdOffset < 0) throw new Error('not a valid zip file (end-of-central-directory record not found)');
+
+  const entryCount = buf.readUInt16LE(eocdOffset + 10);
+  const centralDirOffset = buf.readUInt32LE(eocdOffset + 16);
+
+  const entries = [];
+  let off = centralDirOffset;
+  for (let i = 0; i < entryCount; i++) {
+    if (buf.readUInt32LE(off) !== 0x02014b50) throw new Error('corrupt central directory record');
+    const compMethod = buf.readUInt16LE(off + 10);
+    const crc = buf.readUInt32LE(off + 16);
+    const compSize = buf.readUInt32LE(off + 20);
+    const uncompSize = buf.readUInt32LE(off + 24);
+    const nameLen = buf.readUInt16LE(off + 28);
+    const extraLen = buf.readUInt16LE(off + 30);
+    const commentLen = buf.readUInt16LE(off + 32);
+    const externalAttrs = buf.readUInt32LE(off + 38);
+    const localHeaderOffset = buf.readUInt32LE(off + 42);
+    const nameStart = off + 46;
+    const name = buf.slice(nameStart, nameStart + nameLen).toString('utf8');
+    entries.push({
+      name, compMethod, crc, compSize, uncompSize, localHeaderOffset,
+      isDir: name.endsWith('/') || (externalAttrs & 0x10) !== 0,
+    });
+    off = nameStart + nameLen + extraLen + commentLen;
+  }
+  return entries;
+}
+
+async function extractEntryData(buf, entry) {
+  const off = entry.localHeaderOffset;
+  if (buf.readUInt32LE(off) !== 0x04034b50) throw new Error(`corrupt local header for ${entry.name}`);
+  const nameLen = buf.readUInt16LE(off + 26);
+  const extraLen = buf.readUInt16LE(off + 28);
+  const dataStart = off + 30 + nameLen + extraLen;
+  const compData = buf.slice(dataStart, dataStart + entry.compSize);
+  if (entry.compMethod === 0) return Buffer.from(compData);
+  if (entry.compMethod === 8) {
+    if (!HAS_STREAMS) throw new Error('this browser cannot inflate deflate-raw streams');
+    return Buffer.from(await inflateRaw(compData));
+  }
+  throw new Error(`unsupported compression method ${entry.compMethod} for ${entry.name}`);
+}
+
+const abs = resolvePath(archiveArg);
+if (!fs.existsSync(abs)) { write(`unzip: ${archiveArg}: No such file or directory\n`); return; }
+const raw = fs.readFileSync(abs);
+const buf = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
+
+let entries;
+try { entries = parseCentralDirectory(buf); }
+catch (e) { write(`unzip: ${archiveArg}: ${e.message}\n`); return; }
+
+if (listOnly) {
+  const lines = entries.map(e => e.isDir ? e.name : `${e.name}  (${e.uncompSize} bytes)`);
+  write(lines.join('\n') + '\n');
+} else {
+  const destDir = (dest ? resolvePath(dest) : pwd).replace(/\/+$/, '');
+  let count = 0;
+  for (const e of entries) {
+    const target = `${destDir}/${e.name}`.replace(/\/+/g, '/');
+    if (e.isDir) {
+      mkdirp(target.replace(/\/$/, ''));
+      continue;
+    }
+    mkdirp(target.split('/').slice(0, -1).join('/'));
+    let data;
+    try { data = await extractEntryData(buf, e); }
+    catch (err) { write(`unzip: ${e.name}: ${err.message}\n`); continue; }
+    if (crc32(data) >>> 0 !== e.crc >>> 0) {
+      write(`unzip: warning: CRC mismatch for ${e.name}\n`);
+    }
+    fs.writeFileSync(target, data);
+    count++;
+  }
+  write(`unzip: extracted ${count} entries to ${destDir}\n`);
+}

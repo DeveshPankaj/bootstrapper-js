@@ -139,7 +139,44 @@ told so their own bar can show "(muted)"), and **Hang up**. Only one call at a t
 other side gets `busy` if you're already on a call. An unanswered call auto-cancels
 after 30s. If the other person disconnects mid-call, it ends locally with a toast.
 
-CLI: `webrtc call <@user>`, `answer`, `decline`, `hangup`, `call-status`.
+CLI: `webrtc call <@user>`, `answer-call`, `decline`, `hangup`, `call-status`.
+
+## Group voice chat
+
+A group's header has a **Join Voice** / **Leave Voice** button — an ambient voice room
+(Discord-style), not a ring/accept dance like DM calls. Joining broadcasts a
+`group-call-join` announcement to the group and mesh-connects to everyone already in the
+room; whoever else joins later does the same, so it converges to a full mesh (everyone
+directly connected to everyone) with no coordinator, using the same smaller-id-dials
+tie-break the mesh auto-connect logic already uses elsewhere in this app. Each connection
+is just another leg on that member's *existing* peer connection — same renegotiation
+mechanism as a DM call, just one leg per other member instead of one. Mute is local only
+(broadcasts `call-mute` so others can show it, same as DM calls); leaving tears down only
+your own legs, everyone else's call continues. A DM call and a group call are mutually
+exclusive — only one call, of either kind, at a time.
+
+CLI: `webrtc voice <#group>` to join; `hangup`/`call-status` work for either call kind.
+
+Known limitation: there's no roster broadcast independent of joining, so you can't see who
+(if anyone) is already in a group's voice room before you join it yourself.
+
+## Mesh bridge (for other apps)
+
+The WebRTC app exposes a small set of `platform.host` commands so *other* apps can
+piggyback messages on the peer connections it already holds open for a group, instead of
+standing up their own WebRTC signaling (used by the Distributed Compute and Distributed
+KV Store apps):
+
+- `webrtc.mesh.available` — `exec()` → `boolean`.
+- `webrtc.mesh.myId` — `exec()` → `{ id, name }`.
+- `webrtc.mesh.groups` — `exec()` → `[{ gid, name, members: [{ id, name, online }] }]`.
+- `webrtc.mesh.send` — `exec(gid, channel, payload)` → `{ ok, sentTo }` or `{ ok:false, err }`.
+  `payload` must be JSON-serializable and under ~60KB (chunk larger data yourself, tagging
+  each message with an app-chosen `channel` string so different apps' traffic can't collide).
+- `webrtc.mesh.subscribe` — `exec(channel, handler)` → `{ unsubscribe() }`;
+  `handler(gid, fromPeerId, fromName, payload)` fires for messages tagged with that exact
+  channel from any group. Only delivered for a group both sides are actually members of —
+  identity is the connection a message arrived on, same trust model as everything else here.
 
 ## CLI (`webrtc help`)
 
@@ -155,7 +192,8 @@ webrtc chats | messages <everyone|@user|#group> [n] | say <everyone|@user|#group
 webrtc invite [name] | join <link> [name] | answer <link>
 webrtc mount <user> <share> [--ro] | mounts | unmount <mount> | sync <mount>
 webrtc listen <#group> <vfs-path> | listen-stop <#group>
-webrtc call <@user> | answer | decline | hangup | call-status
+webrtc call <@user> | answer-call | decline | hangup | call-status
+webrtc voice <#group>
 webrtc ice | ice add <url> [user] [pass] | ice rm <n> | ice relay on|off | ice test
 ```
 
@@ -184,4 +222,10 @@ permission) covers ringing → accept → active with a *genuinely live* remote 
 sides (not just state), mute notifying the other side without affecting their own mute state,
 hang up leaving the underlying connection intact for chat, decline, re-calling on the same
 connection without stale senders, and CLI parity.
+`node testing/scripts/test-webrtc-group-call-mesh.mjs` covers a 3-person group voice chat
+(mesh convergence including a peer joining via CLI after two others are already in, live
+audio both ways, mute isolation, leave/rejoin, DM-vs-group mutual exclusion) plus the
+`webrtc.mesh.*` bridge itself: group/identity listing, send/subscribe delivery with the
+correct sender and payload, channel isolation, unsubscribe, and validation (unknown group,
+oversized payload).
 Known gap: symlink hardening isn't exercised — the mounted BrowserFS returns ENOTSUP for `symlinkSync`.

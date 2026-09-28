@@ -1,0 +1,56 @@
+/** /bin/curl.run */
+const terminal = platform.getService('terminal');
+const fs = platform.host.getFS();
+const [pwd, ...args] = $args;
+const write = terminal ? terminal.write.bind(terminal) : console.log;
+
+let method = 'GET';
+let outFile = null;
+const headers = {};
+let url = null;
+
+for (let i = 0; i < args.length; i++) {
+  const a = args[i];
+  if (a === '-o' && args[i + 1]) { outFile = args[++i]; }
+  else if (a === '-X' && args[i + 1]) { method = args[++i]; }
+  else if (a === '-H' && args[i + 1]) {
+    const h = args[++i];
+    const idx = h.indexOf(':');
+    if (idx > -1) headers[h.slice(0, idx).trim()] = h.slice(idx + 1).trim();
+  }
+  else if (!a.startsWith('-')) { url = a; }
+}
+
+if (!url) { write('usage: curl [-o <outfile>] [-X METHOD] [-H "Header: value"] <url>\n'); return; }
+
+// Only same-origin or CORS-permitting URLs will actually work from a
+// browser tab — that's an expected, unavoidable limitation, not a bug.
+let res;
+try {
+  res = await fetch(url, { method, headers });
+} catch (e) {
+  write(`curl: could not fetch '${url}': ${e && e.message ? e.message : 'network error (or blocked by CORS)'}\n`);
+  return;
+}
+
+if (!res.ok) {
+  write(`curl: ${url} responded with ${res.status} ${res.statusText}\n`);
+}
+
+if (outFile) {
+  try {
+    const buf = Buffer.from(await res.arrayBuffer());
+    const dest = outFile.startsWith('/') ? outFile : `${pwd}/${outFile}`;
+    fs.writeFileSync(dest, buf);
+    write(`curl: saved ${buf.length} bytes to ${outFile}\n`);
+  } catch (e) {
+    write(`curl: error saving to '${outFile}': ${e.message}\n`);
+  }
+} else {
+  try {
+    const text = await res.text();
+    write(text + '\n');
+  } catch (e) {
+    write(`curl: error reading response body: ${e.message}\n`);
+  }
+}

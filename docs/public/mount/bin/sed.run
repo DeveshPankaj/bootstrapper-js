@@ -1,0 +1,54 @@
+/** /bin/sed.run */
+// Scope: only the `s/pattern/replacement/[g][i]` substitute command is
+// supported, and it always prints the result to stdout — it never modifies
+// the file in place (a deliberate, documented limitation; see help.run).
+const terminal = platform.getService('terminal');
+const fs = platform.host.getFS();
+const [pwd, expr, file, ...rest] = $args;
+const write = terminal ? terminal.write.bind(terminal) : console.log;
+
+if (!expr || !file) { write("usage: sed 's/<pattern>/<replacement>/[g]' <file>  (prints to stdout, never edits in place)\n"); return; }
+
+const m = /^s(.)((?:\\.|[^\\])*?)\1((?:\\.|[^\\])*?)\1([a-zA-Z]*)$/.exec(expr);
+if (!m) { write(`sed: invalid expression: ${expr} (only s/pattern/replacement/[g] is supported)\n`); return; }
+
+const [, , rawPattern, rawReplacement, flags] = m;
+const global = flags.includes('g');
+const ignoreCase = flags.includes('i');
+
+let re;
+try { re = new RegExp(rawPattern, (global ? 'g' : '') + (ignoreCase ? 'i' : '')); }
+catch (e) { write(`sed: invalid pattern: ${e.message}\n`); return; }
+
+// Convert sed-style replacement text (\1..\9 backrefs, & = whole match) into
+// the string form JS String.replace expects ($1..$9, $&, literal $ -> $$).
+function toJsReplacement(str) {
+  let out = '';
+  for (let k = 0; k < str.length; k++) {
+    const c = str[k];
+    if (c === '\\' && k + 1 < str.length) {
+      const next = str[k + 1];
+      if (/[0-9]/.test(next)) { out += '$' + next; k++; continue; }
+      if (next === '&' || next === '\\') { out += next; k++; continue; }
+      out += next; k++; continue;
+    }
+    if (c === '$') { out += '$$'; continue; }
+    if (c === '&') { out += '$&'; continue; }
+    out += c;
+  }
+  return out;
+}
+const replacement = toJsReplacement(rawReplacement);
+
+const target = file.startsWith('/') ? file : `${pwd}/${file}`;
+if (!fs.existsSync(target)) { write(`sed: ${file}: No such file or directory\n`); return; }
+
+const lines = fs.readFileSync(target, 'utf8').split('\n');
+if (lines.length && lines[lines.length - 1] === '') lines.pop();
+
+const out = lines.map(line => {
+  re.lastIndex = 0;
+  return line.replace(re, replacement);
+});
+
+write(out.join('\n') + '\n');

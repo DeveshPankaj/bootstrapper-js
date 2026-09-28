@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>YouTube Player</title>
+<style>
+  :root {
+    --bg: #141517;
+    --surface: #1a1b1e;
+    --surface2: #25262b;
+    --surface3: #2c2e33;
+    --border: #373a40;
+    --text: #c1c2c5;
+    --text-dim: #909296;
+    --text-bright: #e9ecef;
+    --accent: #ff5c5c;
+    --danger: #ff6b6b;
+    --radius: 10px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; overflow: hidden; }
+  #app { display: flex; flex-direction: column; height: 100%; }
+
+  /* ── Header ── */
+  #header { display: flex; flex-direction: column; gap: 6px; padding: 10px 14px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  #input-row { display: flex; align-items: center; gap: 8px; }
+  #logo { font-size: 15px; font-weight: 600; color: var(--text-bright); white-space: nowrap; display: flex; align-items: center; gap: 6px; }
+  #url-input { flex: 1; min-width: 120px; padding: 7px 10px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px; outline: none; }
+  #url-input:focus { border-color: var(--accent); }
+  #url-input::placeholder { color: var(--text-dim); }
+
+  .btn { padding: 7px 14px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface2); color: var(--text); cursor: pointer; font-size: 13px; white-space: nowrap; transition: background 0.12s, color 0.12s, border-color 0.12s; }
+  .btn:hover { background: var(--surface3); border-color: #4a4d56; }
+  .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
+  .btn.primary:hover { filter: brightness(1.08); }
+
+  #error-row { font-size: 12px; color: var(--danger); min-height: 16px; }
+  #error-row:empty { display: none; }
+
+  /* ── Body ── */
+  #body { flex: 1; display: flex; min-height: 0; }
+
+  #video-pane { flex: 1; display: flex; align-items: center; justify-content: center; background: #000; position: relative; min-width: 0; }
+  #placeholder { color: var(--text-dim); font-size: 13px; text-align: center; padding: 20px; }
+  #video-frame { width: 100%; height: 100%; border: 0; display: none; }
+
+  #history-pane { width: 260px; flex-shrink: 0; background: var(--surface); border-left: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; }
+  #history-header { padding: 10px 12px; font-size: 12px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.03em; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  #history-list { flex: 1; overflow-y: auto; padding: 6px; }
+  #history-empty { color: var(--text-dim); font-size: 12px; padding: 10px 6px; }
+
+  .hist-item { display: flex; flex-direction: column; gap: 2px; padding: 8px 8px; border-radius: 7px; cursor: pointer; margin-bottom: 4px; border: 1px solid transparent; }
+  .hist-item:hover { background: var(--surface2); border-color: var(--border); }
+  .hist-title { font-size: 12.5px; color: var(--text-bright); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hist-meta { font-size: 11px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="header">
+    <div id="input-row">
+      <div id="logo">▶ YouTube</div>
+      <input id="url-input" type="text" placeholder="Paste a YouTube video or playlist URL, or an 11-char video ID..." />
+      <button id="play-btn" class="btn primary">Play</button>
+    </div>
+    <div id="error-row"></div>
+  </div>
+  <div id="body">
+    <div id="video-pane">
+      <div id="placeholder">Paste a YouTube link above to start watching.</div>
+      <iframe id="video-frame"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+        allowfullscreen></iframe>
+    </div>
+    <div id="history-pane">
+      <div id="history-header">Recently Played</div>
+      <div id="history-list">
+        <div id="history-empty">Nothing played yet.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const CONFIG_DIR = '/home/user1/.local/share/youtube-player';
+  const HISTORY_PATH = CONFIG_DIR + '/history.json';
+  const MAX_HISTORY = 20;
+  const VIDEO_ID_RE = /^[a-zA-Z0-9_-]{11}$/;
+  const VALID_HOSTS = new Set(['youtube.com', 'youtu.be', 'youtube-nocookie.com', 'music.youtube.com']);
+
+  const state = { history: [] };
+
+  const input = document.getElementById('url-input');
+  const playBtn = document.getElementById('play-btn');
+  const errorRow = document.getElementById('error-row');
+  const frame = document.getElementById('video-frame');
+  const placeholder = document.getElementById('placeholder');
+  const historyList = document.getElementById('history-list');
+
+  // ── FS helpers ─────────────────────────────────────────────
+  function getFS() { return window.platform.host.getFS(); }
+  // BrowserFS's mkdirSync(dir, {recursive:true}) doesn't reliably create
+  // multi-level paths — create each segment by hand instead (mirrors the
+  // dashboard app's mkdirpSync helper).
+  function mkdirpSync(dirPath) {
+    const fs = getFS();
+    const parts = dirPath.split('/').filter(Boolean);
+    let cur = '';
+    for (const part of parts) {
+      cur += '/' + part;
+      try { fs.mkdirSync(cur); } catch (e) { if (e.code !== 'EEXIST') throw e; }
+    }
+  }
+  function loadHistory() {
+    try {
+      const fs = getFS();
+      if (fs.existsSync(HISTORY_PATH)) {
+        const parsed = JSON.parse(fs.readFileSync(HISTORY_PATH, 'utf8'));
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (_) {}
+    return [];
+  }
+  function saveHistory(list) {
+    try {
+      const fs = getFS();
+      if (!fs.existsSync(CONFIG_DIR)) mkdirpSync(CONFIG_DIR);
+      fs.writeFileSync(HISTORY_PATH, JSON.stringify(list, null, 2));
+    } catch (e) { console.error('youtube-player: failed to save history', e); }
+  }
+
+  // ── Parsing ────────────────────────────────────────────────
+  // Accepts: watch?v=<id>, youtu.be/<id>, /embed/<id>, /shorts/<id>, a bare
+  // 11-char video id, and/or a `list=<playlistId>` query param in any position.
+  function parseYouTubeInput(raw) {
+    const trimmed = (raw || '').trim();
+    if (!trimmed) return { error: 'Paste a YouTube URL or video ID first.' };
+
+    if (VIDEO_ID_RE.test(trimmed)) {
+      return { videoId: trimmed, playlistId: null };
+    }
+
+    let url;
+    try {
+      const withProto = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+      url = new URL(withProto);
+    } catch (_) {
+      return { error: "That doesn't look like a YouTube URL or video ID." };
+    }
+
+    const host = url.hostname.toLowerCase().replace(/^www\./, '').replace(/^m\./, '');
+    if (!VALID_HOSTS.has(host)) {
+      return { error: "That doesn't look like a YouTube URL." };
+    }
+
+    const playlistId = url.searchParams.get('list') || null;
+
+    let videoId = null;
+    if (host === 'youtu.be') {
+      videoId = url.pathname.split('/').filter(Boolean)[0] || null;
+    } else {
+      videoId = url.searchParams.get('v');
+      if (!videoId) {
+        const m = url.pathname.match(/\/(embed|shorts|v)\/([a-zA-Z0-9_-]{11,})/);
+        if (m) videoId = m[2];
+      }
+    }
+
+    if (videoId) {
+      // Trim any trailing garbage a stray path segment/param might add on.
+      videoId = videoId.slice(0, 11);
+      if (!VIDEO_ID_RE.test(videoId)) videoId = null;
+    }
+
+    if (!videoId && !playlistId) {
+      return { error: "Couldn't find a video or playlist ID in that URL." };
+    }
+
+    return { videoId: videoId || null, playlistId };
+  }
+
+  function buildEmbedSrc({ videoId, playlistId }) {
+    const base = videoId
+      ? `https://www.youtube-nocookie.com/embed/${videoId}`
+      : 'https://www.youtube-nocookie.com/embed/videoseries';
+    const params = new URLSearchParams();
+    if (playlistId) params.set('list', playlistId);
+    const qs = params.toString();
+    return qs ? `${base}?${qs}` : base;
+  }
+
+  // ── UI ─────────────────────────────────────────────────────
+  function showError(msg) { errorRow.textContent = msg; }
+  function clearError() { errorRow.textContent = ''; }
+
+  function renderHistory() {
+    historyList.innerHTML = '';
+    if (!state.history.length) {
+      const empty = document.createElement('div');
+      empty.id = 'history-empty';
+      empty.textContent = 'Nothing played yet.';
+      historyList.appendChild(empty);
+      return;
+    }
+    state.history.forEach((entry) => {
+      const item = document.createElement('div');
+      item.className = 'hist-item';
+      const title = document.createElement('div');
+      title.className = 'hist-title';
+      title.textContent = entry.videoId ? entry.videoId : `playlist ${entry.playlistId}`;
+      const meta = document.createElement('div');
+      meta.className = 'hist-meta';
+      const when = entry.playedAt ? new Date(entry.playedAt).toLocaleString() : '';
+      meta.textContent = entry.playlistId && entry.videoId ? `+ playlist · ${when}` : when;
+      item.appendChild(title);
+      item.appendChild(meta);
+      item.addEventListener('click', () => {
+        input.value = entry.input || entry.videoId || '';
+        clearError();
+        playResult({ videoId: entry.videoId, playlistId: entry.playlistId }, entry.input || entry.videoId || '');
+      });
+      historyList.appendChild(item);
+    });
+  }
+
+  function addHistoryEntry(result, rawInput) {
+    const entry = {
+      videoId: result.videoId || null,
+      playlistId: result.playlistId || null,
+      input: rawInput,
+      playedAt: Date.now(),
+    };
+    // Replaying something already in history (e.g. clicking its own row) must move it to
+    // the top, not add a second copy — dedupe by the same video/playlist identity first.
+    const isSame = (e) => e.videoId === entry.videoId && e.playlistId === entry.playlistId;
+    state.history = [entry, ...state.history.filter((e) => !isSame(e))].slice(0, MAX_HISTORY);
+    saveHistory(state.history);
+    renderHistory();
+  }
+
+  function playResult(result, rawInput) {
+    const src = buildEmbedSrc(result);
+    frame.src = src;
+    frame.style.display = 'block';
+    placeholder.style.display = 'none';
+    addHistoryEntry(result, rawInput);
+  }
+
+  function submit() {
+    const raw = input.value;
+    const result = parseYouTubeInput(raw);
+    if (result.error) {
+      showError(result.error);
+      return;
+    }
+    clearError();
+    playResult(result, raw);
+  }
+
+  playBtn.addEventListener('click', submit);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') submit();
+  });
+
+  // Test/introspection hook, mirroring window.__terminalApp elsewhere in this
+  // codebase — lets a Playwright test drive parsing/embedding without needing
+  // real network access to YouTube.
+  window.__youtubePlayerApp = {
+    parseYouTubeInput,
+    buildEmbedSrc,
+    getHistory: () => state.history,
+    loadFromInput: (raw) => { input.value = raw; submit(); },
+  };
+
+  state.history = loadHistory();
+  renderHistory();
+})();
+</script>
+</body>
+</html>

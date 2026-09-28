@@ -1,0 +1,139 @@
+/** /bin/tar.run */
+// A simple, real, working (uncompressed) archive format of our own — not
+// POSIX tar-compatible, but documented, versioned, and round-trips folders,
+// files and binary content correctly:
+//   MAGIC "BOOTAR1\n" + "<headerByteLength>\n" + <header JSON> + <raw file bytes, concatenated in header order>
+// header JSON = { version: 1, entries: [{ path, type: 'file'|'dir', size }] }
+// `path` is relative (no leading '/'), directories end with '/'.
+const terminal = platform.getService('terminal');
+const fs = platform.host.getFS();
+const [pwd, mode, archiveArg, ...paths] = $args;
+const write = terminal ? terminal.write.bind(terminal) : console.log;
+
+const MAGIC = 'BOOTAR1\n';
+
+function resolvePath(p) { return p.startsWith('/') ? p : `${pwd}/${p}`; }
+
+function mkdirp(dir) {
+  if (!dir) return;
+  const parts = dir.split('/').filter(Boolean);
+  let cur = '';
+  for (const part of parts) {
+    cur += '/' + part;
+    try { fs.mkdirSync(cur); } catch (e) { if (e.code !== 'EEXIST') throw e; }
+  }
+}
+
+function collectEntries(root, baseName) {
+  const out = [];
+  const stat = fs.statSync(root);
+  if (stat.isDirectory()) {
+    out.push({ relPath: baseName + '/', absPath: root, type: 'dir' });
+    let names = [];
+    try { names = fs.readdirSync(root).sort(); } catch (_) {}
+    for (const name of names) {
+      out.push(...collectEntries(`${root}/${name}`.replace(/\/+/g, '/'), `${baseName}/${name}`));
+    }
+  } else {
+    out.push({ relPath: baseName, absPath: root, type: 'file' });
+  }
+  return out;
+}
+
+function create(archivePath, srcPaths) {
+  let entries = [];
+  for (const p of srcPaths) {
+    const abs = resolvePath(p);
+    if (!fs.existsSync(abs)) { write(`tar: ${p}: No such file or directory\n`); return; }
+    const base = p.replace(/\/+$/, '').split('/').filter(Boolean).pop() || p;
+    entries = entries.concat(collectEntries(abs, base));
+  }
+
+  const header = [];
+  const chunks = [];
+  for (const e of entries) {
+    if (e.type === 'dir') {
+      header.push({ path: e.relPath, type: 'dir', size: 0 });
+    } else {
+      const raw = fs.readFileSync(e.absPath);
+      const buf = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
+      header.push({ path: e.relPath, type: 'file', size: buf.length });
+      chunks.push(buf);
+    }
+  }
+
+  const headerJson = JSON.stringify({ version: 1, entries: header });
+  const headerBuf = Buffer.from(headerJson, 'utf8');
+  const lenLine = Buffer.from(String(headerBuf.length) + '\n', 'utf8');
+  const magicBuf = Buffer.from(MAGIC, 'utf8');
+
+  const full = Buffer.concat([magicBuf, lenLine, headerBuf, ...chunks]);
+  fs.writeFileSync(resolvePath(archivePath), full);
+  write(`tar: created ${archivePath} (${header.length} entries, ${full.length} bytes)\n`);
+}
+
+function readArchive(archivePath) {
+  const abs = resolvePath(archivePath);
+  if (!fs.existsSync(abs)) { write(`tar: ${archivePath}: No such file or directory\n`); return null; }
+  const raw = fs.readFileSync(abs);
+  const buf = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
+  const magicBuf = Buffer.from(MAGIC, 'utf8');
+  if (buf.length < magicBuf.length || !buf.slice(0, magicBuf.length).equals(magicBuf)) {
+    write(`tar: ${archivePath}: not a valid bootar archive\n`);
+    return null;
+  }
+  let offset = magicBuf.length;
+  const nlIdx = buf.indexOf(10, offset); // '\n'
+  const headerLen = parseInt(buf.slice(offset, nlIdx).toString('utf8'), 10);
+  offset = nlIdx + 1;
+  const header = JSON.parse(buf.slice(offset, offset + headerLen).toString('utf8'));
+  offset += headerLen;
+
+  const files = [];
+  let cursor = offset;
+  for (const e of header.entries) {
+    if (e.type === 'file') {
+      files.push({ ...e, data: buf.slice(cursor, cursor + e.size) });
+      cursor += e.size;
+    } else {
+      files.push({ ...e, data: null });
+    }
+  }
+  return { header, files };
+}
+
+function list(archivePath) {
+  const archive = readArchive(archivePath);
+  if (!archive) return;
+  const lines = archive.files.map(e => e.type === 'dir' ? e.path : `${e.path}  (${e.size} bytes)`);
+  write(lines.join('\n') + '\n');
+}
+
+function extract(archivePath, dest) {
+  const archive = readArchive(archivePath);
+  if (!archive) return;
+  const destDir = (dest ? resolvePath(dest) : pwd).replace(/\/+$/, '');
+  for (const e of archive.files) {
+    const target = `${destDir}/${e.path}`.replace(/\/+/g, '/');
+    if (e.type === 'dir') {
+      mkdirp(target.replace(/\/$/, ''));
+    } else {
+      mkdirp(target.split('/').slice(0, -1).join('/'));
+      fs.writeFileSync(target, e.data);
+    }
+  }
+  write(`tar: extracted ${archive.files.length} entries to ${destDir}\n`);
+}
+
+if (mode === '-c') {
+  if (!archiveArg || !paths.length) write('usage: tar -c <archive> <path...>\n');
+  else create(archiveArg, paths);
+} else if (mode === '-x') {
+  if (!archiveArg) write('usage: tar -x <archive> [dest]\n');
+  else extract(archiveArg, paths[0]);
+} else if (mode === '-t') {
+  if (!archiveArg) write('usage: tar -t <archive>\n');
+  else list(archiveArg);
+} else {
+  write('usage: tar -c <archive> <path...> | tar -x <archive> [dest] | tar -t <archive>\n');
+}

@@ -37,6 +37,9 @@ const CORE_APPS = [
   { id: 'vector-store',   appDir: '/opt/apps/vector-store',   mainFile: '/opt/apps/vector-store/main.js' },
   { id: 'ai-dom-lens',    appDir: '/opt/apps/ai-dom-lens',    mainFile: '/opt/apps/ai-dom-lens/main.js' },
   { id: 'webrtc',         appDir: '/opt/apps/webrtc',         mainFile: '/opt/apps/webrtc/main.js' },
+  { id: 'youtube-player', appDir: '/opt/apps/youtube-player', mainFile: '/opt/apps/youtube-player/main.js' },
+  { id: 'distributed-compute', appDir: '/opt/apps/distributed-compute', mainFile: '/opt/apps/distributed-compute/main.js' },
+  { id: 'distributed-kv',      appDir: '/opt/apps/distributed-kv',      mainFile: '/opt/apps/distributed-kv/main.js' },
   // python-demo is not a core app — install via App Manager
 ];
 

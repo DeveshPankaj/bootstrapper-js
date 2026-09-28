@@ -1,0 +1,31 @@
+/** /bin/df.run */
+const terminal = platform.getService('terminal');
+const write = terminal ? terminal.write.bind(terminal) : console.log;
+
+// Mirrors the 'memory' desktop widget (/etc/widgets/memory.js) and the
+// disk-usage-logger systemd unit: the vfs sits on IndexedDB rather than a
+// real block device, so navigator.storage.estimate() is the closest thing
+// to a `df`-style usage/quota accounting available in the browser.
+if (!navigator.storage || !navigator.storage.estimate) {
+  write('df: navigator.storage.estimate() unavailable in this browser\n');
+  return;
+}
+
+const { usage = 0, quota = 0 } = await navigator.storage.estimate();
+const free = Math.max(0, quota - usage);
+const pct = quota ? Math.round((usage / quota) * 100) : 0;
+
+function fmt(n) {
+  if (n < 1024) return `${n}B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)}K`;
+  if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)}M`;
+  return `${(n / (1024 * 1024 * 1024)).toFixed(2)}G`;
+}
+
+const rows = [
+  ['Filesystem', 'Size', 'Used', 'Avail', 'Use%', 'Mounted on'],
+  ['vfs (indexeddb)', fmt(quota), fmt(usage), fmt(free), `${pct}%`, '/'],
+];
+const widths = [0, 1, 2, 3, 4, 5].map(i => Math.max(...rows.map(r => r[i].length)));
+const lines = rows.map(r => r.map((c, i) => c.padEnd(widths[i] + 2)).join(''));
+write(lines.join('\n') + '\n');

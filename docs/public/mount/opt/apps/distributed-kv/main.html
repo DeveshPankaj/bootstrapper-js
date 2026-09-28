@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Distributed KV</title>
+<style>
+  /* Same dark palette/CSS-var scheme as distributed-compute's main.html, reused here
+     for visual consistency between the two mesh-bridge apps. */
+  :root {
+    --bg: #141517;
+    --surface: #1a1b1e;
+    --surface2: #25262b;
+    --surface3: #2c2e33;
+    --border: #373a40;
+    --text: #c1c2c5;
+    --text-dim: #909296;
+    --text-bright: #e9ecef;
+    --accent: #4dabf7;
+    --danger: #ff6b6b;
+    --ok: #51cf66;
+    --warn: #fcc419;
+    --radius: 8px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 13px; overflow: hidden; }
+  #app { display: flex; flex-direction: column; height: 100%; }
+
+  #header { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--surface); border-bottom: 1px solid var(--border); flex-wrap: wrap; flex-shrink: 0; }
+  #header h1 { font-size: 14px; font-weight: 600; color: var(--text-bright); white-space: nowrap; }
+  select, button, input[type=text] { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 5px 9px; font-size: 12px; }
+  select, button { cursor: pointer; }
+  select:hover, button:hover { border-color: #4a4d56; }
+  button.primary { background: var(--accent); color: #06131f; border-color: var(--accent); font-weight: 600; }
+  button.primary:disabled { opacity: 0.5; cursor: default; }
+  button.danger { background: var(--surface3); color: var(--danger); border-color: #4a3536; }
+  #mesh-banner { font-size: 11.5px; color: var(--text-dim); padding: 2px 10px; }
+  #mesh-banner.ok { color: var(--ok); }
+  #mesh-banner.warn { color: var(--warn); }
+
+  .main-grid { flex: 1; display: grid; grid-template-columns: 190px 1fr; min-height: 0; }
+  aside, section { min-height: 0; overflow: auto; }
+  #roster { background: var(--surface); border-right: 1px solid var(--border); padding: 10px; display: flex; flex-direction: column; }
+  #roster h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim); margin-bottom: 6px; }
+  .worker-row { display: flex; align-items: center; gap: 6px; padding: 5px 6px; border-radius: 6px; margin-bottom: 3px; background: var(--surface2); }
+  .worker-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); flex-shrink: 0; }
+  .worker-dot.self { background: var(--accent); }
+  .worker-dot.offline { background: var(--surface3); border: 1px solid var(--border); }
+  .worker-name { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  #kv-pane { display: flex; flex-direction: column; }
+  #kv-form { display: flex; gap: 8px; padding: 10px; border-bottom: 1px solid var(--border); flex-wrap: wrap; align-items: center; background: var(--surface); }
+  #kv-key { flex: 0 0 150px; }
+  #kv-value { flex: 1 1 200px; min-width: 140px; }
+
+  .table-wrap { flex: 1; overflow: auto; padding: 0 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  thead th { text-align: left; position: sticky; top: 0; background: var(--bg); color: var(--text-dim); font-weight: 600; padding: 8px 6px; border-bottom: 1px solid var(--border); }
+  tbody td { padding: 7px 6px; border-bottom: 1px solid var(--surface3); vertical-align: top; }
+  .key-cell { font-weight: 600; color: var(--text-bright); word-break: break-all; }
+  .value-cell { word-break: break-all; }
+  .writer-cell, .age-cell { color: var(--text-dim); white-space: nowrap; }
+  .empty-row { text-align: center; color: var(--text-dim); padding: 20px !important; }
+
+  .policy-note { padding: 6px 10px; font-size: 11px; color: var(--text-dim); flex-shrink: 0; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="header">
+    <h1>Distributed KV</h1>
+    <select id="group-select"></select>
+    <span id="mesh-banner"></span>
+  </div>
+  <div class="main-grid">
+    <aside id="roster">
+      <h2>Peers</h2>
+      <div id="roster-list"></div>
+    </aside>
+    <section id="kv-pane">
+      <form id="kv-form">
+        <input id="kv-key" type="text" placeholder="key" autocomplete="off" required>
+        <input id="kv-value" type="text" placeholder="value (JSON or plain text)" autocomplete="off">
+        <button type="submit" class="primary">Set</button>
+      </form>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Key</th><th>Value</th><th>Last writer</th><th>Updated</th><th></th></tr>
+          </thead>
+          <tbody id="kv-tbody"></tbody>
+        </table>
+      </div>
+      <div class="policy-note" id="policy-note">Conflict policy: last write wins (compared by logical timestamp, ties broken by peer id) — all peers converge on the same value.</div>
+    </section>
+  </div>
+</div>
+<script type="module" src="./ui/app.js"></script>
+</body>
+</html>
