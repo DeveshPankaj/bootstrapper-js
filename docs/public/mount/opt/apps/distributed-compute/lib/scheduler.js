@@ -19,11 +19,42 @@ function randomId() {
 }
 
 export class Scheduler {
+  // opts.host (optional) — a platform.host instance to register worker-task
+  // activity on (see Host.registerActivity, src/shared/index.ts) so it's
+  // visible to this app's own "Worker Activity" panel, Task Manager, and the
+  // `activities.run` CLI command. Omitted in unit tests that only need the
+  // dispatch/combine logic — activity tracking is then simply skipped.
+  // opts.runInWorker (optional) — (source, args) => { promise, kill() },
+  // typically `runTaskInWorker` from worker-task-runtime.js. When given, the
+  // RESPONDER side (answering another peer's dc-task) executes inside a real
+  // Worker instead of the default synchronous `runTask`, which is what makes
+  // `activity.onKill` able to genuinely interrupt an in-flight task instead of
+  // only marking it cancelled while it keeps running. Local self-dispatch
+  // (this peer working on its own job) and the combine step are unaffected —
+  // they keep using synchronous `runTask` directly, since they already have
+  // UI feedback via the progress panel.
   constructor(mesh, opts = {}) {
     this.mesh = mesh;
     this.myId = opts.myId || 'self';
     this._pending = new Map(); // taskId -> { resolve }
     this._sub = null;
+    this._host = opts.host || null;
+    this._runInWorker = opts.runInWorker || null;
+    // Local, per-instance record of this scheduler's own worker-task activity
+    // (id -> activity-like object), independent of `this._host`'s GLOBAL,
+    // cross-window registry. The app's own "Worker Activity" panel reads this
+    // directly via `getLocalActivities()` instead of Host.activities$, because
+    // Host's `servicePlatformName` identifies the shared module that rendered
+    // this iframe (e.g. the generic `ui.iframe` command), not this specific
+    // window instance — so filtering the global registry by it can't tell one
+    // open distributed-compute window's own activity apart from another's.
+    // The CLI (`activities.run`)/Task Manager intentionally keep using the
+    // global registry instead, where cross-window visibility is the point.
+    this._local = new Map();
+  }
+
+  getLocalActivities() {
+    return Array.from(this._local.values());
   }
 
   startResponder() {
@@ -31,15 +62,7 @@ export class Scheduler {
     this._sub = this.mesh.onMessage((gid, fromPeerId, fromName, msg) => {
       if (!msg || typeof msg !== 'object') return;
       if (msg.type === MSG_TASK && msg.to === this.myId) {
-        const outcome = runTask(msg.taskSource, msg.args);
-        this.mesh.send(gid, {
-          type: MSG_RESULT,
-          to: fromPeerId,
-          taskId: msg.taskId,
-          ok: outcome.ok,
-          result: outcome.ok ? outcome.result : undefined,
-          error: outcome.ok ? undefined : outcome.error,
-        });
+        this._handleIncomingTask(gid, fromPeerId, fromName, msg);
       } else if (msg.type === MSG_RESULT && msg.to === this.myId) {
         const pending = this._pending.get(msg.taskId);
         if (pending) {
@@ -47,6 +70,53 @@ export class Scheduler {
           pending.resolve({ ok: msg.ok, result: msg.result, error: msg.error, fromPeerId });
         }
       }
+    });
+  }
+
+  // Runs an incoming dc-task (answering another peer's job) and replies with
+  // dc-result — via a Worker (killable) when `this._runInWorker` is set,
+  // otherwise the original synchronous `runTask` (matches pre-existing
+  // behavior exactly when no worker/host is configured, e.g. in unit tests).
+  // Registers an activity (if `this._host` is set) so the in-flight task is
+  // visible/killable from the app UI and CLI, left up for a few seconds after
+  // completion so a listing has a chance to see the final state.
+  _handleIncomingTask(gid, fromPeerId, fromName, msg) {
+    const useWorker = typeof this._runInWorker === 'function';
+    const handle = useWorker ? this._runInWorker(msg.taskSource, msg.args) : null;
+    const id = `worker-task-${msg.taskId}`;
+    const onKill = handle ? () => handle.kill() : undefined;
+
+    const localEntry = { id, kind: 'distributed-compute.worker-task', label: `task from ${fromName || fromPeerId}`, state: 'running', startedAt: Date.now(), meta: { taskId: msg.taskId, fromPeerId, fromName, gid, killable: useWorker }, onKill };
+    this._local.set(id, localEntry);
+
+    const globalActivity = this._host && this._host.registerActivity({ ...localEntry });
+
+    const setState = (state) => {
+      const entry = this._local.get(id);
+      if (entry) this._local.set(id, { ...entry, state });
+      if (globalActivity) globalActivity.update({ state });
+    };
+    const endActivity = () => {
+      this._local.delete(id);
+      if (globalActivity) globalActivity.end();
+    };
+
+    const promise = useWorker ? handle.promise : Promise.resolve(runTask(msg.taskSource, msg.args));
+    promise.then((outcome) => {
+      setState('sending');
+      this.mesh.send(gid, {
+        type: MSG_RESULT,
+        to: fromPeerId,
+        taskId: msg.taskId,
+        ok: outcome.ok,
+        result: outcome.ok ? outcome.result : undefined,
+        error: outcome.ok ? undefined : (outcome.killed ? 'killed by user' : outcome.error),
+      });
+      setState(outcome.killed ? 'killed' : (outcome.ok ? 'done' : 'failed'));
+      // Leave the terminal state up for a few seconds so a listing (app panel,
+      // CLI, Task Manager) has a chance to observe how the task ended, instead
+      // of it disappearing the instant it finishes.
+      setTimeout(endActivity, 4000);
     });
   }
 

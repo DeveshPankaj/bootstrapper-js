@@ -326,6 +326,22 @@ a remote peer's shared folder into `/mnt/webrtc/<label>` as a real, synchronous,
 filesystem — every existing app (file explorer, notepad, terminal) reads and writes it exactly
 like any local folder, no special-casing anywhere else in the codebase.
 
+### Lazy remote mounts and `vfs:changed` (Remote Machines, `/mnt/ssh/<machine>`)
+
+Remote Machines (`docs/public/mount/opt/apps/remote-machines/`) mounts each connected SSH machine at
+`/mnt/ssh/<name>` with the same `FS.mount` + `InMemory` + `Object.create(mem)` wrapper technique, but
+*lazily* (a whole disk can't be cloned): folders are listed when an app reads them and one level ahead;
+files are placeholders whose `statSync` reports the remote size until fetched, and a read of an
+unfetched one throws `EAGAIN` (never wrong bytes) while it downloads. Writes go through `openSync`
+(BaseFileSystem routes `readFileSync`/`writeFileSync`/`appendFileSync` there) and are pushed to the
+machine in order. **Gotcha:** BaseFileSystem's truncating `openSync` calls `this.unlinkSync` first, so
+the wrapper's `openSync` must call `mem.openSync` directly or every save would become a remote delete.
+Since a lazy backend can't block, it announces finished listings/downloads with
+`window.top.dispatchEvent(new CustomEvent('vfs:changed', { detail: { path } }))`; both explorer copies
+(`opt/apps/file-explorer/main.js` and `src/apps/file-explorer/index.tsx`) re-read the folder they show
+when the change is in it, is it, or is its parent. Any future async-backed mount can use the same event.
+Details: `documentation/apps/remote-machines.md`.
+
 ## Modal width vs. a CSS Grid overlay (webrtc app, `openModal`)
 
 `.overlay` (the backdrop behind every modal in `docs/public/mount/opt/apps/webrtc/main.html`) is

@@ -6,6 +6,7 @@
 import { MeshClient } from '../lib/mesh-client.js';
 import { Scheduler } from '../lib/scheduler.js';
 import { runTask } from '../lib/task-runtime.js';
+import { runTaskInWorker } from '../lib/worker-task-runtime.js';
 import * as TinyNN from '../lib/tiny-nn.js';
 import { MAP_REDUCE_EXAMPLE } from '../examples/map-reduce-demo.js';
 import { NEURAL_NET_EXAMPLE, NN_COMBINE_SOURCE } from '../examples/neural-net-training.js';
@@ -18,20 +19,41 @@ const el = (id) => document.getElementById(id);
 const exampleSelect = el('example-select');
 const groupSelect = el('group-select');
 const runBtn = el('run-btn');
+const toggleNavBtn = el('toggle-nav-btn');
+const sideNav = el('side-nav');
 const meshBanner = el('mesh-banner');
+const statusRunState = el('status-run-state');
 const rosterList = el('roster-list');
+const activityList = el('activity-list');
 const progressList = el('progress-list');
 const resultValue = el('result-value');
 const lossCanvas = el('loss-canvas');
 const logEl = el('log');
 
-const mesh = new MeshClient(window.platform ? window.platform.host : null);
-const scheduler = new Scheduler(mesh, { myId: (mesh.myIdentity() || {}).id || 'self' });
+const platformHost = window.platform ? window.platform.host : null;
+const mesh = new MeshClient(platformHost);
+
+// Worker-task execution reads tiny-nn.js's own source text so
+// worker-task-runtime.js can inline it into a real dedicated Worker (see that
+// file's header comment for why: it's what makes a genuinely killable
+// in-flight task possible, unlike the default synchronous `runTask`).
+let nnSource = '';
+try {
+  const fs = platformHost && platformHost.getFS ? platformHost.getFS() : null;
+  if (fs) nnSource = fs.readFileSync('/opt/apps/distributed-compute/lib/tiny-nn.js', 'utf8');
+} catch (_) { /* falls back to no nn helpers available inside the worker */ }
+
+const scheduler = new Scheduler(mesh, {
+  myId: (mesh.myIdentity() || {}).id || 'self',
+  host: platformHost,
+  runInWorker: (source, args) => runTaskInWorker(source, args, nnSource),
+});
 scheduler.startResponder(); // this window is always a potential worker for other peers' jobs
 
 let editor = null;
 let running = false;
 let chunkRows = new Map(); // chunkIndex -> row element
+let latestActivities = []; // last value from platformHost.activities$, for updateStatusRunState()
 
 function log(line, isErr) {
   const div = document.createElement('div');
@@ -54,6 +76,62 @@ function renderRoster(workers) {
     row.innerHTML = `<span class="worker-dot${w.isSelf ? ' self' : ''}"></span><span class="worker-name">${w.isSelf ? (w.name || 'You') + ' (you)' : (w.name || w.id)}</span>`;
     rosterList.appendChild(row);
   }
+}
+
+// Renders THIS scheduler instance's own in-flight/recently-finished
+// worker-task activity (answering OTHER peers' jobs in the background) — see
+// Scheduler.getLocalActivities()/_handleIncomingTask. Deliberately reads the
+// scheduler's own local list rather than the global Host.activities$ registry:
+// Host's `servicePlatformName` identifies the shared module that renders this
+// iframe (e.g. the generic `ui.iframe` command), not this specific window
+// instance, so it can't distinguish one open distributed-compute window's own
+// activity from another's. (The `activities` CLI command/Task Manager use the
+// global registry instead, where cross-window visibility is the point.)
+function renderActivity(mine) {
+  activityList.innerHTML = '';
+  if (!mine || mine.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'activity-empty';
+    empty.textContent = 'No active worker tasks';
+    activityList.appendChild(empty);
+    return;
+  }
+  for (const a of mine) {
+    const row = document.createElement('div');
+    row.className = 'activity-row';
+
+    const label = document.createElement('span');
+    label.className = 'activity-label';
+    label.title = a.label;
+    label.textContent = a.label;
+    row.appendChild(label);
+
+    const state = document.createElement('span');
+    state.className = `activity-state state-${a.state}`;
+    state.textContent = a.state;
+    row.appendChild(state);
+
+    if (a.state === 'running' && a.meta && a.meta.killable) {
+      const killBtn = document.createElement('button');
+      killBtn.className = 'activity-kill-btn';
+      killBtn.textContent = 'Kill';
+      killBtn.title = 'Terminate this worker task immediately';
+      killBtn.addEventListener('click', () => {
+        platformHost.getCommand('activity.kill')?.exec(a.id);
+      });
+      row.appendChild(killBtn);
+    }
+
+    activityList.appendChild(row);
+  }
+}
+
+function updateStatusRunState() {
+  const activeCount = latestActivities.filter((a) => a.state !== 'done' && a.state !== 'failed' && a.state !== 'killed').length;
+  const parts = [running ? 'Running' : 'Idle'];
+  if (activeCount > 0) parts.push(`${activeCount} worker task${activeCount === 1 ? '' : 's'} active`);
+  statusRunState.textContent = parts.join(' · ');
+  statusRunState.classList.toggle('busy', running || activeCount > 0);
 }
 
 function renderMeshBanner(available, groups) {
@@ -195,6 +273,7 @@ async function runNeuralNetExample(sourceText, gid, workers) {
 async function onRun() {
   if (running) return;
   running = true;
+  updateStatusRunState();
   runBtn.disabled = true;
   logEl.innerHTML = '';
   resultValue.textContent = '--';
@@ -215,6 +294,7 @@ async function onRun() {
   } finally {
     running = false;
     runBtn.disabled = false;
+    updateStatusRunState();
   }
 }
 
@@ -234,9 +314,23 @@ function init() {
   editor = createEditor(el('editor-host'), EXAMPLES[0].source);
   exampleSelect.addEventListener('change', () => loadExample(exampleSelect.value));
   runBtn.addEventListener('click', onRun);
+  toggleNavBtn.addEventListener('click', () => sideNav.classList.toggle('collapsed'));
 
   refreshMeshUi();
   setInterval(refreshMeshUi, 3000); // roster/availability can change any time (peers join/leave)
+
+  // Worker-task activity (this window acting as a worker for another peer's
+  // job) — see Scheduler._handleIncomingTask/getLocalActivities(). Polled
+  // (like refreshMeshUi above) rather than event-driven, since Scheduler is
+  // deliberately plain/DOM-free and doesn't own a pub/sub mechanism of its
+  // own; states are short-lived enough that a fast poll keeps it feeling live.
+  const refreshActivity = () => {
+    latestActivities = scheduler.getLocalActivities();
+    renderActivity(latestActivities);
+    updateStatusRunState();
+  };
+  refreshActivity();
+  setInterval(refreshActivity, 500);
 
   // test hooks
   window.__distComputeReady = true;
@@ -244,6 +338,7 @@ function init() {
   window.__distComputeGetSource = () => editor.getValue();
   window.__distComputeMesh = mesh;
   window.__distComputeScheduler = scheduler;
+  window.__distComputeActivities = () => scheduler.getLocalActivities();
 }
 
 init();

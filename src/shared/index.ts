@@ -81,6 +81,30 @@ export type SettingsSectionDef = {
   meta: Record<string, unknown>;
 };
 
+// An "activity" is a lightweight, app-owned unit of in-progress work that isn't
+// itself a window/process (e.g. distributed-compute acting as a worker for
+// another peer's job in the background) but that other surfaces — Task Manager,
+// a CLI command — want to list and, where possible, kill generically, without
+// each app having to invent its own bespoke process-listing mechanism.
+// Registered via `platform.host.registerActivity(...)`, analogous to
+// `registerWidget`/`registerSettingsSection`. `pid`, when given, lets a listing
+// UI/CLI nest an activity under its owning window's process entry (see
+// `process.list` in window-manager.ts). `onKill` is optional — omit it when the
+// work genuinely cannot be interrupted (e.g. synchronous, main-thread execution
+// that has already started; see distributed-compute's task-runtime.js) so
+// callers can tell "not killable" apart from "kill silently did nothing".
+export type ActivityDef = {
+  id: string;
+  pid?: number;
+  kind: string;
+  label: string;
+  state: string;
+  startedAt: number;
+  meta: Record<string, unknown>;
+  onKill?: () => boolean | void;
+  servicePlatformName: string;
+};
+
 
 export type UICallbackProps = {
     pid: number
@@ -100,6 +124,7 @@ export class Host {
   public readonly commands$: Observable<Array<Command>>;
   public readonly widgets$: Observable<Array<WidgetDef>>;
   public readonly settingsSections$: Observable<Array<SettingsSectionDef>>;
+  public readonly activities$: Observable<Array<ActivityDef>>;
 
   constructor(
     private window: Window,
@@ -116,11 +141,13 @@ export class Host {
       }
     > = new Map(),
     private settingsSections: BehaviorSubject<Array<SettingsSectionDef>> = new BehaviorSubject<Array<SettingsSectionDef>>([]),
-    private widgetTypes: Map<string, WidgetTypeRenderer> = new Map()
+    private widgetTypes: Map<string, WidgetTypeRenderer> = new Map(),
+    private activities: BehaviorSubject<Array<ActivityDef>> = new BehaviorSubject<Array<ActivityDef>>([])
   ) {
     this.commands$ = this.commands.asObservable();
     this.widgets$ = this.widgets.asObservable();
     this.settingsSections$ = this.settingsSections.asObservable();
+    this.activities$ = this.activities.asObservable();
   }
 
   // Looks up a module's `Platform` instance by its (unique) module name -
@@ -258,6 +285,51 @@ export class Host {
         );
       },
     };
+  }
+
+  // Registers one in-progress unit of work. Returns `update(patch)` to change
+  // its `state`/`meta`/label as it progresses, and `end()` to remove it once
+  // it's finished (callers that want a "just finished" state to remain briefly
+  // visible to a listing UI/CLI should `update()` to a terminal state first,
+  // then `end()` after their own short delay — Host doesn't impose one).
+  public registerActivity(
+    initial: Omit<ActivityDef, "servicePlatformName">
+  ): { update: (patch: Partial<ActivityDef>) => void; end: () => void } {
+    let current: ActivityDef = Object.freeze({
+      ...initial,
+      servicePlatformName: this.platform.name,
+    });
+    this.activities.next([...this.activities.getValue(), current]);
+
+    return {
+      update: (patch: Partial<ActivityDef>) => {
+        const next = Object.freeze({ ...current, ...patch });
+        this.activities.next(
+          this.activities.getValue().map((a) => (a === current ? next : a))
+        );
+        current = next;
+      },
+      end: () => {
+        this.activities.next(
+          this.activities.getValue().filter((a) => a !== current)
+        );
+      },
+    };
+  }
+
+  // Looks up a registered activity by id and calls its `onKill` hook, if any.
+  // Returns false both when the activity doesn't exist and when it exists but
+  // declared no `onKill` (i.e. it can't be interrupted) — callers that need to
+  // tell those two cases apart should check `activities$`/getActivity by id first.
+  public killActivity(id: string): boolean {
+    const activity = this.activities.getValue().find((a) => a.id === id);
+    if (!activity || typeof activity.onKill !== "function") return false;
+    try {
+      const result = activity.onKill();
+      return result !== false;
+    } catch (_) {
+      return false;
+    }
   }
 
   public getCommand(command_name: string) {

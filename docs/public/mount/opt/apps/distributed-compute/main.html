@@ -31,28 +31,47 @@
   button.primary { background: var(--accent); color: #06131f; border-color: var(--accent); font-weight: 600; }
   button.primary:disabled { opacity: 0.5; cursor: default; }
   button:disabled { opacity: 0.5; cursor: default; }
-  #mesh-banner { font-size: 11.5px; color: var(--text-dim); padding: 2px 10px; }
-  #mesh-banner.ok { color: var(--ok); }
-  #mesh-banner.warn { color: var(--warn); }
+  #toggle-nav-btn { margin-left: auto; }
 
-  .main-grid { flex: 1; display: grid; grid-template-columns: 200px 1fr 260px; min-height: 0; }
+  /* Two-column layout: a collapsible left sidebar (workers / activity / chunks /
+     result -- everything that isn't "the thing being edited") and a right column
+     that is just the editor plus a status bar. Previously this was a 4-column CSS
+     grid (`grid-template-columns: 200px 1fr 260px`) with FOUR grid items -- the
+     4th (#result-pane) silently wrapped into an unsized implicit second row
+     (grid-auto-flow defaults to row), leaving it stranded below everything else
+     with blank space under the editor, and because grid rows were `auto`-sized
+     rather than stretched, the editor's height (and therefore CodeMirror's) was
+     never pinned to the container -- it shrank whenever sibling content (e.g. the
+     result/log) grew. Flexbox with two explicit columns avoids both problems:
+     there's no auto-flow to wrap into, and #content-col's height comes straight
+     from the flex container, not from a sibling's content size. */
+  .main-grid { flex: 1; display: flex; min-height: 0; }
   aside, section { min-height: 0; overflow: auto; }
-  #roster { background: var(--surface); border-right: 1px solid var(--border); padding: 10px; }
-  #roster h2, #progress-pane h2, #result-pane h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim); margin-bottom: 6px; }
+
+  #side-nav { width: 280px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); overflow-y: auto; overflow-x: hidden; transition: width 0.15s ease, min-width 0.15s ease; }
+  #side-nav.collapsed { width: 0; min-width: 0; border-right: none; }
+  .nav-section { padding: 10px; border-bottom: 1px solid var(--border); }
+  .nav-section:last-child { border-bottom: none; }
+  #side-nav h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim); margin-bottom: 6px; }
   .worker-row { display: flex; align-items: center; gap: 6px; padding: 5px 6px; border-radius: 6px; margin-bottom: 3px; background: var(--surface2); }
   .worker-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); flex-shrink: 0; }
   .worker-dot.self { background: var(--accent); }
   .worker-name { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-  #editor-pane { display: flex; flex-direction: column; border-right: 1px solid var(--border); }
-  #editor-toolbar { display: flex; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--border); align-items: center; }
+  #content-col { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  #editor-pane { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  #editor-toolbar { display: flex; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--border); align-items: center; flex-shrink: 0; }
   #editor-host { flex: 1; min-height: 0; overflow: auto; }
   #editor-host .CodeMirror { height: 100%; font-size: 12.5px; }
   .plain-editor { width: 100%; height: 100%; background: var(--surface); color: var(--text); border: none; outline: none; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; padding: 10px; resize: none; }
 
-  #progress-pane, #result-pane { padding: 10px; background: var(--surface); }
-  #progress-pane { border-right: 1px solid var(--border); display: flex; flex-direction: column; }
-  #progress-list { flex: 1; overflow: auto; }
+  #status-bar { flex-shrink: 0; display: flex; align-items: center; gap: 12px; height: 26px; padding: 0 10px; background: var(--surface); border-top: 1px solid var(--border); font-size: 11px; color: var(--text-dim); overflow: hidden; white-space: nowrap; }
+  #status-bar .status-sep { color: var(--border); }
+  #mesh-banner.ok { color: var(--ok); }
+  #mesh-banner.warn { color: var(--warn); }
+  #status-run-state.busy { color: var(--accent); }
+
+  #progress-list { max-height: 220px; overflow: auto; }
   .chunk-row { display: flex; align-items: center; gap: 6px; padding: 3px 4px; font-size: 11.5px; border-radius: 4px; }
   .chunk-idx { color: var(--text-dim); width: 26px; flex-shrink: 0; }
   .chunk-worker { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dim); }
@@ -62,10 +81,21 @@
   .status-done { color: #06210f; background: var(--ok); }
   .status-timeout, .status-failed { color: #2b0707; background: var(--danger); }
 
-  #result-pane { display: flex; flex-direction: column; gap: 8px; }
-  #result-value { background: var(--surface2); border-radius: 6px; padding: 8px; font-family: ui-monospace, monospace; font-size: 12px; word-break: break-all; max-height: 90px; overflow: auto; }
-  #loss-canvas { width: 100%; height: 90px; background: var(--surface2); border-radius: 6px; }
-  #log { flex: 1; overflow: auto; font-family: ui-monospace, monospace; font-size: 11px; color: var(--text-dim); white-space: pre-wrap; }
+  #activity-list { display: flex; flex-direction: column; gap: 4px; }
+  .activity-empty { font-size: 11.5px; color: var(--text-dim); font-style: italic; }
+  .activity-row { display: flex; align-items: center; gap: 6px; padding: 4px 5px; font-size: 11px; border-radius: 4px; background: var(--surface2); }
+  .activity-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dim); }
+  .activity-state { font-weight: 600; padding: 1px 6px; border-radius: 4px; font-size: 10px; flex-shrink: 0; }
+  .state-running { color: #1a1b1e; background: var(--accent); }
+  .state-sending { color: #1a1b1e; background: var(--warn); }
+  .state-done { color: #06210f; background: var(--ok); }
+  .state-failed, .state-killed { color: #2b0707; background: var(--danger); }
+  .activity-kill-btn { flex-shrink: 0; padding: 1px 6px; font-size: 10px; border-color: var(--danger); color: var(--danger); }
+  .activity-kill-btn:hover { background: var(--danger); color: #2b0707; }
+
+  #result-value { background: var(--surface2); border-radius: 6px; padding: 8px; font-family: ui-monospace, monospace; font-size: 12px; word-break: break-all; max-height: 90px; overflow: auto; margin-bottom: 8px; }
+  #loss-canvas { width: 100%; height: 90px; background: var(--surface2); border-radius: 6px; margin-bottom: 8px; }
+  #log { max-height: 200px; overflow: auto; font-family: ui-monospace, monospace; font-size: 11px; color: var(--text-dim); white-space: pre-wrap; }
   #log .err { color: var(--danger); }
 </style>
 </head>
@@ -76,29 +106,42 @@
     <select id="example-select"></select>
     <select id="group-select"></select>
     <button id="run-btn" class="primary">Run</button>
-    <span id="mesh-banner"></span>
+    <button id="toggle-nav-btn" title="Toggle sidebar">&#9776;</button>
   </div>
   <div class="main-grid">
-    <aside id="roster">
-      <h2>Workers</h2>
-      <div id="roster-list"></div>
-    </aside>
-    <section id="editor-pane">
-      <div id="editor-toolbar">
-        <span style="color:var(--text-dim);font-size:11.5px;">Code (map/training step -- editable, re-read on every Run)</span>
+    <aside id="side-nav">
+      <div class="nav-section">
+        <h2>Workers</h2>
+        <div id="roster-list"></div>
       </div>
-      <div id="editor-host"></div>
-    </section>
-    <aside id="progress-pane">
-      <h2>Chunks / Epochs</h2>
-      <div id="progress-list"></div>
+      <div class="nav-section">
+        <h2>Worker Activity</h2>
+        <div id="activity-list"></div>
+      </div>
+      <div class="nav-section">
+        <h2>Chunks / Epochs</h2>
+        <div id="progress-list"></div>
+      </div>
+      <div class="nav-section">
+        <h2>Result</h2>
+        <div id="result-value">--</div>
+        <canvas id="loss-canvas" width="240" height="90"></canvas>
+        <div id="log"></div>
+      </div>
     </aside>
-    <aside id="result-pane">
-      <h2>Result</h2>
-      <div id="result-value">--</div>
-      <canvas id="loss-canvas" width="240" height="90"></canvas>
-      <div id="log"></div>
-    </aside>
+    <div id="content-col">
+      <section id="editor-pane">
+        <div id="editor-toolbar">
+          <span style="color:var(--text-dim);font-size:11.5px;">Code (map/training step -- editable, re-read on every Run)</span>
+        </div>
+        <div id="editor-host"></div>
+      </section>
+      <div id="status-bar">
+        <span id="mesh-banner"></span>
+        <span class="status-sep">|</span>
+        <span id="status-run-state">Idle</span>
+      </div>
+    </div>
   </div>
 </div>
 

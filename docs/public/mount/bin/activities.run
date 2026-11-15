@@ -1,0 +1,70 @@
+/** /bin/activities.run */
+// Lists (and kills) registered "activities" — lightweight, app-owned units of
+// in-progress work that aren't full windows/processes (e.g. distributed-compute
+// acting as a worker for another peer's job in the background). Backed by the
+// generic activity registry (Host.registerActivity/activities$/killActivity,
+// see src/shared/index.ts) so this is reusable by any app that registers one,
+// not just distributed-compute.
+//
+// `kind` is a `<app>.<detail>` string by convention (e.g.
+// 'distributed-compute.worker-task') — the part before the first '.' is shown
+// as APP, so each activity reads as a child of the app that registered it,
+// the same way process.list/ps.run groups windows, without requiring every
+// activity to carry a numeric pid.
+const terminal = platform.getService('terminal')
+const write = terminal ? terminal.write.bind(terminal) : console.log
+const [pwd, verb, id] = $args
+
+const fmtAge = (startedAt) => {
+    const secs = Math.floor((Date.now() - startedAt) / 1000)
+    const h = Math.floor(secs / 3600)
+    const m = Math.floor((secs % 3600) / 60)
+    const s = secs % 60
+    if (h) return `${h}h ${m}m`
+    if (m) return `${m}m ${s}s`
+    return `${s}s`
+}
+
+const list = () => platform.host.getCommand('activity.list')?.exec() ?? []
+
+if (verb === 'kill') {
+    if (!id) {
+        write('usage: activities kill <id>\r\n')
+        return
+    }
+    const activity = list().find(a => a.id === id)
+    if (!activity) {
+        write(`activities: no such activity: ${id}\r\n`)
+        return
+    }
+    const killed = platform.host.getCommand('activity.kill')?.exec(id)
+    write(killed ? `Killed ${id}\r\n` : `activities: '${id}' could not be killed (task already finished, or its execution can't be interrupted)\r\n`)
+    return
+}
+
+if (verb && verb !== 'list') {
+    write(`usage: activities [list] | activities kill <id>\r\n`)
+    return
+}
+
+const activities = list()
+if (activities.length === 0) {
+    write('no activities registered\r\n')
+    return
+}
+
+const rows = activities.map(a => [
+    a.id,
+    (a.kind || '').split('.')[0] || '-',
+    a.state,
+    a.label,
+    fmtAge(a.startedAt),
+    typeof a.onKill === 'function' || (a.meta && a.meta.killable) ? 'yes' : 'no',
+])
+
+const header = ['ID', 'APP', 'STATE', 'LABEL', 'AGE', 'KILLABLE']
+const widths = header.map((h, i) => Math.max(h.length, ...rows.map(r => r[i].length)))
+const formatRow = (cols) => cols.map((c, i) => c.padEnd(widths[i])).join('  ')
+
+write(formatRow(header) + '\r\n')
+rows.forEach(row => write(formatRow(row) + '\r\n'))

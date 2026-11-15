@@ -1,0 +1,16 @@
+{
+  "about": "The workspace-ssh bridge for the Remote Machines app. Built in ts-playground (node scripts/build-downloads.ts \u2192 public/downloads/workspace-ssh-bridge.zip); bridge.mjs is the zip's self-contained bridge. Refresh both files and this manifest together.",
+  "version": "1.3.0",
+  "node": ">=20",
+  "built": "2026-10-18T19:35:46.350Z",
+  "mjs": {
+    "file": "bridge.mjs",
+    "size": 780144,
+    "sha256": "336f00a62b2028e89850272a7ba9559bf7f16f85893db2df98e36c7cd3987ba8"
+  },
+  "zip": {
+    "file": "workspace-ssh-bridge.zip",
+    "size": 169925,
+    "sha256": "804c7062253a1c11a2e5357e4dda0d9f22783ce01d1c32579384abe6eb414952"
+  }
+}

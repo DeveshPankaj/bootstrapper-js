@@ -46,6 +46,10 @@ isolated iframes/windows.
 - **XML parser** – parse and inspect XML documents.
 - **Game of Life** – Conway's Game of Life demo app.
 - **Webamp** – embedded Winamp-style media player.
+- **Remote Machines** – machines reached over SSH through a bridge on your computer: saved
+  connections, terminals on the machine or inside its LXD containers, and a file browser that copies
+  to and from the virtual FS (see `documentation/apps/remote-machines.md`). It offers the bridge
+  (`bridge.mjs`, one file for Node.js 20+) for download on first use.
 - **WAMP / FS / TOTP / WebRTC tools** – small utility apps under `/opt/apps`.
 
 ## Development

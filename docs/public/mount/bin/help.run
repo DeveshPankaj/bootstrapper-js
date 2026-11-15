@@ -38,6 +38,7 @@ const commands = [
     { name: 'history',                       message: 'Show command history' },
     { name: 'clear',                         message: 'Clear the terminal' },
     { name: 'ps',                            message: 'List running processes' },
+    { name: 'activities [kill <id>]',       message: 'List (or kill) background app activities, e.g. distributed-compute worker tasks' },
     { name: 'htop',                          message: 'Live process monitor (q to quit)' },
     { name: 'kill <pid>',                    message: 'Kill a running process' },
     { name: 'systemctl <cmd> [unit]',       message: 'Manage systemd-style services' },

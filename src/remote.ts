@@ -1,4 +1,4 @@
-import { Command, Host, Platform, PlatformEvent, SettingsSectionDef, WidgetDef } from "@shared/index";
+import { ActivityDef, Command, Host, Platform, PlatformEvent, SettingsSectionDef, WidgetDef } from "@shared/index";
 import { removeRecursive, VFS, readJsonFile, writeJsonFile } from "@shared/fs-utils";
 import { KEYBINDINGS_FILE, WIDGETS_DIR } from "@shared/constants";
 import { BehaviorSubject, Subject } from "rxjs";
@@ -23,7 +23,7 @@ class WindowService {
         const newPlatform = new Platform(platformEventEmitter, uniqueName);
         iframe.contentWindow!.platform = newPlatform;
 
-        const host = new Host(this.window, newPlatform, commands, widgets, modulesMap, settingsSections, widgetTypes);
+        const host = new Host(this.window, newPlatform, commands, widgets, modulesMap, settingsSections, widgetTypes, activities);
         newPlatform.setHost(host);
 
         resolve([iframe.contentWindow!, platformEventEmitter]);
@@ -151,7 +151,8 @@ const commands = new BehaviorSubject<Array<Command>>([]);
 const widgets = new BehaviorSubject<Array<WidgetDef>>([]);
 const settingsSections = new BehaviorSubject<Array<SettingsSectionDef>>([]);
 const widgetTypes = new Map<string, import('@shared/index').WidgetTypeRenderer>();
-const host = new Host(window, hostPlatform, commands, widgets, modulesMap, settingsSections, widgetTypes);
+const activities = new BehaviorSubject<Array<ActivityDef>>([]);
+const host = new Host(window, hostPlatform, commands, widgets, modulesMap, settingsSections, widgetTypes, activities);
 hostPlatform.setHost(host);
 // Expose for ExecEngine's lazy _getHost() accessor (avoids circular import)
 (window as any).__wosHost = host;
@@ -373,6 +374,15 @@ platform.host.registerCommand('systemd.journal', (name: string, lines?: number) 
 // it in the vfs.
 platform.host.registerCommand('start-cron-scheduler', () => startCronScheduler());
 platform.host.registerCommand('load-widgets', () => loadWidgets());
+
+// Generic activity registry (see Host.registerActivity in shared/index.ts) — lets
+// any app register/track lightweight in-progress work (e.g. distributed-compute
+// acting as a worker for another peer's job) without inventing its own bespoke
+// process-listing mechanism. `activity.list` mirrors `process.list`/`systemd.list`
+// (a command, not direct BehaviorSubject access, so callers stay decoupled from
+// Host internals); `activity.kill` mirrors `process.kill`.
+platform.host.registerCommand('activity.list', () => activities.getValue());
+platform.host.registerCommand('activity.kill', (id: string) => host.killActivity(id));
 
 // Convenience commands for opening the terminal and settings via the keybinding
 // system, Spotlight, and the desktop context menu. These are proper app commands

@@ -526,6 +526,21 @@
       "main": "main.js"
     },
     {
+      "id": "remote-machines",
+      "name": "Remote Machines",
+      "description": "Machines reached over SSH through the workspace-ssh bridge: saved connections, terminals on the machine or inside its LXD / Incus containers, and a file browser that copies to and from Files.",
+      "version": "1.0.0",
+      "icon": "lan",
+      "category": "Network",
+      "author": "bootstrapper-js",
+      "commandName": "ui.remote-machines",
+      "files": [
+        { "dest": "main.js",   "src": "/public/mount/opt/apps/remote-machines/main.js" },
+        { "dest": "main.html", "src": "/public/mount/opt/apps/remote-machines/main.html" }
+      ],
+      "main": "main.js"
+    },
+    {
       "id": "youtube-player",
       "name": "YouTube Player",
       "description": "Paste a YouTube video or playlist link and watch it in an embedded player, with a small recently-played history.",
@@ -561,6 +576,7 @@
         { "dest": "lib/mesh-client.js", "src": "/public/mount/opt/apps/distributed-compute/lib/mesh-client.js" },
         { "dest": "lib/scheduler.js", "src": "/public/mount/opt/apps/distributed-compute/lib/scheduler.js" },
         { "dest": "lib/task-runtime.js", "src": "/public/mount/opt/apps/distributed-compute/lib/task-runtime.js" },
+        { "dest": "lib/worker-task-runtime.js", "src": "/public/mount/opt/apps/distributed-compute/lib/worker-task-runtime.js" },
         { "dest": "lib/tiny-nn.js", "src": "/public/mount/opt/apps/distributed-compute/lib/tiny-nn.js" },
         { "dest": "examples/map-reduce-demo.js", "src": "/public/mount/opt/apps/distributed-compute/examples/map-reduce-demo.js" },
         { "dest": "examples/neural-net-training.js", "src": "/public/mount/opt/apps/distributed-compute/examples/neural-net-training.js" },

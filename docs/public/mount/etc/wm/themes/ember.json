@@ -1,0 +1,18 @@
+{
+  "name": "Ember",
+  "appearance": {
+    "headerBackground": "#1d140d",
+    "headerColor": "#fdf1e7",
+    "windowBackground": "rgba(38, 32, 28, 0.55)",
+    "taskbarBackground": "rgba(29, 20, 13, 0.6)",
+    "taskbarSize": 56,
+    "accentColor": "#ff7a1a",
+    "borderRadius": 20,
+    "blur": 26,
+    "shadow": true
+  },
+  "behavior": {
+    "dblClickHeaderFullscreen": true,
+    "bringToFrontOnClick": true
+  }
+}

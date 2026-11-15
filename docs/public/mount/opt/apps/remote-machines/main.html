@@ -1,0 +1,1897 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Remote Machines</title>
+<link rel="stylesheet" href="https://unpkg.com/xterm@5.3.0/css/xterm.css">
+<style>
+  :root {
+    --bg: #12141a; --panel: #1a1d26; --panel2: #212533; --panel3: #2a2f40; --line: #2e3346;
+    --text: #e6e9f2; --muted: #8d95ab; --accent: #5b8def; --accent-d: #3f74d9;
+    --ok: #3ecf8e; --warn: #f5b84b; --danger: #ef5b6b; --radius: 10px; --term: #0c0e13;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg); color: var(--text); font: 13px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  input, textarea, select { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; outline: none; min-width: 0; }
+  input:focus, textarea:focus, select:focus { border-color: var(--accent); }
+  input[type=checkbox] { width: 16px; height: 16px; padding: 0; flex-shrink: 0; accent-color: var(--accent); margin: 0; }
+  textarea { resize: vertical; }
+  .muted { color: var(--muted); } .small { font-size: 11.5px; }
+  .ic { display: inline-flex; vertical-align: middle; }
+  .btn { display: inline-flex; align-items: center; gap: 6px; background: var(--panel3); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; white-space: nowrap; }
+  .btn:hover { background: #343a50; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .btn.primary:hover { background: var(--accent-d); }
+  .btn.danger { color: var(--danger); }
+  .btn.sm { padding: 3px 8px; font-size: 12px; }
+  .btn.ghost { background: transparent; border-color: transparent; }
+  .btn.ghost:hover { background: var(--panel3); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); display: inline-block; flex-shrink: 0; }
+  .dot.ok { background: var(--ok); } .dot.warn { background: var(--warn); } .dot.bad { background: var(--danger); }
+
+  #app { display: flex; height: 100%; position: relative; }
+  #side { width: 240px; flex-shrink: 0; background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+  .side-head { display: flex; align-items: center; gap: 10px; padding: 12px 14px 8px; }
+  .logo { width: 30px; height: 30px; border-radius: 9px; background: linear-gradient(135deg, var(--accent), #3ecf8e); display: grid; place-items: center; color: #fff; }
+  .title { font-weight: 700; font-size: 14px; }
+  .bridge { margin: 4px 10px 6px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel2); display: flex; flex-direction: column; gap: 4px; cursor: pointer; }
+  .bridge:hover { border-color: #3a4160; }
+  .bridge .row1 { display: flex; align-items: center; gap: 7px; font-weight: 600; font-size: 12px; }
+  .bridge .addr { color: var(--muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sec { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px 4px; font-size: 10.5px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+  #conns { flex: 1; overflow-y: auto; padding: 0 8px 10px; }
+  .conn { display: flex; align-items: center; gap: 9px; padding: 7px 8px; border-radius: 8px; cursor: pointer; }
+  .conn:hover { background: var(--panel2); }
+  .conn.active { background: var(--panel3); }
+  .conn .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .conn .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+  .conn .addr { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 11.5px; }
+
+  #main { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+  .head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .head .who { flex: 1; min-width: 160px; display: flex; flex-direction: column; }
+  .head .who b { font-size: 14px; }
+  .head .who span { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #menu-btn { display: none; }
+  .tabs { display: flex; gap: 2px; padding: 0 10px; border-bottom: 1px solid var(--line); }
+  .tabs button { background: none; border: none; padding: 9px 12px; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tabs button.on { color: var(--text); border-bottom-color: var(--accent); }
+  .tabs button:disabled { opacity: .45; cursor: not-allowed; }
+  .pane { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .notice { margin: 12px 14px 0; padding: 10px 12px; border: 1px solid var(--line); border-left: 3px solid var(--warn); border-radius: var(--radius); background: var(--panel2); display: flex; flex-direction: column; gap: 8px; }
+  .notice.bad { border-left-color: var(--danger); }
+  .notice code, .mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
+  .notice code { background: var(--panel3); padding: 1px 5px; border-radius: 5px; overflow-wrap: anywhere; }
+  .empty { margin: auto; padding: 24px; max-width: 520px; text-align: center; color: var(--muted); display: flex; flex-direction: column; gap: 10px; align-items: center; }
+  .empty h3 { margin: 0; color: var(--text); font-size: 16px; }
+  .empty code { background: var(--panel3); padding: 2px 6px; border-radius: 5px; color: var(--text); }
+
+  .bar { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .bar .grow { flex: 1; min-width: 120px; }
+  .crumbs { display: flex; flex-wrap: wrap; gap: 1px; align-items: center; }
+  .crumbs button { background: none; border: none; color: #8db4ff; padding: 2px 5px; border-radius: 5px; }
+  .crumbs button:hover { background: var(--panel3); }
+  .scroll { flex: 1; min-height: 0; overflow: auto; position: relative; }
+  .scroll.drag { outline: 2px dashed var(--accent); outline-offset: -6px; background: rgba(91, 141, 239, .06); }
+  table.grid { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  table.grid th { position: sticky; top: 0; z-index: 1; background: var(--panel); color: var(--muted); font-weight: 500; text-align: left; padding: 6px 10px; font-size: 12px; border-bottom: 1px solid var(--line); }
+  table.grid td { padding: 5px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  table.grid tr.item { cursor: default; }
+  table.grid tr.item:hover td { background: var(--panel2); }
+  table.grid tr.item.sel td { background: rgba(91, 141, 239, .16); }
+  table.grid td.num { text-align: right; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  table.grid td.nm .cell { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  table.grid td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  table.grid td.nm .cell > span:not(.ic) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  table.grid td.act { text-align: right; }
+  table.grid td.act .btn { opacity: .35; }
+  table.grid tr.item:hover td.act .btn, table.grid tr.item.sel td.act .btn { opacity: 1; }
+  .folder { color: #f5b84b; } .filei { color: var(--muted); }
+  .status { display: flex; gap: 12px; align-items: center; padding: 5px 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+  .status .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chip { display: inline-block; padding: 1px 7px; border-radius: 10px; background: var(--panel3); font-size: 11px; color: var(--muted); }
+  .st-Running { color: var(--ok); } .st-Stopped { color: var(--muted); } .st-Frozen, .st-Error { color: var(--warn); }
+
+  .term-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .term-tabs { display: flex; gap: 4px; padding: 6px 10px; border-bottom: 1px solid var(--line); overflow-x: auto; flex-shrink: 0; }
+  .term-tab { display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px 4px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel2); white-space: nowrap; cursor: pointer; font-size: 12px; }
+  .term-tab.on { border-color: var(--accent); background: var(--panel3); }
+  .term-tab .x { background: none; border: none; padding: 0 2px; color: var(--muted); display: inline-flex; }
+  .term-tab .x:hover { color: var(--text); }
+  .term-host { flex: 1; min-height: 0; position: relative; background: var(--term); }
+  .term { position: absolute; inset: 6px 4px 4px 8px; }
+  .term[hidden] { display: none; }
+  .term-gone { position: absolute; right: 14px; bottom: 12px; z-index: 3; }
+
+  .mon { padding: 12px 14px 16px; display: flex; flex-direction: column; gap: 12px; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .tile { background: var(--panel2); border: 1px solid var(--line); border-radius: var(--radius); padding: 9px 12px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .tile .k { color: var(--muted); font-size: 11.5px; }
+  .tile .v { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tile .sub { color: var(--muted); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .meter { height: 6px; border-radius: 3px; background: var(--panel3); overflow: hidden; }
+  .meter i { display: block; height: 100%; border-radius: 3px; background: #3987e5; }
+  .meter.hi i { background: var(--warn); } .meter.full i { background: var(--danger); }
+  .charts { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
+  .chart { background: var(--panel2); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px 22px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .chart-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .chart-head .now { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; }
+  .legend { display: flex; gap: 12px; color: var(--muted); font-size: 11.5px; }
+  .legend i { display: inline-block; width: 12px; height: 2px; vertical-align: middle; margin-right: 5px; border-radius: 1px; }
+  .plot { position: relative; height: 118px; margin-left: 46px; cursor: crosshair; }
+  .plot svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+  .plot .ylab { position: absolute; right: calc(100% + 6px); font-size: 10.5px; color: var(--muted); white-space: nowrap; transform: translateY(-50%); }
+  .plot .xlab { position: absolute; top: calc(100% + 4px); font-size: 10.5px; color: var(--muted); white-space: nowrap; }
+  .plot .cross { position: absolute; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,.35); pointer-events: none; }
+  .plot .tip { position: absolute; top: 2px; z-index: 2; background: rgba(12,14,19,.95); border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; font-size: 12px; pointer-events: none; white-space: nowrap; }
+  .plot .tip .key { display: inline-block; width: 10px; height: 2px; margin-right: 6px; vertical-align: middle; border-radius: 1px; }
+  .cores { display: flex; gap: 3px; align-items: flex-end; height: 40px; }
+  .cores span { flex: 1; min-width: 4px; background: #3987e5; border-radius: 3px 3px 0 0; min-height: 2px; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg button { background: none; border: none; padding: 4px 10px; color: var(--muted); font-size: 12px; }
+  .seg button[aria-pressed="true"] { background: var(--panel3); color: var(--text); }
+
+  .dl { border: 1px dashed #3a4160; border-radius: var(--radius); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; text-align: left; background: var(--panel2); width: 100%; }
+  .dl b { font-size: 13px; }
+  .dl .row { justify-content: flex-start; }
+  .dl a.btn { text-decoration: none; color: var(--text); }
+  .dl a.btn.primary { color: #fff; }
+  .dl .sha { font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: var(--muted); overflow-wrap: anywhere; cursor: copy; background: none; border: none; padding: 0; text-align: left; }
+  .dl .sha:hover { color: var(--text); }
+  .overlay { position: fixed; inset: 0; background: rgba(5,7,12,.62); display: grid; place-items: center; z-index: 50; padding: 14px; }
+  .modal { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; max-height: 92vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+  .modal-head { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line); font-weight: 700; font-size: 14px; }
+  .modal-head .grow { flex: 1; }
+  .modal-body { padding: 14px 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+  .field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+  .field input, .field select, .field textarea { color: var(--text); font-size: 13px; }
+  .cols { display: grid; grid-template-columns: minmax(0, 1fr) 110px; gap: 10px; }
+  .check { display: flex; align-items: center; gap: 8px; color: var(--text); font-size: 13px; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .row.end { justify-content: flex-end; }
+  .hint { color: var(--muted); font-size: 12px; }
+  .err { color: var(--danger); font-size: 12px; }
+  .ok-text { color: var(--ok); font-size: 12px; }
+  .fp { font-family: ui-monospace, Menlo, monospace; font-size: 12px; background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; overflow-wrap: anywhere; }
+  .list { display: flex; flex-direction: column; }
+  .list .li { display: flex; align-items: center; gap: 10px; padding: 7px 6px; border-bottom: 1px solid var(--line); }
+  .list .li.click { cursor: pointer; } .list .li.click:hover { background: var(--panel2); }
+  .list .li .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .editor { width: 100%; min-height: 360px; height: 58vh; font: 12.5px/1.5 ui-monospace, Menlo, Consolas, monospace; white-space: pre; tab-size: 4; background: var(--term); }
+  #toasts { position: fixed; right: 14px; bottom: 14px; display: flex; flex-direction: column; gap: 8px; z-index: 90; pointer-events: none; }
+  .toast { background: var(--panel3); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 8px; padding: 8px 12px; max-width: 360px; box-shadow: 0 8px 24px rgba(0,0,0,.4); }
+  .toast.ok { border-left-color: var(--ok); } .toast.bad { border-left-color: var(--danger); } .toast.warn { border-left-color: var(--warn); }
+
+  /* Narrow windows: the machine list slides over the content. */
+  body.narrow #side { position: absolute; inset: 0 auto 0 0; z-index: 20; width: min(280px, 86vw); box-shadow: 0 10px 40px rgba(0,0,0,.5); transform: translateX(-102%); transition: transform .15s; }
+  body.narrow.side-open #side { transform: none; }
+  body.narrow #menu-btn { display: inline-flex; }
+  body.narrow .head .who { min-width: 100px; }
+  body.narrow table.grid .wide { display: none; }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="side">
+    <div class="side-head"><div class="logo" id="logo"></div><div><div class="title">Remote Machines</div><div class="small muted">SSH through a bridge</div></div></div>
+    <div class="bridge" id="bridge" title="SSH bridge settings"></div>
+    <div class="sec"><span>Machines</span><button class="btn ghost sm" id="add-btn" title="Add a machine"></button></div>
+    <div id="conns"></div>
+  </aside>
+  <section id="main"></section>
+</div>
+<div id="modals"></div>
+<div id="toasts"></div>
+<script src="https://unpkg.com/xterm@5.3.0/lib/xterm.js"></script>
+<script src="https://unpkg.com/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+<script>
+// ════════════════════════════════════════════════════════════════════════════
+// Remote Machines: machines reached over SSH through the workspace-ssh bridge.
+//
+// The bridge (ts-playground's bridge/, `node bridge.mjs`) speaks JSON over one WebSocket per
+// machine at <bridge>/rpc: the first message is the SSH login ({type:'ssh', host, port,
+// username, password | privateKey | useAgent, hostKey, root}); the bridge answers 'ready' with
+// the machine's info, 'prompt' for keyboard-interactive questions, or 'error' (host-key-unknown,
+// host-key-changed, auth-failed, bridge-token, connect-failed). After that: {id, method, params}
+// → {id, result | error}, plus pushed {event, data} messages (term.data, term.exit, exec.output,
+// exec.exit). Methods used here: fs.list / fs.read / fs.readChunk / fs.write / fs.mkdir /
+// fs.remove / fs.rename, term.open / term.write / term.resize / term.close, exec.run.
+//
+// Nothing is installed on the machines. Sign-ins are kept only in memory unless "remember" is on;
+// then they are encrypted (AES-GCM) with a non-extractable key that lives in this browser's
+// IndexedDB, and only the ciphertext is written to the VFS.
+// ════════════════════════════════════════════════════════════════════════════
+
+const $ = (s) => document.querySelector(s);
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+const fmtBytes = (n) => { if (!n && n !== 0) return ''; if (n < 1024) return n + ' B'; const u = ['KB', 'MB', 'GB', 'TB']; let i = -1; do { n /= 1024; i++; } while (n >= 1024 && i < 3); return n.toFixed(n < 10 ? 1 : 0) + ' ' + u[i]; };
+const fmtDate = (ms) => { if (!ms) return ''; const d = new Date(ms); return d.toDateString() === new Date().toDateString() ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : d.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' }); };
+/** Single-quoted for sh. */
+const q = (s) => `'${String(s).replace(/'/g, `'\\''`)}'`;
+const joinPath = (dir, name) => (dir === '/' ? '' : dir) + '/' + name;
+const parentOf = (p) => { const i = p.lastIndexOf('/'); return i <= 0 ? '/' : p.slice(0, i); };
+const baseName = (p) => p.split('/').filter(Boolean).pop() || '/';
+const cleanName = (s) => String(s || '').replace(/[\u0000-\u001f\u007f/]/g, '').trim().slice(0, 255);
+
+function h(tag, attrs, ...kids) {
+  const el = document.createElement(tag);
+  if (attrs) for (const [k, v] of Object.entries(attrs)) {
+    if (v == null || v === false) continue;
+    if (k === 'class') el.className = v;
+    else if (k === 'style' && typeof v === 'object') Object.assign(el.style, v);
+    else if (k.startsWith('on') && typeof v === 'function') el.addEventListener(k.slice(2), v);
+    else if (k === 'value') el.value = v;
+    else if (v === true) el.setAttribute(k, '');
+    else el.setAttribute(k, v);
+  }
+  for (const kid of kids.flat(Infinity)) { if (kid == null || kid === false) continue; el.append(kid.nodeType ? kid : document.createTextNode(String(kid))); }
+  return el;
+}
+
+const ICONS = {
+  plus: '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
+  x: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
+  server: '<rect x="2" y="3" width="20" height="8" rx="2"/><rect x="2" y="13" width="20" height="8" rx="2"/><line x1="6" y1="7" x2="6.01" y2="7"/><line x1="6" y1="17" x2="6.01" y2="17"/>',
+  folder: '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
+  folderPlus: '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/>',
+  file: '<path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/>',
+  download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
+  upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>',
+  trash: '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>',
+  pencil: '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+  up: '<line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>',
+  refresh: '<polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>',
+  terminal: '<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>',
+  box: '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>',
+  power: '<path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/>',
+  play: '<polygon points="5 3 19 12 5 21 5 3"/>',
+  stop: '<rect x="5" y="5" width="14" height="14" rx="1"/>',
+  rotate: '<polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>',
+  key: '<path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>',
+  link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+  menu: '<line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>',
+  eye: '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>',
+  save: '<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>',
+  laptop: '<rect x="3" y="4" width="18" height="12" rx="2"/><line x1="2" y1="20" x2="22" y2="20"/>',
+  activity: '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>',
+};
+function ic(name, size = 16, cls) {
+  const s = h('span', { class: 'ic' + (cls ? ' ' + cls : '') });
+  s.innerHTML = `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] || ''}</svg>`;
+  return s;
+}
+function toast(text, kind) {
+  const el = h('div', { class: 'toast ' + (kind || '') }, text);
+  $('#toasts').append(el);
+  setTimeout(() => el.remove(), kind === 'bad' ? 8000 : 4000);
+}
+const errText = (e) => (e && e.message) || String(e);
+/** replaceChildren, skipping null / false like h() does. */
+const fill = (el, ...kids) => el.replaceChildren(...kids.flat(Infinity).filter((k) => k != null && k !== false));
+
+const toBase64 = (bytes) => { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000)); return btoa(s); };
+const fromBase64 = (data) => { const b = atob(data); const out = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) out[i] = b.charCodeAt(i); return out; };
+// BrowserFS's writeFileSync wants a Buffer (it calls .copy()); the OS installs the polyfill on top.
+const B = (() => { try { return window.top.Buffer || window.Buffer || null; } catch (_) { return window.Buffer || null; } })();
+
+// ════════════════════════════════════════════════════════════════════════════
+// 1. Platform (VFS) and saved state
+// ════════════════════════════════════════════════════════════════════════════
+// Under ui.iframe this page gets window.platform. Opened as a plain tab it still works (saved
+// state goes to localStorage), but without the VFS copies.
+let PLAT = null, FS = null;
+const DATA_DIR = '/home/user1/.local/share/remote-machines';
+
+async function whenPlatform(ms = 1500) {
+  const t0 = Date.now();
+  while (!window.platform && Date.now() - t0 < ms) await sleep(40);
+  return window.platform || null;
+}
+function mkdirp(dir) {
+  let cur = '';
+  for (const part of dir.split('/').filter(Boolean)) {
+    cur += '/' + part;
+    try { FS.mkdirSync(cur); } catch (e) { if (e && e.code !== 'EEXIST') throw e; }
+  }
+}
+function readJson(name, fallback) {
+  try {
+    if (FS) return JSON.parse(FS.readFileSync(`${DATA_DIR}/${name}`, 'utf8'));
+    const v = localStorage.getItem('remote-machines.' + name);
+    return v ? JSON.parse(v) : fallback;
+  } catch (_) { return fallback; }
+}
+function writeJson(name, value) {
+  const text = JSON.stringify(value, null, 1);
+  try {
+    if (FS) { mkdirp(DATA_DIR); FS.writeFileSync(`${DATA_DIR}/${name}`, text); }
+    else localStorage.setItem('remote-machines.' + name, text);
+  } catch (e) { toast('Could not save: ' + errText(e), 'bad'); }
+}
+
+const DEFAULT_BRIDGE = 'http://localhost:7090';
+let settings = { bridgeUrl: DEFAULT_BRIDGE };
+/** Saved machines (no secrets): { id, name, host, port, username, auth: password|key|agent, root, remember }. */
+let conns = [];
+/** Trusted host keys by "host:port", like ~/.ssh/known_hosts. */
+let knownHosts = {};
+/** Encrypted sign-ins by connection id ("bridge" holds the bridge token). */
+let sealed = {};
+const saveConns = () => writeJson('connections.json', conns);
+const saveSettings = () => writeJson('settings.json', settings);
+const saveKnownHosts = () => writeJson('known_hosts.json', knownHosts);
+
+// ── Encrypted sign-ins ──
+let masterKeyPromise = null;
+function masterKey() {
+  masterKeyPromise ||= new Promise((resolve, reject) => {
+    const req = indexedDB.open('remote-machines-keystore', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('keys');
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => {
+      const db = req.result;
+      const get = db.transaction('keys').objectStore('keys').get('master');
+      get.onerror = () => reject(get.error);
+      get.onsuccess = async () => {
+        if (get.result) return resolve(get.result);
+        try {
+          // Non-extractable: script on this origin can use it, nobody can read it out.
+          const key = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+          const put = db.transaction('keys', 'readwrite').objectStore('keys').put(key, 'master');
+          put.onsuccess = () => resolve(key);
+          put.onerror = () => reject(put.error);
+        } catch (e) { reject(e); }
+      };
+    };
+  });
+  return masterKeyPromise;
+}
+async function seal(value) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const data = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await masterKey(), new TextEncoder().encode(JSON.stringify(value)));
+  return { iv: toBase64(iv), data: toBase64(new Uint8Array(data)) };
+}
+async function unseal(box) {
+  const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: fromBase64(box.iv) }, await masterKey(), fromBase64(box.data));
+  return JSON.parse(new TextDecoder().decode(plain));
+}
+/** This page's copies (also of sign-ins not remembered). */
+const sessionSecrets = new Map();
+async function keepSecret(key, secret, remember) {
+  if (secret) sessionSecrets.set(key, secret); else sessionSecrets.delete(key);
+  if (remember && secret) { try { sealed[key] = await seal(secret); } catch (e) { toast('Could not encrypt the sign-in: ' + errText(e), 'bad'); delete sealed[key]; } }
+  else delete sealed[key];
+  writeJson('secrets.json', sealed);
+}
+async function secretOf(key) {
+  if (sessionSecrets.has(key)) return sessionSecrets.get(key);
+  if (!sealed[key]) return null;
+  try { const s = await unseal(sealed[key]); sessionSecrets.set(key, s); return s; }
+  catch (_) { return null; }   // another browser's key, or the keystore was cleared
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// 2. The bridge
+// ════════════════════════════════════════════════════════════════════════════
+let bridge = { state: 'checking', info: null, error: '' };
+const bridgeBase = () => { const u = (settings.bridgeUrl || DEFAULT_BRIDGE).trim().replace(/\/+$/, ''); return u + '/'; };
+async function checkBridge() {
+  bridge = { state: 'checking', info: null, error: '' };
+  renderBridge();
+  try {
+    const res = await fetch(new URL('health', bridgeBase()), { cache: 'no-store', signal: AbortSignal.timeout(6000) });
+    const body = await res.json();
+    if (!res.ok || body.bridge !== 'workspace-ssh') throw new Error(`${settings.bridgeUrl} doesn't look like the SSH bridge`);
+    bridge = { state: body.originAllowed === false ? 'forbidden' : 'ok', info: body, error: '' };
+  } catch (e) {
+    bridge = { state: 'down', info: null, error: errText(e) };
+  }
+  renderBridge();
+  renderMain();
+}
+// The bridge to download: copies of ts-playground's build, served with the site (docs/public/downloads).
+const DOWNLOADS = '/public/downloads/remote-machines/';
+let bridgeDownload = null;   // its manifest.json: { version, node, mjs: { file, size, sha256 }, zip: {…} }
+async function loadBridgeDownload() {
+  try {
+    const r = await fetch(DOWNLOADS + 'manifest.json', { cache: 'no-cache' });
+    if (r.ok) bridgeDownload = await r.json();
+  } catch (_) { bridgeDownload = null; }
+}
+/** -1, 0, 1 for dotted versions ("1.2.0" < "1.3.0"). */
+const compareVersions = (a, b) => { const x = String(a).split('.').map(Number), y = String(b).split('.').map(Number); for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] || 0) - (y[i] || 0); if (d) return d < 0 ? -1 : 1; } return 0; };
+/** Download links for the bridge, with how to run it. */
+function downloadBox() {
+  const d = bridgeDownload;
+  if (!d) return h('div', { class: 'dl' }, h('b', {}, 'Get the SSH bridge'), h('div', { class: 'hint' }, "The download isn't available on this site. Build it from ts-playground: node scripts/build-downloads.ts (public/downloads/workspace-ssh-bridge.zip)."));
+  const running = bridge.state === 'ok' && bridge.info?.version;
+  const older = running && compareVersions(bridge.info.version, d.version) < 0;
+  const copySha = async () => { try { await navigator.clipboard.writeText(d.mjs.sha256); toast('SHA-256 copied', 'ok'); } catch (_) { toast(d.mjs.sha256); } };
+  return h('div', { class: 'dl' },
+    h('b', {}, older ? `A newer bridge is available: ${d.version} (yours is ${bridge.info.version})` : running ? `SSH bridge ${d.version}` : 'Get the SSH bridge'),
+    h('div', { class: 'hint' }, `One file, nothing to install: it needs Node.js ${String(d.node || '>=20').replace('>=', '')} or newer. Save it in a folder of its own, then run `, h('code', { class: 'mono' }, startHint()), ' there and leave it running. It writes nothing on your machines.'),
+    h('div', { class: 'row' },
+      h('a', { class: 'btn primary', href: DOWNLOADS + d.mjs.file, download: 'bridge.mjs' }, ic('download', 14), `Download bridge.mjs · ${fmtBytes(d.mjs.size)}`),
+      d.zip ? h('a', { class: 'btn', href: DOWNLOADS + d.zip.file, download: d.zip.file, title: 'bridge.mjs with start.sh / start.cmd and a README' }, ic('download', 14), `With start scripts (.zip) · ${fmtBytes(d.zip.size)}`) : null),
+    h('button', { class: 'sha', title: 'Copy the SHA-256 of bridge.mjs (compare: shasum -a 256 bridge.mjs)', onclick: copySha }, `Version ${d.version} · SHA-256 ${d.mjs.sha256}`));
+}
+const startHint = () => {
+  const local = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+  return local ? 'node bridge.mjs' : `node bridge.mjs --origin ${location.origin}`;
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// 3. One SSH session per machine, over its own WebSocket
+// ════════════════════════════════════════════════════════════════════════════
+class Session {
+  constructor(conn) {
+    this.conn = conn;
+    this.status = 'offline';   // offline | connecting | online | needs-login | host-key-changed | error
+    this.error = '';
+    this.info = null;
+    this.hostKeyChange = null;
+    this.ws = null;
+    this.seq = 0;
+    this.pending = new Map();
+    this.listeners = new Map();
+    this.closed = true;
+    this.everOnline = false;
+    this.retry = 1000;
+    this.retryTimer = 0;
+    /** Requests someone is waiting for; background mirror work holds back while there are any. */
+    this.fg = 0;
+  }
+  set(status, error = '') { this.status = status; this.error = error; onSessionChange(this); }
+  async connect() {
+    if (this.status === 'connecting' || this.status === 'online') return;
+    this.closed = false;
+    clearTimeout(this.retryTimer);
+    // Connecting from here on: a second call while the sign-in is read must not open a second socket.
+    this.status = 'connecting';
+    const c = this.conn;
+    const secrets = c.auth === 'agent' ? { useAgent: true } : await secretOf(c.id);
+    if (this.closed) return;
+    if (!secrets) return this.set('needs-login', 'Sign in to connect.');
+    const token = (await secretOf('bridge'))?.token;
+    if (this.closed) return;
+    let url;
+    try { url = new URL('rpc', bridgeBase()); } catch (_) { return this.set('error', `The bridge address isn't valid: ${settings.bridgeUrl}`); }
+    url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+    this.set('connecting');
+    let ws;
+    try { ws = new WebSocket(url); } catch (e) { return this.set('error', errText(e)); }
+    this.ws = ws;
+    let opened = false, hostKeyQuestion = null;
+    const known = knownHosts[`${c.host}:${c.port}`];
+    ws.onopen = () => {
+      opened = true;
+      ws.send(JSON.stringify({ type: 'ssh', host: c.host, port: c.port, username: c.username, root: c.root || '/', hostKey: known?.fingerprint, ...secrets, ...(token ? { bridgeToken: token } : {}) }));
+    };
+    ws.onmessage = (ev) => {
+      if (this.ws !== ws) return;   // a socket this session already replaced or closed
+      let msg; try { msg = JSON.parse(String(ev.data)); } catch (_) { return; }
+      if (msg.type === 'ready') { this.info = msg.info || null; this.retry = 1000; this.everOnline = true; this.hostKeyChange = null; return this.set('online'); }
+      if (msg.type === 'prompt') {
+        askPrompts(c, msg).then((answers) => ws.readyState === ws.OPEN && ws.send(JSON.stringify({ type: 'answers', answers })));
+        return;
+      }
+      if (msg.type === 'error') {
+        if (msg.error === 'host-key-unknown') { hostKeyQuestion = { fingerprint: String(msg.fingerprint || ''), type: String(msg.keyType || '') }; return; }
+        if (msg.error === 'host-key-changed') { this.hostKeyChange = { fingerprint: String(msg.fingerprint || ''), type: String(msg.keyType || ''), trusted: String(msg.trusted || '') }; return this.set('host-key-changed', msg.message || 'The host key changed.'); }
+        if (msg.error === 'auth-failed') { sessionSecrets.delete(c.id); return this.set('needs-login', msg.message || 'The sign-in was refused.'); }
+        return this.set('error', msg.message || msg.error);
+      }
+      if (typeof msg.id === 'number') {
+        const p = this.pending.get(msg.id);
+        if (!p) return;
+        this.pending.delete(msg.id);
+        clearTimeout(p.timer);
+        if (msg.error) p.reject(new Error(msg.error)); else p.resolve(msg.result);
+        return;
+      }
+      if (msg.event) (this.listeners.get(msg.event) || []).forEach((fn) => { try { fn(msg.data || {}); } catch (e) { console.warn(e); } });
+    };
+    ws.onclose = () => {
+      if (this.ws !== ws) return;
+      this.ws = null;
+      for (const p of this.pending.values()) { clearTimeout(p.timer); p.reject(new Error('The connection closed')); }
+      this.pending.clear();
+      this.emit('closed', {});
+      if (!opened) return this.set('error', `Can't reach the SSH bridge at ${settings.bridgeUrl}. Start it on your computer: ${startHint()}`);
+      if (hostKeyQuestion) {
+        const key = hostKeyQuestion;
+        this.set('connecting', 'Waiting for you to check the host key…');
+        trustHostKey(c, key, false).then((ok) => {
+          if (!ok) return this.set('error', 'The host key was not trusted.');
+          this.status = 'offline';
+          this.connect();
+        });
+        return;
+      }
+      if (this.closed || ['needs-login', 'host-key-changed', 'error'].includes(this.status)) return;
+      if (this.status === 'connecting' && !this.everOnline) return this.set('error', this.error || 'Could not connect.');
+      // Dropped after it worked: try again with a back-off.
+      this.set('offline', 'The connection dropped. Reconnecting…');
+      this.retryTimer = setTimeout(() => { this.status = 'offline'; this.connect(); }, this.retry);
+      this.retry = Math.min(this.retry * 2, 30000);
+    };
+  }
+  rpc(method, params = {}, timeout = 20000, opts = {}) {
+    if (this.status !== 'online' || !this.ws) return Promise.reject(new Error(`${this.conn.name} isn't connected`));
+    const id = ++this.seq;
+    const fg = !opts.bg;
+    if (fg) this.fg++;
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => { this.pending.delete(id); reject(new Error(`${method} timed out`)); }, timeout);
+      this.pending.set(id, { resolve, reject, timer });
+      this.ws.send(JSON.stringify({ id, method, params }));
+    }).finally(() => { if (fg) this.fg--; });
+  }
+  on(event, fn) {
+    if (!this.listeners.has(event)) this.listeners.set(event, new Set());
+    this.listeners.get(event).add(fn);
+    return () => this.listeners.get(event)?.delete(fn);
+  }
+  emit(event, data) { (this.listeners.get(event) || []).forEach((fn) => { try { fn(data); } catch (_) {} }); }
+  close() {
+    this.closed = true;
+    clearTimeout(this.retryTimer);
+    const ws = this.ws;
+    this.ws = null;
+    try { ws?.close(); } catch (_) {}
+    this.set('offline');
+  }
+}
+
+// ── Files over the session (large ones in pieces, like the bridge expects) ──
+const CHUNK = 6 * 1024 * 1024;
+async function readRemote(s, path, opts = {}) {
+  try {
+    const r = await s.rpc('fs.read', { path }, 120000, opts);
+    return r.encoding === 'utf8' ? r.data : fromBase64(r.data);
+  } catch (e) { if (!/larger than/i.test(errText(e))) throw e; }
+  const parts = []; let offset = 0, size = Infinity;
+  while (offset < size) {
+    const r = await s.rpc('fs.readChunk', { path, offset, length: CHUNK }, 120000, opts);
+    const part = fromBase64(r.data); size = r.size;
+    if (!part.length) break;
+    parts.push(part); offset += part.length;
+  }
+  const out = new Uint8Array(offset); let at = 0;
+  for (const p of parts) { out.set(p, at); at += p.length; }
+  return out;
+}
+async function writeRemote(s, path, content) {
+  if (typeof content === 'string') {
+    if (content.length <= CHUNK) return s.rpc('fs.write', { path, encoding: 'utf8', data: content }, 120000);
+    content = new TextEncoder().encode(content);
+  }
+  for (let offset = 0; offset < content.length || offset === 0; offset += CHUNK) {
+    await s.rpc('fs.write', { path, encoding: 'base64', data: toBase64(content.subarray(offset, offset + CHUNK)), append: offset > 0 }, 120000);
+    if (!content.length) break;
+  }
+}
+
+/** A command on the machine (not a terminal): its output and exit code. */
+function runExec(s, script, opts = {}) {
+  return new Promise(async (resolve, reject) => {
+    let id = null, stdout = '', stderr = '';
+    const early = [];
+    const offOut = s.on('exec.output', (d) => { if (id === null) return early.push(['o', d]); if (d.id === id) d.stream === 'stderr' ? (stderr += d.data) : (stdout += d.data); });
+    const offExit = s.on('exec.exit', (d) => { if (id === null) return early.push(['x', d]); if (d.id === id) finish(d); });
+    const offClosed = s.on('closed', () => { cleanup(); reject(new Error('The connection closed')); });
+    const cleanup = () => { offOut(); offExit(); offClosed(); };
+    const finish = (d) => { cleanup(); resolve({ code: d.code, stdout, stderr, sudoFailed: !!d.sudoFailed }); };
+    try {
+      const r = await s.rpc('exec.run', { script, sudo: !!opts.sudo, ...(opts.password ? { sudoPassword: opts.password } : {}) }, 30000);
+      id = r.id;
+      for (const [k, d] of early) { if (d.id !== id) continue; if (k === 'x') return finish(d); d.stream === 'stderr' ? (stderr += d.data) : (stdout += d.data); }
+    } catch (e) { cleanup(); reject(e); }
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// 4. Per-machine view state
+// ════════════════════════════════════════════════════════════════════════════
+const live = new Map();   // conn id → { session, files, terms, cts }
+let selectedId = null;
+function stateOf(conn) {
+  let st = live.get(conn.id);
+  if (!st) {
+    st = {
+      session: new Session(conn),
+      tab: 'files',
+      files: { path: '/', entries: null, loading: false, error: '', sel: new Set(), hidden: false, transfer: null },
+      terms: { list: [], active: null, root: null },
+      cts: { loading: false, error: '', list: null, cli: '', sudo: false, password: '' },
+    };
+    live.set(conn.id, st);
+  }
+  st.session.conn = conn;
+  return st;
+}
+const current = () => conns.find((c) => c.id === selectedId) || null;
+function onSessionChange(s) {
+  const st = live.get(s.conn.id);
+  if (st && s.status === 'online' && st.files.entries === null && !st.files.loading) loadDir(s.conn, st.files.path);
+  if (st && s.status === 'online' && FS && typeof FS.mount === 'function' && !st.mount) {
+    const m = (st.mount = new RemoteMount(s.conn, s));
+    m.mount().then(() => { if (s.conn.id === selectedId) renderMain(); }).catch((e) => { st.mount = null; toast(`Couldn't add ${s.conn.name} to Files: ${errText(e)}`, 'bad'); });
+  }
+  if (st && s.status !== 'online' && st.mount) { st.mount.unmount(); st.mount = null; }
+  if (st && s.status !== 'online') for (const t of st.terms.list) if (!t.exited && t.id) markExited(st, t, 'connection lost');
+  renderSide();
+  if (s.conn.id === selectedId) renderMain();
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// 5. Rendering
+// ════════════════════════════════════════════════════════════════════════════
+const DOT = { online: 'ok', connecting: 'warn', 'needs-login': 'warn', error: 'bad', 'host-key-changed': 'bad' };
+const statusDot = (status) => h('span', { class: 'dot ' + (DOT[status] || '') });
+const STATUS_TEXT = { offline: 'Not connected', connecting: 'Connecting…', online: 'Connected', 'needs-login': 'Sign-in needed', 'host-key-changed': 'Host key changed', error: 'Could not connect' };
+const addressOf = (c) => `${c.username}@${c.host}${c.port && c.port !== 22 ? ':' + c.port : ''}`;
+
+function renderBridge() {
+  const el = $('#bridge');
+  const s = bridge.state;
+  const dot = h('span', { class: 'dot ' + (s === 'ok' ? 'ok' : s === 'checking' ? 'warn' : 'bad') });
+  const text = s === 'ok' ? `Bridge ${bridge.info?.version || ''}`.trim() : s === 'checking' ? 'Checking the bridge…' : s === 'forbidden' ? 'Bridge refuses this site' : 'No bridge';
+  const older = s === 'ok' && bridgeDownload && bridge.info?.version && compareVersions(bridge.info.version, bridgeDownload.version) < 0;
+  fill(el, h('div', { class: 'row1' }, dot, text, bridge.info?.token ? h('span', { class: 'chip', title: 'This bridge needs its access token' }, 'token') : null, older ? h('span', { class: 'chip', title: `Version ${bridgeDownload.version} is available` }, 'update') : null),
+    h('div', { class: 'addr' }, s === 'down' || s === 'forbidden' ? (s === 'down' ? 'Click to get it' : `Start it with --origin ${location.origin}`) : settings.bridgeUrl));
+}
+
+function renderSide() {
+  const list = $('#conns');
+  if (!conns.length) {
+    fill(list, h('div', { class: 'hint', style: { padding: '8px' } }, 'No machines yet.'));
+    return;
+  }
+  fill(list, ...conns.map((c) => {
+    const s = live.get(c.id)?.session;
+    return h('div', { class: 'conn' + (c.id === selectedId ? ' active' : ''), title: s ? STATUS_TEXT[s.status] : STATUS_TEXT.offline, onclick: () => select(c.id) },
+      ic('server', 16, 'muted'),
+      h('div', { class: 'txt' }, h('span', { class: 'name' }, c.name), h('span', { class: 'addr' }, addressOf(c))),
+      statusDot(s ? s.status : 'offline'));
+  }));
+}
+
+function select(id) {
+  selectedId = id;
+  document.body.classList.remove('side-open');
+  const c = current();
+  if (c) {
+    const st = stateOf(c);
+    if (st.session.status === 'offline' && !st.session.everOnline) st.session.connect();
+  }
+  renderSide();
+  renderMain();
+}
+
+function renderMain() {
+  const main = $('#main');
+  const menu = h('button', { class: 'btn ghost sm', id: 'menu-btn', title: 'Machines', onclick: () => document.body.classList.toggle('side-open') }, ic('menu'));
+  const c = current();
+  if (!c) {
+    const noBridge = bridge.state === 'down' || bridge.state === 'forbidden';
+    fill(main, h('div', { class: 'head' }, menu, h('div', { class: 'who' }, h('b', {}, 'Remote Machines'))),
+      h('div', { class: 'empty' },
+        h('div', { class: 'logo', style: { width: '48px', height: '48px' } }, ic('server', 26)),
+        h('h3', {}, conns.length ? 'Pick a machine on the left' : 'Reach your machines over SSH'),
+        h('div', {}, 'Terminals on the machine or inside its LXD containers, and a file browser that copies to and from Files. Nothing is installed on the machines.'),
+        noBridge ? h('div', {}, 'First start the SSH bridge on your computer (it listens on ', h('code', {}, DEFAULT_BRIDGE), ').') : null,
+        noBridge ? downloadBox() : null,
+        h('div', { class: 'row', style: { justifyContent: 'center' } },
+          h('button', { class: 'btn primary', onclick: () => editConnection(null) }, ic('plus', 14), 'Add a machine'),
+          h('button', { class: 'btn', onclick: () => openBridgeSettings() }, ic('link', 14), 'Bridge settings'))));
+    return;
+  }
+  const st = stateOf(c);
+  const s = st.session;
+  const online = s.status === 'online';
+  const info = s.info;
+  const head = h('div', { class: 'head' }, menu,
+    h('div', { class: 'who' }, h('b', {}, c.name), h('span', {}, [addressOf(c), online && info ? `${info.os}${info.arch ? ' ' + info.arch : ''} · folder ${info.root}` : STATUS_TEXT[s.status]].join(' · '))),
+    statusDot(s.status),
+    online || s.status === 'connecting' ? h('button', { class: 'btn sm', onclick: () => s.close() }, ic('power', 13), 'Disconnect') : h('button', { class: 'btn sm primary', onclick: () => { s.status = 'offline'; s.connect(); } }, ic('power', 13), 'Connect'),
+    h('button', { class: 'btn sm ghost', title: 'Edit this machine', onclick: () => editConnection(c) }, ic('pencil', 14)),
+    h('button', { class: 'btn sm ghost danger', title: 'Remove this machine', onclick: () => removeConnection(c) }, ic('trash', 14)));
+  const notices = [];
+  if (online && st.mount?.mounted) notices.push(h('div', { class: 'notice', style: { borderLeftColor: 'var(--ok)', flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' } },
+    ic('folder', 15, 'folder'), h('span', { style: { flex: 1, minWidth: '200px' } }, 'In Files at ', h('code', {}, st.mount.path), st.mount.pending ? ` · sending ${st.mount.pending} change${st.mount.pending === 1 ? '' : 's'}…` : ''),
+    h('button', { class: 'btn sm', onclick: () => openInFiles(st.mount.path) }, ic('folder', 13), 'Open in Files')));
+  if (s.status === 'needs-login') notices.push(signInNotice(c, st));
+  if (s.status === 'host-key-changed' && s.hostKeyChange) notices.push(h('div', { class: 'notice bad' },
+    h('b', {}, `The host key of ${c.host} has changed`),
+    h('div', { class: 'hint' }, 'Someone could be intercepting the connection, or the machine was reinstalled. Only continue if you know why.'),
+    h('div', { class: 'small muted' }, 'Trusted before:'), h('div', { class: 'fp' }, s.hostKeyChange.trusted || '(unknown)'),
+    h('div', { class: 'small muted' }, `Now (${s.hostKeyChange.type}):`), h('div', { class: 'fp' }, s.hostKeyChange.fingerprint),
+    h('div', { class: 'row' }, h('button', { class: 'btn danger', onclick: async () => { if (await trustHostKey(c, s.hostKeyChange, true)) { s.status = 'offline'; s.connect(); } } }, 'Trust the new key…'))));
+  if (s.status === 'error' || (s.status === 'offline' && s.error)) notices.push(h('div', { class: 'notice' + (s.status === 'error' ? ' bad' : '') }, h('div', {}, s.error), s.status === 'error' ? h('div', { class: 'row' }, h('button', { class: 'btn sm', onclick: () => { s.status = 'offline'; s.connect(); } }, 'Try again'), h('button', { class: 'btn sm ghost', onclick: () => openBridgeSettings() }, bridge.state === 'down' ? 'Get the bridge' : 'Bridge settings')) : null));
+  const tabBtn = (id, label, icon, disabled) => h('button', { class: st.tab === id ? 'on' : '', disabled, onclick: () => { st.tab = id; renderMain(); if (id === 'containers' && online && st.cts.list === null) loadContainers(c); } }, ic(icon, 13), ' ', label);
+  const tabs = h('div', { class: 'tabs' },
+    tabBtn('files', 'Files', 'folder', !online),
+    tabBtn('terminal', `Terminal${st.terms.list.length ? ` (${st.terms.list.length})` : ''}`, 'terminal', !online && !st.terms.list.length),
+    tabBtn('containers', 'Containers', 'box', !online),
+    tabBtn('monitor', 'Monitor', 'activity', !online));
+  if (st.tab !== 'monitor') stopMonitor(st);
+  let pane;
+  if (st.tab === 'terminal') pane = terminalPane(c, st);
+  else if (!online) pane = h('div', { class: 'pane' }, s.status === 'connecting' ? h('div', { class: 'empty' }, s.error || 'Connecting…') : h('div', { class: 'empty' }, 'Connect to browse files, open terminals and see its containers.'));
+  else if (st.tab === 'containers') pane = containersPane(c, st);
+  else if (st.tab === 'monitor') pane = monitorPane(c, st);
+  else pane = filesPane(c, st);
+  fill(main, head, notices, tabs, pane);
+  if (st.tab === 'terminal') fitActive(st);
+}
+
+function signInNotice(c, st) {
+  const pass = h('input', { type: 'password', placeholder: c.auth === 'key' ? 'Key passphrase (if any)' : 'Password', autocomplete: 'current-password' });
+  const key = c.auth === 'key' ? h('textarea', { rows: 4, placeholder: '-----BEGIN OPENSSH PRIVATE KEY-----', class: 'mono', spellcheck: 'false' }) : null;
+  const remember = h('input', { type: 'checkbox', checked: c.remember !== false });
+  const go = async () => {
+    const secret = c.auth === 'key' ? { privateKey: key.value.trim() + '\n', passphrase: pass.value || undefined } : { password: pass.value };
+    if (c.auth === 'key' ? !/-----BEGIN [A-Z ]*PRIVATE KEY-----/.test(key.value) : !pass.value) return toast(c.auth === 'key' ? 'Paste the private key' : 'Enter the password', 'warn');
+    if (c.remember !== remember.checked) { c.remember = remember.checked; saveConns(); }
+    await keepSecret(c.id, secret, remember.checked);
+    st.session.status = 'offline';
+    st.session.connect();
+  };
+  pass.addEventListener('keydown', (e) => e.key === 'Enter' && go());
+  setTimeout(() => (key || pass).focus(), 0);
+  return h('div', { class: 'notice' }, h('div', {}, st.session.error || 'Sign in to connect.'), key, h('div', { class: 'row' }, pass, h('label', { class: 'check' }, remember, 'Remember (encrypted in this browser)'), h('button', { class: 'btn primary', onclick: go }, 'Sign in')));
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// 6. Files
+// ════════════════════════════════════════════════════════════════════════════
+async function loadDir(c, path) {
+  const st = stateOf(c);
+  const f = st.files;
+  f.loading = true; f.error = '';
+  if (selectedId === c.id && st.tab === 'files') renderMain();
+  try {
+    const list = await st.session.rpc('fs.list', { path });
+    f.path = path;
+    f.entries = list.sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === 'dir' ? -1 : 1));
+    f.sel = new Set();
+  } catch (e) {
+    f.error = errText(e);
+    if (f.entries === null) f.entries = [];
+  } finally { f.loading = false; }
+  if (selectedId === c.id) renderMain();
+}
+
+function filesPane(c, st) {
+  const f = st.files;
+  const s = st.session;
+  const parts = f.path.split('/').filter(Boolean);
+  const go = (p) => loadDir(c, p || '/');
+  const shown = (f.entries || []).filter((n) => f.hidden || !n.name.startsWith('.'));
+  const upload = h('input', { type: 'file', multiple: true, style: { display: 'none' }, onchange: async () => { const files = [...upload.files]; upload.value = ''; await uploadComputerFiles(c, files, f.path); } });
+  const bar = h('div', { class: 'bar' },
+    h('button', { class: 'btn sm ghost', title: 'Up', disabled: f.path === '/', onclick: () => go(parentOf(f.path)) }, ic('up', 14)),
+    h('button', { class: 'btn sm ghost', title: 'Refresh', onclick: () => go(f.path) }, ic('refresh', 14)),
+    h('div', { class: 'crumbs grow' }, h('button', { onclick: () => go('/') }, s.info?.root && s.info.root !== '/' ? s.info.root : '/'), parts.map((p, i) => [h('span', { class: 'muted' }, '›'), h('button', { onclick: () => go('/' + parts.slice(0, i + 1).join('/')) }, p)])),
+    h('button', { class: 'btn sm', title: 'New folder', onclick: () => newFolder(c) }, ic('folderPlus', 14)),
+    h('button', { class: 'btn sm', title: 'Upload files from this computer', onclick: () => upload.click() }, ic('laptop', 14), 'Upload'),
+    FS ? h('button', { class: 'btn sm', title: 'Copy files or a folder from Files (the workspace) to here', onclick: () => uploadFromVfs(c) }, ic('upload', 14), 'From Files') : null,
+    h('button', { class: 'btn sm ghost' + (f.hidden ? ' on' : ''), title: f.hidden ? 'Hide dotfiles' : 'Show dotfiles', onclick: () => { f.hidden = !f.hidden; renderMain(); } }, ic('eye', 14)),
+    upload);
+  let drawFilesStatus = () => {};
+  const rows = shown.map((n) => {
+    const tr = h('tr', { class: 'item' + (f.sel.has(n.path) ? ' sel' : ''), draggable: 'true' },
+      h('td', { class: 'nm' }, h('div', { class: 'cell' }, n.kind === 'dir' ? ic('folder', 16, 'folder') : ic('file', 16, 'filei'), h('span', { title: n.name }, n.name))),
+      h('td', { class: 'num' }, n.kind === 'dir' ? '' : fmtBytes(n.size)),
+      h('td', { class: 'num wide' }, fmtDate(n.mtime)),
+      h('td', { class: 'act' },
+        n.kind === 'file' ? h('button', { class: 'btn sm ghost', title: 'Open (text files)', onclick: (e) => { e.stopPropagation(); openRemoteFile(c, n); } }, ic('file', 13)) : null,
+        FS ? h('button', { class: 'btn sm ghost', title: 'Save a copy to Files (the workspace)', onclick: (e) => { e.stopPropagation(); saveToVfs(c, [n]); } }, ic('save', 13)) : null,
+        n.kind === 'file' ? h('button', { class: 'btn sm ghost', title: 'Download to this computer', onclick: (e) => { e.stopPropagation(); downloadToComputer(c, n); } }, ic('download', 13)) : null,
+        h('button', { class: 'btn sm ghost', title: 'Rename', onclick: (e) => { e.stopPropagation(); renameNode(c, n); } }, ic('pencil', 13)),
+        h('button', { class: 'btn sm ghost danger', title: 'Delete', onclick: (e) => { e.stopPropagation(); deleteNodes(c, [n]); } }, ic('trash', 13))));
+    tr.dataset.path = n.path;
+    tr.addEventListener('click', (e) => {
+      if (e.metaKey || e.ctrlKey) { f.sel.has(n.path) ? f.sel.delete(n.path) : f.sel.add(n.path); }
+      else f.sel = new Set([n.path]);
+      // In place: a full redraw would replace the row between the two clicks of a double-click.
+      for (const row of tr.parentElement.children) row.classList.toggle('sel', f.sel.has(row.dataset.path));
+      drawFilesStatus();
+    });
+    tr.addEventListener('dblclick', () => (n.kind === 'dir' ? go(n.path) : openRemoteFile(c, n)));
+    tr.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', `${addressOf(c)}:${n.path}`); e.dataTransfer.effectAllowed = 'copy'; });
+    return tr;
+  });
+  const table = h('table', { class: 'grid' }, h('thead', {}, h('tr', {}, h('th', {}, 'Name'), h('th', { style: { textAlign: 'right', width: '84px' } }, 'Size'), h('th', { class: 'wide', style: { textAlign: 'right', width: '118px' } }, 'Modified'), h('th', { style: { width: FS ? '178px' : '146px' } }))), h('tbody', {}, rows));
+  const scroll = h('div', { class: 'scroll' },
+    f.error ? h('div', { class: 'notice bad' }, f.error) : null,
+    f.entries === null ? h('div', { class: 'empty' }, 'Loading…') : shown.length ? table : h('div', { class: 'empty' }, f.loading ? 'Loading…' : 'This folder is empty. Drop files here to upload them.'));
+  // Drops: files from this computer, or items dragged from the OS's file explorer (VFS paths).
+  scroll.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; scroll.classList.add('drag'); });
+  scroll.addEventListener('dragleave', (e) => { if (e.target === scroll) scroll.classList.remove('drag'); });
+  scroll.addEventListener('drop', async (e) => {
+    e.preventDefault(); scroll.classList.remove('drag');
+    const vfs = e.dataTransfer.getData('application/x-vfs-path');
+    if (vfs && FS) return uploadVfsPaths(c, vfs.split('\n').map((p) => p.trim()).filter(Boolean), f.path);
+    const files = [...(e.dataTransfer.files || [])];
+    if (files.length) await uploadComputerFiles(c, files, f.path);
+  });
+  const status = h('div', { class: 'status' });
+  drawFilesStatus = () => {
+    const sel = shown.filter((n) => f.sel.has(n.path));
+    fill(status, 
+      h('span', { class: 'grow' }, f.transfer ? `${f.transfer.label} ${f.transfer.done}/${f.transfer.total}` : `${shown.length} item${shown.length === 1 ? '' : 's'}${sel.length ? ` · ${sel.length} selected` : ''}${f.loading ? ' · loading…' : ''}`),
+      sel.length > 1 ? h('button', { class: 'btn sm', onclick: () => saveToVfs(c, sel), disabled: !FS }, ic('save', 13), 'Save to Files') : null,
+      sel.length > 1 ? h('button', { class: 'btn sm danger', onclick: () => deleteNodes(c, sel) }, ic('trash', 13), 'Delete') : null);
+  };
+  drawFilesStatus();
+  return h('div', { class: 'pane' }, bar, scroll, status);
+}
+
+const setTransfer = (c, t) => { const st = stateOf(c); st.files.transfer = t; if (selectedId === c.id && st.tab === 'files') renderMain(); };
+
+async function newFolder(c) {
+  const st = stateOf(c);
+  const name = cleanName(prompt('Name of the new folder:', 'New folder') || '');
+  if (!name) return;
+  try { await st.session.rpc('fs.mkdir', { path: joinPath(st.files.path, name) }); loadDir(c, st.files.path); }
+  catch (e) { toast(errText(e), 'bad'); }
+}
+async function renameNode(c, n) {
+  const st = stateOf(c);
+  const name = cleanName(prompt('New name:', n.name) || '');
+  if (!name || name === n.name) return;
+  try { await st.session.rpc('fs.rename', { from: n.path, to: joinPath(parentOf(n.path), name) }); loadDir(c, st.files.path); }
+  catch (e) { toast(errText(e), 'bad'); }
+}
+async function deleteNodes(c, nodes) {
+  const st = stateOf(c);
+  const what = nodes.length === 1 ? `"${nodes[0].name}"${nodes[0].kind === 'dir' ? ' and everything in it' : ''}` : `${nodes.length} items`;
+  if (!confirm(`Delete ${what} on ${c.name}? This can't be undone.`)) return;
+  for (const n of nodes) { try { await st.session.rpc('fs.remove', { path: n.path }, 120000); } catch (e) { toast(`${n.name}: ${errText(e)}`, 'bad'); } }
+  loadDir(c, st.files.path);
+}
+
+/** Text files open in an editor; saving writes them back to the machine. */
+const openEditors = new Set();
+async function openRemoteFile(c, n) {
+  const key = `${c.id}:${n.path}`;
+  if (openEditors.has(key)) return;
+  openEditors.add(key);
+  try { await editRemoteFile(c, n, () => openEditors.delete(key)); } catch (e) { openEditors.delete(key); toast(errText(e), 'bad'); }
+}
+async function editRemoteFile(c, n, closed) {
+  const s = stateOf(c).session;
+  if (n.size > 4 * 1024 * 1024) { closed(); return toast(`${n.name} is ${fmtBytes(n.size)}: too big to edit here. Save it to Files or download it.`, 'warn'); }
+  const res = await s.rpc('fs.read', { path: n.path }, 60000);
+  if (res.encoding !== 'utf8') { closed(); return toast(`${n.name} isn't a text file. Save it to Files or download it instead.`, 'warn'); }
+  let dirty = false;
+  const area = h('textarea', { class: 'editor', spellcheck: 'false' });
+  area.value = res.data;
+  const state = h('span', { class: 'hint' }, n.path);
+  const save = async () => {
+    try { await writeRemote(s, n.path, area.value); dirty = false; state.textContent = 'Saved ' + new Date().toLocaleTimeString(); state.className = 'ok-text'; }
+    catch (e) { state.textContent = errText(e); state.className = 'err'; }
+  };
+  area.addEventListener('input', () => { if (!dirty) { dirty = true; state.textContent = 'Unsaved changes'; state.className = 'hint'; } });
+  area.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') { e.preventDefault(); save(); }
+    if (e.key === 'Tab') { e.preventDefault(); const a = area.selectionStart; area.setRangeText('\t', a, area.selectionEnd, 'end'); }
+  });
+  const m = openModal({ title: `${n.name} on ${c.name}`, width: 900, onClose: closed, confirmClose: () => !dirty || confirm('Discard unsaved changes?'), render: () => [area, h('div', { class: 'row', style: { justifyContent: 'space-between' } }, state, h('div', { class: 'row' }, h('button', { class: 'btn', onclick: () => m.close() }, 'Close'), h('button', { class: 'btn primary', onclick: save }, ic('save', 14), 'Save')))] });
+  setTimeout(() => area.focus(), 0);
+}
+
+async function downloadToComputer(c, n) {
+  const s = stateOf(c).session;
+  setTransfer(c, { label: `Downloading ${n.name}`, done: 0, total: 1 });
+  try {
+    const data = await readRemote(s, n.path);
+    const url = URL.createObjectURL(new Blob([data]));
+    const a = h('a', { href: url, download: n.name });
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+  } catch (e) { toast(errText(e), 'bad'); }
+  setTransfer(c, null);
+}
+
+/** Remote → VFS: files, and folders with everything in them. */
+async function saveToVfs(c, nodes) {
+  if (!FS) return;
+  const dir = await pickVfsFolder({ title: `Save ${nodes.length === 1 ? `"${nodes[0].name}"` : `${nodes.length} items`} to…`, buttonLabel: 'Save here' });
+  if (!dir) return;
+  const s = stateOf(c).session;
+  const jobs = [];
+  const collect = async (n, dest) => {
+    if (n.kind === 'dir') {
+      jobs.push({ kind: 'dir', dest });
+      for (const child of await s.rpc('fs.list', { path: n.path })) await collect(child, joinPath(dest, child.name));
+    } else jobs.push({ kind: 'file', src: n.path, dest, size: n.size });
+    if (jobs.length > 5000) throw new Error('More than 5000 items: copy a smaller folder.');
+  };
+  try {
+    setTransfer(c, { label: 'Listing', done: 0, total: 0 });
+    for (const n of nodes) await collect(n, joinPath(dir, cleanName(n.name)));
+    const files = jobs.filter((j) => j.kind === 'file');
+    const clash = jobs.find((j) => FS.existsSync(j.dest) && j.kind === 'file');
+    if (clash && !confirm(`${clash.dest} already exists${files.length > 1 ? ' (and maybe others)' : ''}. Overwrite?`)) return setTransfer(c, null);
+    let done = 0;
+    for (const j of jobs) {
+      if (j.kind === 'dir') { mkdirp(j.dest); continue; }
+      setTransfer(c, { label: 'Saving to Files', done, total: files.length });
+      const data = await readRemote(s, j.src);
+      mkdirp(parentOf(j.dest));
+      FS.writeFileSync(j.dest, typeof data === 'string' ? data : (B ? B.from(data) : data));
+      done++;
+    }
+    toast(`Saved ${files.length} file${files.length === 1 ? '' : 's'} to ${dir}`, 'ok');
+  } catch (e) { toast(errText(e), 'bad'); }
+  setTransfer(c, null);
+}
+
+/** VFS → remote: files and whole folders. */
+async function uploadVfsPaths(c, paths, remoteDir) {
+  const st = stateOf(c);
+  const s = st.session;
+  const jobs = [];
+  const collect = (vfsPath, dest) => {
+    const stat = FS.statSync(vfsPath);
+    if (stat.isDirectory()) {
+      jobs.push({ kind: 'dir', dest });
+      for (const name of FS.readdirSync(vfsPath)) collect(joinPath(vfsPath, name), joinPath(dest, name));
+    } else jobs.push({ kind: 'file', src: vfsPath, dest });
+    if (jobs.length > 5000) throw new Error('More than 5000 items: copy a smaller folder.');
+  };
+  try {
+    for (const p of paths) collect(p, joinPath(remoteDir, cleanName(baseName(p))));
+    const files = jobs.filter((j) => j.kind === 'file');
+    const existing = new Set((st.files.entries || []).map((n) => n.path));
+    const clash = jobs.find((j) => existing.has(j.dest));
+    if (clash && !confirm(`${baseName(clash.dest)} already exists on ${c.name}. Overwrite?`)) return;
+    let done = 0;
+    for (const j of jobs) {
+      if (j.kind === 'dir') { await s.rpc('fs.mkdir', { path: j.dest }).catch(() => {}); continue; }
+      setTransfer(c, { label: `Uploading to ${c.name}`, done, total: files.length });
+      await writeRemote(s, j.dest, new Uint8Array(FS.readFileSync(j.src)));
+      done++;
+    }
+    toast(`Copied ${files.length} file${files.length === 1 ? '' : 's'} to ${c.name}:${remoteDir}`, 'ok');
+  } catch (e) { toast(errText(e), 'bad'); }
+  setTransfer(c, null);
+  loadDir(c, st.files.path);
+}
+async function uploadComputerFiles(c, files, remoteDir) {
+  const st = stateOf(c);
+  let done = 0;
+  try {
+    for (const file of files) {
+      setTransfer(c, { label: `Uploading to ${c.name}`, done, total: files.length });
+      await writeRemote(st.session, joinPath(remoteDir, cleanName(file.name)), new Uint8Array(await file.arrayBuffer()));
+      done++;
+    }
+    toast(`Uploaded ${done} file${done === 1 ? '' : 's'}`, 'ok');
+  } catch (e) { toast(errText(e), 'bad'); }
+  setTransfer(c, null);
+  loadDir(c, st.files.path);
+}
+async function uploadFromVfs(c) {
+  const picked = await pickVfsEntries({ title: `Copy to ${c.name}:${stateOf(c).files.path}` });
+  if (picked?.length) uploadVfsPaths(c, picked, stateOf(c).files.path);
+}
+
+// ── VFS pickers ──
+function vfsEntries(path) {
+  const out = [];
+  try { for (const n of FS.readdirSync(path)) { try { const l = FS.lstatSync(joinPath(path, n)); if (l.isSymbolicLink()) continue; out.push({ n, d: l.isDirectory(), s: l.size }); } catch (_) {} } } catch (_) {}
+  return out.sort((a, b) => (b.d - a.d) || a.n.localeCompare(b.n));
+}
+function vfsCrumbs(path, go) {
+  const parts = path.split('/').filter(Boolean);
+  return h('div', { class: 'crumbs' }, h('button', { onclick: () => go('/') }, '/'), parts.map((p, i) => [h('span', { class: 'muted' }, '›'), h('button', { onclick: () => go('/' + parts.slice(0, i + 1).join('/')) }, p)]));
+}
+function pickVfsFolder({ title, buttonLabel, start }) {
+  return new Promise((resolve) => {
+    let path = start || '/home/user1', done = false;
+    const finish = (v) => { if (done) return; done = true; m.close(); resolve(v); };
+    const m = openModal({ title, width: 520, onClose: () => { if (!done) { done = true; resolve(null); } }, render: () => {
+      const go = (p) => { path = p || '/'; m.refresh(); };
+      const dirs = vfsEntries(path).filter((e) => e.d);
+      return [vfsCrumbs(path, go),
+        h('div', { class: 'list', style: { maxHeight: '300px', overflowY: 'auto' } },
+          path !== '/' ? h('div', { class: 'li click', onclick: () => go(parentOf(path)) }, ic('up', 14), h('span', { class: 'grow' }, '..')) : null,
+          dirs.map((e) => h('div', { class: 'li click', onclick: () => go(joinPath(path, e.n)) }, ic('folder', 15, 'folder'), h('span', { class: 'grow' }, e.n))),
+          !dirs.length ? h('div', { class: 'hint', style: { padding: '8px' } }, 'No sub-folders here.') : null),
+        h('div', { class: 'row', style: { justifyContent: 'space-between' } }, h('span', { class: 'hint' }, path), h('button', { class: 'btn primary', onclick: () => finish(path) }, buttonLabel))];
+    } });
+  });
+}
+function pickVfsEntries({ title }) {
+  return new Promise((resolve) => {
+    let path = '/home/user1', done = false;
+    const chosen = new Set();
+    const finish = (v) => { if (done) return; done = true; m.close(); resolve(v); };
+    const m = openModal({ title, width: 560, onClose: () => { if (!done) { done = true; resolve(null); } }, render: () => {
+      const go = (p) => { path = p || '/'; m.refresh(); };
+      const entries = vfsEntries(path);
+      return [vfsCrumbs(path, go),
+        h('div', { class: 'list', style: { maxHeight: '320px', overflowY: 'auto' } },
+          path !== '/' ? h('div', { class: 'li click', onclick: () => go(parentOf(path)) }, ic('up', 14), h('span', { class: 'grow' }, '..')) : null,
+          entries.map((e) => {
+            const full = joinPath(path, e.n);
+            const box = h('input', { type: 'checkbox', checked: chosen.has(full), onclick: (ev) => { ev.stopPropagation(); ev.target.checked ? chosen.add(full) : chosen.delete(full); m.refresh(); } });
+            return h('div', { class: 'li click', onclick: () => (e.d ? go(full) : (chosen.has(full) ? chosen.delete(full) : chosen.add(full), m.refresh())) }, box, ic(e.d ? 'folder' : 'file', 15, e.d ? 'folder' : 'filei'), h('span', { class: 'grow', title: e.n }, e.n), e.d ? null : h('span', { class: 'hint' }, fmtBytes(e.s)));
+          }),
+          !entries.length ? h('div', { class: 'hint', style: { padding: '8px' } }, 'This folder is empty.') : null),
+        h('div', { class: 'row', style: { justifyContent: 'space-between' } }, h('span', { class: 'hint' }, chosen.size ? `${chosen.size} chosen (folders are copied with everything in them)` : 'Tick files or folders, or open a folder.'), h('button', { class: 'btn primary', disabled: !chosen.size, onclick: () => finish([...chosen]) }, ic('upload', 14), 'Copy'))];
+    } });
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// 6b. The machine as a folder of the VFS: /mnt/ssh/<name>
+// ════════════════════════════════════════════════════════════════════════════
+// While a machine is connected, it is mounted at /mnt/ssh/<name>, so the default file explorer (and
+// every other app) uses it like any folder. VFS calls are synchronous and the bridge isn't, so the
+// mount is an in-memory mirror (FS.createBackend('InMemory')) behind a wrapper this page owns:
+//   * folders are listed on demand (when an app reads them) and one level ahead in the background
+//     (only below folders an app opened: background listings don't expand further);
+//     the explorer re-reads a folder when its listing arrives ('vfs:changed' on the top window);
+//   * files start as placeholders that report the remote size and date; small ones (≤ 512 KB) are
+//     fetched in the background, others on first read (over 8 MB: on a second open within a minute) —
+//     that read fails with EAGAIN ("still downloading, open it again") instead of returning wrong
+//     bytes, and a notification says when it's there;
+//   * writes, new folders, deletes and renames apply to the mirror at once (so the calling app sees
+//     them) and go to the machine in order, in the background; failures are notified and the folder
+//     is listed again, so the mirror shows what the machine really has;
+//   * remote changes come from the bridge's fs.watch (it re-lists the folders listed recently).
+// rmdir on the mirror uses the bridge's non-recursive fs.rmdir: a folder whose remote contents were
+// never listed is never deleted with them by accident.
+const MOUNT_ROOT = '/mnt/ssh';
+const PREFETCH_FILE = 512 * 1024, PREFETCH_DIR_FILES = 40, PREFETCH_DIR_BYTES = 4 * 1024 * 1024, PREFETCH_SUBDIRS = 60;
+const ON_DEMAND_MAX = 256 * 1024 * 1024;
+/** Bigger files download on a second open within a minute, not the first read (the explorer reads every image for its thumbnails). */
+const ON_DEMAND_EASY = 8 * 1024 * 1024, ASK_AGAIN_MS = 60000;
+const LIST_TTL = 5000;
+const vfsChanged = (path) => { try { window.top.dispatchEvent(new CustomEvent('vfs:changed', { detail: { path } })); } catch (_) {} };
+const notifyOS = (title, body) => { try { PLAT.host.callCommand('notify', { title, body, duration: 5000 }); } catch (_) { toast(`${title}: ${body}`); } };
+const errno = (code, message) => Object.assign(new Error(`${code}: ${message}`), { code });
+
+/** At most `n` background jobs at a time (listings ahead, small-file prefetch). */
+function limiter(n) {
+  let running = 0; const waiting = [];
+  const next = () => { while (running < n && waiting.length) { running++; const [fn, ok, ko] = waiting.shift(); fn().then(ok, ko).finally(() => { running--; next(); }); } };
+  return (fn) => new Promise((ok, ko) => { waiting.push([fn, ok, ko]); next(); });
+}
+
+class RemoteMount {
+  constructor(conn, session) {
+    this.conn = conn;
+    this.s = session;
+    this.path = '';
+    this.meta = new Map();       // mount-relative path → { kind, size, mtime, fetched, dirty, listedAt }
+    this.internal = 0;           // > 0 while this page itself writes the mirror (no remote side effects)
+    this.listing = new Map();
+    this.fetching = new Map();
+    this.queued = new Set();     // files with a save to the machine waiting
+    this.chain = Promise.resolve();
+    this.pending = 0;
+    // Two at a time (the bridge runs four commands per machine), and only while nobody waits.
+    const gate = limiter(2);
+    this.background = (fn) => gate(async () => { while (this.s.fg > 0 && this.mounted) await sleep(150); return this.mounted ? fn() : undefined; });
+    this.offs = [];
+    this.timers = new Map();
+    this.mounted = false;
+  }
+  abs(rel) { return rel === '/' ? this.path : this.path + rel; }
+  inside(fn) { this.internal++; try { return fn(); } finally { this.internal--; } }
+
+  async mount() {
+    const mem = await FS.createBackend('InMemory', {});
+    this.mem = mem;
+    mkdirp(MOUNT_ROOT);
+    const label = (this.conn.name || this.conn.host).replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'machine';
+    let path = `${MOUNT_ROOT}/${label}`, n = 2;
+    while (FS.existsSync(path)) path = `${MOUNT_ROOT}/${label}-${n++}`;
+    this.path = path;
+    FS.mount(path, this.wrap(mem));
+    this.mounted = true;
+    this.meta.set('/', { kind: 'dir', listedAt: 0 });
+    try { await this.list('/', true); }
+    catch (e) { this.unmount(); throw e; }
+    this.offs.push(this.s.on('fs', (d) => this.remoteChanged(d)));
+    this.s.rpc('fs.watch').catch(() => {});
+    vfsChanged(MOUNT_ROOT);
+  }
+  unmount() {
+    if (!this.mounted) return;
+    this.mounted = false;
+    for (const off of this.offs) off();
+    for (const t of this.timers.values()) clearTimeout(t);
+    try { FS.umount(this.path); } catch (_) {}
+    if (this.pending) notifyOS(`${this.conn.name} disconnected`, `${this.pending} change${this.pending === 1 ? '' : 's'} to ${this.path} didn't reach the machine.`);
+    vfsChanged(MOUNT_ROOT);
+  }
+
+  /** The backend apps see: the mirror, with the remote machine behind every call. */
+  wrap(mem) {
+    const self = this;
+    const view = Object.create(mem);
+    view.getName = () => 'RemoteMachine';
+    view.readdirSync = function (p) {
+      const names = mem.readdirSync(p);
+      if (!self.internal) self.touch(p);
+      return names;
+    };
+    view.statSync = function (p, isLstat) {
+      const st = mem.statSync(p, isLstat);
+      const m = self.meta.get(p);
+      if (m && !self.internal) {
+        if (m.kind === 'file' && !m.fetched) st.size = m.size;
+        if (m.mtime && !m.dirty) st.mtime = new Date(m.mtime);
+      }
+      return st;
+    };
+    view.openSync = function (p, flag, mode) {
+      // readFileSync / writeFileSync / appendFileSync all come through here (BaseFileSystem).
+      if (self.internal) return mem.openSync(p, flag, mode);
+      const m = self.meta.get(p);
+      if (m && m.kind === 'file' && !m.fetched && flag.isReadable() && !flag.isTruncating()) {
+        const started = self.fetch(p, true);
+        throw errno('EAGAIN', started
+          ? `${baseName(p)} is still downloading from ${self.conn.name}${m.size ? ` (${fmtBytes(m.size)})` : ''}. Open it again in a moment.`
+          : `${baseName(p)} is ${fmtBytes(m.size)} on ${self.conn.name}: open it again to download it.`);
+      }
+      // mem.openSync, not this.openSync: truncating opens unlink first, and that must stay local.
+      const fd = mem.openSync(p, flag, mode);
+      if (flag.isWriteable() || flag.isAppendable()) {
+        const closeSync = fd.closeSync.bind(fd), close = fd.close.bind(fd);
+        fd.closeSync = () => { closeSync(); self.saved(p); };
+        fd.close = (cb) => close((err) => { if (!err) self.saved(p); cb && cb(err); });
+      }
+      return fd;
+    };
+    view.mkdirSync = function (p, mode) {
+      if (self.internal) return mem.mkdirSync(p, mode);
+      // Apps also mkdir to get to a folder (the explorer does when it opens a path that isn't
+      // there yet): create the missing levels here, then ask the machine whether it already has
+      // the folder (list it) or needs it made (mkdir -p).
+      const missing = [];
+      let cur = '';
+      for (const part of p.split('/').filter(Boolean)) {
+        cur += '/' + part;
+        let there = true; try { mem.statSync(cur, false); } catch (_) { there = false; }
+        if (!there) missing.push(cur);
+      }
+      if (!missing.length) return mem.mkdirSync(p, mode);   // EEXIST, like any file system
+      // `pending`: a listing of the parent that arrives before the machine has it must not drop it.
+      for (const d of missing) { mem.mkdirSync(d, mode); self.meta.set(d, { kind: 'dir', listedAt: 0, pending: true }); }
+      self.remote(`create the folder ${p}`, async () => {
+        const st = await self.s.rpc('fs.stat', { path: p });
+        if (!st) await self.s.rpc('fs.mkdir', { path: p });
+        for (const d of missing) { const m = self.meta.get(d); if (m) delete m.pending; }
+        if (st && st.kind !== 'dir') throw new Error(`${p} is a file on the machine`);
+        // Fill in what is there now: the first new level's parent, then each new level.
+        await self.list(parentOf(missing[0]), false).catch(() => {});
+        for (const d of missing) await self.list(d, d === p).catch(() => {});
+      });
+    };
+    view.unlinkSync = function (p) {
+      mem.unlinkSync(p);
+      if (self.internal) return;
+      self.meta.delete(p);
+      self.queued.delete(p);
+      self.remote(`delete ${p}`, () => self.s.rpc('fs.remove', { path: p }, 120000));
+    };
+    view.rmdirSync = function (p) {
+      mem.rmdirSync(p);
+      if (self.internal) return;
+      self.forget(p);
+      self.remote(`remove the folder ${p}`, () => self.s.rpc('fs.rmdir', { path: p }));
+    };
+    view.renameSync = function (a, b) {
+      mem.renameSync(a, b);
+      if (self.internal) return;
+      self.move(a, b);
+      self.remote(`move ${a}`, () => self.s.rpc('fs.rename', { from: a, to: b }));
+    };
+    return view;
+  }
+
+  // ── Mirror bookkeeping ──
+  forget(rel) { for (const k of [...this.meta.keys()]) if (k === rel || k.startsWith(rel + '/')) this.meta.delete(k); }
+  move(a, b) {
+    for (const [k, v] of [...this.meta]) if (k === a || k.startsWith(a + '/')) { this.meta.delete(k); this.meta.set(b + k.slice(a.length), v); }
+  }
+  rmTree(abs) {
+    let st; try { st = FS.statSync(abs); } catch (_) { return; }
+    if (st.isDirectory()) { for (const n of FS.readdirSync(abs)) this.rmTree(abs + '/' + n); FS.rmdirSync(abs); }
+    else FS.unlinkSync(abs);
+  }
+
+  /**
+   * An app read a folder: list it if that isn't recent (the answer it got is refreshed through
+   * vfs:changed), and look one level ahead of it.
+   */
+  touch(p) {
+    const m = this.meta.get(p);
+    if (!m || m.kind !== 'dir') return;
+    if (Date.now() - (m.listedAt || 0) >= LIST_TTL) return void this.list(p, true).catch((e) => console.warn('[remote-machines] list', p, errText(e)));
+    if (!m.expanded) { m.expanded = true; this.ahead(p, this.children(p)); }
+  }
+  children(p) {
+    const out = [];
+    for (const [k, v] of this.meta) if (k !== '/' && parentOf(k) === p) out.push({ name: baseName(k), kind: v.kind, size: v.size || 0 });
+    return out;
+  }
+  /** `expand`: an app looks at this folder, so prefetch below it; background listings don't. */
+  list(p, expand = false) {
+    if (this.listing.has(p)) return this.listing.get(p).then(() => { if (expand) this.touch(p); });
+    const job = (async () => {
+      const nodes = await this.s.rpc('fs.list', { path: p }, 20000, { bg: !expand });
+      if (!this.mounted) return;
+      this.inside(() => this.reconcile(p, nodes));
+      vfsChanged(this.abs(p));
+      if (expand) { this.meta.get(p).expanded = true; this.ahead(p, nodes); }
+    })().finally(() => this.listing.delete(p));
+    this.listing.set(p, job);
+    return job;
+  }
+  reconcile(p, nodes) {
+    const dirAbs = this.abs(p);
+    let here;
+    try { here = new Set(FS.readdirSync(dirAbs)); } catch (_) { return; }   // gone meanwhile
+    const there = new Set();
+    for (const n of nodes) {
+      there.add(n.name);
+      const rel = joinPath(p, n.name), abs = this.abs(rel);
+      const m = this.meta.get(rel);
+      if (m && (m.dirty || m.pending || this.queued.has(rel))) continue;   // ours, on its way to the machine
+      if (n.kind === 'dir') {
+        if (m && m.kind === 'file') { this.rmTree(abs); here.delete(n.name); }
+        if (!here.has(n.name)) FS.mkdirSync(abs);
+        this.meta.set(rel, { kind: 'dir', mtime: n.mtime, listedAt: m && m.kind === 'dir' ? m.listedAt : 0, expanded: m && m.kind === 'dir' ? m.expanded : false });
+      } else {
+        if (m && m.kind === 'dir') { this.rmTree(abs); this.forget(rel); here.delete(n.name); }
+        if (m && m.kind === 'file' && m.size === n.size && m.mtime === n.mtime && here.has(n.name)) continue;
+        FS.writeFileSync(abs, B ? B.alloc(0) : new Uint8Array(0));
+        this.meta.set(rel, { kind: 'file', size: n.size, mtime: n.mtime, fetched: n.size === 0 });
+      }
+    }
+    for (const name of here) {
+      if (there.has(name)) continue;
+      const rel = joinPath(p, name), m = this.meta.get(rel);
+      if ((m && (m.dirty || m.pending)) || this.queued.has(rel)) continue;
+      this.rmTree(this.abs(rel)); this.forget(rel);
+    }
+    const dm = this.meta.get(p) || { kind: 'dir' };
+    dm.listedAt = Date.now();
+    dm.kind = 'dir';
+    this.meta.set(p, dm);
+  }
+  /** One level ahead: the sub-folders' listings and the small files' contents. */
+  ahead(p, nodes) {
+    for (const n of nodes.filter((x) => x.kind === 'dir').slice(0, PREFETCH_SUBDIRS)) {
+      const rel = joinPath(p, n.name), m = this.meta.get(rel);
+      if (m && !m.listedAt) this.background(() => this.list(rel, false).catch(() => {}));
+    }
+    let files = 0, bytes = 0;
+    for (const n of nodes.filter((x) => x.kind === 'file' && x.size > 0 && x.size <= PREFETCH_FILE).sort((a, b) => a.size - b.size)) {
+      if (files >= PREFETCH_DIR_FILES || bytes + n.size > PREFETCH_DIR_BYTES) break;
+      files++; bytes += n.size;
+      const rel = joinPath(p, n.name);
+      this.background(() => this.fetching.get(rel) || (this.fetch(rel, false), this.fetching.get(rel)) || Promise.resolve());
+    }
+  }
+  /** Starts downloading a file into the mirror. Returns whether a download is running (false: not this time). */
+  fetch(rel, asked) {
+    if (this.fetching.has(rel)) return true;
+    const m = this.meta.get(rel);
+    if (!m || m.kind !== 'file' || m.fetched) return false;
+    if (asked && m.size > ON_DEMAND_MAX) { notifyOS(`${baseName(rel)} is too big to open from ${this.conn.name}`, `${fmtBytes(m.size)}: use Remote Machines → Files → Download instead.`); return false; }
+    if (asked && m.size > ON_DEMAND_EASY && !(m.askedAt && Date.now() - m.askedAt < ASK_AGAIN_MS)) { m.askedAt = Date.now(); return false; }
+    const job = (async () => {
+      try {
+        const data = await readRemote(this.s, rel, { bg: !asked });
+        const now = this.meta.get(rel);
+        if (!this.mounted || now !== m || m.dirty) return;   // changed or written meanwhile: keep that
+        this.inside(() => FS.writeFileSync(this.abs(rel), typeof data === 'string' ? data : (B ? B.from(data) : data)));
+        m.fetched = true;
+        vfsChanged(this.abs(parentOf(rel)));
+        if (asked) notifyOS(`${baseName(rel)} is ready`, `Downloaded from ${this.conn.name}: open it again.`);
+      } catch (e) {
+        if (asked) notifyOS(`Couldn't download ${baseName(rel)}`, errText(e));
+      }
+    })().finally(() => this.fetching.delete(rel));
+    this.fetching.set(rel, job);
+    return true;
+  }
+
+  // ── Changes to the machine, in order ──
+  remote(what, fn) {
+    this.pending++;
+    this.chain = this.chain.then(fn).catch((e) => {
+      notifyOS(`${this.conn.name}: couldn't ${what}`, errText(e));
+      // Show what the machine really has.
+      const dir = parentOf(what.split(' ').pop());
+      if (this.meta.get(dir)?.kind === 'dir') this.list(dir).catch(() => {});
+    }).finally(() => { this.pending--; if (selectedId === this.conn.id) renderMain(); });
+    if (selectedId === this.conn.id) renderMain();
+  }
+  saved(rel) {
+    const m = this.meta.get(rel) || { kind: 'file' };
+    Object.assign(m, { kind: 'file', fetched: true, dirty: true });
+    this.meta.set(rel, m);
+    if (this.queued.has(rel)) return;   // the save already waiting will send the latest content
+    this.queued.add(rel);
+    this.remote(`save ${rel}`, async () => {
+      this.queued.delete(rel);
+      if (!this.mounted) return;
+      let data;
+      try { data = this.inside(() => FS.readFileSync(this.abs(rel))); } catch (_) { return; }   // deleted meanwhile
+      await writeRemote(this.s, rel, new Uint8Array(data));
+      const st = await this.s.rpc('fs.stat', { path: rel }).catch(() => null);
+      if (!this.queued.has(rel)) Object.assign(m, { size: st ? st.size : data.length, mtime: st ? st.mtime : Date.now(), dirty: false });
+    });
+  }
+  remoteChanged(d) {
+    if (!d || typeof d.path !== 'string') return;
+    if (this.queued.has(d.path) || this.meta.get(d.path)?.dirty) return;   // our own write coming back
+    const dir = parentOf(d.path);
+    if (this.meta.get(dir)?.kind !== 'dir') return;
+    clearTimeout(this.timers.get(dir));
+    this.timers.set(dir, setTimeout(() => { this.timers.delete(dir); this.list(dir).catch(() => {}); }, 300));
+  }
+}
+
+function openInFiles(path) {
+  try { PLAT.host.execCommand("service('001-core.layout','open-window')(command('explorer'), $args[0])", PLAT, path); }
+  catch (e) { toast(errText(e), 'bad'); }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// 7. Terminals (real PTYs over SSH; in a container through `lxc exec`)
+// ════════════════════════════════════════════════════════════════════════════
+function terminalPane(c, st) {
+  const T = st.terms;
+  if (!T.root) {
+    T.host = h('div', { class: 'term-host' });
+    T.strip = h('div', { class: 'term-tabs' });
+    T.root = h('div', { class: 'term-wrap' }, T.strip, T.host);
+  }
+  drawTermTabs(c, st);
+  if (!T.list.length) {
+    T.host.querySelector('.empty')?.remove();
+    T.host.append(h('div', { class: 'empty' }, 'No terminal yet.', st.session.status === 'online' ? h('button', { class: 'btn primary', onclick: () => openTerminal(c, {}) }, ic('terminal', 14), 'Open a shell') : 'Connect first.'));
+  } else T.host.querySelector('.empty')?.remove();
+  return h('div', { class: 'pane' }, T.root);
+}
+function drawTermTabs(c, st) {
+  const T = st.terms;
+  fill(T.strip, 
+    ...T.list.map((t) => h('div', { class: 'term-tab' + (t === T.active ? ' on' : ''), onclick: () => activateTerm(st, t), title: t.exited ? 'Ended' : t.title },
+      t.exited ? h('span', { class: 'dot' }) : h('span', { class: 'dot ok' }), t.title,
+      h('button', { class: 'x', title: 'Close', onclick: (e) => { e.stopPropagation(); closeTerminal(c, st, t); } }, ic('x', 12)))),
+    h('button', { class: 'btn sm ghost', title: 'New shell', disabled: st.session.status !== 'online', onclick: () => openTerminal(c, {}) }, ic('plus', 14)));
+}
+function activateTerm(st, t) {
+  st.terms.active = t;
+  for (const x of st.terms.list) x.el.hidden = x !== t;
+  drawTermTabs(current(), st);
+  fitActive(st);
+  t.term.focus();
+}
+function fitActive(st) {
+  const t = st.terms.active;
+  if (!t) return;
+  requestAnimationFrame(() => { if (t.el.offsetWidth > 0) { try { t.fit.fit(); } catch (_) {} } });
+}
+async function openTerminal(c, { title, command }) {
+  const st = stateOf(c);
+  if (typeof Terminal === 'undefined') return toast('The terminal library (xterm.js) could not be loaded from unpkg.com.', 'bad');
+  st.tab = 'terminal';
+  renderMain();
+  const T = st.terms;
+  const el = h('div', { class: 'term' });
+  T.host.append(el);
+  const term = new Terminal({ cursorBlink: true, fontSize: 13, fontFamily: 'ui-monospace, Menlo, Consolas, monospace', theme: { background: '#0c0e13' }, scrollback: 5000 });
+  const fit = new FitAddon.FitAddon();
+  term.loadAddon(fit);
+  term.open(el);   // open() before any resize (see CLAUDE.md: resizing first corrupts the buffer)
+  const t = { title: title || `${c.name} shell`, term, fit, el, id: null, exited: false, command: command || null, offs: [], gone: null };
+  T.list.push(t);
+  activateTerm(st, t);
+  term.onData((data) => { if (t.id && !t.exited) st.session.rpc('term.write', { id: t.id, data }).catch(() => {}); });
+  term.onResize(({ cols, rows }) => { if (t.id && !t.exited) st.session.rpc('term.resize', { id: t.id, cols, rows }).catch(() => {}); });
+  t.ro = new ResizeObserver(() => { if (el.offsetWidth > 0) { try { fit.fit(); } catch (_) {} } });
+  t.ro.observe(el);
+  await startShell(c, st, t);
+}
+async function startShell(c, st, t) {
+  t.gone?.remove(); t.gone = null;
+  t.exited = false;
+  for (const off of t.offs) off();
+  t.offs = [
+    st.session.on('term.data', (d) => { if (d.id === t.id) t.term.write(String(d.data)); }),
+    st.session.on('term.exit', (d) => { if (d.id === t.id) markExited(st, t, `exited with code ${d.code}`); }),
+  ];
+  try { fitTerm(t); } catch (_) {}
+  t.term.write(`\x1b[2mConnecting to ${c.name}…\x1b[0m\r\n`);
+  try {
+    const r = await st.session.rpc('term.open', { cols: t.term.cols, rows: t.term.rows, ...(t.command ? { command: t.command } : {}) });
+    t.id = r.id;
+  } catch (e) { t.term.write(`\x1b[31m${errText(e)}\x1b[0m\r\n`); markExited(st, t, 'could not start'); }
+  drawTermTabs(c, st);
+}
+function fitTerm(t) { if (t.el.offsetWidth > 0) t.fit.fit(); }
+function markExited(st, t, why) {
+  if (t.exited) return;
+  t.exited = true;
+  t.id = null;
+  t.term.write(`\r\n\x1b[2m[${why}]\x1b[0m\r\n`);
+  const c = conns.find((x) => live.get(x.id) === st);
+  t.gone = h('button', { class: 'btn sm term-gone', onclick: () => c && st.session.status === 'online' ? startShell(c, st, t) : toast('Connect first', 'warn') }, ic('rotate', 13), 'Restart');
+  t.el.append(t.gone);
+  if (c) drawTermTabs(c, st);
+}
+function closeTerminal(c, st, t) {
+  if (t.id && !t.exited) st.session.rpc('term.close', { id: t.id }).catch(() => {});
+  for (const off of t.offs) off();
+  t.ro?.disconnect();
+  t.term.dispose();
+  t.el.remove();
+  const T = st.terms;
+  T.list = T.list.filter((x) => x !== t);
+  if (T.active === t) T.active = T.list[T.list.length - 1] || null;
+  if (T.active) activateTerm(st, T.active);
+  renderMain();
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// 8. Containers: LXD / Incus instances on the machine
+// ════════════════════════════════════════════════════════════════════════════
+const FIND_CLI = 'for c in lxc /snap/bin/lxc incus; do if command -v "$c" >/dev/null 2>&1; then echo "@@CLI $c"; break; fi; done';
+const looksLikePermission = (s) => /permission denied|not allowed|unix socket|access denied/i.test(s);
+
+/** Runs `script` with the LXD CLI, with sudo when the user can't use the socket (asks for the password once). */
+async function lxcRun(c, script) {
+  const st = stateOf(c);
+  const s = st.session;
+  const root = s.info?.user === 'root';
+  let r = await runExec(s, script, st.cts.sudo && !root ? { sudo: true, password: st.cts.password } : {});
+  if (r.code !== 0 && !root && !st.cts.sudo && looksLikePermission(r.stderr)) {
+    st.cts.sudo = true;
+    r = await runExec(s, script, { sudo: true });
+  }
+  if (r.sudoFailed) {
+    const pw = await askPassword(`sudo password for ${s.info?.user || c.username} on ${c.name}`, 'LXD needs root (or the lxd group) on this machine.');
+    if (pw === null) return r;
+    st.cts.password = pw;
+    r = await runExec(s, script, { sudo: true, password: pw });
+    if (r.sudoFailed) { st.cts.password = ''; toast('sudo refused that password', 'bad'); }
+  }
+  return r;
+}
+async function loadContainers(c) {
+  const st = stateOf(c);
+  const k = st.cts;
+  k.loading = true; k.error = '';
+  renderMain();
+  try {
+    if (!k.cli) {
+      const r = await runExec(st.session, FIND_CLI);
+      k.cli = /@@CLI (\S+)/.exec(r.stdout)?.[1] || '';
+    }
+    if (!k.cli) { k.list = []; k.error = 'Neither LXD nor Incus is installed on this machine.'; }
+    else {
+      const cli = q(k.cli);
+      const r = await lxcRun(c, `${cli} list --format json --all-projects 2>/dev/null || ${cli} list --format json`);
+      if (r.code !== 0) throw new Error((r.stderr || r.stdout).trim().split('\n').pop() || `${k.cli} list failed`);
+      k.list = JSON.parse(r.stdout || '[]').map((i) => ({
+        name: i.name, type: i.type, status: i.status, project: i.project || 'default', location: i.location && i.location !== 'none' ? i.location : '',
+        ipv4: Object.entries(i.state?.network || {}).filter(([n]) => n !== 'lo').flatMap(([, d]) => (d.addresses || []).filter((a) => a.family === 'inet' && a.scope === 'global').map((a) => a.address)),
+      })).sort((a, b) => a.project.localeCompare(b.project) || a.name.localeCompare(b.name));
+    }
+  } catch (e) { k.error = errText(e); if (!k.list) k.list = []; }
+  k.loading = false;
+  if (selectedId === c.id) renderMain();
+}
+function containersPane(c, st) {
+  const k = st.cts;
+  const projects = new Set((k.list || []).map((i) => i.project));
+  const clustered = (k.list || []).some((i) => i.location);
+  const act = async (i, verb) => {
+    const r = await lxcRun(c, `${q(k.cli)} ${verb} ${q(i.name)}${i.project !== 'default' ? ` --project ${q(i.project)}` : ''}${verb === 'stop' || verb === 'restart' ? ' --timeout 60' : ''}`);
+    if (r.code !== 0) toast((r.stderr || r.stdout).trim().split('\n').pop() || `${verb} failed`, 'bad');
+    loadContainers(c);
+  };
+  const shell = (i) => {
+    const inner = 'if command -v bash >/dev/null 2>&1; then exec bash -l; else exec sh -l; fi';
+    // Inside a PTY, sudo asks for its password in the terminal itself.
+    const sudo = st.session.info?.user !== 'root' && k.sudo ? 'sudo ' : '';
+    openTerminal(c, { title: i.name, command: `${sudo}${q(k.cli)} exec ${q(i.name)}${i.project !== 'default' ? ` --project ${q(i.project)}` : ''} -- sh -c ${q(inner)}` });
+  };
+  const rows = (k.list || []).map((i) => h('tr', { class: 'item' },
+    h('td', { class: 'nm' }, h('div', { class: 'cell' }, ic('box', 15, 'muted'), h('span', {}, i.name), i.type === 'virtual-machine' ? h('span', { class: 'chip' }, 'VM') : null, projects.size > 1 ? h('span', { class: 'chip' }, i.project) : null)),
+    h('td', { class: 'st-' + i.status }, i.status),
+    h('td', { class: 'num mono wide', title: i.ipv4.join('\n') }, i.ipv4.find((a) => !a.startsWith('172.17.')) || i.ipv4[0] || ''),
+    clustered ? h('td', { class: 'num wide' }, i.location) : null,
+    h('td', { class: 'act' },
+      i.status === 'Running' ? h('button', { class: 'btn sm', title: 'A shell inside it', onclick: () => shell(i) }, ic('terminal', 13), 'Terminal') : null,
+      i.status === 'Running' ? h('button', { class: 'btn sm ghost', title: 'Restart', onclick: () => act(i, 'restart') }, ic('rotate', 13)) : null,
+      i.status === 'Running' ? h('button', { class: 'btn sm ghost', title: 'Stop', onclick: () => confirm(`Stop ${i.name}?`) && act(i, 'stop') }, ic('stop', 13)) : h('button', { class: 'btn sm ghost', title: 'Start', onclick: () => act(i, 'start') }, ic('play', 13)))));
+  return h('div', { class: 'pane' },
+    h('div', { class: 'bar' }, h('button', { class: 'btn sm ghost', title: 'Refresh', onclick: () => loadContainers(c) }, ic('refresh', 14)), h('span', { class: 'grow hint' }, k.cli ? `${k.cli.split('/').pop() === 'incus' ? 'Incus' : 'LXD'} on ${c.name}${k.sudo && st.session.info?.user !== 'root' ? ' (with sudo)' : ''}` : 'LXD / Incus instances on this machine')),
+    h('div', { class: 'scroll' },
+      k.error ? h('div', { class: 'notice' + (k.list && k.list.length ? '' : ' bad') }, k.error) : null,
+      k.list === null || (k.loading && !k.list.length) ? h('div', { class: 'empty' }, 'Looking for containers…') : k.list.length ? h('table', { class: 'grid' }, h('thead', {}, h('tr', {}, h('th', {}, 'Instance'), h('th', { style: { width: '78px' } }, 'State'), h('th', { class: 'wide', style: { textAlign: 'right', width: '120px' } }, 'IPv4'), clustered ? h('th', { class: 'wide', style: { textAlign: 'right', width: '128px' } }, 'Member') : null, h('th', { style: { width: '156px' } }))), h('tbody', {}, rows)) : (!k.error ? h('div', { class: 'empty' }, 'No instances.') : null)),
+    h('div', { class: 'status' }, h('span', { class: 'grow' }, k.list ? `${k.list.length} instance${k.list.length === 1 ? '' : 's'} · ${k.list.filter((i) => i.status === 'Running').length} running${k.loading ? ' · refreshing…' : ''}` : '')));
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// 8b. Monitor: the bridge samples Linux machines every 5 s (CPU, memory, swap, disk of the attached
+// folder, network, load, each core) and keeps an hour; this tab reads what's new every 5 s while it
+// is open, plus the busiest processes.
+// ════════════════════════════════════════════════════════════════════════════
+// Two categorical steps from ts-playground's chart kit (validated on a dark surface): receive, send.
+const SERIES = ['#3987e5', '#d95926'];
+const RANGES = [['5m', '5 min', 5 * 60e3], ['15m', '15 min', 15 * 60e3], ['1h', '1 hour', 60 * 60e3]];
+const pct = (used, total) => (total > 0 ? Math.max(0, Math.min(100, (used / total) * 100)) : 0);
+const fmtRate = (n) => (n == null ? '—' : `${fmtBytes(n)}/s`);
+const fmtClock = (t) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+const meter = (value) => h('div', { class: 'meter' + (value >= 90 ? ' full' : value >= 75 ? ' hi' : '') }, h('i', { style: { width: `${value.toFixed(1)}%` } }));
+
+function monState(st) { return (st.mon ||= { samples: [], top: [], range: '15m', timer: 0, el: null, error: '', topError: '' }); }
+async function pollMonitor(c) {
+  const st = stateOf(c), mon = monState(st), s = st.session;
+  if (s.status !== 'online') return;
+  const since = mon.samples.length ? mon.samples[mon.samples.length - 1].t : 0;
+  try {
+    const [hist, top] = await Promise.all([
+      s.rpc('metrics.history', { since }),
+      s.rpc('metrics.top', { limit: 15 }).catch((e) => { mon.topError = errText(e); return null; }),
+    ]);
+    if (Array.isArray(hist) && hist.length) { mon.samples.push(...hist); if (mon.samples.length > 720) mon.samples.splice(0, mon.samples.length - 720); }
+    if (Array.isArray(top)) { mon.top = top; mon.topError = ''; }
+    mon.error = '';
+  } catch (e) { mon.error = errText(e); }
+  drawMonitor(c, st);
+}
+function startMonitor(c) {
+  const st = stateOf(c), mon = monState(st);
+  if (mon.timer) return;
+  pollMonitor(c);
+  mon.timer = setInterval(() => {
+    if (selectedId !== c.id || st.tab !== 'monitor' || st.session.status !== 'online' || !mon.el?.isConnected) return stopMonitor(st);
+    pollMonitor(c);
+  }, 5000);
+}
+function stopMonitor(st) { if (st.mon?.timer) { clearInterval(st.mon.timer); st.mon.timer = 0; } }
+
+function monitorPane(c, st) {
+  const mon = monState(st);
+  mon.el = h('div', { class: 'scroll mon' });
+  const seg = h('div', { class: 'seg', role: 'group', 'aria-label': 'Time range' }, RANGES.map(([id, label]) => h('button', { 'aria-pressed': String(mon.range === id), onclick: () => { mon.range = id; for (const b of seg.children) b.setAttribute('aria-pressed', String(b.textContent === label)); drawMonitor(c, st); } }, label)));
+  drawMonitor(c, st);
+  startMonitor(c);
+  return h('div', { class: 'pane' }, h('div', { class: 'bar' }, h('button', { class: 'btn sm ghost', title: 'Refresh', onclick: () => pollMonitor(c) }, ic('refresh', 14)), h('span', { class: 'grow hint' }, `Live from ${c.name}, every 5 s`), seg), mon.el);
+}
+
+/**
+ * A time series: thin lines in a 1000×100 viewBox stretched to the box (non-scaling strokes keep them
+ * 2px), axis labels in HTML, and a crosshair with one tooltip for every series on hover.
+ */
+function lineChart({ title, samples, series, yMax, fmt, now }) {
+  const t0 = samples[0].t, t1 = samples[samples.length - 1].t, span = Math.max(1, t1 - t0);
+  const X = (t) => ((t - t0) / span) * 1000, Y = (v) => 100 - (Math.max(0, Math.min(v, yMax)) / yMax) * 100;
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 1000 100'); svg.setAttribute('preserveAspectRatio', 'none');
+  for (const y of [0, 50, 100]) { const l = document.createElementNS(NS, 'line'); Object.entries({ x1: 0, x2: 1000, y1: y, y2: y, stroke: 'rgba(255,255,255,.08)', 'stroke-width': 1, 'vector-effect': 'non-scaling-stroke' }).forEach(([k, v]) => l.setAttribute(k, v)); svg.append(l); }
+  series.forEach((sr, i) => {
+    let d = '', pen = false;
+    samples.forEach((smp) => { const v = sr.value(smp); if (v == null || !Number.isFinite(v)) { pen = false; return; } d += `${pen ? 'L' : 'M'}${X(smp.t).toFixed(1)},${Y(v).toFixed(2)}`; pen = true; });
+    if (series.length === 1 && d) {   // a faint area under a single series
+      const a = document.createElementNS(NS, 'path');
+      const first = samples.find((smp) => sr.value(smp) != null), last = [...samples].reverse().find((smp) => sr.value(smp) != null);
+      a.setAttribute('d', `${d}L${X(last.t).toFixed(1)},100L${X(first.t).toFixed(1)},100Z`); a.setAttribute('fill', sr.color); a.setAttribute('opacity', '0.12');
+      svg.append(a);
+    }
+    const p = document.createElementNS(NS, 'path');
+    Object.entries({ d, fill: 'none', stroke: sr.color, 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round', 'vector-effect': 'non-scaling-stroke' }).forEach(([k, v]) => p.setAttribute(k, v));
+    svg.append(p);
+  });
+  const cross = h('div', { class: 'cross', hidden: true }), tip = h('div', { class: 'tip', hidden: true });
+  const plot = h('div', { class: 'plot' }, svg,
+    h('span', { class: 'ylab', style: { top: '0%' } }, fmt(yMax)), h('span', { class: 'ylab', style: { top: '50%' } }, fmt(yMax / 2)), h('span', { class: 'ylab', style: { top: '100%' } }, fmt(0)),
+    h('span', { class: 'xlab', style: { left: 0 } }, fmtClock(t0)), h('span', { class: 'xlab', style: { right: 0 } }, fmtClock(t1)),
+    cross, tip);
+  plot.addEventListener('mousemove', (e) => {
+    const r = plot.getBoundingClientRect();
+    const t = t0 + ((e.clientX - r.left) / r.width) * span;
+    let best = samples[0];
+    for (const smp of samples) if (Math.abs(smp.t - t) < Math.abs(best.t - t)) best = smp;
+    const x = (X(best.t) / 1000) * r.width;
+    cross.hidden = tip.hidden = false;
+    cross.style.left = `${x}px`;
+    fill(tip, h('div', { class: 'muted' }, fmtClock(best.t)), series.map((sr) => h('div', {}, series.length > 1 ? h('span', { class: 'key', style: { background: sr.color } }) : null, h('b', {}, fmt(sr.value(best))), series.length > 1 ? h('span', { class: 'muted' }, ' ' + sr.name) : null)));
+    tip.style.left = x > r.width / 2 ? '' : `${x + 10}px`;
+    tip.style.right = x > r.width / 2 ? `${r.width - x + 10}px` : '';
+  });
+  plot.addEventListener('mouseleave', () => { cross.hidden = tip.hidden = true; });
+  return h('div', { class: 'chart' },
+    h('div', { class: 'chart-head' }, h('b', {}, title),
+      series.length > 1 ? h('div', { class: 'legend' }, series.map((sr) => h('span', {}, h('i', { style: { background: sr.color } }), sr.name))) : null,
+      h('span', { class: 'now' }, now)),
+    plot);
+}
+const niceMax = (v) => { if (!(v > 0)) return 1; const p = Math.pow(10, Math.floor(Math.log10(v))); for (const m of [1, 2, 2.5, 5, 10]) if (m * p >= v) return m * p; return 10 * p; };
+
+function drawMonitor(c, st) {
+  const mon = monState(st);
+  if (!mon.el) return;
+  const s = st.session;
+  const linux = String(s.info?.os || '').startsWith('Linux');
+  const [, , ms] = RANGES.find(([id]) => id === mon.range) || RANGES[1];
+  const all = mon.samples;
+  const samples = all.length ? all.filter((smp) => smp.t >= all[all.length - 1].t - ms) : [];
+  if (samples.length < 2) {
+    fill(mon.el, mon.error ? h('div', { class: 'notice bad' }, mon.error) : null, h('div', { class: 'empty' }, !linux && s.info ? `Monitoring needs a Linux machine (${c.name} runs ${s.info.os}).` : 'Collecting the first samples (every 5 s)…'));
+    return;
+  }
+  const last = samples[samples.length - 1];
+  const nCores = last.cores?.length || 0;
+  const tile = (k, v, sub, value) => h('div', { class: 'tile' }, h('span', { class: 'k' }, k), h('span', { class: 'v' }, v), value != null ? meter(value) : null, sub ? h('span', { class: 'sub' }, sub) : null);
+  const tiles = h('div', { class: 'tiles' },
+    tile('CPU', `${last.cpu.toFixed(1)}%`, nCores ? `${nCores} core${nCores === 1 ? '' : 's'}` : '', last.cpu),
+    tile('Memory', fmtBytes(last.memUsed), `of ${fmtBytes(last.memTotal)}`, pct(last.memUsed, last.memTotal)),
+    last.swapTotal ? tile('Swap', fmtBytes(last.swapUsed || 0), `of ${fmtBytes(last.swapTotal)}`, pct(last.swapUsed || 0, last.swapTotal)) : null,
+    tile('Load', last.load.toFixed(2), nCores ? `${(last.load / nCores).toFixed(2)} per core` : '1-minute average', null),
+    tile('Disk', fmtBytes(last.diskUsed), `of ${fmtBytes(last.diskTotal)} · ${s.info?.root || '/'}`, pct(last.diskUsed, last.diskTotal)),
+    tile('Network', `↓ ${fmtRate(last.rx)}`, `↑ ${fmtRate(last.tx)}`, null));
+  const netMax = niceMax(Math.max(1024, ...samples.flatMap((smp) => [smp.rx || 0, smp.tx || 0])) * 1.1);
+  const charts = h('div', { class: 'charts' },
+    lineChart({ title: 'CPU', samples, series: [{ name: 'CPU', color: SERIES[0], value: (smp) => smp.cpu }], yMax: 100, fmt: (v) => `${Math.round(v)}%`, now: `${last.cpu.toFixed(1)}%` }),
+    lineChart({ title: 'Memory', samples, series: [{ name: 'Used', color: SERIES[0], value: (smp) => smp.memUsed }], yMax: last.memTotal || niceMax(Math.max(...samples.map((smp) => smp.memUsed))), fmt: fmtBytes, now: `${fmtBytes(last.memUsed)} · ${pct(last.memUsed, last.memTotal).toFixed(0)}%` }),
+    lineChart({ title: 'Network', samples, series: [{ name: 'Received', color: SERIES[0], value: (smp) => smp.rx }, { name: 'Sent', color: SERIES[1], value: (smp) => smp.tx }], yMax: netMax, fmt: fmtRate, now: '' }));
+  const cores = nCores ? h('div', { class: 'chart' }, h('div', { class: 'chart-head' }, h('b', {}, 'Each core'), h('span', { class: 'now' }, 'now')),
+    h('div', { class: 'cores' }, last.cores.map((v, i) => h('span', { title: `core ${i}: ${v.toFixed(0)}%`, style: { height: `${Math.max(3, v)}%`, opacity: String(0.45 + v / 180) } })))) : null;
+  const procs = mon.top.length ? h('div', { class: 'chart', style: { paddingBottom: '10px' } },
+    h('div', { class: 'chart-head' }, h('b', {}, 'Busiest processes'), h('span', { class: 'now' }, mon.topError || `top ${mon.top.length} by CPU`)),
+    h('table', { class: 'grid' }, h('thead', {}, h('tr', {}, h('th', { style: { width: '72px' } }, 'PID'), h('th', { class: 'wide', style: { width: '90px' } }, 'User'), h('th', { style: { width: '64px', textAlign: 'right' } }, 'CPU'), h('th', { style: { width: '64px', textAlign: 'right' } }, 'Mem'), h('th', { class: 'wide', style: { width: '92px', textAlign: 'right' } }, 'Running'), h('th', {}, 'Command'), h('th', { style: { width: '72px' } }))),
+      h('tbody', {}, mon.top.map((p) => h('tr', { class: 'item' },
+        h('td', { class: 'mono' }, String(p.pid)), h('td', { class: 'wide' }, p.user), h('td', { class: 'num' }, `${p.cpu.toFixed(1)}%`), h('td', { class: 'num' }, `${p.mem.toFixed(1)}%`), h('td', { class: 'num wide' }, p.time),
+        h('td', { class: 'mono', title: p.command }, p.command),
+        h('td', { class: 'act' }, h('button', { class: 'btn sm ghost danger', title: `Stop ${p.pid} (SIGTERM)`, onclick: async () => {
+          if (!confirm(`Stop process ${p.pid} on ${c.name}?\n\n${p.command.slice(0, 200)}\n\nIt is sent SIGTERM (asked to exit).`)) return;
+          try { await s.rpc('proc.kill', { pid: p.pid, signal: 'SIGTERM' }); toast(`Sent SIGTERM to ${p.pid}`, 'ok'); pollMonitor(c); } catch (e) { toast(errText(e), 'bad'); }
+        } }, ic('stop', 13)))))))) : null;
+  fill(mon.el, mon.error ? h('div', { class: 'notice bad' }, mon.error) : null, tiles, charts, cores, procs);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// 9. Dialogs
+// ════════════════════════════════════════════════════════════════════════════
+const modalStack = [];
+function openModal({ title, width = 560, render, onClose, confirmClose }) {
+  const overlay = h('div', { class: 'overlay', onmousedown: (e) => { if (e.target === overlay) handle.close(); } });
+  const body = h('div', { class: 'modal-body' });
+  // Anchor to the viewport (a grid overlay's track is content-sized; see bootstrapper CLAUDE.md).
+  const box = h('div', { class: 'modal', style: { width: `min(calc(100vw - 28px), ${width}px)` } },
+    h('div', { class: 'modal-head' }, h('span', { class: 'grow' }, title), h('button', { class: 'btn ghost sm', title: 'Close', onclick: () => handle.close() }, ic('x'))), body);
+  overlay.append(box);
+  const handle = {
+    body,
+    refresh() { body.replaceChildren(...[].concat(render(handle)).filter(Boolean)); },
+    close(force) { if (!force && confirmClose && !confirmClose()) return; overlay.remove(); const i = modalStack.indexOf(handle); if (i >= 0) modalStack.splice(i, 1); onClose?.(); },
+  };
+  handle.refresh();
+  $('#modals').append(overlay);
+  modalStack.push(handle);
+  return handle;
+}
+window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && modalStack.length) modalStack[modalStack.length - 1].close(); });
+
+/** Like ssh's "authenticity of host can't be established": the person checks the fingerprint. */
+function trustHostKey(c, key, changed) {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (ok) => {
+      if (done) return; done = true;
+      if (ok) { knownHosts[`${c.host}:${c.port}`] = { fingerprint: key.fingerprint, type: key.type }; saveKnownHosts(); }
+      m.close(true); resolve(ok);
+    };
+    const m = openModal({ title: changed ? `Trust the new host key of ${c.host}?` : `First connection to ${c.host}`, width: 520, onClose: () => { if (!done) { done = true; resolve(false); } }, render: () => [
+      h('div', { class: 'hint' }, `Check that this matches the machine's ${key.type || 'host'} key (on the machine: `, h('code', { class: 'mono' }, 'ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub'), ').'),
+      h('div', { class: 'fp' }, key.fingerprint),
+      h('div', { class: 'row end' }, h('button', { class: 'btn', onclick: () => finish(false) }, 'Cancel'), h('button', { class: 'btn ' + (changed ? 'danger' : 'primary'), onclick: () => finish(true) }, changed ? 'Trust the new key' : 'Trust and connect')),
+    ] });
+  });
+}
+
+/** Keyboard-interactive questions from the SSH server (one-time codes, extra passwords…). */
+function askPrompts(c, msg) {
+  return new Promise((resolve) => {
+    let done = false;
+    const inputs = (msg.prompts || []).map((p) => h('input', { type: p.echo ? 'text' : 'password', autocomplete: 'one-time-code' }));
+    const finish = (v) => { if (done) return; done = true; m.close(true); resolve(v); };
+    const m = openModal({ title: msg.name || `${c.host} asks`, width: 440, onClose: () => { if (!done) { done = true; resolve(null); } }, render: () => [
+      msg.instructions ? h('div', { class: 'hint' }, msg.instructions) : null,
+      ...(msg.prompts || []).map((p, i) => h('label', { class: 'field' }, p.prompt.trim() || 'Answer', inputs[i])),
+      h('div', { class: 'row end' }, h('button', { class: 'btn', onclick: () => finish(null) }, 'Cancel'), h('button', { class: 'btn primary', onclick: () => finish(inputs.map((x) => x.value)) }, 'Continue')),
+    ] });
+    inputs.forEach((x) => x.addEventListener('keydown', (e) => e.key === 'Enter' && finish(inputs.map((y) => y.value))));
+    setTimeout(() => inputs[0]?.focus(), 0);
+  });
+}
+function askPassword(title, hint) {
+  return new Promise((resolve) => {
+    let done = false;
+    const input = h('input', { type: 'password', autocomplete: 'current-password' });
+    const finish = (v) => { if (done) return; done = true; m.close(true); resolve(v); };
+    const m = openModal({ title, width: 420, onClose: () => { if (!done) { done = true; resolve(null); } }, render: () => [hint ? h('div', { class: 'hint' }, hint) : null, input, h('div', { class: 'hint' }, 'Kept only while this window is open.'), h('div', { class: 'row end' }, h('button', { class: 'btn', onclick: () => finish(null) }, 'Cancel'), h('button', { class: 'btn primary', onclick: () => finish(input.value) }, 'OK'))] });
+    input.addEventListener('keydown', (e) => e.key === 'Enter' && finish(input.value));
+    setTimeout(() => input.focus(), 0);
+  });
+}
+
+function openBridgeSettings() {
+  const url = h('input', { type: 'url', value: settings.bridgeUrl, spellcheck: 'false', placeholder: DEFAULT_BRIDGE });
+  const token = h('input', { type: 'password', placeholder: 'Only if the bridge printed one', autocomplete: 'off' });
+  secretOf('bridge').then((s) => { if (s?.token) token.value = s.token; });
+  const result = h('div', { class: 'hint' });
+  const test = async () => {
+    result.className = 'hint'; result.textContent = 'Checking…';
+    try {
+      const res = await fetch(new URL('health', url.value.trim().replace(/\/+$/, '') + '/'), { cache: 'no-store', signal: AbortSignal.timeout(6000) });
+      const body = await res.json();
+      if (body.bridge !== 'workspace-ssh') throw new Error("That isn't the SSH bridge");
+      result.className = body.originAllowed === false ? 'err' : 'ok-text';
+      result.textContent = body.originAllowed === false ? `Bridge ${body.version} is running but refuses this site: start it with --origin ${location.origin}` : `Bridge ${body.version} is running${body.token ? ' (it needs its token)' : ''}${body.sshAgent ? ' · its SSH agent can sign in' : ''}.`;
+    } catch (e) { result.className = 'err'; result.textContent = `No bridge there (${errText(e)}).`; }
+  };
+  const m = openModal({ title: 'SSH bridge', width: 560, render: () => [
+    h('div', { class: 'hint' }, 'A browser can\'t open SSH connections itself, so a small bridge does it: the workspace-ssh bridge (ts-playground\'s bridge/, or its download bridge.mjs). It writes nothing on your machines.'),
+    h('label', { class: 'field' }, 'Bridge address', url),
+    h('label', { class: 'field' }, 'Access token', token),
+    result,
+    h('div', { class: 'hint' }, 'On this computer: ', h('code', { class: 'mono' }, 'node bridge.mjs'), ' (localhost sites are allowed). On another machine: ', h('code', { class: 'mono' }, `node bridge.mjs --host 0.0.0.0 --origin ${location.origin}`), ' — it prints a token to paste above. From an https site, put the bridge behind https too.'),
+    downloadBox(),
+    h('div', { class: 'row end' }, h('button', { class: 'btn', onclick: test }, 'Test'), h('button', { class: 'btn primary', onclick: async () => {
+      settings.bridgeUrl = (url.value.trim() || DEFAULT_BRIDGE).replace(/\/+$/, '');
+      saveSettings();
+      await keepSecret('bridge', token.value.trim() ? { token: token.value.trim() } : null, true);
+      m.close(true);
+      checkBridge();
+    } }, 'Save')),
+  ] });
+}
+
+function editConnection(c) {
+  const isNew = !c;
+  const conf = c ? { ...c } : { id: uid(), name: '', host: '', port: 22, username: 'root', auth: 'password', root: '/', remember: true };
+  const address = h('input', { value: c ? addressOf(c).replace(/:\d+$/, '') : '', placeholder: 'user@host, e.g. root@192.168.1.200', spellcheck: 'false', autocomplete: 'off' });
+  const port = h('input', { type: 'number', min: 1, max: 65535, value: String(conf.port) });
+  const name = h('input', { value: conf.name, placeholder: 'Empty: the host name' });
+  const auth = h('select', {}, h('option', { value: 'password' }, 'Password'), h('option', { value: 'key' }, 'Private key'), h('option', { value: 'agent', disabled: !bridge.info?.sshAgent }, 'SSH agent (of the bridge’s computer)'));
+  auth.value = conf.auth;
+  const password = h('input', { type: 'password', autocomplete: 'new-password' });
+  const key = h('textarea', { rows: 5, class: 'mono', spellcheck: 'false' });
+  const keyFile = h('input', { type: 'file', style: { display: 'none' }, onchange: async () => { const f = keyFile.files[0]; if (f) key.value = await f.text(); keyFile.value = ''; } });
+  const passphrase = h('input', { type: 'password', placeholder: 'Only if the key has one', autocomplete: 'off' });
+  const root = h('input', { value: conf.root || '/', placeholder: '/', spellcheck: 'false' });
+  const remember = h('input', { type: 'checkbox', checked: conf.remember !== false });
+  const problem = h('div', { class: 'err' });
+  const hasSaved = !!c && (sessionSecrets.has(c.id) || !!sealed[c.id]);
+  const pwField = h('label', { class: 'field' }, 'Password', password);
+  const keyField = h('label', { class: 'field' }, 'Private key', key, h('button', { class: 'btn sm', type: 'button', style: { alignSelf: 'flex-start' }, onclick: () => keyFile.click() }, ic('upload', 13), 'Load key file…'), keyFile);
+  const ppField = h('label', { class: 'field' }, 'Key passphrase', passphrase);
+  const remField = h('label', { class: 'check' }, remember, 'Remember the sign-in (encrypted in this browser)');
+  const sync = () => {
+    const same = !isNew && auth.value === c.auth;
+    pwField.hidden = auth.value !== 'password';
+    keyField.hidden = ppField.hidden = auth.value !== 'key';
+    remField.hidden = auth.value === 'agent';
+    password.placeholder = same && hasSaved ? 'Empty: keep the saved password' : '';
+    key.placeholder = same && hasSaved ? 'Empty: keep the saved key' : '-----BEGIN OPENSSH PRIVATE KEY-----';
+  };
+  auth.addEventListener('change', sync);
+  sync();
+  const save = async () => {
+    const m1 = /^(?:([^@\s]+)@)?(\[[^\]]+\]|[^:\s]+)(?::(\d+))?$/.exec(address.value.trim());
+    if (!m1 || !m1[1]) return (problem.textContent = 'Enter user@host, e.g. root@192.168.1.200');
+    const p = Number(m1[3] || port.value || 22);
+    if (!Number.isInteger(p) || p < 1 || p > 65535) return (problem.textContent = 'Invalid SSH port');
+    const folder = root.value.trim() || '/';
+    if (!folder.startsWith('/')) return (problem.textContent = 'The folder must be an absolute path, e.g. / or /srv/app');
+    let secret = null;
+    if (auth.value === 'password' && password.value) secret = { password: password.value };
+    if (auth.value === 'key' && key.value.trim()) {
+      if (!/-----BEGIN [A-Z ]*PRIVATE KEY-----/.test(key.value)) return (problem.textContent = 'Paste the private key (it starts with -----BEGIN … PRIVATE KEY-----)');
+      secret = { privateKey: key.value.trim() + '\n', passphrase: passphrase.value || undefined };
+    }
+    if (!secret && auth.value !== 'agent' && (isNew || auth.value !== c.auth || !hasSaved)) return (problem.textContent = auth.value === 'password' ? 'Enter the password' : 'Paste the private key');
+    const host = m1[2].replace(/^\[|\]$/g, '');
+    const next = { ...conf, name: name.value.trim() || host, host, port: p, username: m1[1], auth: auth.value, root: folder.replace(/(.)\/+$/, '$1'), remember: auth.value !== 'agent' && remember.checked };
+    const moved = !isNew && (c.host !== next.host || c.port !== next.port || c.username !== next.username || c.root !== next.root || c.auth !== next.auth);
+    if (secret) await keepSecret(next.id, secret, next.remember);
+    else if (auth.value === 'agent') await keepSecret(next.id, null, false);
+    else if (!isNew && c.remember !== next.remember) await keepSecret(next.id, await secretOf(next.id), next.remember);
+    if (isNew) conns.push(next); else conns[conns.findIndex((x) => x.id === next.id)] = next;
+    saveConns();
+    m.close(true);
+    const st = stateOf(next);
+    if (isNew || moved || secret) {
+      // New address, folder or sign-in: start over.
+      st.session.close();
+      st.files = { ...st.files, path: '/', entries: null, sel: new Set(), error: '' };
+      st.cts = { loading: false, error: '', list: null, cli: '', sudo: false, password: '' };
+      st.session.everOnline = false;
+      st.session.status = 'offline';
+    }
+    selectedId = next.id;
+    renderSide(); renderMain();
+    if (st.session.status === 'offline') st.session.connect();
+  };
+  const m = openModal({ title: isNew ? 'Add a machine' : `Edit ${c.name}`, width: 560, render: () => [
+    h('div', { class: 'cols' }, h('label', { class: 'field' }, 'User and host', address), h('label', { class: 'field' }, 'SSH port', port)),
+    h('label', { class: 'field' }, 'Name', name),
+    h('label', { class: 'field' }, 'Sign in with', auth),
+    pwField, keyField, ppField,
+    h('label', { class: 'field' }, 'Folder the file browser shows (/ for the whole disk)', root),
+    remField,
+    problem,
+    h('div', { class: 'row end' }, h('button', { class: 'btn', onclick: () => m.close() }, 'Cancel'), h('button', { class: 'btn primary', onclick: save }, isNew ? 'Add and connect' : 'Save')),
+  ] });
+  setTimeout(() => address.focus(), 0);
+}
+
+async function removeConnection(c) {
+  if (!confirm(`Remove ${c.name}? Its saved sign-in is deleted from this browser.`)) return;
+  const st = live.get(c.id);
+  if (st) { for (const t of [...st.terms.list]) closeTerminal(c, st, t); st.session.close(); live.delete(c.id); }
+  await keepSecret(c.id, null, false);
+  conns = conns.filter((x) => x.id !== c.id);
+  saveConns();
+  if (selectedId === c.id) selectedId = conns[0]?.id || null;
+  renderSide(); renderMain();
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// 10. Start
+// ════════════════════════════════════════════════════════════════════════════
+async function init() {
+  PLAT = await whenPlatform();
+  try { FS = PLAT && PLAT.host.getFS(); } catch (_) { FS = null; }
+  settings = { ...settings, ...readJson('settings.json', {}) };
+  conns = (readJson('connections.json', []) || []).filter((c) => c && c.id && c.host);
+  knownHosts = readJson('known_hosts.json', {}) || {};
+  sealed = readJson('secrets.json', {}) || {};
+  $('#logo').append(ic('server', 17));
+  $('#add-btn').append(ic('plus', 14));
+  $('#add-btn').addEventListener('click', () => editConnection(null));
+  $('#bridge').addEventListener('click', () => openBridgeSettings());
+  const narrow = () => document.body.classList.toggle('narrow', window.innerWidth < 640);
+  window.addEventListener('resize', () => { narrow(); const c = current(); if (c) fitActive(stateOf(c)); });
+  narrow();
+  selectedId = conns[0]?.id || null;
+  renderBridge(); renderSide(); renderMain();
+  await Promise.all([checkBridge(), loadBridgeDownload()]);
+  renderBridge(); renderMain();
+  const c = current();
+  if (c && bridge.state === 'ok') select(c.id);
+  const cleanup = () => { for (const st of live.values()) { for (const t of st.terms.list) if (t.id) st.session.rpc('term.close', { id: t.id }).catch(() => {}); st.mount?.unmount(); st.mount = null; st.session.close(); } };
+  window.addEventListener('pagehide', cleanup);
+  window.addEventListener('beforeunload', cleanup);
+  // For tests and the console.
+  window.__remoteMachines = { RemoteMount, live, get conns() { return conns; }, get settings() { return settings; }, get bridge() { return bridge; }, select, openTerminal, loadDir, loadContainers, stateOf, uploadVfsPaths, saveToVfs };
+}
+init();
+</script>
+</body>
+</html>

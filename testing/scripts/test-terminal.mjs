@@ -13,9 +13,9 @@ await page.waitForTimeout(2000);
 await page.reload({ waitUntil: 'networkidle' });
 await page.waitForTimeout(2000);
 
-// Open the terminal app via the file explorer / exec helper
+// Open the terminal app (all apps now live under /opt/apps, registered as ui.terminal)
 await page.evaluate(() => {
-  window.platform.host.exec(window.platform, '/home/user1/apps/xtermjs.html');
+  window.platform.host.callCommand('ui.terminal');
 });
 await page.waitForTimeout(2000);
 

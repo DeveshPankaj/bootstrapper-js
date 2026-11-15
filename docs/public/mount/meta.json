@@ -45,6 +45,11 @@
     "force_reload": true
   },
   {
+    "path": "/bin/activities.run",
+    "file": "/bin/activities.run",
+    "force_reload": true
+  },
+  {
     "path": "/bin/df.run",
     "file": "/bin/df.run",
     "force_reload": true
@@ -372,6 +377,11 @@
     "force_reload": false
   },
   {
+    "path": "/etc/wm/themes/ember.json",
+    "file": "/etc/wm/themes/ember.json",
+    "force_reload": false
+  },
+  {
     "path": "/meta.json",
     "file": "/meta.json",
     "force_reload": true
@@ -412,6 +422,11 @@
     "force_reload": true
   },
   {
+    "path": "/etc/settings/02-projects.js",
+    "file": "/etc/settings/02-projects.js",
+    "force_reload": true
+  },
+  {
     "path": "/etc/settings/03-contact.js",
     "file": "/etc/settings/03-contact.js",
     "force_reload": true
@@ -424,6 +439,16 @@
   {
     "path": "/etc/settings/04b-desktop-env.js",
     "file": "/etc/settings/04b-desktop-env.js",
+    "force_reload": true
+  },
+  {
+    "path": "/etc/settings/05-layout.js",
+    "file": "/etc/settings/05-layout.js",
+    "force_reload": true
+  },
+  {
+    "path": "/etc/settings/06-window-manager.js",
+    "file": "/etc/settings/06-window-manager.js",
     "force_reload": true
   },
   {
@@ -842,6 +867,16 @@
     "force_reload": true
   },
   {
+    "path": "/opt/apps/remote-machines/main.js",
+    "file": "/opt/apps/remote-machines/main.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/remote-machines/main.html",
+    "file": "/opt/apps/remote-machines/main.html",
+    "force_reload": true
+  },
+  {
     "path": "/opt/apps/youtube-player/main.js",
     "file": "/opt/apps/youtube-player/main.js",
     "force_reload": true
@@ -874,6 +909,11 @@
   {
     "path": "/opt/apps/distributed-compute/lib/task-runtime.js",
     "file": "/opt/apps/distributed-compute/lib/task-runtime.js",
+    "force_reload": true
+  },
+  {
+    "path": "/opt/apps/distributed-compute/lib/worker-task-runtime.js",
+    "file": "/opt/apps/distributed-compute/lib/worker-task-runtime.js",
     "force_reload": true
   },
   {

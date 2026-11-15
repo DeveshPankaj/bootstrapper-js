@@ -670,6 +670,24 @@ const App = (props) => {
   const refreshRef = React.useRef(refresh);
   refreshRef.current = refresh;
 
+  // Backends that fill in asynchronously (e.g. Remote Machines' /mnt/ssh/<machine> mirror) announce
+  // changes with a 'vfs:changed' event on the top window ({ detail: { path } }); re-read the shown
+  // folder when the change is in it, is it, or is its parent. Mirrored in src/apps/file-explorer/index.tsx.
+  React.useEffect(() => {
+    const top = window.top;
+    if (!top) return;
+    const onChanged = (e) => {
+      const p = e && e.detail && e.detail.path;
+      const dir = dirRef.current;
+      if (typeof p !== 'string' || !dir) return;
+      if (p === dir || p.startsWith(dir === '/' ? '/' : dir + '/') || dir.startsWith(p === '/' ? '/' : p + '/')) {
+        try { refreshRef.current(); } catch (_) { /* the folder went away; the next navigation shows it */ }
+      }
+    };
+    top.addEventListener('vfs:changed', onChanged);
+    return () => top.removeEventListener('vfs:changed', onChanged);
+  }, []);
+
   React.useEffect(() => {
     const k = cmdPrefix.current;
     const regs = [

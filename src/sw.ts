@@ -129,7 +129,7 @@ self.addEventListener('fetch', function(event: Event | any) {
                                             : new TextDecoder().decode(fileData as Uint8Array)
                                         body = injectAppSdkBootstrap(htmlStr)
                                     }
-                                    resolve(new Response(body, {headers: {'Content-Type': mimeType}}))
+                                    resolve(new Response(body as BodyInit, {headers: {'Content-Type': mimeType}}))
                                 }
                             });
 

@@ -597,6 +597,24 @@ const App = (props: UICallbackProps & { file: FileType }) => {
     const refreshRef = React.useRef(refresh)
     refreshRef.current = refresh
 
+    // Backends that fill in asynchronously (e.g. Remote Machines' /mnt/ssh/<machine> mirror) announce
+    // changes with a 'vfs:changed' event on the top window ({ detail: { path } }); re-read the shown
+    // folder when the change is in it, is it, or is its parent. Mirrored in opt/apps/file-explorer/main.js.
+    React.useEffect(() => {
+        const top = window.top
+        if (!top) return
+        const onChanged = (e: Event) => {
+            const p = (e as CustomEvent<{ path?: string }>).detail?.path
+            const dir = dirRef.current
+            if (typeof p !== 'string' || !dir) return
+            if (p === dir || p.startsWith(dir === '/' ? '/' : dir + '/') || dir.startsWith(p === '/' ? '/' : p + '/')) {
+                try { refreshRef.current() } catch (_) { /* the folder went away; the next navigation shows it */ }
+            }
+        }
+        top.addEventListener('vfs:changed', onChanged)
+        return () => top.removeEventListener('vfs:changed', onChanged)
+    }, [])
+
     const [propsFile, setPropsFile] = React.useState<string | null>(null)
     const setPropsFileRef = React.useRef(setPropsFile)
     setPropsFileRef.current = setPropsFile

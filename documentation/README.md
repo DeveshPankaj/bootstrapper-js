@@ -17,6 +17,7 @@ Browser-based web OS built with TypeScript + React + BrowserFS.
 | [apps/terminal.md](apps/terminal.md) | xterm.js terminal — sessions, command pipeline, I/O redirection, variables |
 | [apps/file-explorer.md](apps/file-explorer.md) | File explorer — drag & drop, icons, navigation, two parallel implementations |
 | [apps/dashboard.md](apps/dashboard.md) | Dashboard — bookmarks, headless widgets, config format |
+| [apps/remote-machines.md](apps/remote-machines.md) | Remote Machines — SSH through a bridge: connections, terminals (also in LXD containers), remote file browser |
 
 ## Features
 
