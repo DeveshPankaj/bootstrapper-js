@@ -981,6 +981,29 @@
       "main": "index.html"
     },
     {
+      "id": "implicit-function-visualizer",
+      "name": "Implicit Function Visualizer",
+      "description": "Plot implicit equations in 2 or 3 variables: F(x, y) = c as a surface over the XY plane with its level curve, or F(x, y, z) = c as an isosurface with a slice explorer and hover probe.",
+      "version": "1.0.0",
+      "icon": "function",
+      "category": "Tools",
+      "author": "bootstrapper-js",
+      "commandName": "ui.implicit-function-visualizer",
+      "files": [
+        {
+          "dest": "main.js",
+          "src": "/public/mount/opt/apps/implicit-function-visualizer/main.js",
+          "sha256": "e1e5aa2a1f9fb5add4046b5519dffed6e7698ab172bcd56eead7b6c1265e56d4"
+        },
+        {
+          "dest": "main.html",
+          "src": "/public/mount/opt/apps/implicit-function-visualizer/main.html",
+          "sha256": "f49554f8903ade1d6c9729bfd5577e065fd03e524fdbfd722f27513634363192"
+        }
+      ],
+      "main": "main.js"
+    },
+    {
       "id": "vscode-online",
       "name": "VS Code",
       "description": "VS Code editor running in the browser via Microsoft's web build.",

@@ -1,0 +1,410 @@
+{
+  "label": "ifv-static",
+  "baseUrl": "http://localhost:8080",
+  "root": null,
+  "finishedAt": "2026-11-21T09:08:10.499Z",
+  "totals": {
+    "phase1": {
+      "findings": 14,
+      "pass": 14,
+      "fail": 0,
+      "error": 0,
+      "checks": 20,
+      "checksPassed": 20
+    },
+    "info": {
+      "findings": 1,
+      "pass": 1,
+      "fail": 0,
+      "error": 0,
+      "checks": 1,
+      "checksPassed": 1
+    },
+    "phase2": {
+      "findings": 2,
+      "pass": 0,
+      "fail": 2,
+      "error": 0,
+      "checks": 2,
+      "checksPassed": 0
+    }
+  },
+  "scripts": [
+    {
+      "script": "test-static.mjs",
+      "exit": 0,
+      "timedOut": false,
+      "seconds": 0,
+      "checks": 23,
+      "stderrTail": ""
+    }
+  ],
+  "table": {
+    "phase1": [
+      {
+        "id": "APP-5",
+        "status": "PASS",
+        "pass": 1,
+        "total": 1,
+        "failing": [],
+        "scripts": [
+          "test-static.mjs"
+        ]
+      },
+      {
+        "id": "APP-6",
+        "status": "PASS",
+        "pass": 1,
+        "total": 1,
+        "failing": [],
+        "scripts": [
+          "test-static.mjs"
+        ]
+      },
+      {
+        "id": "APP-7",
+        "status": "PASS",
+        "pass": 1,
+        "total": 1,
+        "failing": [],
+        "scripts": [
+          "test-static.mjs"
+        ]
+      },
+      {
+        "id": "APP-8",
+        "status": "PASS",
+        "pass": 2,
+        "total": 2,
+        "failing": [],
+        "scripts": [
+          "test-static.mjs"
+        ]
+      },
+      {
+        "id": "APP-10",
+        "status": "PASS",
+        "pass": 2,
+        "total": 2,
+        "failing": [],
+        "scripts": [
+          "test-static.mjs"
+        ]
+      },
+      {
+        "id": "APP-11",
+        "status": "PASS",
+        "pass": 1,
+        "total": 1,
+        "failing": [],
+        "scripts": [
+          "test-static.mjs"
+        ]
+      },
+      {
+        "id": "APP-12",
+        "status": "PASS",
+        "pass": 1,
+        "total": 1,
+        "failing": [],
+        "scripts": [
+          "test-static.mjs"
+        ]
+      },
+      {
+        "id": "APP-13",
+        "status": "PASS",
+        "pass": 1,
+        "total": 1,
+        "failing": [],
+        "scripts": [
+          "test-static.mjs"
+        ]
+      },
+      {
+        "id": "APP-14",
+        "status": "PASS",
+        "pass": 4,
+        "total": 4,
+        "failing": [],
+        "scripts": [
+          "test-static.mjs"
+        ]
+      },
+      {
+        "id": "D15",
+        "status": "PASS",
+        "pass": 1,
+        "total": 1,
+        "failing": [],
+        "scripts": [
+          "test-static.mjs"
+        ]
+      },
+      {
+        "id": "KRN-3",
+        "status": "PASS",
+        "pass": 2,
+        "total": 2,
+        "failing": [],
+        "scripts": [
+          "test-static.mjs"
+        ]
+      },
+      {
+        "id": "NET-5",
+        "status": "PASS",
+        "pass": 1,
+        "total": 1,
+        "failing": [],
+        "scripts": [
+          "test-static.mjs"
+        ]
+      },
+      {
+        "id": "NET-12",
+        "status": "PASS",
+        "pass": 1,
+        "total": 1,
+        "failing": [],
+        "scripts": [
+          "test-static.mjs"
+        ]
+      },
+      {
+        "id": "WIN-5",
+        "status": "PASS",
+        "pass": 1,
+        "total": 1,
+        "failing": [],
+        "scripts": [
+          "test-static.mjs"
+        ]
+      }
+    ],
+    "info": [
+      {
+        "id": "APP-11",
+        "status": "PASS",
+        "pass": 1,
+        "total": 1,
+        "failing": [],
+        "scripts": [
+          "test-static.mjs"
+        ]
+      }
+    ],
+    "phase2": [
+      {
+        "id": "APP-15",
+        "status": "FAIL",
+        "pass": 0,
+        "total": 1,
+        "failing": [
+          "FAIL static-apps-no-top-parent"
+        ],
+        "scripts": [
+          "test-static.mjs"
+        ]
+      },
+      {
+        "id": "KRN-6",
+        "status": "FAIL",
+        "pass": 0,
+        "total": 1,
+        "failing": [
+          "FAIL static-no-same-origin-app-sandboxes"
+        ],
+        "scripts": [
+          "test-static.mjs"
+        ]
+      }
+    ]
+  },
+  "checks": [
+    {
+      "id": "KRN-3",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "static-no-interpolated-dsl",
+      "detail": "0 interpolated DSL sites:",
+      "script": "test-static.mjs"
+    },
+    {
+      "id": "KRN-3",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "static-no-interpolated-dsl-etc-scripts",
+      "detail": "0 interpolated DSL sites in /etc/settings + /etc/widgets scripts (not assigned in TODO 1A–1F):",
+      "script": "test-static.mjs"
+    },
+    {
+      "id": "D15",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "static-dead-exec-engine-removed",
+      "detail": "removed",
+      "script": "test-static.mjs"
+    },
+    {
+      "id": "WIN-5",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "static-innerhtml-core/window-manager.ts",
+      "detail": "0 raw sinks in src/core/window-manager.ts",
+      "script": "test-static.mjs"
+    },
+    {
+      "id": "APP-14",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "static-innerhtml-dock/gnome.html",
+      "detail": "0 raw sinks in docs/public/mount/opt/apps/dock/gnome.html",
+      "script": "test-static.mjs"
+    },
+    {
+      "id": "APP-14",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "static-innerhtml-dock/macos.html",
+      "detail": "0 raw sinks in docs/public/mount/opt/apps/dock/macos.html",
+      "script": "test-static.mjs"
+    },
+    {
+      "id": "APP-14",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "static-innerhtml-audio-player/player.html",
+      "detail": "0 raw sinks in docs/public/mount/opt/apps/audio-player/player.html",
+      "script": "test-static.mjs"
+    },
+    {
+      "id": "APP-14",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "static-innerhtml-fs-inspector/main.html",
+      "detail": "0 raw sinks in docs/public/mount/opt/apps/fs-inspector/main.html",
+      "script": "test-static.mjs"
+    },
+    {
+      "id": "APP-10",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "static-innerhtml-trainboard/main.html",
+      "detail": "0 raw sinks in docs/public/mount/opt/apps/trainboard/main.html",
+      "script": "test-static.mjs"
+    },
+    {
+      "id": "APP-10",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "static-innerhtml-trainboard/board.html",
+      "detail": "0 raw sinks in docs/public/mount/opt/apps/trainboard/board.html",
+      "script": "test-static.mjs"
+    },
+    {
+      "id": "APP-8",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "static-innerhtml-totp-auth/main.html",
+      "detail": "0 raw sinks in docs/public/mount/opt/apps/totp-auth/main.html",
+      "script": "test-static.mjs"
+    },
+    {
+      "id": "NET-5",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "static-innerhtml-ui/app.js",
+      "detail": "0 raw sinks in docs/public/mount/opt/apps/distributed-compute/ui/app.js",
+      "script": "test-static.mjs"
+    },
+    {
+      "id": "APP-5",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "static-notebook-markdown-sanitised",
+      "detail": "0 unsanitised marked → innerHTML:",
+      "script": "test-static.mjs"
+    },
+    {
+      "id": "APP-13",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "static-dashboard-no-inline-handlers",
+      "detail": "0 inline handlers with interpolation:",
+      "script": "test-static.mjs"
+    },
+    {
+      "id": "APP-11",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "static-cdn-pinned-sri-viewer-apps",
+      "detail": "0 CDN <script src> in 1F-owned apps without exact version+SRI:",
+      "script": "test-static.mjs"
+    },
+    {
+      "id": "APP-11",
+      "status": "PASS",
+      "phase": "info",
+      "check": "static-cdn-pinned-sri-other-apps",
+      "detail": "0 in other apps / pages:",
+      "script": "test-static.mjs"
+    },
+    {
+      "id": "NET-12",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "static-webamp-pinned",
+      "detail": "no unpinned webamp URL",
+      "script": "test-static.mjs"
+    },
+    {
+      "id": "APP-7",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "static-mermaid-security-level",
+      "detail": "securityLevel values: [\"strict\"]",
+      "script": "test-static.mjs"
+    },
+    {
+      "id": "APP-12",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "static-ts-ide-preview-no-same-origin",
+      "detail": "ts-ide preview sandbox values: [\"allow-scripts\"]",
+      "script": "test-static.mjs"
+    },
+    {
+      "id": "APP-6",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "static-ai-dom-lens-page-frame-no-scripts",
+      "detail": "pageFrame sandbox values: [\"allow-same-origin\"] (tag: <iframe id=\"pageFrame\" sandbox=\"allow-same-origin\" style=\"flex:1;border:none;display:none;)",
+      "script": "test-static.mjs"
+    },
+    {
+      "id": "APP-8",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "static-totp-no-localstorage",
+      "detail": "no localStorage writes",
+      "script": "test-static.mjs"
+    },
+    {
+      "id": "KRN-6",
+      "status": "FAIL",
+      "phase": "phase2",
+      "check": "static-no-same-origin-app-sandboxes",
+      "detail": "1 sandbox strings with allow-scripts+allow-same-origin: src/core/window-manager.ts:592",
+      "script": "test-static.mjs"
+    },
+    {
+      "id": "APP-15",
+      "status": "FAIL",
+      "phase": "phase2",
+      "check": "static-apps-no-top-parent",
+      "detail": "14 app files reference top./parent.: audio-player/main.js(1), audio-player/player.html(1), bookmarks/main.js(1), distributed-compute/lib/worker-task-runtime.js(1), explorer-sifi/main.js(5), file-explorer/main.js(5), fs-inspector/main.html(3), mermaid-viewer/main.js(1), pkg-manager/main.js(1), spotlight/main.js(1), sqlite-browser/main.js(2), sqlite-charts/main.js(2), ts-ide/main.html(5), webrtc/main.html(1)",
+      "script": "test-static.mjs"
+    }
+  ]
+}

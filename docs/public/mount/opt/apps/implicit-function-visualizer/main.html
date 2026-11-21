@@ -1,0 +1,1067 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Implicit Function Visualizer</title>
+<!--
+  Plots implicit equations in 2 or 3 variables:
+    2 variables — F(x, y) = c as a surface over the XY plane, with the curve F = c on the plane;
+    3 variables — F(x, y, z) = c as an isosurface, with a slice plane.
+  Runs in the opaque sandbox (ui.sandboxed-app): it needs nothing from the OS.
+  Equations are parsed by math.js against an allowlist (no eval). Libraries are pinned
+  with integrity hashes.
+-->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  },
+  "integrity": {
+    "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js": "sha384-61S/Nu32S3E5+n+KpCOTb2eRYps6fVKm+9Gz1QBvSePFthb46f063Aa/qe/lykFZ",
+    "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js": "sha384-qlO/ZugKPxAQUAvTlQoo0QECzxJIJySZmCF/DHdb2Xn/hHndFwX/vfUAC9Hbk6LP",
+    "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/TrackballControls.js": "sha384-YJIBxfkhqGQ1F97K2Nwi+bg4229e9J/nAefwARxexnlsAcnWEXm5P8pnDnTYS3Qw"
+  }
+}
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjs@13.2.0/lib/browser/math.js" integrity="sha384-d3+I7LvDambpjs3mxCGV0oIwCXzDxj2cyVHley/ulGoS2DijbpfjYixiUSl3nGuj" crossorigin="anonymous"></script>
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #0f1420;
+  --panel: #151c2b;
+  --line: #2a3548;
+  --field: #1f2838;
+  --field-line: #39475b;
+  --text: #e6edf7;
+  --muted: #93a4bb;
+  --soft: #b9c5d5;
+  --accent: #62a7ff;
+  --accent-strong: #2563eb;
+  --error: #ff8b8b;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.45 system-ui, sans-serif;
+  overflow: hidden;
+}
+.app { display: flex; height: 100vh; }
+
+.sidebar {
+  width: 320px;
+  min-width: 280px;
+  padding: 18px;
+  overflow-y: auto;
+  background: var(--panel);
+  border-right: 1px solid var(--line);
+}
+h1 { font-size: 18px; margin: 0 0 4px; }
+.subtitle { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+h3 {
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  margin: 22px 0 10px;
+}
+label { display: block; color: var(--soft); margin: 11px 0 5px; font-size: 12px; }
+input, select, button {
+  width: 100%;
+  padding: 8px 10px;
+  background: var(--field);
+  color: var(--text);
+  border: 1px solid var(--field-line);
+  border-radius: 6px;
+  font: inherit;
+}
+input:focus, select:focus { outline: 1px solid var(--accent); }
+input[type=range] { padding: 0; accent-color: var(--accent); }
+button { cursor: pointer; margin-top: 10px; }
+button:hover { filter: brightness(1.15); }
+button.primary { background: var(--accent-strong); border-color: var(--accent-strong); font-weight: 600; }
+
+.segmented { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.segmented button { margin: 0; background: #18212f; }
+.segmented button.active { background: #244b7c; border-color: var(--accent); font-weight: 600; }
+
+.row { display: flex; gap: 9px; }
+.row > div { flex: 1; min-width: 0; }
+.check { display: flex; align-items: center; gap: 8px; margin: 10px 0; }
+.check input { width: auto; margin: 0; accent-color: var(--accent); }
+.check label { margin: 0; }
+.hint { color: #8190a5; font-size: 11px; line-height: 1.5; margin-top: 7px; }
+.examples { display: flex; flex-wrap: wrap; gap: 6px; }
+.examples button {
+  width: auto;
+  margin: 0;
+  padding: 4px 9px;
+  font-size: 12px;
+  color: #c9d6e8;
+  background: #18212f;
+  border-radius: 999px;
+}
+#status { color: #9db6d5; font-size: 11px; margin-top: 9px; min-height: 18px; }
+#status.error { color: var(--error); }
+
+body.mode-2d .only-3d, body.mode-3d .only-2d { display: none; }
+
+.viewer { flex: 1; position: relative; min-width: 0; }
+#canvasHost { position: absolute; inset: 0; }
+#canvasHost canvas { width: 100%; height: 100%; display: block; }
+.overlay, #probe, .legend {
+  position: absolute;
+  background: #111827d9;
+  border: 1px solid #344156;
+  border-radius: 8px;
+  padding: 10px 13px;
+  font-size: 12px;
+  pointer-events: none;
+}
+.overlay { top: 14px; left: 14px; line-height: 1.7; min-width: 200px; max-width: calc(100% - 28px); }
+.overlay strong { color: #77b7ff; }
+.overlay .nav { color: var(--muted); }
+#probe { bottom: 16px; left: 14px; font-family: ui-monospace, monospace; white-space: pre-line; min-width: 200px; }
+.legend { bottom: 16px; right: 16px; font-size: 11px; }
+.gradient {
+  width: 140px;
+  height: 8px;
+  margin: 6px 0 4px;
+  border-radius: 5px;
+  background: linear-gradient(to right, #3135cf, #12b9c6, #d6dc38, #f04438);
+}
+.legend-ends { display: flex; justify-content: space-between; color: var(--muted); }
+
+@media (max-width: 760px) {
+  .app { flex-direction: column; }
+  .sidebar { width: auto; min-width: 0; max-height: 46vh; border-right: 0; border-bottom: 1px solid var(--line); }
+  .viewer { min-height: 54vh; }
+}
+</style>
+</head>
+<body class="mode-2d">
+<div class="app">
+  <aside class="sidebar">
+    <h1>Implicit Function Visualizer</h1>
+    <div class="subtitle">Level sets of implicit equations in 2 or 3 variables</div>
+
+    <h3>Variables</h3>
+    <div class="segmented" role="radiogroup" aria-label="Number of variables">
+      <button type="button" id="mode2d" class="active" role="radio" aria-checked="true">2 · x, y</button>
+      <button type="button" id="mode3d" role="radio" aria-checked="false">3 · x, y, z</button>
+    </div>
+
+    <h3>Equation</h3>
+    <label for="equation" id="equationLabel">F(x, y) = c</label>
+    <input id="equation" spellcheck="false" autocomplete="off">
+    <div class="hint" id="equationHint"></div>
+    <button type="button" class="primary" id="plot">Plot equation</button>
+    <div id="status" role="status">Ready</div>
+
+    <h3>Examples</h3>
+    <div class="examples" id="examples"></div>
+
+    <h3>Level set</h3>
+    <label for="level">Level value c (plots F = c)</label>
+    <input id="level" type="number" value="0" step="0.1">
+
+    <h3>Domain</h3>
+    <div class="row">
+      <div><label for="xmin">x min</label><input id="xmin" type="number" step="1"></div>
+      <div><label for="xmax">x max</label><input id="xmax" type="number" step="1"></div>
+    </div>
+    <div class="row">
+      <div><label for="ymin">y min</label><input id="ymin" type="number" step="1"></div>
+      <div><label for="ymax">y max</label><input id="ymax" type="number" step="1"></div>
+    </div>
+    <div class="row only-3d">
+      <div><label for="zmin">z min</label><input id="zmin" type="number" step="1"></div>
+      <div><label for="zmax">z max</label><input id="zmax" type="number" step="1"></div>
+    </div>
+    <label for="resolution">Grid resolution: <span id="resValue"></span></label>
+    <input id="resolution" type="range">
+    <div class="hint">Higher resolution gives more detail but takes longer to compute.</div>
+
+    <section class="only-2d">
+      <h3>Surface</h3>
+      <div class="segmented">
+        <button type="button" id="viewMesh" class="active">Mesh</button>
+        <button type="button" id="viewSolid">Color surface</button>
+      </div>
+      <label for="heightMode">Height above the plane</label>
+      <select id="heightMode">
+        <option value="distance">Approx. signed distance (F − c) / |∇F|</option>
+        <option value="residual">Raw residual F − c</option>
+      </select>
+      <label for="zscale">Vertical scale</label>
+      <input id="zscale" type="number" min="0.1" max="10" step="0.1" value="1">
+      <div class="check">
+        <input type="checkbox" id="showContour" checked>
+        <label for="showContour">Show the curve F = c on the XY plane</label>
+      </div>
+    </section>
+
+    <section class="only-3d">
+      <h3>Surface</h3>
+      <label for="colorMode">Surface color</label>
+      <select id="colorMode">
+        <option value="height">Height (z coordinate)</option>
+        <option value="gradient">Gradient magnitude |∇F|</option>
+      </select>
+      <div class="check"><input type="checkbox" id="showSurface" checked><label for="showSurface">Show surface</label></div>
+      <div class="check"><input type="checkbox" id="showWire"><label for="showWire">Wireframe overlay</label></div>
+
+      <h3>Slice explorer</h3>
+      <div class="check"><input type="checkbox" id="showSlice"><label for="showSlice">Show slice plane</label></div>
+      <label for="sliceAxis">Slice orientation</label>
+      <select id="sliceAxis">
+        <option value="z">XY plane (fixed z)</option>
+        <option value="y">XZ plane (fixed y)</option>
+        <option value="x">YZ plane (fixed x)</option>
+      </select>
+      <label for="slicePosition">Slice position: <span id="sliceValue">0</span></label>
+      <input id="slicePosition" type="range" min="-6" max="6" step="0.1" value="0">
+    </section>
+
+    <h3>View</h3>
+    <label for="rotationMode">Rotation</label>
+    <select id="rotationMode">
+      <option value="free">Free — rotate in any direction</option>
+      <option value="turntable">Turntable — z axis stays up</option>
+    </select>
+    <div class="check"><input type="checkbox" id="showAxes" checked><label for="showAxes">Show axes and grid</label></div>
+    <div class="check"><input type="checkbox" id="enableProbe" checked><label for="enableProbe" id="probeToggleLabel">Hover probe</label></div>
+    <div class="hint" id="probeHint"></div>
+    <button type="button" id="resetCamera">Reset camera</button>
+  </aside>
+
+  <main class="viewer" id="viewer">
+    <div id="canvasHost"></div>
+    <div class="overlay">
+      <strong id="modeTitle"></strong>
+      <div id="overlayEquation"></div>
+      <div id="overlayLevel"></div>
+      <div id="overlayHeight" class="only-2d"></div>
+      <div id="surfaceInfo"></div>
+      <div class="nav">Drag: rotate · Scroll: zoom · Right drag: pan</div>
+    </div>
+    <div id="probe" hidden></div>
+    <div class="legend">
+      <div id="legendTitle"></div>
+      <div class="gradient"></div>
+      <div class="legend-ends"><span id="legendLow"></span><span id="legendHigh"></span></div>
+    </div>
+  </main>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { TrackballControls } from 'three/addons/controls/TrackballControls.js';
+
+const $ = id => document.getElementById(id);
+
+// ── Modes and their remembered settings ─────────────────────────────────────
+
+const MODES = {
+  '2d': {
+    vars: ['x', 'y'],
+    title: '2 variables · F(x, y) = c',
+    label: 'F(x, y) = c',
+    hint: 'An equation in x and y, e.g. y = sin(x) or x^2 + y^2 = 25. Without "=", the expression itself is F.',
+    probeLabel: 'Hover probe on the XY plane',
+    probeHint: 'Hover over the XY plane to read F there and the surface height above that point.',
+    resolution: { min: 20, max: 220, step: 10 },
+    examples: [
+      ['Circle', 'x^2 + y^2 = 25'],
+      ['Sine curve', 'y = sin(x)'],
+      ['Hyperbola', 'x^2 - y^2 = 4'],
+      ['Lemniscate', '(x^2 + y^2)^2 = 50 * (x^2 - y^2)'],
+      ['Wavy grid', 'sin(x) + cos(y) = 0.5'],
+      ['Saddle curves', 'sin(x * y) = 0.5'],
+    ],
+  },
+  '3d': {
+    vars: ['x', 'y', 'z'],
+    title: '3 variables · F(x, y, z) = c',
+    label: 'F(x, y, z) = c',
+    hint: 'An equation in x, y and z, e.g. x^2 + y^2 + z^2 = 25. Without "=", the expression itself is F.',
+    probeLabel: 'Hover probe on the surface',
+    probeHint: 'Move the pointer over the surface to read its coordinates and F(x, y, z).',
+    resolution: { min: 16, max: 56, step: 4 },
+    examples: [
+      ['Sphere', 'x^2 + y^2 + z^2 = 25'],
+      ['Double cone', 'x^2 + y^2 - z^2 = 0'],
+      ['Cylinder', 'x^2 + y^2 = 16'],
+      ['Elliptic-like', 'x^2 + y^2 + z^2 - 2*x*y - 4 = 0'],
+      ['Wavy surface', 'z - sin(x)*cos(y) = 0'],
+      ['Nonlinear', 'x^2 + y^2 + z^2 - 2*x^2*z = 0'],
+      ['Two spheres', '(x^2+y^2+z^2-16)*(x^2+y^2+z^2-4) = 0'],
+    ],
+  },
+};
+
+// The form fields each mode remembers when you switch back and forth.
+const settings = {
+  '2d': { equation: 'x^2 + y^2 = 25', level: '0', xmin: '-10', xmax: '10', ymin: '-10', ymax: '10', zmin: '-10', zmax: '10', resolution: '90' },
+  '3d': { equation: 'x^2 + y^2 + z^2 = 25', level: '0', xmin: '-6', xmax: '6', ymin: '-6', ymax: '6', zmin: '-6', zmax: '6', resolution: '32' },
+};
+const FORM_FIELDS = ['equation', 'level', 'xmin', 'xmax', 'ymin', 'ymax', 'zmin', 'zmax', 'resolution'];
+
+const state = {
+  mode: '2d',
+  F: null,             // compiled F(x, y[, z])
+  params: null,        // validated numbers of the current plot
+  height2d: null,      // (x, y) => height above the plane, 2-variable mode
+  frameKey: null,      // domain the camera was last framed on
+  view2d: 'mesh',
+};
+
+// ── Equation parsing (math.js, allowlisted — never eval) ────────────────────
+
+const mathjs = window.math;
+const CONSTANTS = ['pi', 'e'];
+const FUNCTIONS = ['sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'atan2', 'sinh', 'cosh', 'tanh',
+  'sqrt', 'abs', 'log', 'log10', 'exp', 'floor', 'ceil', 'round', 'sign', 'min', 'max', 'pow'];
+const NODE_TYPES = new Set(['SymbolNode', 'ConstantNode', 'ParenthesisNode', 'OperatorNode', 'FunctionNode']);
+
+function compileEquation(input, vars) {
+  const raw = input.trim();
+  if (!raw) throw new Error('Enter an equation first.');
+  const parts = raw.split('=');
+  if (parts.length > 2) throw new Error('Use at most one "=" sign.');
+  if (parts.some(p => !p.trim())) throw new Error('Both sides of "=" need an expression.');
+  const source = parts.length === 2 ? `(${parts[0]}) - (${parts[1]})` : parts[0];
+
+  let ast;
+  try { ast = mathjs.parse(source); }
+  catch (err) { throw new Error('Could not parse the equation: ' + err.message); }
+
+  const allowed = new Set([...vars, ...CONSTANTS, ...FUNCTIONS]);
+  ast.traverse(node => {
+    if (!NODE_TYPES.has(node.type)) throw new Error('Unsupported expression element: ' + node.type);
+    if (node.isSymbolNode && !allowed.has(node.name)) {
+      if (node.name === 'z') throw new Error('z needs 3 variables — switch "Variables" above.');
+      throw new Error('Unknown symbol: ' + node.name);
+    }
+  });
+
+  const compiled = ast.compile();
+  const scope = { x: 0, y: 0, z: 0 };
+  return (x, y, z = 0) => {
+    scope.x = x; scope.y = y; scope.z = z;
+    try {
+      const v = compiled.evaluate(scope);
+      return typeof v === 'number' && Number.isFinite(v) ? v : NaN;
+    } catch (_) {
+      return NaN;
+    }
+  };
+}
+
+// ── Scene ────────────────────────────────────────────────────────────────────
+
+const host = $('canvasHost');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+host.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0f1420);
+
+const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 2000);
+camera.up.set(0, 0, 1); // z starts up in both modes
+
+// Rotation: "free" (trackball) tumbles in any direction, including straight down
+// the z axis and past it; "turntable" (orbit) keeps z pointing up and therefore
+// stops at the poles. Both: drag rotates, scroll zooms, right drag pans.
+let controls = null;
+let viewRadius = 20;
+
+function createControls(kind) {
+  const target = controls ? controls.target.clone() : new THREE.Vector3();
+  controls?.dispose();
+  if (kind === 'turntable') {
+    // OrbitControls reads camera.up once, when created: straighten any roll first.
+    camera.up.set(0, 0, 1);
+    camera.lookAt(target);
+    controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+  } else {
+    controls = new TrackballControls(camera, renderer.domElement);
+    controls.rotateSpeed = 3;
+    controls.zoomSpeed = 1.2;
+    controls.panSpeed = 0.8;
+    controls.dynamicDampingFactor = 0.15;
+    controls.keys = ['', '', '']; // no A/S/D drag modifiers: typing in the form must not change dragging
+  }
+  controls.minDistance = viewRadius / 50;
+  controls.maxDistance = viewRadius * 20;
+  controls.target.copy(target);
+  controls.handleResize?.();
+  controls.update();
+}
+createControls('free');
+
+scene.add(new THREE.HemisphereLight(0xbcd7ff, 0x263047, 1.6));
+const sun = new THREE.DirectionalLight(0xffffff, 1.7);
+sun.position.set(12, -10, 20);
+scene.add(sun);
+
+const layers = { axes: null, surface: null, wire: null, contour: null, slice: null };
+
+function disposeObject(obj) {
+  obj.traverse(child => {
+    child.geometry?.dispose();
+    const m = child.material;
+    if (Array.isArray(m)) m.forEach(x => x.dispose()); else m?.dispose();
+  });
+}
+
+function setLayer(name, obj) {
+  const old = layers[name];
+  if (old) {
+    scene.remove(old);
+    // The wireframe overlay shares the surface geometry; dispose it only once.
+    if (name === 'wire') old.material.dispose(); else disposeObject(old);
+  }
+  layers[name] = obj;
+  if (obj) scene.add(obj);
+}
+
+function clearLayers() {
+  setLayer('wire', null);
+  for (const name of ['axes', 'surface', 'contour', 'slice']) setLayer(name, null);
+}
+
+// Probe: a marker, and in 2-variable mode a stem from the plane up to the surface.
+const probeGroup = new THREE.Group();
+const probeMarker = new THREE.Mesh(
+  new THREE.SphereGeometry(1, 16, 16),
+  new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false }),
+);
+probeMarker.renderOrder = 10;
+const probeStem = new THREE.Line(
+  new THREE.BufferGeometry(),
+  new THREE.LineBasicMaterial({ color: 0xffffff, depthTest: false }),
+);
+probeStem.renderOrder = 9;
+probeGroup.add(probeMarker, probeStem);
+probeGroup.visible = false;
+scene.add(probeGroup);
+
+// ── Colors ───────────────────────────────────────────────────────────────────
+
+// t in [-1, 1] → blue … teal … yellow … red (2-variable heights: below / on / above the curve).
+const DIVERGING = [[0.05, 0.10, 0.55], [0.02, 0.65, 0.72], [0.82, 0.82, 0.20], [0.92, 0.24, 0.12]];
+function divergingColor(t) {
+  const p = Math.max(0, Math.min(0.9999, (t + 1) / 2)) * 3;
+  const i = Math.floor(p), a = p - i;
+  return DIVERGING[i].map((v, k) => v * (1 - a) + DIVERGING[i + 1][k] * a);
+}
+
+// t in [0, 1] → hue ramp from blue to red (3-variable surface and slice).
+const rampColor = (() => {
+  const c = new THREE.Color();
+  return t => { c.setHSL(0.68 * (1 - Math.max(0, Math.min(1, t))), 0.85, 0.52); return [c.r, c.g, c.b]; };
+})();
+
+// ── Form ↔ settings ──────────────────────────────────────────────────────────
+
+function saveForm(mode) {
+  for (const f of FORM_FIELDS) settings[mode][f] = $(f).value;
+}
+
+function loadForm(mode) {
+  const r = MODES[mode].resolution;
+  const res = $('resolution');
+  res.min = r.min; res.max = r.max; res.step = r.step;
+  for (const f of FORM_FIELDS) $(f).value = settings[mode][f];
+  $('resValue').textContent = res.value;
+}
+
+function readParams() {
+  const mode = state.mode;
+  const num = id => Number($(id).value);
+  const range = axis => {
+    const lo = num(axis + 'min'), hi = num(axis + 'max');
+    if (!Number.isFinite(lo) || !Number.isFinite(hi) || lo >= hi) {
+      throw new Error(`${axis} max must be greater than ${axis} min.`);
+    }
+    return [lo, hi];
+  };
+  const level = num('level');
+  if (!Number.isFinite(level)) throw new Error('The level c must be a number.');
+  const r = MODES[mode].resolution;
+  const resolution = Math.max(r.min, Math.min(r.max, Math.round(num('resolution')) || r.min));
+  const params = { mode, level, resolution, x: range('x'), y: range('y') };
+  if (mode === '3d') params.z = range('z');
+  return params;
+}
+
+// ── 2 variables: F(x, y) = c ─────────────────────────────────────────────────
+
+function build2d(F, p) {
+  const [x0, x1] = p.x, [y0, y1] = p.y;
+  const n = p.resolution;
+  const c = p.level;
+  const extent = Math.max(x1 - x0, y1 - y0);
+  const h = 1e-4 * extent;
+  const distance = $('heightMode').value === 'distance';
+  const vscale = Number($('zscale').value) || 1;
+
+  const g = (x, y) => F(x, y) - c;
+  const height = (x, y) => {
+    const v = g(x, y);
+    if (!distance) return v;
+    const dx = (F(x + h, y) - F(x - h, y)) / (2 * h);
+    const dy = (F(x, y + h) - F(x, y - h)) / (2 * h);
+    const norm = Math.hypot(dx, dy);
+    return Number.isFinite(v) && Number.isFinite(norm) && norm > 1e-9 ? v / norm : NaN;
+  };
+  state.height2d = height;
+  state.params = { ...p, vscale, distance, g };
+
+  const count = (n + 1) * (n + 1);
+  const positions = new Float32Array(count * 3);
+  const colors = new Float32Array(count * 3);
+  const values = new Float32Array(count);
+  let maxAbs = 0;
+
+  for (let j = 0; j <= n; j++) {
+    for (let i = 0; i <= n; i++) {
+      const x = x0 + (x1 - x0) * i / n;
+      const y = y0 + (y1 - y0) * j / n;
+      const k = j * (n + 1) + i;
+      const z = height(x, y);
+      values[k] = z;
+      if (Number.isFinite(z)) maxAbs = Math.max(maxAbs, Math.abs(z));
+      positions[3 * k] = x;
+      positions[3 * k + 1] = y;
+      positions[3 * k + 2] = Number.isFinite(z) ? z * vscale : 0;
+    }
+  }
+  const scale = Math.max(maxAbs, 1e-8);
+  for (let k = 0; k < count; k++) {
+    const t = Number.isFinite(values[k]) ? Math.max(-1, Math.min(1, values[k] / scale)) : 0;
+    colors.set(divergingColor(t), 3 * k);
+  }
+
+  const indices = [];
+  for (let j = 0; j < n; j++) {
+    for (let i = 0; i < n; i++) {
+      const a = j * (n + 1) + i, b = a + 1, cc = a + n + 1, d = cc + 1;
+      if (Number.isFinite(values[a]) && Number.isFinite(values[b]) && Number.isFinite(values[cc]) && Number.isFinite(values[d])) {
+        indices.push(a, b, cc, b, d, cc);
+      }
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  setLayer('surface', new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({
+    vertexColors: true, side: THREE.DoubleSide, roughness: 0.78, metalness: 0.05,
+    wireframe: state.view2d === 'mesh',
+  })));
+
+  setLayer('axes', axes2d(p));
+  buildContour2d();
+
+  $('surfaceInfo').textContent = `${n} × ${n} cells · ${(indices.length / 3).toLocaleString()} triangles`;
+  $('overlayHeight').textContent = distance ? 'z ≈ (F − c) / |∇F|' : 'z = F − c';
+  return indices.length > 0;
+}
+
+function axes2d(p) {
+  const [x0, x1] = p.x, [y0, y1] = p.y;
+  const group = new THREE.Group();
+  const material = new THREE.LineBasicMaterial({ color: 0x647895, transparent: true, opacity: 0.7 });
+  const line = (a, b) => group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([a, b]), material));
+  line(new THREE.Vector3(x0, 0, 0), new THREE.Vector3(x1, 0, 0));
+  line(new THREE.Vector3(0, y0, 0), new THREE.Vector3(0, y1, 0));
+  const grid = new THREE.GridHelper(Math.max(x1 - x0, y1 - y0), 20, 0x52627e, 0x293750);
+  grid.rotation.x = Math.PI / 2;
+  grid.position.set((x0 + x1) / 2, (y0 + y1) / 2, 0);
+  group.add(grid);
+  group.visible = $('showAxes').checked;
+  return group;
+}
+
+// Marching squares on g = F − c: the curve F = c, drawn just above the plane.
+function buildContour2d() {
+  const p = state.params;
+  if (state.mode !== '2d' || !p || !$('showContour').checked) { setLayer('contour', null); return; }
+  const [x0, x1] = p.x, [y0, y1] = p.y;
+  const n = p.resolution;
+  const lift = 1e-3 * Math.max(x1 - x0, y1 - y0);
+  const points = [];
+  const cut = (pa, pb, va, vb) => {
+    const t = va / (va - vb);
+    return new THREE.Vector3(pa[0] + (pb[0] - pa[0]) * t, pa[1] + (pb[1] - pa[1]) * t, lift);
+  };
+  for (let j = 0; j < n; j++) {
+    for (let i = 0; i < n; i++) {
+      const xa = x0 + (x1 - x0) * i / n, xb = x0 + (x1 - x0) * (i + 1) / n;
+      const ya = y0 + (y1 - y0) * j / n, yb = y0 + (y1 - y0) * (j + 1) / n;
+      const corners = [[xa, ya], [xb, ya], [xb, yb], [xa, yb]];
+      const v = corners.map(q => p.g(q[0], q[1]));
+      if (!v.every(Number.isFinite)) continue;
+      const hits = [];
+      for (const [a, b] of [[0, 1], [1, 2], [2, 3], [3, 0]]) {
+        if ((v[a] < 0 && v[b] > 0) || (v[a] > 0 && v[b] < 0)) hits.push(cut(corners[a], corners[b], v[a], v[b]));
+      }
+      // Two crossings per cell; ambiguous four-crossing cells are paired in order.
+      for (let k = 0; k + 1 < hits.length; k += 2) points.push(hits[k], hits[k + 1]);
+    }
+  }
+  if (!points.length) { setLayer('contour', null); return; }
+  const line = new THREE.LineSegments(
+    new THREE.BufferGeometry().setFromPoints(points),
+    new THREE.LineBasicMaterial({ color: 0xffffff, depthTest: false }),
+  );
+  line.renderOrder = 5;
+  setLayer('contour', line);
+}
+
+// ── 3 variables: F(x, y, z) = c ──────────────────────────────────────────────
+
+function build3d(F, p) {
+  const n = p.resolution;
+  const [x0, x1] = p.x, [y0, y1] = p.y, [z0, z1] = p.z;
+  const sx = (x1 - x0) / n, sy = (y1 - y0) / n, sz = (z1 - z0) / n;
+  const size = n + 1;
+  const level = p.level;
+  const extent = Math.max(x1 - x0, y1 - y0, z1 - z0);
+  const h = 1e-4 * extent;
+  const colorMode = $('colorMode').value;
+  state.params = { ...p };
+
+  const values = new Float32Array(size * size * size);
+  const index = (i, j, k) => (i * size + j) * size + k;
+  for (let i = 0; i <= n; i++) {
+    const x = x0 + i * sx;
+    for (let j = 0; j <= n; j++) {
+      const y = y0 + j * sy;
+      for (let k = 0; k <= n; k++) values[index(i, j, k)] = F(x, y, z0 + k * sz);
+    }
+  }
+
+  const gradient = (x, y, z) => {
+    const dx = (F(x + h, y, z) - F(x - h, y, z)) / (2 * h);
+    const dy = (F(x, y + h, z) - F(x, y - h, z)) / (2 * h);
+    const dz = (F(x, y, z + h) - F(x, y, z - h)) / (2 * h);
+    return Math.sqrt(dx * dx + dy * dy + dz * dz);
+  };
+  const colorOf = pt => colorMode === 'height'
+    ? rampColor((pt[2] - z0) / (z1 - z0))
+    : rampColor(Math.log1p(Math.min(gradient(pt[0], pt[1], pt[2]), 1000)) / Math.log(101));
+
+  // Marching tetrahedra: six tetrahedra per cube around the 0–6 diagonal.
+  const CORNERS = [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0], [0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]];
+  const TETRAHEDRA = [[0, 5, 1, 6], [0, 1, 2, 6], [0, 2, 3, 6], [0, 3, 7, 6], [0, 7, 4, 6], [0, 4, 5, 6]];
+  const positions = [];
+  const colors = [];
+  const triangle = (a, b, c) => {
+    for (const pt of [a, b, c]) {
+      positions.push(pt[0], pt[1], pt[2]);
+      colors.push(...colorOf(pt));
+    }
+  };
+  const lerp = (pa, pb, va, vb) => {
+    const t = Math.max(0, Math.min(1, (level - va) / (vb - va)));
+    return [pa[0] + (pb[0] - pa[0]) * t, pa[1] + (pb[1] - pa[1]) * t, pa[2] + (pb[2] - pa[2]) * t];
+  };
+  const tetra = (pts, vals) => {
+    const inside = [], outside = [];
+    for (let i = 0; i < 4; i++) {
+      if (!Number.isFinite(vals[i])) continue;
+      (vals[i] < level ? inside : outside).push(i);
+    }
+    if (inside.length + outside.length < 4 || inside.length === 0 || inside.length === 4) return;
+    const e = (a, b) => lerp(pts[a], pts[b], vals[a], vals[b]);
+    if (inside.length === 1) {
+      const a = inside[0];
+      triangle(e(a, outside[0]), e(a, outside[1]), e(a, outside[2]));
+    } else if (inside.length === 3) {
+      const a = outside[0];
+      triangle(e(a, inside[0]), e(a, inside[2]), e(a, inside[1]));
+    } else {
+      const [a, b] = inside, [c, d] = outside;
+      const p1 = e(a, c), p2 = e(a, d), p3 = e(b, c), p4 = e(b, d);
+      triangle(p1, p2, p3);
+      triangle(p2, p4, p3);
+    }
+  };
+
+  const cubePts = CORNERS.map(() => [0, 0, 0]);
+  const cubeVals = new Array(8);
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      for (let k = 0; k < n; k++) {
+        for (let q = 0; q < 8; q++) {
+          const o = CORNERS[q];
+          cubePts[q] = [x0 + (i + o[0]) * sx, y0 + (j + o[1]) * sy, z0 + (k + o[2]) * sz];
+          cubeVals[q] = values[index(i + o[0], j + o[1], k + o[2])];
+        }
+        for (const t of TETRAHEDRA) tetra(t.map(v => cubePts[v]), t.map(v => cubeVals[v]));
+      }
+    }
+  }
+
+  setLayer('axes', axes3d(p));
+  setLayer('wire', null);
+  const vertexCount = positions.length / 3;
+  if (vertexCount === 0) {
+    setLayer('surface', null);
+    $('surfaceInfo').textContent = 'No surface at this level';
+    buildSlice3d();
+    return false;
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  geometry.computeVertexNormals();
+  const surface = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({
+    vertexColors: true, roughness: 0.65, metalness: 0.05, side: THREE.DoubleSide,
+  }));
+  surface.visible = $('showSurface').checked;
+  setLayer('surface', surface);
+  const wire = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({
+    color: 0x101827, wireframe: true, transparent: true, opacity: 0.2,
+  }));
+  wire.visible = $('showWire').checked;
+  setLayer('wire', wire);
+
+  $('surfaceInfo').textContent = `${vertexCount.toLocaleString()} vertices`;
+  buildSlice3d();
+  return true;
+}
+
+function axes3d(p) {
+  const [x0, x1] = p.x, [y0, y1] = p.y, [z0, z1] = p.z;
+  const group = new THREE.Group();
+  const grid = new THREE.GridHelper(Math.max(x1 - x0, y1 - y0), 12, 0x52647b, 0x293747);
+  grid.rotation.x = Math.PI / 2;
+  grid.position.set((x0 + x1) / 2, (y0 + y1) / 2, z0);
+  group.add(grid);
+  group.add(new THREE.AxesHelper(0.55 * Math.max(x1 - x0, y1 - y0, z1 - z0)));
+  group.visible = $('showAxes').checked;
+  return group;
+}
+
+function syncSliceRange() {
+  const p = state.params;
+  if (!p || !p.z) return;
+  const [lo, hi] = p[$('sliceAxis').value];
+  const slider = $('slicePosition');
+  const current = Number(slider.value);
+  slider.min = lo; slider.max = hi;
+  slider.step = (hi - lo) / 200;
+  slider.value = Number.isFinite(current) ? Math.max(lo, Math.min(hi, current)) : (lo + hi) / 2;
+  $('sliceValue').textContent = Number(slider.value).toFixed(2);
+}
+
+function buildSlice3d() {
+  const p = state.params;
+  if (state.mode !== '3d' || !p || !p.z || !state.F || !$('showSlice').checked) { setLayer('slice', null); return; }
+  syncSliceRange();
+  const F = state.F;
+  const axis = $('sliceAxis').value;
+  const fixed = Number($('slicePosition').value);
+  const [a0, a1] = axis === 'x' ? p.y : p.x;
+  const [b0, b1] = axis === 'z' ? p.y : p.z;
+  const m = 70;
+  const at = (a, b) => axis === 'x' ? [fixed, a, b] : axis === 'y' ? [a, fixed, b] : [a, b, fixed];
+
+  const positions = [], values = [], colors = [], indices = [];
+  let lo = Infinity, hi = -Infinity;
+  for (let i = 0; i <= m; i++) {
+    for (let j = 0; j <= m; j++) {
+      const pt = at(a0 + (a1 - a0) * i / m, b0 + (b1 - b0) * j / m);
+      const v = F(...pt);
+      positions.push(...pt);
+      values.push(v);
+      if (Number.isFinite(v)) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
+    }
+  }
+  const span = Math.max(1e-9, hi - lo);
+  for (const v of values) colors.push(...rampColor(Number.isFinite(v) ? (v - lo) / span : 0));
+  const id = (i, j) => i * (m + 1) + j;
+  for (let i = 0; i < m; i++) {
+    for (let j = 0; j < m; j++) {
+      const a = id(i, j), b = id(i + 1, j), c = id(i + 1, j + 1), d = id(i, j + 1);
+      indices.push(a, b, d, b, c, d);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  geometry.setIndex(indices);
+  setLayer('slice', new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({
+    vertexColors: true, side: THREE.DoubleSide, transparent: true, opacity: 0.72, depthWrite: false,
+  })));
+}
+
+// ── Build ────────────────────────────────────────────────────────────────────
+
+function setStatus(message, isError = false) {
+  $('status').textContent = message;
+  $('status').classList.toggle('error', isError);
+}
+
+function updateLegend() {
+  if (state.mode === '2d') {
+    $('legendTitle').textContent = $('heightMode').value === 'distance' ? 'Signed distance to F = c' : 'Residual F − c';
+    $('legendLow').textContent = 'Below c';
+    $('legendHigh').textContent = 'Above c';
+  } else {
+    $('legendTitle').textContent = $('colorMode').value === 'height' ? 'Surface height (z)' : 'Gradient |∇F|';
+    $('legendLow').textContent = 'Low';
+    $('legendHigh').textContent = 'High';
+  }
+}
+
+function frameCamera(force = false) {
+  const p = state.params;
+  if (!p) return;
+  const key = [p.mode, p.x, p.y, p.z].join('|');
+  if (!force && key === state.frameKey) return;
+  state.frameKey = key;
+  const [x0, x1] = p.x, [y0, y1] = p.y;
+  const [z0, z1] = p.z ?? [0, 0];
+  const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, cz = (z0 + z1) / 2;
+  const r = Math.max(x1 - x0, y1 - y0, z1 - z0);
+  viewRadius = r;
+  // Fresh controls: the trackball keeps spinning with the momentum of the last
+  // drag (its own reset() doesn't clear that), which would undo this framing.
+  createControls($('rotationMode').value);
+  camera.up.set(0, 0, 1); // undo any roll from free rotation
+  camera.position.set(cx + 0.95 * r, cy - 1.15 * r, cz + (p.mode === '2d' ? 1.0 : 0.85) * r);
+  camera.near = r / 1000;
+  camera.far = r * 60;
+  camera.updateProjectionMatrix();
+  controls.target.set(cx, cy, cz);
+  camera.lookAt(controls.target);
+  controls.minDistance = r / 50;
+  controls.maxDistance = r * 20;
+  controls.update();
+  probeMarker.scale.setScalar(0.012 * r);
+}
+
+function build() {
+  hideProbe();
+  const mode = state.mode;
+  const equation = $('equation').value;
+  try {
+    const F = compileEquation(equation, MODES[mode].vars);
+    const params = readParams();
+    state.F = F;
+    const found = mode === '2d' ? build2d(F, params) : build3d(F, params);
+    frameCamera();
+    $('modeTitle').textContent = MODES[mode].title;
+    $('overlayEquation').textContent = 'F: ' + equation.trim();
+    $('overlayLevel').textContent = 'c = ' + params.level;
+    updateLegend();
+    if (mode === '3d' && !found) setStatus('No surface at this level inside the domain.', true);
+    else if (mode === '2d' && !found) setStatus('F is undefined everywhere in this domain.', true);
+    else setStatus('Plotted.');
+  } catch (err) {
+    setStatus(err.message || 'Unable to plot this equation.', true);
+  }
+}
+
+// Let "Computing…" paint before a long build; a newer request supersedes an older one.
+let buildToken = 0;
+function scheduleBuild() {
+  const token = ++buildToken;
+  setStatus('Computing…');
+  requestAnimationFrame(() => setTimeout(() => { if (token === buildToken) build(); }, 0));
+}
+
+// ── Mode switching ───────────────────────────────────────────────────────────
+
+function renderExamples() {
+  const box = $('examples');
+  box.replaceChildren();
+  for (const [name, eq] of MODES[state.mode].examples) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = name;
+    b.title = eq;
+    b.addEventListener('click', () => { $('equation').value = eq; scheduleBuild(); });
+    box.appendChild(b);
+  }
+}
+
+function applyMode() {
+  const m = MODES[state.mode];
+  document.body.classList.toggle('mode-2d', state.mode === '2d');
+  document.body.classList.toggle('mode-3d', state.mode === '3d');
+  for (const [id, mode] of [['mode2d', '2d'], ['mode3d', '3d']]) {
+    const on = state.mode === mode;
+    $(id).classList.toggle('active', on);
+    $(id).setAttribute('aria-checked', String(on));
+  }
+  $('equationLabel').textContent = m.label;
+  $('equationHint').textContent = m.hint;
+  $('probeToggleLabel').textContent = m.probeLabel;
+  $('probeHint').textContent = m.probeHint;
+  loadForm(state.mode);
+  renderExamples();
+}
+
+function setMode(mode) {
+  if (mode === state.mode) return;
+  saveForm(state.mode);
+  state.mode = mode;
+  state.params = null;
+  state.height2d = null;
+  state.frameKey = null;
+  clearLayers();
+  applyMode();
+  scheduleBuild();
+}
+
+function setView2d(view) {
+  state.view2d = view;
+  $('viewMesh').classList.toggle('active', view === 'mesh');
+  $('viewSolid').classList.toggle('active', view === 'solid');
+  const s = layers.surface;
+  if (state.mode === '2d' && s) { s.material.wireframe = view === 'mesh'; s.material.needsUpdate = true; }
+}
+
+// ── Probe ────────────────────────────────────────────────────────────────────
+
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+const xyPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+const hit = new THREE.Vector3();
+
+function hideProbe() {
+  probeGroup.visible = false;
+  $('probe').hidden = true;
+}
+
+function showProbe(lines) {
+  $('probe').textContent = lines.join('\n');
+  $('probe').hidden = false;
+  probeGroup.visible = true;
+}
+
+function updateProbe(event) {
+  const p = state.params;
+  if (!$('enableProbe').checked || !p || !state.F) { hideProbe(); return; }
+  const rect = renderer.domElement.getBoundingClientRect();
+  pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera(pointer, camera);
+
+  if (state.mode === '2d') {
+    // Hit the XY plane, not the surface, so the probe works wherever the surface is.
+    if (!raycaster.ray.intersectPlane(xyPlane, hit)) { hideProbe(); return; }
+    const { x, y } = hit;
+    if (x < p.x[0] || x > p.x[1] || y < p.y[0] || y > p.y[1]) { hideProbe(); return; }
+    const f = state.F(x, y), z = state.height2d(x, y);
+    if (!Number.isFinite(f) || !Number.isFinite(z)) { hideProbe(); return; }
+    const top = z * p.vscale;
+    probeMarker.position.set(x, y, top);
+    probeStem.geometry.dispose();
+    probeStem.geometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(x, y, 0), new THREE.Vector3(x, y, top)]);
+    probeStem.visible = true;
+    showProbe([
+      `x: ${x.toFixed(4)}`,
+      `y: ${y.toFixed(4)}`,
+      `F(x, y): ${f.toFixed(5)}`,
+      `${p.distance ? 'distance' : 'F − c'}: ${z.toFixed(5)}`,
+      `height shown: ${top.toFixed(5)}`,
+    ]);
+    return;
+  }
+
+  const surface = layers.surface;
+  if (!surface || !surface.visible) { hideProbe(); return; }
+  const hits = raycaster.intersectObject(surface);
+  if (!hits.length) { hideProbe(); return; }
+  const pt = hits[0].point;
+  probeMarker.position.copy(pt);
+  probeStem.visible = false;
+  showProbe([
+    `x: ${pt.x.toFixed(4)}`,
+    `y: ${pt.y.toFixed(4)}`,
+    `z: ${pt.z.toFixed(4)}`,
+    `F(x, y, z): ${state.F(pt.x, pt.y, pt.z).toFixed(6)}`,
+  ]);
+}
+
+renderer.domElement.addEventListener('pointermove', updateProbe);
+renderer.domElement.addEventListener('pointerleave', hideProbe);
+
+// ── Wiring ───────────────────────────────────────────────────────────────────
+
+$('mode2d').addEventListener('click', () => setMode('2d'));
+$('mode3d').addEventListener('click', () => setMode('3d'));
+$('plot').addEventListener('click', scheduleBuild);
+$('equation').addEventListener('keydown', e => { if (e.key === 'Enter') scheduleBuild(); });
+for (const id of ['level', 'xmin', 'xmax', 'ymin', 'ymax', 'zmin', 'zmax', 'resolution', 'heightMode', 'zscale', 'colorMode']) {
+  $(id).addEventListener('change', scheduleBuild);
+}
+$('resolution').addEventListener('input', () => { $('resValue').textContent = $('resolution').value; });
+$('viewMesh').addEventListener('click', () => setView2d('mesh'));
+$('viewSolid').addEventListener('click', () => setView2d('solid'));
+$('showContour').addEventListener('change', buildContour2d);
+$('showSurface').addEventListener('change', () => {
+  if (layers.surface && state.mode === '3d') layers.surface.visible = $('showSurface').checked;
+  if (!$('showSurface').checked) hideProbe();
+});
+$('showWire').addEventListener('change', () => { if (layers.wire) layers.wire.visible = $('showWire').checked; });
+$('showAxes').addEventListener('change', () => { if (layers.axes) layers.axes.visible = $('showAxes').checked; });
+$('showSlice').addEventListener('change', buildSlice3d);
+$('sliceAxis').addEventListener('change', () => { $('slicePosition').value = ''; buildSlice3d(); });
+$('slicePosition').addEventListener('input', () => {
+  $('sliceValue').textContent = Number($('slicePosition').value).toFixed(2);
+  buildSlice3d();
+});
+$('enableProbe').addEventListener('change', hideProbe);
+$('resetCamera').addEventListener('click', () => frameCamera(true));
+$('rotationMode').addEventListener('change', () => createControls($('rotationMode').value));
+
+// Read-only handle for automated tests (this page runs in an opaque sandbox).
+window.__implicitViz = Object.freeze({ camera, get controls() { return controls; } });
+
+function resize() {
+  const w = host.clientWidth, h = host.clientHeight;
+  if (!w || !h) return;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  controls.handleResize?.(); // the trackball caches the canvas size
+}
+new ResizeObserver(resize).observe(host);
+
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+applyMode();
+resize();
+if (!mathjs || typeof mathjs.parse !== 'function') {
+  setStatus('The math library failed to load — check the network connection and reopen the app.', true);
+} else {
+  build();
+}
+animate();
+</script>
+</body>
+</html>
