@@ -82,8 +82,10 @@ const StorageSettings = () => {
 
       <p className="settings-hint">
         The active backend is stored under the <code>{FS_BACKEND_STORAGE_KEY}</code> key in this browser's
-        localStorage, and can be overridden by adding <code>?{FS_BACKEND_QUERY_PARAM}=indexeddb</code> or{' '}
-        <code>?{FS_BACKEND_QUERY_PARAM}=localstorage</code> to the page URL. Each backend keeps its own
+        localStorage. Opening a link with <code>?{FS_BACKEND_QUERY_PARAM}=indexeddb</code> or{' '}
+        <code>?{FS_BACKEND_QUERY_PARAM}=localstorage</code> asks you to confirm before it switches the backend
+        (nothing is asked when it names the backend already in use, and declining keeps the current one);
+        switching here never asks. Each backend keeps its own
         separate copy of the filesystem &mdash; switching does not move or merge files between them.
       </p>
 

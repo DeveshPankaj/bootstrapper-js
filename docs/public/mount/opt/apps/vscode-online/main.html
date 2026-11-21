@@ -11,7 +11,12 @@
     }
 </style>
   
-<iframe src="https://code-public.pankajdevesh.com/?folder=/config/workspace/react-app"></iframe>
+<!-- Third-party embed (audit NET-2): code-server keeps its own origin (it needs its storage,
+     service worker and sign-in form), its dialogs, downloads and link/preview popups — but no
+     top navigation and no popups that escape the sandbox, and no referrer. -->
+<iframe src="https://code-public.pankajdevesh.com/?folder=/config/workspace/react-app"
+  sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-downloads allow-popups"
+  allow="clipboard-read; clipboard-write" referrerpolicy="no-referrer"></iframe>
 <script>
 
   const props = platform.getService('props')

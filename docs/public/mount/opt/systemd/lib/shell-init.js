@@ -3,4 +3,6 @@
 // starting for the user once the system is up. Another "oneshot"-style
 // unit: initd.run's own commands run to completion here, nothing further
 // needs to be kept alive by this unit itself.
-platform.host.exec(platform, '/home/user1/initd.run')
+// Explicit run (no prompt — this is the boot sequence itself): host.exec is
+// "open" since the D10 open policy (documentation/security/decisions.md).
+platform.host.runFile(platform, '/home/user1/initd.run', [], { confirm: false })

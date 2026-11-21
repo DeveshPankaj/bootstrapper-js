@@ -289,7 +289,9 @@ input,select,button{font-family:inherit;font-size:13px}
       <div class="vs-rows" id="vsRows"></div>
     </div>
   </div>
-  <iframe id="pageFrame" style="flex:1;border:none;display:none;background:#fff"></iframe>
+  <!-- Fetched web pages and vfs HTML/Markdown are inspected, never run: same-origin so the
+       lens can read contentDocument, but no allow-scripts (audit APP-6). -->
+  <iframe id="pageFrame" sandbox="allow-same-origin" style="flex:1;border:none;display:none;background:#fff"></iframe>
   </div><!-- /sourcePaneWrap -->
   <div id="aiViewPane">
     <div id="aiViewHeader">
@@ -457,15 +459,20 @@ async function loadUrlPage(url){
 }
 
 let _markedLib=null;
+function loadScriptSri(src,integrity){
+  return new Promise((res,rej)=>{
+    const s=document.createElement('script');
+    s.src=src;s.integrity=integrity;s.crossOrigin='anonymous';
+    s.onload=res;s.onerror=()=>rej(new Error('Failed to load '+src));
+    document.head.appendChild(s);
+  });
+}
 async function ensureMarked(){
   if(_markedLib) return _markedLib;
   setStatus('busy','Loading Markdown parser…',-1);
-  await new Promise((res,rej)=>{
-    const s=document.createElement('script');
-    s.src='https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js';
-    s.onload=res;s.onerror=()=>rej(new Error('Failed to load marked.js'));
-    document.head.appendChild(s);
-  });
+  await loadScriptSri('https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js','sha384-odPBjvtXVM/5hOYIr3A1dB+flh0c3wAT3bSesIOqEGmyUA4JoKf/YTWy0XKOYAY7');
+  // marked passes raw HTML through: its output is always sanitised (audit APP-6)
+  if(!window.DOMPurify) await loadScriptSri('/public/vendor/dompurify/3.4.18/purify.min.js','sha384-lkArbWjiZKuE+bzKbj1vOEF7DKYBDNvgwZMCt5OH8bdRB92zpzyNska9Q/XKPHQD');
   _markedLib=window.marked;
   return _markedLib;
 }
@@ -473,7 +480,9 @@ async function ensureMarked(){
 async function markdownToHtml(mdText,filePath){
   const marked=await ensureMarked();
   marked.setOptions({gfm:true,breaks:false});
-  const body=marked.parse(mdText);
+  const body=(window.DOMPurify&&DOMPurify.isSupported)
+    ? DOMPurify.sanitize(marked.parse(mdText),{FORBID_TAGS:['form']})
+    : '<pre>'+escHtml(mdText)+'</pre>';
   const title=escHtml((filePath||'').split('/').pop());
   return `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title><style>
 :root{color-scheme:light dark}
@@ -979,7 +988,10 @@ async function vfsNavOpen(dir){
       const icon=e.isDir?'📁':isHtml?'📄':isMd?'📝':ext==='json'?'📋':'📃';
       const item=document.createElement('div');
       item.className='vfs-item';
-      item.innerHTML=`<span class="vfs-item-icon">${icon}</span><span class="vfs-item-name">${escHtml(e.name)}</span><span class="vfs-item-type">${e.isDir?'folder':ext.toUpperCase()}</span>`;
+      // file names (and so their extensions) are data (audit APP-14): text only
+      [['vfs-item-icon',icon],['vfs-item-name',e.name],['vfs-item-type',e.isDir?'folder':ext.toUpperCase()]].forEach(([cls,txt])=>{
+        const sp=document.createElement('span');sp.className=cls;sp.textContent=txt;item.appendChild(sp);
+      });
       if(e.isDir){
         item.addEventListener('click',()=>vfsNavOpen(fullPath));
       }else{

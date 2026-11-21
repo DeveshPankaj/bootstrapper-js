@@ -27,6 +27,8 @@ async function openWindow(page, cmd) {
 
 const browser = await chromium.launch();
 const pA = await (await browser.newContext()).newPage(), pB = await (await browser.newContext()).newPage();
+// Joining a group a peer creates needs the user's OK (audit NET-11) — accept it.
+pB.on('dialog', (d) => d.accept());
 const errs = []; pA.on('pageerror', e => errs.push('A ' + e.message)); pB.on('pageerror', e => errs.push('B ' + e.message));
 await boot(pA);
 await openWindow(pA, 'ui.webrtc');
@@ -54,6 +56,8 @@ const dcA = await appFrame(pA, 'distributed-compute/main.html');
 const dcB = await appFrame(pB, 'distributed-compute/main.html');
 await waitFor(() => dcA.evaluate(() => window.__distComputeReady === true));
 await waitFor(() => dcB.evaluate(() => window.__distComputeReady === true));
+// Bob answers other peers' tasks only for groups he opted in to (audit NET-1) — opt in.
+check('B: opts in to running tasks for the group', await waitFor(() => dcB.evaluate((g) => window.__distComputeSetAccept(g, true), gid), 8000));
 
 check('A: mesh bridge reports available inside distributed-compute', await waitFor(() => dcA.evaluate(() => window.__distComputeMesh.isAvailable())));
 check('A: sees the "Compute" group with Bob online', await waitFor(() => dcA.evaluate((gid) => { const g = window.__distComputeMesh.groups().find(x => x.gid === gid); return !!g && g.members.some(m => m.name === 'Bob' && m.online); }, gid)));
@@ -68,7 +72,7 @@ await dcB.evaluate(() => {
   const mesh = window.__distComputeMesh;
   const origSend = mesh.send.bind(mesh);
   window.__bobResultsSent = 0;
-  mesh.send = (gid, message) => { if (message && message.type === 'dc-result') window.__bobResultsSent++; return origSend(gid, message); };
+  mesh.send = (gid, message) => { if (message && message.type === 'dc-result' && message.ok === true) window.__bobResultsSent++; return origSend(gid, message); };
 });
 
 const clickRun = async (frame) => frame.evaluate(() => document.getElementById('run-btn').click());

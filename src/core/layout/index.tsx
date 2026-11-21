@@ -5,9 +5,11 @@ import { LAYOUTS_PATH, LAYOUT_CONFIG_PATH, WM_CURRENT_PATH, WM_THEMES_DIR, WM_DE
 import { createRoot } from 'react-dom/client'
 import React from 'react'
 import { Taskbar } from './commands'
-import { ContextMenu, ContextMenuItem } from './contextmenu'
-import { DESKTOP_CONTAINER_CLASS, WINDOWS_CONTAINER_CLASS, WindowManager, windowsSubject } from '../window-manager'
-import { broadcastIpcEvent, registerWindowIpcHandlers } from '../ipc'
+import { ContextMenu, ContextMenuItem, runContextMenuItem } from './contextmenu'
+import { DESKTOP_CONTAINER_CLASS, WINDOWS_CONTAINER_CLASS, WindowManager, windowsSubject, safeIconName, TaskbarWindowInfo, preloadWindowManagerCode } from '../window-manager'
+import { getSystemModule, loadSystemModule } from '../../system/static-code'
+import { registerWindowIpcHandlers } from '../ipc'
+import type { IpcFramePolicy } from '../../kernel/ipc-bus'
 import { LayoutManager } from '../../system/layout-manager'
 import { DesktopManager } from '../../system/desktop-manager'
 import { FileType } from '../../shared/types'
@@ -289,6 +291,69 @@ const resolveWallpaperUrl = (wallpaper: string): string => {
     }
 }
 
+// ── Layout extension frames (decisions.md D2/D4, audit WIN-7, KRN-13) ────────
+// Docks and the canvas wallpaper are opaque srcdoc frames the layout creates
+// itself. Each one is registered with the kernel IPC bus with the narrowest
+// policy that keeps it working, and the layout posts its own events (window
+// list, dock settings, pointer position) only to these frames — never `'*'`
+// to every iframe in the document. The kernel's frame registry lives in
+// another bundle, so the layout tracks the frames it registered itself.
+type LayoutFrame = {
+    iframe: HTMLIFrameElement
+    /** `wos-ipc-event` names the layout pushes to this frame. */
+    events: ReadonlySet<string>
+    /** Unregisters the frame and stops all posts to it. Idempotent. */
+    detach: () => void
+}
+const layoutFrames = new Set<LayoutFrame>()
+
+// Call right after the iframe is inserted (contentWindow exists from then on,
+// and the srcdoc hasn't run yet). The first `load` is the srcdoc we built; a
+// later one means the frame navigated away from it, and the new document must
+// not inherit the registration or our event stream (D4: re-navigation is a
+// restart) — the frame is detached and `onRenavigate` tears it down.
+const attachLayoutFrame = (
+    iframe: HTMLIFrameElement,
+    policy: IpcFramePolicy,
+    events: string[],
+    hooks: { onFirstLoad?: () => void, onRenavigate: () => void },
+): LayoutFrame => {
+    const unregister = platform.host.registerIpcFrame(iframe.contentWindow, policy)
+    let loads = 0
+    const onLoad = () => {
+        loads += 1
+        if (loads === 1) { hooks.onFirstLoad?.(); return }
+        console.warn(`[layout] ${policy.id} navigated away from its srcdoc — closing it`)
+        frame.detach()
+        hooks.onRenavigate()
+    }
+    const frame: LayoutFrame = {
+        iframe,
+        events: new Set(events),
+        detach: () => {
+            iframe.removeEventListener('load', onLoad)
+            unregister()
+            layoutFrames.delete(frame)
+        },
+    }
+    iframe.addEventListener('load', onLoad)
+    layoutFrames.add(frame)
+    return frame
+}
+
+// Opaque frames have origin 'null', so '*' is the only usable targetOrigin;
+// what keeps the posts contained is that only attached frames get them.
+const postToLayoutFrame = (frame: LayoutFrame, message: unknown) => {
+    if (!layoutFrames.has(frame)) return
+    try { frame.iframe.contentWindow?.postMessage(message, '*') } catch (_) {}
+}
+
+const postLayoutEvent = (event: string, data: unknown) => {
+    layoutFrames.forEach(frame => {
+        if (frame.events.has(event)) postToLayoutFrame(frame, { type: 'wos-ipc-event', event, data })
+    })
+}
+
 // A canvas wallpaper is a VFS .js file exporting `render(canvas)`, run
 // live behind the desktop (fixed, z-index:-1) instead of a static
 // background-image. It executes in a sandboxed iframe (allow-scripts,
@@ -297,6 +362,7 @@ const resolveWallpaperUrl = (wallpaper: string): string => {
 // can use real `export function render(canvas) {...}` syntax.
 const CANVAS_WALLPAPER_PREFIX = 'canvas:'
 let canvasWallpaperIframe: HTMLIFrameElement | null = null
+let canvasWallpaperFrame: LayoutFrame | null = null
 let canvasWallpaperMouseHandler: ((e: MouseEvent) => void) | null = null
 let canvasWallpaperWindowsSub: { unsubscribe: () => void } | null = null
 
@@ -306,6 +372,7 @@ const unmountCanvasWallpaper = () => {
         canvasWallpaperMouseHandler = null
     }
     if (canvasWallpaperWindowsSub) { canvasWallpaperWindowsSub.unsubscribe(); canvasWallpaperWindowsSub = null }
+    if (canvasWallpaperFrame) { canvasWallpaperFrame.detach(); canvasWallpaperFrame = null }
     if (canvasWallpaperIframe) { canvasWallpaperIframe.remove(); canvasWallpaperIframe = null }
 }
 
@@ -379,20 +446,29 @@ const mountCanvasWallpaper = (vfsPath: string) => {
     doc.body.insertBefore(iframe, doc.body.firstChild)
     canvasWallpaperIframe = iframe
 
+    const postWindowCount = () => postToLayoutFrame(frame, { t: 'windows', count: windowsSubject.getValue().length })
+    // The wallpaper uses no wos-ipc events at all: an empty policy records it
+    // as a layout frame the bus answers nothing (audit WIN-7). Its only input
+    // is the pointer position and window count the layout posts below.
+    const frame = canvasWallpaperFrame = attachLayoutFrame(iframe, { id: 'wallpaper:canvas', events: [] }, [], {
+        // Posts made before the srcdoc's listener exists are lost, so send the
+        // current count once it has loaded.
+        onFirstLoad: postWindowCount,
+        onRenavigate: unmountCanvasWallpaper,
+    })
+
     // Forwards real mouse position over the desktop into the sandboxed
     // wallpaper (see the message listener built into the srcdoc above) —
     // this is what lets a wallpaper be "interactive" without the iframe
     // itself ever intercepting real pointer events.
     canvasWallpaperMouseHandler = (e: MouseEvent) => {
-        iframe.contentWindow?.postMessage({ t: 'mouse', x: e.clientX, y: e.clientY }, '*')
+        postToLayoutFrame(frame, { t: 'mouse', x: e.clientX, y: e.clientY })
     }
     doc.addEventListener('mousemove', canvasWallpaperMouseHandler)
 
     // Forwards live open-window count so a wallpaper can react to the
     // desktop being empty (see api.windows.count in buildCanvasWallpaperSrcdoc).
-    canvasWallpaperWindowsSub = windowsSubject.subscribe(wins => {
-        iframe.contentWindow?.postMessage({ t: 'windows', count: wins.length }, '*')
-    })
+    canvasWallpaperWindowsSub = windowsSubject.subscribe(postWindowCount)
 }
 
 const applyCss = ({wallpaper, grid}: {wallpaper: string, grid: LayoutDef['grid']}) => {
@@ -429,6 +505,9 @@ const applyCss = ({wallpaper, grid}: {wallpaper: string, grid: LayoutDef['grid']
 const userPrefWallpaper = platform.userPref.getWallpaper()
 applyCss({wallpaper: userPrefWallpaper || '/public/wp-11.jpg', grid: getCurrentLayout().grid})
 applyWmSettings(readWmSettings())
+// Fetch the static copies of /opt/window-manager.js and the /opt/wm styles now,
+// so they're in memory before the first window opens (src/system/static-code.ts).
+preloadWindowManagerCode()
 
 // Init Ring 2 managers so they mirror the current system state
 try {
@@ -907,23 +986,31 @@ const WidgetsPanel = () => {
     )
 }
 
-// VFS Desktop Manager — pluggable desktop-icon renderer, mirroring the dock's
-// variant system (see openVfsDock below) but running in-process (execString,
-// direct FS/callback access) instead of a sandboxed iframe, since desktop
-// icons need tight synchronous access to openFile/showFileActions - the same
-// trust level as /opt/wm/*.js window-manager styles, not the dock's untrusted
-// postMessage boundary.
+// Desktop Manager — pluggable desktop-icon renderer, mirroring the dock's
+// variant system (see openVfsDock below) but running in-process (direct
+// callback access) instead of a sandboxed iframe, since desktop icons need
+// tight synchronous access to openFile/showFileActions - the same trust level
+// as /opt/wm/*.js window-manager styles, not the dock's postMessage boundary.
 //
-// id 'default' preserves the pre-existing behavior exactly: use
-// /opt/desktop/manager.js if present (the original single hand-editable
-// override file), else fall back to the compiled ListDirComponent. Any other
-// id loads /opt/desktop/<id>.js, which must export render(container, api)
-// and may optionally export getSettingsSchema(storedValues)/
-// applySetting(key, value) for a live per-variant settings panel in
-// Settings > Managers (see get-desktop-schema/set-desktop-setting below,
-// which mirror get-dock-schema/set-dock-setting but stay in-process).
-const VFS_DESKTOP_PATH = '/opt/desktop/manager.js'
-const DESKTOP_VARIANTS_DIR = '/opt/desktop'
+// Variants are the modules that ship in docs/public/mount/opt/desktop/
+// ('default' is manager.js, the original single file) and run from that
+// immutable static copy, never from the writable vfs (decisions.md D1, audit
+// WIN-6/BOOT-5) — the vfs copies are view-only. An id (Settings > Managers,
+// /etc/managers.json) only selects one of them; an unknown id, or a variant
+// whose static copy can't be loaded, gets the compiled ListDirComponent. A
+// variant exports render(container, api) and optionally
+// getSettingsSchema(storedValues)/applySetting(key, value) for a live
+// per-variant settings panel in Settings > Managers (see
+// get-desktop-schema/set-desktop-setting below, which mirror
+// get-dock-schema/set-dock-setting but stay in-process).
+const DESKTOP_VARIANT_PATHS: Readonly<Record<string, string>> = Object.freeze({
+    'default': '/opt/desktop/manager.js',
+    'windows-tiles': '/opt/desktop/windows-tiles.js',
+    'scifi': '/opt/desktop/scifi.js',
+    'interactive': '/opt/desktop/interactive.js',
+})
+const desktopVariantPath = (id: string): string | undefined =>
+    typeof id === 'string' && Object.prototype.hasOwnProperty.call(DESKTOP_VARIANT_PATHS, id) ? DESKTOP_VARIANT_PATHS[id] : undefined
 const desktopManagerSubject = new BehaviorSubject<string>('default')
 
 let activeDesktopModule: any = null
@@ -958,9 +1045,6 @@ const DesktopMount = ({ openFile, showFileActionsHandler }: {
         const container = ref.current
         if (!container) return
 
-        const fs = platform.host.getFS()
-        const loadFrom = (path: string) => platform.host.execString(fs.readFileSync(path, 'utf-8') as string, path)
-
         if (desktopId === 'none') {
             activeDesktopModule = null
             activeDesktopId = desktopId
@@ -968,19 +1052,22 @@ const DesktopMount = ({ openFile, showFileActionsHandler }: {
             return undefined
         }
 
-        let mod: any = null
-        try {
-            if (desktopId !== 'default') {
-                const path = `${DESKTOP_VARIANTS_DIR}/${desktopId}.js`
-                if (fs.existsSync(path)) mod = loadFrom(path)
-            } else if (fs.existsSync(VFS_DESKTOP_PATH)) {
-                mod = loadFrom(VFS_DESKTOP_PATH)
-            }
-        } catch (err) {
-            console.error('[desktop-manager] VFS load failed:', err)
+        const path = desktopVariantPath(desktopId)
+        let cancelled = false
+        let cleanup: (() => void) | undefined
+
+        // Compile-time ListDirComponent: unknown ids, and any variant whose
+        // static copy can't be loaded.
+        const mountFallback = () => {
+            activeDesktopModule = null
+            activeDesktopId = path ? desktopId : 'default'
+            activeDesktopSchema = []
+            const root = createRoot(container)
+            root.render(<ListDirComponent openFile={openFile} showFileActions={showFileActionsHandler} customClass='desktop-icons' />)
+            cleanup = () => setTimeout(() => root.unmount(), 0)
         }
 
-        if (mod && typeof mod.render === 'function') {
+        const mountModule = (mod: any) => {
             activeDesktopModule = mod
             activeDesktopId = desktopId
             try {
@@ -990,22 +1077,42 @@ const DesktopMount = ({ openFile, showFileActionsHandler }: {
                 console.error('[desktop-manager] getSettingsSchema failed:', err)
                 activeDesktopSchema = []
             }
-            const cleanup = mod.render(container, { openFile, showFileActions: showFileActionsHandler })
-            return () => {
+            const done = mod.render(container, { openFile, showFileActions: showFileActionsHandler })
+            cleanup = () => {
                 activeDesktopModule = null
                 activeDesktopSchema = []
-                if (typeof cleanup === 'function') cleanup()
+                if (typeof done === 'function') done()
             }
         }
 
-        // Fallback: compile-time ListDirComponent (also covers 'default' when
-        // /opt/desktop/manager.js is missing).
-        activeDesktopModule = null
-        activeDesktopId = desktopId
-        activeDesktopSchema = []
-        const root = createRoot(container)
-        root.render(<ListDirComponent openFile={openFile} showFileActions={showFileActionsHandler} customClass='desktop-icons' />)
-        return () => setTimeout(() => root.unmount(), 0)
+        const mount = (mod: any) => {
+            if (cancelled) return
+            if (!mod || typeof mod.render !== 'function') { mountFallback(); return }
+            try {
+                mountModule(mod)
+            } catch (err) {
+                console.error('[desktop-manager] render failed:', err)
+                cleanup?.()
+                container.replaceChildren()
+                mountFallback()
+            }
+        }
+
+        if (!path) {
+            console.warn('[desktop-manager] unknown desktop variant — using the built-in icons:', desktopId)
+            mountFallback()
+        } else {
+            // Synchronous when the source is already here (hot swap); otherwise
+            // the desktop stays empty for the moment the fetch takes.
+            const ready = getSystemModule(path)
+            if (ready !== undefined) mount(ready)
+            else loadSystemModule(path).then(mount)
+        }
+
+        return () => {
+            cancelled = true
+            cleanup?.()
+        }
     }, [desktopId])
 
     return <div ref={ref} style={{ width: '100%', height: '100%' }} />
@@ -1104,27 +1211,35 @@ export const render = (container: HTMLElement) => {
     const getLaunchItems = () => {
       try {
         const fs = platform.host.getFS()
-        const pinned: string[] = fs.existsSync('/etc/taskbar.json')
+        const pinned: unknown[] = fs.existsSync('/etc/taskbar.json')
           ? JSON.parse(fs.readFileSync('/etc/taskbar.json', 'utf-8') as string).pinned ?? []
           : ['ui.app-drawer', 'explorer', 'ui.notepad', 'ui.terminal', 'ui.pkg-manager', 'ui.settings']
-        return pinned.map(name => {
-          const cmd = platform.host.getCommand(name)
-          const meta = (cmd as any)?.meta ?? {}
-          return {
-            name,
-            label: meta.title ?? name,
-            icon: meta.icon ?? DEFAULT_ICON[name] ?? 'apps',
-            cmd: `service('001-core.layout','open-window')(command('${name}'))`,
-          }
-        })
+        return (Array.isArray(pinned) ? pinned : [])
+          .filter((name): name is string => typeof name === 'string')
+          .map(name => {
+            const cmd = platform.host.getCommand(name)
+            const meta = (cmd as any)?.meta ?? {}
+            return {
+              name,
+              label: String(meta.title ?? name),
+              icon: safeIconName(meta.icon ?? DEFAULT_ICON[name], 'apps'),
+              // Kept only for the kernel's WmBridge type: no consumer runs it,
+              // and it no longer carries generated DSL (audit KRN-3) — docks
+              // launch by name through wm.launch.
+              cmd: '',
+            }
+          })
       } catch { return [] }
     }
 
+    // What docks see of the window list: plain data, icons as checked names.
+    const dockWindowList = (wins: TaskbarWindowInfo[]) => wins.map(w => ({
+      pid: w.pid, name: w.name, title: w.title,
+      icon: safeIconName(w.icon), minimized: w.minimized, active: w.active,
+    }))
+
     registerWindowIpcHandlers(
-      () => windowsSubject.getValue().map(w => ({
-        pid: w.pid, name: w.name, title: w.title,
-        icon: w.icon, minimized: w.minimized, active: w.active,
-      })),
+      () => dockWindowList(windowsSubject.getValue()),
       (pid) => {
         const win = windowsSubject.getValue().find(w => w.pid === pid);
         win?.toggle();
@@ -1132,7 +1247,13 @@ export const render = (container: HTMLElement) => {
       platform.window,
       getLaunchItems,
     );
+    // Docks may launch only what they were offered (audit WIN-7): a name from
+    // getLaunchItems(), never an arbitrary command or callable.
     platform.window.__wosWmBridge!.launch = (name: string) => {
+      if (!getLaunchItems().some(item => item.name === name)) {
+        console.warn('[layout] wm.launch refused — not a launch item:', name)
+        return
+      }
       const cmd = platform.host.getCommand(name)
       if (!cmd) return
       // Commands with meta.callable=true manage their own lifecycle (overlay toggles,
@@ -1143,38 +1264,48 @@ export const render = (container: HTMLElement) => {
         windowManager.createWindow(cmd.name)
       }
     };
-    // Broadcast window-list changes to all iframes in the main document.
-    // Pass platform.window.document explicitly — bare `document` inside the
-    // layout bundle resolves to the hidden-iframe document (no child iframes).
+    // Window-list changes go only to the layout frames that asked for them
+    // (the dock), not to every iframe in the document (audit KRN-13).
     windowsSubject.subscribe(wins => {
-      broadcastIpcEvent('wm.windowsChanged', wins.map(w => ({
-        pid: w.pid, name: w.name, title: w.title,
-        icon: w.icon, minimized: w.minimized, active: w.active,
-      })), platform.window.document);
+      postLayoutEvent('wm.windowsChanged', dockWindowList(wins));
     });
 
     platform.register('open-window', onCommandClick)
 
     // Dock settings commands — read/write dock schema and persist to /etc/dock/{id}.json.
-    const getDockSchema = () => {
+    // Dock ids name /opt/apps/dock/<id>.html and /etc/dock/<id>.json, so they
+    // must be a plain name. The settings file path is built from the id the
+    // layout opened, never from the dockId a dock frame reports about itself
+    // through dock.registerSettings.
+    const DOCK_ID_RE = /^[a-z0-9-]{1,64}$/
+    let activeDockId = ''
+    // The kernel keeps the last dock.registerSettings payload; it only counts
+    // when it came from the dock that is open now.
+    const getActiveDockBridge = () => {
         const bridge = platform.window.__wosDockBridge
-        return bridge ? { schema: bridge.schema, dockId: bridge.dockId } : { schema: [], dockId: '' }
+        return bridge && activeDockId && bridge.dockId === activeDockId ? bridge : undefined
+    }
+    const getDockSchema = () => {
+        const bridge = getActiveDockBridge()
+        return bridge ? { schema: bridge.schema, dockId: activeDockId } : { schema: [], dockId: '' }
     }
     const setDockSetting = (data: { key: string; value: unknown }) => {
-        const bridge = platform.window.__wosDockBridge
-        if (!bridge) return false
+        const bridge = getActiveDockBridge()
+        if (!bridge || typeof data?.key !== 'string') return false
+        // Only keys the dock declared in its schema are persisted.
         const entry = bridge.schema.find((e: any) => e.key === data.key)
-        if (entry) entry.value = data.value
+        if (!entry) return false
+        entry.value = data.value
         try {
             const fs = platform.host.getFS()
-            const settingsPath = `/etc/dock/${bridge.dockId}.json`
+            const settingsPath = `/etc/dock/${activeDockId}.json`
             let current: Record<string, unknown> = {}
             try { current = JSON.parse(fs.readFileSync(settingsPath, 'utf-8') as string) } catch (_) {}
             current[data.key] = data.value
             if (!fs.existsSync('/etc/dock')) fs.mkdirSync('/etc/dock', { recursive: true })
             fs.writeFileSync(settingsPath, JSON.stringify(current, null, 2))
         } catch (_) {}
-        broadcastIpcEvent('dock.settingChanged', { key: data.key, value: data.value }, platform.window.document)
+        postLayoutEvent('dock.settingChanged', { key: data.key, value: data.value })
         return true
     }
     platform.register('get-dock-schema', getDockSchema)
@@ -1189,8 +1320,12 @@ export const render = (container: HTMLElement) => {
     // the same way it polls get-dock-schema for the active dock.
     const getDesktopSchema = () => ({ desktopId: activeDesktopId, schema: activeDesktopSchema })
     const setDesktopSetting = (data: { key: string; value: unknown }) => {
+        // Only keys the active (shipped, validated) variant declared are persisted,
+        // to /etc/desktop/<its id>.json.
+        if (typeof data?.key !== 'string' || !desktopVariantPath(activeDesktopId)) return false
         const entry = activeDesktopSchema.find(e => e.key === data.key)
-        if (entry) entry.value = data.value
+        if (!entry) return false
+        entry.value = data.value
         try {
             const fs = platform.host.getFS()
             if (!fs.existsSync('/etc/desktop')) fs.mkdirSync('/etc/desktop', { recursive: true })
@@ -1220,21 +1355,28 @@ export const render = (container: HTMLElement) => {
     // Auto-hide behaviour: dock starts hidden below the viewport (translateY 100%,
     // pointer-events:none) so it never blocks app content. Moving the mouse within
     // TRIGGER_PX of the bottom edge reveals it; moving away hides it after a delay.
-    const openVfsDock = (id: string) => {
+    const closeVfsDock = () => {
         const doc = platform.window.document
 
-        // Abort previous dock's listeners before replacing it.
+        // Abort previous dock's listeners (and its IPC registration) before replacing it.
         const existing = doc.getElementById('vfs-dock-iframe') as HTMLIFrameElement | null
         if (existing) {
             const cleanup = (existing as any).__dockCleanup
             if (typeof cleanup === 'function') cleanup()
             existing.remove()
         }
+        activeDockId = ''
         doc.body.classList.remove('vfs-dock-active')
         doc.body.classList.remove('vfs-dock-occupy')
         doc.documentElement.style.removeProperty('--vfs-dock-height')
+    }
+
+    const openVfsDock = (id: string) => {
+        const doc = platform.window.document
+        closeVfsDock()
 
         if (!id || id === 'none') return
+        if (typeof id !== 'string' || !DOCK_ID_RE.test(id)) { console.warn('[dock] invalid dock id:', id); return }
 
         const fs = platform.host.getFS()
         const dockPath = `/opt/apps/dock/${id}.html`
@@ -1261,6 +1403,16 @@ export const render = (container: HTMLElement) => {
             // Transition eases the slide-in/out animation.
             iframe.style.cssText = `position:fixed;bottom:0;left:0;width:100%;height:${h}px;border:none;background:transparent;z-index:9000;pointer-events:none;transform:translateY(100%);transition:transform 0.18s ease;`
             doc.body.appendChild(iframe)
+            activeDockId = id
+            // Exactly what docks/*.html use (audit WIN-7): the window list,
+            // toggling a window, launching one of the offered launch items,
+            // registering their settings schema, and reading their own
+            // settings file. They are sent the window-list and setting events.
+            const dockFrame = attachLayoutFrame(iframe, {
+                id: `dock:${id}`,
+                events: ['wm.getWindows', 'wm.toggleWindow', 'wm.getLaunchItems', 'wm.launch', 'dock.registerSettings', 'fs.readText'],
+                fs: { read: [`/etc/dock/${id}.json`] },
+            }, ['wm.windowsChanged', 'dock.settingChanged'], { onRenavigate: closeVfsDock })
             doc.body.classList.add('vfs-dock-active')
             doc.documentElement.style.setProperty('--vfs-dock-height', `${h}px`)
 
@@ -1333,6 +1485,7 @@ export const render = (container: HTMLElement) => {
 
             // Store cleanup so switching docks removes the old listeners.
             ;(iframe as any).__dockCleanup = () => {
+                dockFrame.detach()
                 doc.removeEventListener('mousemove', onDocMouseMove)
                 iframe.removeEventListener('mouseenter', onIframeEnter)
                 iframe.removeEventListener('mouseleave', onIframeLeave)
@@ -1408,20 +1561,23 @@ export const render = (container: HTMLElement) => {
         }
     })
 
+    // Desktop icon actions: the path travels as a value (audit KRN-3) — a file
+    // name can't become code however it is spelled.
     const showFileActionsHandler = (file: FileType, event: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
+        const path = file.path
         const items: Array<ContextMenuItem> = [
-            { id: 'edit_file',   type: 'action', title: 'Edit',   cmd: `service('001-core.layout', 'open-window') (command('ui.notepad'), '${file.path}')` },
-            { id: 'open_file',   type: 'action', title: 'Open',   cmd: `service('001-core.layout', 'open-window') (command('ui.iframe'), '${file.path}')` },
-            { id: 'delete_file', type: 'action', title: 'Delete', cmd: `service('root', 'fs')('rm', '${file.path}')` },
+            { id: 'edit_file',   type: 'action', title: 'Edit',   command: 'ui.notepad', args: [path], window: true },
+            { id: 'open_file',   type: 'action', title: 'Open',   command: 'ui.iframe',  args: [path], window: true },
+            { id: 'delete_file', type: 'action', title: 'Delete', onSelect: () => (platform.host.getService('root', 'fs') as Function)('rm', path) },
         ]
         if (file.type === 'file') {
             const ext = file.name.split('.').pop()?.toLowerCase() || ''
             const registered = platform.host.getCommandsForExtension(ext)
-            const owChildren = registered.map(app => ({
+            const owChildren: Array<ContextMenuItem> = registered.map(app => ({
                 id: `ow_${app.name}`, type: 'action' as const, title: app.title,
-                cmd: `service('001-core.layout','open-window')(command('${app.name}'),'${file.path}')`,
+                command: app.name, args: [path], window: true,
             }))
-            owChildren.push({ id: 'ow_browser', type: 'action' as const, title: 'Browser', cmd: `service('001-core.layout','open-window')(command('ui.iframe'),'${file.path}')` })
+            owChildren.push({ id: 'ow_browser', type: 'action', title: 'Browser', command: 'ui.iframe', args: [path], window: true })
             items.push({ id: 'divider_ow', type: 'divider', title: '' })
             items.push({ id: 'open_with', type: 'group', title: 'Open with', children: owChildren })
         }
@@ -1435,8 +1591,11 @@ export const render = (container: HTMLElement) => {
         contextMenuComponentRef.current.setItems(items);
         contextMenuComponentRef.current.setOnClick(item => {
             contextMenuRef.current!.style.display = 'none';
-            if (item.cmd) {
-                platform.host.execCommand(item.cmd, platform)
+            try {
+                const result = runContextMenuItem(item) as any
+                if (result && typeof result.catch === 'function') result.catch((err: unknown) => console.error('[contextmenu]', err))
+            } catch (err) {
+                console.error('[contextmenu]', err)
             }
         });
 
@@ -1462,25 +1621,32 @@ export const render = (container: HTMLElement) => {
 
     platform.register('show-context-menu', showContextMenuHandler)
 
-
-    const onCommandClickHandler = (command: Command, ...args: string[]) => {
-        platform.host.execCommand(`service('001-core.layout', 'open-window') (command('${command.name}')${args.length ? ',' : ''} ${args.map(x => "'" + x + "'").join(', ')})`, platform)
-
-    }
-
     // Desktop right-click menu: load items from /etc/contextmenu.json (VFS),
     // falling back to a minimal hardcoded set if the file is absent or invalid.
+    // Entries there are user-authored DSL (`cmd`, decisions.md D9) and get no
+    // values from the layout; anything that isn't a plain entry is dropped.
     const loadContextMenuItems = (): Array<ContextMenuItem> => {
         const fallback: Array<ContextMenuItem> = [
-            { id: '1', type: 'action', title: 'Explorer', cmd: `service('001-core.layout', 'open-window') (command('explorer'))` },
-            { id: '4', type: 'action', title: 'Settings', cmd: `service('001-core.layout', 'open-window') (command('ui.settings'))` },
-            { id: '0', type: 'action', title: 'Terminal', cmd: `service('001-core.layout', 'open-window') (command('ui.terminal'))` },
+            { id: '1', type: 'action', title: 'Explorer', command: 'explorer',    window: true },
+            { id: '4', type: 'action', title: 'Settings', command: 'ui.settings', window: true },
+            { id: '0', type: 'action', title: 'Terminal', command: 'ui.terminal', window: true },
         ]
+        const toEntry = (item: any, index: number): ContextMenuItem | null => {
+            if (!item || typeof item !== 'object' || Array.isArray(item)) return null
+            const type = ['action', 'group', 'divider'].includes(item.type) ? item.type : 'action'
+            const children = Array.isArray(item.children)
+                ? item.children.map(toEntry).filter((c: ContextMenuItem | null): c is ContextMenuItem => !!c)
+                : undefined
+            return { ...item, id: String(item.id ?? index), title: String(item.title ?? ''), type, children, onSelect: undefined }
+        }
         try {
             const fs = platform.host.getFS()
             if (fs.existsSync('/etc/contextmenu.json')) {
                 const parsed = JSON.parse(fs.readFileSync('/etc/contextmenu.json', 'utf-8') as string)
-                if (Array.isArray(parsed) && parsed.length) return parsed
+                const entries = Array.isArray(parsed)
+                    ? parsed.map(toEntry).filter((e: ContextMenuItem | null): e is ContextMenuItem => !!e)
+                    : []
+                if (entries.length) return entries
             }
         } catch (_) {}
         return fallback

@@ -436,7 +436,7 @@
           }
         }
 
-        const commandFile = this.findCommandFile(cmdArgs[0]);
+        const commandFile = this.resolveCommand(cmdArgs[0]);
 
         if (commandFile) {
           platform.register('terminal', this.terminal);
@@ -446,10 +446,14 @@
             HOME: '/home/user1',
             ...this.env,
           });
-          // `host.exec` returns a promise for `.run`/`.js` commands, allowing
-          // async commands (e.g. ones that `await` inside) to finish before the
-          // next prompt is shown.
-          await platform.host.exec(platform, commandFile, this.context.pwd, ...cmdArgs.slice(1));
+          // A command typed here is the user's explicit intent to run it (decisions.md
+          // D10): host.runFile, not host.exec ("open" — shows scripts outside /bin,
+          // /usr/bin, /opt/apps in the editor). Exception: a script *path* that came from
+          // an alias (~/.aliases is writable by any app) asks first, naming the file.
+          // `runFile` returns a promise for `.run` commands, so async commands (ones
+          // that `await` inside) finish before the next prompt is shown.
+          const askFirst = !!aliasValue && cmdArgs[0].includes('/');
+          await platform.host.runFile(platform, commandFile, [this.context.pwd, ...cmdArgs.slice(1)], { confirm: askFirst });
         } else {
           await this.handleInternalCommands(cmdArgs);
         }
@@ -530,7 +534,24 @@
         }
       }
 
+      // A command is a name looked up on PATH, or — when it contains a '/' — the path
+      // of a .run/.js script (./x.run, scripts/y.js, /home/user1/z.run).
+      resolveCommand(command) {
+        if (typeof command !== 'string' || !command) return '';
+        return command.includes('/') ? this.findScriptByPath(command) : this.findCommandFile(command);
+      }
+
+      findScriptByPath(command) {
+        let path;
+        try { path = platform.host.pathPolicy.normalizePath(command, this.context.pwd); } catch (_) { return ''; }
+        if (!/\.(run|js)$/.test(path)) return '';
+        try { return this.fs.statSync(path).isFile() ? path : ''; } catch (_) { return ''; }
+      }
+
+      // PATH lookup of a command *name*, never a path: '/', '\' and '..' are refused
+      // (audit BOOT-12), so `../home/user1/x` can't reach a script outside the bin dirs.
       findCommandFile(command) {
+        if (typeof command !== 'string' || !command || /[\/\\]/.test(command) || command.includes('..')) return '';
         let commandFile = '';
         const binDirs = this.context.PATH.split(':');
         for (const dir of binDirs) {

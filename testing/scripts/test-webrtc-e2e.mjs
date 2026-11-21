@@ -43,11 +43,16 @@ async function waitFor(fn, ms = 20000, step = 300) { const t0 = Date.now(); whil
   const ctxB = await browser.newContext();
   const ctxC = await browser.newContext();
   const pA = await ctxA.newPage(), pB = await ctxB.newPage(), pC = await ctxC.newPage();
+  // Group invitations and outside webrtc.api calls now ask first (audit NET-11/NET-6) — accept those.
+  const acceptWebrtcPrompts = (p) => p.on('dialog', (d) => { if (/wants to add you to the group|asks WebRTC Chat to run/.test(d.message())) d.accept().catch(() => {}); else d.dismiss().catch(() => {}); });
+  for (const p of [pA, pB, pC]) acceptWebrtcPrompts(p);
   const errs = [];
   for (const [n, p] of [['A', pA], ['B', pB], ['C', pC]]) p.on('pageerror', e => errs.push(`${n}: ${e.message}`));
 
   await bootClean(pA);
   const fA = await openApp(pA);
+  // autoMesh is off by default now (audit NET-11); this test covers the mesh — turn it on.
+  await fA.evaluate(() => { window.__webrtcApp.settings.autoMesh = true; });
   check('app opens, command registered', await pA.evaluate(() => !!window.platform.host.getCommand('webrtc.api')));
 
   // ── A creates an invite (with a name) via the UI ──
@@ -65,6 +70,7 @@ async function waitFor(fn, ms = 20000, step = 300) { const t0 = Date.now(); whil
   // ── B opens the link in a fresh tab → app opens with the offer ──
   await pB.goto(inv1.link);
   const fB = await appFrame(pB, 40000);
+  await fB.evaluate(() => { window.__webrtcApp.settings.autoMesh = true; });
   check('B: link opened app and parsed the offer', await waitFor(() => fB.evaluate(() => window.__webrtcApp.joins.size === 1)));
   check('B: hash consumed from URL', !(await pB.evaluate(() => location.hash)));
   await fB.locator('.modal .card input[maxlength="40"]').first().fill('Bob');
@@ -87,6 +93,7 @@ async function waitFor(fn, ms = 20000, step = 300) { const t0 = Date.now(); whil
   await pC.goto(inv2);
   let fC; try { fC = await appFrame(pC, 40000); } catch (e) { await pC.screenshot({ path: `${SHOT}/webrtc-c-fail.png` }); console.log('C url', pC.url(), 'hash', await pC.evaluate(() => location.hash.slice(0, 40)), 'wins', await pC.evaluate(() => document.querySelectorAll('.window').length), 'errs', errs.slice(-3)); throw e; }
   await waitFor(() => fC.evaluate(() => window.__webrtcApp.joins.size === 1));
+  await fC.evaluate(() => { window.__webrtcApp.settings.autoMesh = true; });
   await fC.locator('.modal .card input[maxlength="40"]').first().fill('Carol');
   await fC.locator('button:has-text("Generate answer link")').click({ force: true });
   await waitFor(() => fC.evaluate(() => [...window.__webrtcApp.joins.values()].some(j => j.link)));
@@ -117,6 +124,8 @@ async function waitFor(fn, ms = 20000, step = 300) { const t0 = Date.now(); whil
   check('DM not visible on A', !(await fA.evaluate(() => [...window.__webrtcApp.convs.values()].some(c => c.messages.some(m => m.text === 'psst carol')))));
   // group A + B (C excluded)
   await fA.evaluate((b) => window.__webrtcApp.createGroup('Duo', [b]), bId);
+  // Bob must accept the invitation before group traffic reaches him (audit NET-11).
+  check('group invitation accepted by B', await waitFor(() => fB.evaluate(() => [...window.__webrtcApp.groups.values()].some(g => g.name === 'Duo'))));
   await fA.evaluate(() => window.__webrtcApp.sendText([...window.__webrtcApp.convs.keys()].find(k => k.startsWith('g:')), 'group hi'));
   check('group msg reaches B', await waitFor(() => fB.evaluate(() => [...window.__webrtcApp.convs.values()].some(c => c.kind === 'group' && c.messages.some(m => m.text === 'group hi')))));
   check('group msg NOT on C', !(await fC.evaluate(() => [...window.__webrtcApp.convs.values()].some(c => c.messages.some(m => m.text === 'group hi')))));

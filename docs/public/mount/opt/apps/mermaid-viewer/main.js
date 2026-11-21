@@ -81,7 +81,9 @@ body{margin:0;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-siz
 .mv-divider{width:1px;height:18px;background:#e5e0db;flex-shrink:0;margin:0 2px;}
 `;
 
-const MERMAID_CDN = 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js';
+// Exact version + SRI (audit APP-7/APP-11): this runs in the window's same-origin document.
+const MERMAID_CDN = 'https://cdn.jsdelivr.net/npm/mermaid@11.17.2/dist/mermaid.min.js';
+const MERMAID_SRI = 'sha384-EOXBFmc3gx5mb+vn0vPvvGqACToJD24hhacX5Yx+8NUUQrHIle/Qi5Bg9o3zKwW2';
 let mermaidLoadPromise = null;
 
 const loadMermaid = (doc) => {
@@ -91,10 +93,14 @@ const loadMermaid = (doc) => {
   mermaidLoadPromise = new Promise((resolve, reject) => {
     const s = doc.createElement('script');
     s.src = MERMAID_CDN;
+    s.integrity = MERMAID_SRI;
+    s.crossOrigin = 'anonymous';
     s.onload = () => {
       const m = win.mermaid;
       if (!m) { reject(new Error('mermaid not found on window')); return; }
-      m.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose' });
+      // 'strict': labels are sanitised/encoded and click callbacks are disabled — a diagram
+      // file is data, and the SVG is inserted into a same-origin document (audit APP-7).
+      m.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'strict' });
       resolve(m);
     };
     s.onerror = () => reject(new Error('Failed to load Mermaid from CDN'));
@@ -327,7 +333,10 @@ const App = ({ initialArg, docRef, topDoc, fs, onTitleChange }) => {
     pip.style.cssText = 'position:fixed;bottom:16px;right:16px;z-index:99996;width:280px;min-width:140px;min-height:80px;background:#fff;border:1px solid #e0dbd4;border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.18);overflow:hidden;resize:both;font-family:system-ui,sans-serif;';
     const hdr = doc.createElement('div');
     hdr.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:5px 10px;background:#fafaf8;border-bottom:1px solid #e0dbd4;font-size:11px;color:#888;cursor:move;user-select:none;';
-    hdr.innerHTML = `<span>📌 ${baseName}</span>`;
+    // baseName is the file name and this header lives in the top document: text only (audit APP-14)
+    const hdrLabel = doc.createElement('span');
+    hdrLabel.textContent = `📌 ${baseName}`;
+    hdr.appendChild(hdrLabel);
     const closeBtn = doc.createElement('button');
     closeBtn.textContent = '✕';
     closeBtn.style.cssText = 'background:none;border:none;cursor:pointer;font-size:14px;color:#aaa;padding:0 3px;line-height:1;';

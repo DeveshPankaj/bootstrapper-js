@@ -6,6 +6,7 @@ const { useState, useEffect, useRef, useCallback } = React;
 
 const SQL_JS_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js';
 const SQL_WASM_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.wasm';
+const SQL_JS_SRI = 'sha384-8D3Rsfo535FqoC1pHCCQMrNf75UgzyoG/HQm9zOzITRrz3QKzecc2E7JXKGCXoWu'; // the .wasm is fetched by sql.js itself (no SRI possible)
 
 const CSS = `
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -117,6 +118,8 @@ const loadSqlJs = () => {
     const iframeWin = iframe.contentWindow;
     const script = iframeWin.document.createElement('script');
     script.src = SQL_JS_CDN;
+    script.integrity = SQL_JS_SRI;
+    script.crossOrigin = 'anonymous';
     script.onload = () => {
       const initFn = iframeWin.initSqlJs;
       if (!initFn) { reject(new Error('initSqlJs not found')); return; }
@@ -186,7 +189,16 @@ const renderSqliteChartWidget = (container, config, api) => {
         const pct = ((v / total) * 100).toFixed(1);
         const row = document.createElement('div');
         row.style.cssText = 'display:flex;align-items:center;gap:5px;font-size:10px;';
-        row.innerHTML = `<div style="width:8px;height:8px;border-radius:2px;background:${colors[i % colors.length]};flex-shrink:0"></div><span style="opacity:0.8;max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${String(r[lc])}</span><span style="opacity:0.5;margin-left:auto">${pct}%</span>`;
+        // label values come from the database file: text only (audit APP-14)
+        const sw = document.createElement('div');
+        sw.style.cssText = `width:8px;height:8px;border-radius:2px;background:${colors[i % colors.length]};flex-shrink:0`;
+        const lab = document.createElement('span');
+        lab.style.cssText = 'opacity:0.8;max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+        lab.textContent = String(r[lc]);
+        const pc = document.createElement('span');
+        pc.style.cssText = 'opacity:0.5;margin-left:auto';
+        pc.textContent = `${pct}%`;
+        row.append(sw, lab, pc);
         legend.appendChild(row);
       });
       wrapper.appendChild(legend);

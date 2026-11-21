@@ -36,6 +36,27 @@ const getBreadcrumbs = (path) => {
   return crumbs;
 };
 
+// Context-menu entries (audit KRN-3/APP-1, decisions.md D9): what an entry does
+// is a function over values — the layout's ContextMenuItem `onSelect` — so no
+// file name is ever turned into DSL source. Same shape as file-explorer/main.js.
+const toContextMenuItems = (entries) => entries.map((entry) =>
+  entry.divider ? { id: entry.id, type: 'divider', title: '' }
+    : entry.children ? { id: entry.id, type: 'group', title: entry.title, children: toContextMenuItems(entry.children) }
+      : { id: entry.id, type: 'action', title: entry.title, onSelect: entry.run });
+
+// "Run" for scripts (decisions.md D10): opening views a .js/.run file; running
+// it is this explicit action, and host.runFile asks for confirmation naming the
+// file outside the system folders. A .run gets its folder as `$args[0]`.
+const SCRIPT_EXTS = new Set(['js', 'run']);
+const runScript = (path) => {
+  const report = (e) => platform.host.callCommand('notify', { title: 'Run failed', body: `${path.split('/').pop()}: ${(e && e.message) || e}`, duration: 4000 });
+  try {
+    const result = platform.host.runFile(platform, path, [path.split('/').slice(0, -1).join('/') || '/']);
+    if (result && typeof result.catch === 'function') result.catch(report);
+    return result;
+  } catch (e) { report(e); }
+};
+
 // ── ZIP support ──────────────────────────────────────────────────────────
 let _fflate = null;
 const loadFflate = () => {
@@ -48,21 +69,45 @@ const loadFflate = () => {
   } catch (e) { throw new Error('fflate not available: ' + e.message); }
   return _fflate;
 };
+// Where an archive entry may be written (audit BOOT-8/APP-3, decisions.md D6):
+// inside destDir via pathPolicy.safeJoin (no absolute names, '..', backslashes,
+// control characters), and never onto a kernel-owned path unless the user is
+// extracting inside one already. Same rule as file-explorer/main.js.
+const archiveEntryPath = (destDir, name) => {
+  const { safeJoin, isKernelOwned, PathPolicyError } = platform.host.pathPolicy;
+  const target = safeJoin(destDir, name);
+  if (isKernelOwned(target) && !isKernelOwned(destDir)) throw new PathPolicyError(`protected path: ${target}`);
+  return target;
+};
+// Returns { count, skipped }: entries that would escape destDir are not written.
 const extractZip = (zipPath, destDir) => {
   const fflate = loadFflate();
   const data = fs.readFileSync(zipPath);
   const uint8 = new Uint8Array(data.buffer ?? data);
   const entries = fflate.unzipSync(uint8);
   let count = 0;
+  const skipped = [];
   for (const [name, content] of Object.entries(entries)) {
     if (name.endsWith('/')) continue;
-    const fullPath = normalizePath(`${destDir}/${name}`);
+    let fullPath;
+    try { fullPath = archiveEntryPath(destDir, name); }
+    catch (_) { skipped.push(name); continue; }
     const parentDir = fullPath.split('/').slice(0, -1).join('/');
     try { fs.mkdirSync(parentDir, { recursive: true }); } catch (_) {}
     fs.writeFileSync(fullPath, Buffer.from(content));
     count++;
   }
-  return count;
+  return { count, skipped };
+};
+const extractNotice = ({ count, skipped }) => {
+  const body = `${count} file${count !== 1 ? 's' : ''} extracted`;
+  if (!skipped.length) return { title: 'Extracted', body, duration: 3000 };
+  const names = skipped.slice(0, 5).map((n) => JSON.stringify(n.length > 80 ? n.slice(0, 77) + '…' : n)).join(', ');
+  return {
+    title: 'Extracted — unsafe entries skipped',
+    body: `${body}. Skipped ${skipped.length} entr${skipped.length !== 1 ? 'ies' : 'y'} that would land outside the folder or on a system path: ${names}${skipped.length > 5 ? ', …' : ''}`,
+    duration: 10000,
+  };
 };
 const addToZip = (zipFiles, vfsPath, zipEntryName) => {
   try {
@@ -254,7 +299,7 @@ const TILE_CSS = (cls) => `
 const run = (...args) => {
   const [body, props, dir = DESKTOP_PATH] = args;
   if (!body) {
-    platform.host.execCommand("service('001-core.layout', 'open-window') (command('explorer-sifi'))", platform);
+    platform.host.openWindow('explorer-sifi');
     return;
   }
   const container = platform.window.document.createElement('div');
@@ -364,7 +409,7 @@ const App = (props) => {
         try { fs.writeFileSync(`${dirRef.current}/${n}`, ''); refreshRef.current(); } catch (e) { alert(e.message); }
       }),
       platform.host.registerCommand(`${k}.zip-extract`, (zipPath) => {
-        try { const n = extractZip(zipPath, zipPath.split('/').slice(0,-1).join('/')); platform.host.callCommand('notify', { title:'Extracted', body:`${n} file${n!==1?'s':''} extracted`, duration:3000 }); refreshRef.current(); }
+        try { platform.host.callCommand('notify', extractNotice(extractZip(zipPath, zipPath.split('/').slice(0,-1).join('/') || '/'))); refreshRef.current(); }
         catch (e) { platform.host.callCommand('notify', { title:'Extract failed', body:e.message||String(e), duration:4000 }); }
       }),
       platform.host.registerCommand(`${k}.zip-compress`, (vfsPath) => {
@@ -400,12 +445,12 @@ const App = (props) => {
     if (stat.isDirectory()) { goTo(p); return; }
     const ext = getFileExtension(p);
     if (IMAGE_EXTS.has(ext)) { const cmd=platform.host.getCommand('ui.imageviewer'); if(cmd){cmd.exec(null,null,p);return;} }
-    if (AUDIO_EXTS.has(ext)) { platform.host.execCommand(`service('001-core.layout', 'open-window') (command('ui.audioplayer'), '${p}')`, platform); return; }
+    if (AUDIO_EXTS.has(ext)) { platform.host.openWindow('ui.audioplayer', p); return; }
     if (ext==='.csv') { const cmd=platform.host.getCommand('ui.csv-viewer'); if(cmd){cmd.exec(null,null,p);return;} }
     if (ext==='.py')  { const cmd=platform.host.getCommand('ui.python');     if(cmd){cmd.exec(null,null,p);return;} }
     if (ext==='.zip') {
       if (confirm(`Extract "${p.split('/').pop()}" here?`)) {
-        try { const n=extractZip(p,dirRef.current); platform.host.callCommand('notify',{title:'Extracted',body:`${n} files`,duration:3000}); refresh(); }
+        try { platform.host.callCommand('notify', extractNotice(extractZip(p,dirRef.current))); refresh(); }
         catch (e) { platform.host.callCommand('notify',{title:'Extract failed',body:e.message,duration:4000}); }
       }
       return;
@@ -441,46 +486,50 @@ const App = (props) => {
     if (!openCtx) return;
     const rect = props.getBoundingClientRect();
     const k = cmdPrefix.current;
+    const call = (name, ...values) => () => platform.host.callCommand(`${k}.${name}`, ...values);
+    const openIn = (commandName, ...values) => () => platform.host.openWindow(commandName, ...values);
+    const fsService = (op, path) => () => platform.host.getService('root', 'fs')(op, path);
     const actions = [];
-    file.path = file.path.replace(/\/\//g,'/');
-    const stats = fs.statSync(file.path);
+    const path = file.path = normalizePath(file.path);
+    const stats = fs.statSync(path);
     if (stats.isFile()) {
-      actions.push({id:'edit_file', type:'action',title:'Edit',   cmd:`service('001-core.layout','open-window')(command('ui.notepad'),'${file.path}')`});
+      actions.push({id:'edit_file', title:'Edit', run:openIn('ui.notepad', path)});
       const ctxExt=file.name.split('.').pop().toLowerCase();
       const AUDIO_EXTS_SIFI = new Set(['mp3','wav','ogg','flac','m4a','aac','opus','mp4','mkv','webm']);
-      if (ctxExt==='py') actions.push({id:'run_py',type:'action',title:'Run in Python',cmd:`service('001-core.layout','open-window')(command('ui.python'),'${file.path}')`});
-      if (AUDIO_EXTS_SIFI.has(ctxExt)) actions.push({id:'open_audio',type:'action',title:'Play in Music Player',cmd:`service('001-core.layout','open-window')(command('ui.audioplayer'),'${file.path}')`});
-      if (ctxExt==='db'||ctxExt==='sqlite'||ctxExt==='sqlite3') actions.push({id:'open_sqlite',type:'action',title:'Open in SQLite Browser',cmd:`service('001-core.layout','open-window')(command('ui.sqlite'),'${file.path}')`});
-      actions.push({id:'open_file',  type:'action',title:'Open',   cmd:`service('001-core.layout','open-window')(command('ui.iframe'),'${file.path}')`});
-      actions.push({id:'delete_file',type:'action',title:'Delete', cmd:`service('root','fs')('rm','${file.path}')`});
-      actions.push({id:'rename_file',type:'action',title:'Rename',cmd:`platform.host.callCommand('${k}.rename','${file.path}')`});
-      actions.push({id:'diff_file',  type:'action',title:'Compare with…',cmd:`service('001-core.layout','open-window')(command('ui.diff'),'${file.path}','')`});
-      if (ctxExt==='zip') actions.push({id:'zip_extract',type:'action',title:'Extract here',cmd:`platform.host.callCommand('${k}.zip-extract','${file.path}')`});
-      actions.push({id:'zip_compress',type:'action',title:'Compress to ZIP',cmd:`platform.host.callCommand('${k}.zip-compress','${file.path}')`});
-      actions.push({id:'copy_file',type:'action',title:'Copy',cmd:`platform.host.callCommand('${k}.copy-file','${file.path}')`});
-      actions.push({id:'cut_file', type:'action',title:'Cut', cmd:`platform.host.callCommand('${k}.cut-file','${file.path}')`});
-      actions.push({id:'props_file',type:'action',title:'Properties',cmd:`platform.host.callCommand('${k}.show-properties','${file.path}')`});
-      actions.push({id:'div_ow',type:'divider',title:''});
-      actions.push({id:'open_with',type:'group',title:'Open with',children:[
-        {id:'ow_notepad',type:'action',title:'Text Editor',    cmd:`service('001-core.layout','open-window')(command('ui.notepad'),'${file.path}')`},
-        {id:'ow_vscode', type:'action',title:'VS Code',        cmd:`service('001-core.layout','open-window')(command('ui.vs-code'),'${file.path}')`},
-        {id:'ow_csv',    type:'action',title:'Spreadsheet',    cmd:`service('001-core.layout','open-window')(command('ui.csv-viewer'),'${file.path}')`},
-        {id:'ow_image',  type:'action',title:'Image Viewer',   cmd:`service('001-core.layout','open-window')(command('ui.imageviewer'),'${file.path}')`},
-        {id:'ow_audio',  type:'action',title:'Music Player',   cmd:`service('001-core.layout','open-window')(command('ui.audioplayer'),'${file.path}')`},
-        {id:'ow_sqlite', type:'action',title:'SQLite Browser', cmd:`service('001-core.layout','open-window')(command('ui.sqlite'),'${file.path}')`},
-        {id:'ow_python', type:'action',title:'Python REPL',    cmd:`service('001-core.layout','open-window')(command('ui.python'),'${file.path}')`},
-        {id:'ow_browser',type:'action',title:'Browser',        cmd:`service('001-core.layout','open-window')(command('ui.iframe'),'${file.path}')`},
+      if (SCRIPT_EXTS.has(ctxExt)) actions.push({id:'run_file', title:'Run', run:() => runScript(path)});
+      if (ctxExt==='py') actions.push({id:'run_py', title:'Run in Python', run:openIn('ui.python', path)});
+      if (AUDIO_EXTS_SIFI.has(ctxExt)) actions.push({id:'open_audio', title:'Play in Music Player', run:openIn('ui.audioplayer', path)});
+      if (ctxExt==='db'||ctxExt==='sqlite'||ctxExt==='sqlite3') actions.push({id:'open_sqlite', title:'Open in SQLite Browser', run:openIn('ui.sqlite', path)});
+      actions.push({id:'open_file',   title:'Open',   run:openIn('ui.iframe', path)});
+      actions.push({id:'delete_file', title:'Delete', run:fsService('rm', path)});
+      actions.push({id:'rename_file', title:'Rename', run:call('rename', path)});
+      actions.push({id:'diff_file',   title:'Compare with…', run:openIn('ui.diff', path, '')});
+      if (ctxExt==='zip') actions.push({id:'zip_extract', title:'Extract here', run:call('zip-extract', path)});
+      actions.push({id:'zip_compress', title:'Compress to ZIP', run:call('zip-compress', path)});
+      actions.push({id:'copy_file',  title:'Copy', run:call('copy-file', path)});
+      actions.push({id:'cut_file',   title:'Cut',  run:call('cut-file', path)});
+      actions.push({id:'props_file', title:'Properties', run:call('show-properties', path)});
+      actions.push({id:'div_ow', divider:true});
+      actions.push({id:'open_with', title:'Open with', children:[
+        {id:'ow_notepad', title:'Text Editor',    run:openIn('ui.notepad', path)},
+        {id:'ow_vscode',  title:'VS Code',        run:openIn('ui.vs-code', path)},
+        {id:'ow_csv',     title:'Spreadsheet',    run:openIn('ui.csv-viewer', path)},
+        {id:'ow_image',   title:'Image Viewer',   run:openIn('ui.imageviewer', path)},
+        {id:'ow_audio',   title:'Music Player',   run:openIn('ui.audioplayer', path)},
+        {id:'ow_sqlite',  title:'SQLite Browser', run:openIn('ui.sqlite', path)},
+        {id:'ow_python',  title:'Python REPL',    run:openIn('ui.python', path)},
+        {id:'ow_browser', title:'Browser',        run:openIn('ui.iframe', path)},
       ]});
     } else {
-      actions.push({id:'open_dir',        type:'action',title:'Open',            cmd:`service('001-core.layout','open-window')(command('explorer-sifi'),'${file.path}')`});
-      actions.push({id:'delete_dir',      type:'action',title:'Delete',          cmd:`service('root','fs')('rmdir','${file.path}')`});
-      actions.push({id:'rename_dir',      type:'action',title:'Rename',          cmd:`platform.host.callCommand('${k}.rename','${file.path}')`});
-      actions.push({id:'zip_compress_dir',type:'action',title:'Compress to ZIP', cmd:`platform.host.callCommand('${k}.zip-compress','${file.path}')`});
-      actions.push({id:'copy_dir',type:'action',title:'Copy',cmd:`platform.host.callCommand('${k}.copy-file','${file.path}')`});
-      actions.push({id:'cut_dir', type:'action',title:'Cut', cmd:`platform.host.callCommand('${k}.cut-file','${file.path}')`});
-      actions.push({id:'props_dir',type:'action',title:'Properties',cmd:`platform.host.callCommand('${k}.show-properties','${file.path}')`});
+      actions.push({id:'open_dir',         title:'Open',            run:openIn('explorer-sifi', path)});
+      actions.push({id:'delete_dir',       title:'Delete',          run:fsService('rmdir', path)});
+      actions.push({id:'rename_dir',       title:'Rename',          run:call('rename', path)});
+      actions.push({id:'zip_compress_dir', title:'Compress to ZIP', run:call('zip-compress', path)});
+      actions.push({id:'copy_dir',  title:'Copy', run:call('copy-file', path)});
+      actions.push({id:'cut_dir',   title:'Cut',  run:call('cut-file', path)});
+      actions.push({id:'props_dir', title:'Properties', run:call('show-properties', path)});
     }
-    openCtx(event.clientX+rect.x, event.clientY+rect.y, actions);
+    openCtx(event.clientX+rect.x, event.clientY+rect.y, toContextMenuItems(actions));
   };
 
   // ── Drag & drop ──────────────────────────────────────────────────────────
@@ -526,11 +575,11 @@ const App = (props) => {
     const rect = props.getBoundingClientRect();
     const k = cmdPrefix.current;
     const actions = [
-      { id:'paste',    type:'action', title:'Paste',      cmd:`platform.host.callCommand('${k}.paste-files')` },
-      { id:'new_dir',  type:'action', title:'New Folder',  cmd:`platform.host.callCommand('${k}.make-dir')` },
-      { id:'new_file', type:'action', title:'New File',    cmd:`platform.host.callCommand('${k}.make-file')` },
+      { id:'paste',    title:'Paste',      run:() => platform.host.callCommand(`${k}.paste-files`) },
+      { id:'new_dir',  title:'New Folder', run:() => platform.host.callCommand(`${k}.make-dir`) },
+      { id:'new_file', title:'New File',   run:() => platform.host.callCommand(`${k}.make-file`) },
     ];
-    openCtx(event.clientX+rect.x, event.clientY+rect.y, actions);
+    openCtx(event.clientX+rect.x, event.clientY+rect.y, toContextMenuItems(actions));
   };
 
   const crumbs = getBreadcrumbs(dirRef.current);
@@ -758,12 +807,7 @@ platform.host.registerCommand('explorer-sifi', run, {
   fullScreen: false,
 });
 
-// Register as default 'explorer' if the user has set this as their preference
-try {
-  const prefs = JSON.parse(fs.readFileSync('/user-preferences.json','utf8')||'{}');
-  if (prefs.default_explorer==='explorer-sifi') {
-    platform.host.registerCommand('explorer', run, {
-      callable:false, icon:'folder_open', title:'Files', fullScreen:false,
-    });
-  }
-} catch(_){}
+// Default-explorer preference (prefs.default_explorer === 'explorer-sifi'): the
+// 'explorer' command stays owned by file-explorer/main.js (the registry refuses
+// other owners, audit KRN-10), which hands its calls to this command instead —
+// so there's nothing to re-register here.

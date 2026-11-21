@@ -21,9 +21,10 @@ const Projects = () => {
     '': '/public/folder-icon.png',
   }
 
+  // Opening views the file (decisions.md D10): scripts open in the editor, .html in the
+  // opaque sandboxed viewer. The path travels as a value, never as DSL source (audit KRN-3).
   const openProject = (file) => {
-    const cmd = `service('root', 'exec') ('${projectsDir}/${file}');`
-    platform.host.execCommand(cmd, platform);
+    platform.host.exec(platform, `${projectsDir}/${file}`);
   }
 
   return (

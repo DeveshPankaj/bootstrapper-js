@@ -150,13 +150,19 @@ html, body {
     var el = document.createElement('div');
     el.className = 'item' + (running ? ' running' : '') + (active ? ' active' : '') + (minimized ? ' minimized' : '');
     el.title = label;
-    el.innerHTML = '<span class="icon">' + icon + '</span><span class="label">' + label + '</span><span class="dot"></span>';
+    // Labels are window titles, which apps set from file names: text only (audit APP-14/WIN-7).
+    [['icon', icon], ['label', label], ['dot']].forEach(function(p) {
+      var s = document.createElement('span');
+      s.className = p[0];
+      if (p.length > 1) s.textContent = String(p[1]);
+      el.appendChild(s);
+    });
     el.onclick = onclick;
     return el;
   }
 
   function render() {
-    dock.innerHTML = '';
+    dock.textContent = '';
 
     launchItems.forEach(function(item) {
       var win = openWindows.find(function(w) { return w.name === item.name; });

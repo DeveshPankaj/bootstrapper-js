@@ -51,15 +51,22 @@ const jobMatchesTime = (job: CronJob, now: Date): boolean =>
   fieldMatches(job.month, now.getMonth() + 1) &&
   fieldMatches(job.dow, now.getDay());
 
-// A job's command is either a path to a script (run via `host.exec`, so
-// `.js`/`.run`/etc. all work as usual) or a `execCommand` DSL expression
-// (e.g. `service('root', 'exec') ('/opt/cron/check-public-ip.js')`).
+// A job's command is either a path to a script or a `execCommand` DSL
+// expression (e.g. `service('root', 'exec') ('/opt/cron/check-public-ip.js')`).
+// `.js`/`.run` paths are run explicitly with `host.runFile` — the crontab is
+// the user's own schedule, so no confirmation — because `host.exec` is "open"
+// (decisions.md D10) and would show a script outside the system folders in
+// the editor instead of running it. Other paths are opened as before.
 const runJob = (job: CronJob) => {
   const platform = Platform.getInstance();
   try {
     if (job.command.startsWith("/")) {
       const [filepath, ...args] = job.command.split(/\s+/);
-      platform.host.exec(platform, filepath, ...args);
+      if (/\.(js|run)$/i.test(filepath)) {
+        platform.host.runFile(platform, filepath, args, { confirm: false });
+      } else {
+        platform.host.exec(platform, filepath, ...args);
+      }
     } else {
       platform.host.execCommand(job.command, platform);
     }

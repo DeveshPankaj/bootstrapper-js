@@ -15,7 +15,8 @@
       "files": [
         {
           "dest": "main.js",
-          "src": "/public/mount/opt/apps/file-explorer/main.js"
+          "src": "/public/mount/opt/apps/file-explorer/main.js",
+          "sha256": "10825f8e55229e89914b5f448fb133d6feb56e76d5fb9e64419f69b39fab364f"
         }
       ],
       "main": "main.js"
@@ -32,7 +33,8 @@
       "files": [
         {
           "dest": "main.js",
-          "src": "/public/mount/opt/apps/explorer-sifi/main.js"
+          "src": "/public/mount/opt/apps/explorer-sifi/main.js",
+          "sha256": "f5c843ca8f2b7b25cc21bee4285dda1cd06e7421d6e715f3ca44fdf758520814"
         }
       ],
       "main": "main.js"
@@ -49,7 +51,8 @@
       "files": [
         {
           "dest": "main.js",
-          "src": "/public/mount/opt/apps/image-viewer/main.js"
+          "src": "/public/mount/opt/apps/image-viewer/main.js",
+          "sha256": "2ba84f52cb569ccf6df6e2c4331c9fc2eb78d7afdfa32780a6d20f223bdf8238"
         }
       ],
       "main": "main.js"
@@ -66,7 +69,8 @@
       "files": [
         {
           "dest": "main.html",
-          "src": "/public/mount/opt/apps/terminal/main.html"
+          "src": "/public/mount/opt/apps/terminal/main.html",
+          "sha256": "f189b3e9dd1e9684286c0d7aee2560508efd0fe48662d0a8c038a8f523617cfc"
         }
       ],
       "main": "main.html"
@@ -83,7 +87,8 @@
       "files": [
         {
           "dest": "main.html",
-          "src": "/public/mount/opt/apps/settings/main.html"
+          "src": "/public/mount/opt/apps/settings/main.html",
+          "sha256": "b3c5e465bbecb2a0e6f65e51e85ffeb44a1786c0b3b423c62bf96bbd5d672310"
         }
       ],
       "main": "main.html"
@@ -100,7 +105,8 @@
       "files": [
         {
           "dest": "main.js",
-          "src": "/public/mount/opt/apps/app-drawer/main.js"
+          "src": "/public/mount/opt/apps/app-drawer/main.js",
+          "sha256": "bcba00a0a413a3754eb778526ca662fbc3ba18bfb8a9e6e13eb4df2afd93b641"
         }
       ],
       "main": "main.js"
@@ -117,7 +123,8 @@
       "files": [
         {
           "dest": "main.js",
-          "src": "/public/mount/opt/apps/app-launcher/main.js"
+          "src": "/public/mount/opt/apps/app-launcher/main.js",
+          "sha256": "5a7481c42677d17ec9284e4c27a623a924fd19f314fb8c9549b57bd2a86d1fd3"
         }
       ],
       "main": "main.js"
@@ -134,11 +141,13 @@
       "files": [
         {
           "dest": "main.js",
-          "src": "/public/mount/opt/apps/pkg-manager/main.js"
+          "src": "/public/mount/opt/apps/pkg-manager/main.js",
+          "sha256": "b106fcc85d9c5f6f30b990114374fb41bb30481b9b1240df36a54c159bf247d7"
         },
         {
           "dest": "loader.js",
-          "src": "/public/mount/opt/apps/pkg-manager/loader.js"
+          "src": "/public/mount/opt/apps/pkg-manager/loader.js",
+          "sha256": "85fab875af08655253277450ee1dad3502dcf50d63639cb9cffe6f541a70f739"
         }
       ],
       "main": "main.js"
@@ -155,7 +164,8 @@
       "files": [
         {
           "dest": "main.js",
-          "src": "/public/mount/opt/apps/spotlight/main.js"
+          "src": "/public/mount/opt/apps/spotlight/main.js",
+          "sha256": "c429dcbd088b4b1cc6fc7732205459011a55875f03dd5fadc649408944169acc"
         }
       ],
       "main": "main.js"
@@ -172,7 +182,8 @@
       "files": [
         {
           "dest": "main.js",
-          "src": "/public/mount/opt/apps/task-manager/main.js"
+          "src": "/public/mount/opt/apps/task-manager/main.js",
+          "sha256": "b4159d40217b34e9367e6d19dc89d13d41f62382c75cdf9137e95c8283b70c47"
         }
       ],
       "main": "main.js"
@@ -189,7 +200,8 @@
       "files": [
         {
           "dest": "main.js",
-          "src": "/public/mount/opt/apps/dev-utils/main.js"
+          "src": "/public/mount/opt/apps/dev-utils/main.js",
+          "sha256": "cd1e9cc3fbb310006bd5a2678b01eb66fe9e0f00188a89383e894a4bf1a33dfd"
         }
       ],
       "main": "main.js"
@@ -206,7 +218,8 @@
       "files": [
         {
           "dest": "main.js",
-          "src": "/public/mount/opt/apps/sqlite-browser/main.js"
+          "src": "/public/mount/opt/apps/sqlite-browser/main.js",
+          "sha256": "cb816622cfa8eef3ee8d747164a6b454fbadd2e40ee3fad5180fa4fd0c77ebe7"
         }
       ],
       "main": "main.js"
@@ -221,8 +234,16 @@
       "author": "bootstrapper-js",
       "commandName": "ui.robot-sim",
       "files": [
-        { "dest": "main.js",   "src": "/public/mount/opt/apps/robot-sim/main.js" },
-        { "dest": "main.html", "src": "/public/mount/opt/apps/robot-sim/main.html" }
+        {
+          "dest": "main.js",
+          "src": "/public/mount/opt/apps/robot-sim/main.js",
+          "sha256": "a6ab8189462743d63c70d5a7c6d32f05d9f56eea95e722cb6a522923ac943ed6"
+        },
+        {
+          "dest": "main.html",
+          "src": "/public/mount/opt/apps/robot-sim/main.html",
+          "sha256": "d1ec8946b442a6d5eb86fc15a5c9eb2670ccd211f9a014413c71d0bb9800672e"
+        }
       ],
       "main": "main.js"
     },
@@ -236,8 +257,16 @@
       "author": "bootstrapper-js",
       "commandName": "ui.cpp-ide",
       "files": [
-        { "dest": "main.js",   "src": "/public/mount/opt/apps/cpp-ide/main.js" },
-        { "dest": "main.html", "src": "/public/mount/opt/apps/cpp-ide/main.html" }
+        {
+          "dest": "main.js",
+          "src": "/public/mount/opt/apps/cpp-ide/main.js",
+          "sha256": "d56095d0136b513c4026a70bb0eecf88039513011c13a37d0685e2a511cfc01f"
+        },
+        {
+          "dest": "main.html",
+          "src": "/public/mount/opt/apps/cpp-ide/main.html",
+          "sha256": "88d6eab029870ab33aab707f0662f83982c66dc75a94dea641caee66fa951a00"
+        }
       ],
       "main": "main.js"
     },
@@ -251,8 +280,16 @@
       "author": "bootstrapper-js",
       "commandName": "ui.ts-ide",
       "files": [
-        { "dest": "main.js",   "src": "/public/mount/opt/apps/ts-ide/main.js" },
-        { "dest": "main.html", "src": "/public/mount/opt/apps/ts-ide/main.html" }
+        {
+          "dest": "main.js",
+          "src": "/public/mount/opt/apps/ts-ide/main.js",
+          "sha256": "5b710ca928dcf38566972fb6574f66668ea1d279e799023bc8dbb56bbc2fe3b4"
+        },
+        {
+          "dest": "main.html",
+          "src": "/public/mount/opt/apps/ts-ide/main.html",
+          "sha256": "f65b69c28e85cc2e1c856d2e66b7b51722e52f61ae2706914359d9a0df91cbdc"
+        }
       ],
       "main": "main.js"
     },
@@ -268,7 +305,8 @@
       "files": [
         {
           "dest": "main.js",
-          "src": "/public/mount/opt/apps/graph-editor/main.js"
+          "src": "/public/mount/opt/apps/graph-editor/main.js",
+          "sha256": "49a692bf23c7a695f3553cd105fbe43645d11abf645e744a8f6a652fb1776f0a"
         }
       ],
       "main": "main.js"
@@ -285,7 +323,8 @@
       "files": [
         {
           "dest": "main.js",
-          "src": "/public/mount/opt/apps/mermaid-viewer/main.js"
+          "src": "/public/mount/opt/apps/mermaid-viewer/main.js",
+          "sha256": "65cc7dba0906f4b9f71a8b25313e6b8f61725c69230e009cd6729f5339149475"
         }
       ],
       "main": "main.js"
@@ -302,7 +341,8 @@
       "files": [
         {
           "dest": "main.js",
-          "src": "/public/mount/opt/apps/diff-viewer/main.js"
+          "src": "/public/mount/opt/apps/diff-viewer/main.js",
+          "sha256": "e33ecb6681477516bb5b03f9d7325a0752a55638a8a154c5ee30e1f1b3582cc0"
         }
       ],
       "main": "main.js"
@@ -319,11 +359,13 @@
       "files": [
         {
           "dest": "main.js",
-          "src": "/public/mount/opt/apps/python-repl/main.js"
+          "src": "/public/mount/opt/apps/python-repl/main.js",
+          "sha256": "af47641e5a8f9f67e145b0cc5572a86c5c565d7ee86433e4cb0ebf81ca65ec35"
         },
         {
           "dest": "python.html",
-          "src": "/public/mount/opt/apps/python-repl/python.html"
+          "src": "/public/mount/opt/apps/python-repl/python.html",
+          "sha256": "6cd94ffbc5bb2d48331443d0848bbef7dc84b7396ea29838d46f63f2fd571e10"
         }
       ],
       "main": "main.js"
@@ -340,19 +382,23 @@
       "files": [
         {
           "dest": "main.js",
-          "src": "/public/mount/opt/apps/todo-python/main.js"
+          "src": "/public/mount/opt/apps/todo-python/main.js",
+          "sha256": "51187a0a2ffb2119cf9f9b9a8381f25d686ad6993b6fd2051acf43355d183472"
         },
         {
           "dest": "todo.html",
-          "src": "/public/mount/opt/apps/todo-python/todo.html"
+          "src": "/public/mount/opt/apps/todo-python/todo.html",
+          "sha256": "4b0d8c7ae4a834dabcac035daf35aa76c66f97833aed0f7b9e837e04528d653a"
         },
         {
           "dest": "todo.py",
-          "src": "/public/mount/opt/apps/todo-python/todo.py"
+          "src": "/public/mount/opt/apps/todo-python/todo.py",
+          "sha256": "358dd9ed28a776469a1d4cf623584ecba41857a5546ebf46b2fe8c11657c99e3"
         },
         {
           "dest": "storage.py",
-          "src": "/public/mount/opt/apps/todo-python/storage.py"
+          "src": "/public/mount/opt/apps/todo-python/storage.py",
+          "sha256": "cfff78872290035a416f96046de339a5598416c5064e5d1ae213ea7e89186089"
         }
       ],
       "main": "main.js"
@@ -369,11 +415,13 @@
       "files": [
         {
           "dest": "main.js",
-          "src": "/public/mount/opt/apps/nn-ide/main.js"
+          "src": "/public/mount/opt/apps/nn-ide/main.js",
+          "sha256": "2a4b2a19230b00f4f3b6fd01eeef0661ad80a3dac9fc1cbf19eb19764bc25083"
         },
         {
           "dest": "main.html",
-          "src": "/public/mount/opt/apps/nn-ide/main.html"
+          "src": "/public/mount/opt/apps/nn-ide/main.html",
+          "sha256": "abe4b9c5a07d6534542af2c1b384527f4ee9fc68bab0ef93d8afa5e5044afdd5"
         }
       ],
       "main": "main.js"
@@ -390,19 +438,23 @@
       "files": [
         {
           "dest": "main.js",
-          "src": "/public/mount/opt/apps/model-builder/main.js"
+          "src": "/public/mount/opt/apps/model-builder/main.js",
+          "sha256": "2fe891188be46ed4b1443d1dd2892a05f6443eef247197eb58bb41c990c221d6"
         },
         {
           "dest": "main.html",
-          "src": "/public/mount/opt/apps/model-builder/main.html"
+          "src": "/public/mount/opt/apps/model-builder/main.html",
+          "sha256": "38abd8939d4996f307868a808e173f78f51a2facb36931e3727c8c72f7e2327a"
         },
         {
           "dest": "mnist-data.json",
-          "src": "/public/mount/opt/apps/model-builder/mnist-data.json"
+          "src": "/public/mount/opt/apps/model-builder/mnist-data.json",
+          "sha256": "a222c5a37af97c33440557ff47318e2216def197ed56a438c013f6295305a17f"
         },
         {
           "dest": "fashion-data.json",
-          "src": "/public/mount/opt/apps/model-builder/fashion-data.json"
+          "src": "/public/mount/opt/apps/model-builder/fashion-data.json",
+          "sha256": "823fd82ebe019725c609d61c30c7d71f9ef72ea94fc89a0906e566c9f9f77b5d"
         }
       ],
       "main": "main.js"
@@ -419,11 +471,13 @@
       "files": [
         {
           "dest": "main.js",
-          "src": "/public/mount/opt/apps/markdown-reader/main.js"
+          "src": "/public/mount/opt/apps/markdown-reader/main.js",
+          "sha256": "bcab4ba4715648cc99b77365316bc8dfd07e5cb2f396106c595b7ab4a5310698"
         },
         {
           "dest": "md-renderer.html",
-          "src": "/public/mount/opt/apps/markdown-reader/md-renderer.html"
+          "src": "/public/mount/opt/apps/markdown-reader/md-renderer.html",
+          "sha256": "6727512039873359a2c481642ad4be927170a2c071e7223a22c5ad42d2fdbec6"
         }
       ],
       "main": "main.js"
@@ -440,7 +494,8 @@
       "files": [
         {
           "dest": "main.js",
-          "src": "/public/mount/opt/apps/csv-viewer/main.js"
+          "src": "/public/mount/opt/apps/csv-viewer/main.js",
+          "sha256": "c6bd5757deeaea45c35048685454e4678ea956f95c1beac6eceae2f6913d05dd"
         }
       ],
       "main": "main.js"
@@ -457,11 +512,13 @@
       "files": [
         {
           "dest": "main.js",
-          "src": "/public/mount/opt/apps/dashboard/main.js"
+          "src": "/public/mount/opt/apps/dashboard/main.js",
+          "sha256": "d0742a4297dfea1e6f87e92bf263d8fa2fb8ae60fbd2d5ab90ea100b2328bde8"
         },
         {
           "dest": "dashboard.html",
-          "src": "/public/mount/opt/apps/dashboard/dashboard.html"
+          "src": "/public/mount/opt/apps/dashboard/dashboard.html",
+          "sha256": "16a0291cb5942579d16c4565dfb3ad0598fea994da3f3bd33fd1bd737996b449"
         }
       ],
       "main": "main.js"
@@ -478,7 +535,8 @@
       "files": [
         {
           "dest": "main.js",
-          "src": "/public/mount/opt/apps/bookmarks/main.js"
+          "src": "/public/mount/opt/apps/bookmarks/main.js",
+          "sha256": "623b1ff4d7bc6738f3a2f87c272e1e3e5d344ee68db382af8733ca3642428d59"
         }
       ],
       "main": "main.js"
@@ -487,7 +545,7 @@
       "id": "wamp-client",
       "name": "WAMP Client",
       "description": "WebSocket Application Messaging Protocol client for real-time pub/sub and RPC.",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "icon": "settings_ethernet",
       "category": "Web",
       "author": "bootstrapper-js",
@@ -495,11 +553,13 @@
       "files": [
         {
           "dest": "main.js",
-          "src": "/public/mount/opt/apps/wamp-client/main.js"
+          "src": "/public/mount/opt/apps/wamp-client/main.js",
+          "sha256": "3bd9f071853fe0278246151ed5efcfe77ee0bb1694ddb947f49312f28a3879d0"
         },
         {
           "dest": "WAMP.html",
-          "src": "/public/mount/opt/apps/wamp-client/WAMP.html"
+          "src": "/public/mount/opt/apps/wamp-client/WAMP.html",
+          "sha256": "f2bc5e56d760e9375147feafd43a6bb8d763b2632e465cc6ba47235d55fb6d41"
         }
       ],
       "main": "main.js"
@@ -516,11 +576,13 @@
       "files": [
         {
           "dest": "main.js",
-          "src": "/public/mount/opt/apps/webrtc/main.js"
+          "src": "/public/mount/opt/apps/webrtc/main.js",
+          "sha256": "5468918ec3bb0de3b8e5064e407551d382ae61bf6d2c15f13b2f0347c92011db"
         },
         {
           "dest": "main.html",
-          "src": "/public/mount/opt/apps/webrtc/main.html"
+          "src": "/public/mount/opt/apps/webrtc/main.html",
+          "sha256": "2a614b728868d6bee50b971b6a2a59ccdf83c8ac62af65fc0844924aca62f75d"
         }
       ],
       "main": "main.js"
@@ -535,8 +597,16 @@
       "author": "bootstrapper-js",
       "commandName": "ui.remote-machines",
       "files": [
-        { "dest": "main.js",   "src": "/public/mount/opt/apps/remote-machines/main.js" },
-        { "dest": "main.html", "src": "/public/mount/opt/apps/remote-machines/main.html" }
+        {
+          "dest": "main.js",
+          "src": "/public/mount/opt/apps/remote-machines/main.js",
+          "sha256": "4860f3963bd6caa44b2d69307d54e82a5e1b15d153afa031be2e27adb34daac0"
+        },
+        {
+          "dest": "main.html",
+          "src": "/public/mount/opt/apps/remote-machines/main.html",
+          "sha256": "10684aa57119347c8a38673d3c61fa9e1d9907bf5ffe8b3de6909f8fa9132f62"
+        }
       ],
       "main": "main.js"
     },
@@ -552,11 +622,13 @@
       "files": [
         {
           "dest": "main.js",
-          "src": "/public/mount/opt/apps/youtube-player/main.js"
+          "src": "/public/mount/opt/apps/youtube-player/main.js",
+          "sha256": "93c9ea0aae43e8ad2ecaedf28567e2812186451c3a34df5c83a0b0192fd4c952"
         },
         {
           "dest": "main.html",
-          "src": "/public/mount/opt/apps/youtube-player/main.html"
+          "src": "/public/mount/opt/apps/youtube-player/main.html",
+          "sha256": "5c2b49bf2e93b956b6bededa83944b60042f81de0753241c9ed358933e359d4c"
         }
       ],
       "main": "main.js"
@@ -571,18 +643,66 @@
       "author": "bootstrapper-js",
       "commandName": "ui.distributed-compute",
       "files": [
-        { "dest": "main.js", "src": "/public/mount/opt/apps/distributed-compute/main.js" },
-        { "dest": "main.html", "src": "/public/mount/opt/apps/distributed-compute/main.html" },
-        { "dest": "lib/mesh-client.js", "src": "/public/mount/opt/apps/distributed-compute/lib/mesh-client.js" },
-        { "dest": "lib/scheduler.js", "src": "/public/mount/opt/apps/distributed-compute/lib/scheduler.js" },
-        { "dest": "lib/task-runtime.js", "src": "/public/mount/opt/apps/distributed-compute/lib/task-runtime.js" },
-        { "dest": "lib/worker-task-runtime.js", "src": "/public/mount/opt/apps/distributed-compute/lib/worker-task-runtime.js" },
-        { "dest": "lib/tiny-nn.js", "src": "/public/mount/opt/apps/distributed-compute/lib/tiny-nn.js" },
-        { "dest": "examples/map-reduce-demo.js", "src": "/public/mount/opt/apps/distributed-compute/examples/map-reduce-demo.js" },
-        { "dest": "examples/neural-net-training.js", "src": "/public/mount/opt/apps/distributed-compute/examples/neural-net-training.js" },
-        { "dest": "ui/app.js", "src": "/public/mount/opt/apps/distributed-compute/ui/app.js" },
-        { "dest": "ui/editor.js", "src": "/public/mount/opt/apps/distributed-compute/ui/editor.js" },
-        { "dest": "ui/chart.js", "src": "/public/mount/opt/apps/distributed-compute/ui/chart.js" }
+        {
+          "dest": "main.js",
+          "src": "/public/mount/opt/apps/distributed-compute/main.js",
+          "sha256": "c1d9e3da2f58dcc6ba88635cff12625c54b61dae50734976ec07ff99fb4d30a7"
+        },
+        {
+          "dest": "main.html",
+          "src": "/public/mount/opt/apps/distributed-compute/main.html",
+          "sha256": "b4724c32d6a6491d5d813fab444545cfc8143e9f480ce2cb04574bd98e9b1d28"
+        },
+        {
+          "dest": "lib/mesh-client.js",
+          "src": "/public/mount/opt/apps/distributed-compute/lib/mesh-client.js",
+          "sha256": "b7f35c20dc8d3e5e997ea73d50d9d03ea7b93f80c50e5d5e0dbe88950fcbe32e"
+        },
+        {
+          "dest": "lib/scheduler.js",
+          "src": "/public/mount/opt/apps/distributed-compute/lib/scheduler.js",
+          "sha256": "4a60da11bf4c2df349b6c7032ef75c319986c4a245b50262e9e5558a7224de8d"
+        },
+        {
+          "dest": "lib/task-runtime.js",
+          "src": "/public/mount/opt/apps/distributed-compute/lib/task-runtime.js",
+          "sha256": "bc66bd77c2f0511e240ed98c3d1a01262119afea3cea0e985d3a5a7fd7d0a975"
+        },
+        {
+          "dest": "lib/worker-task-runtime.js",
+          "src": "/public/mount/opt/apps/distributed-compute/lib/worker-task-runtime.js",
+          "sha256": "69e26fd2cbf14e5fb8bde1365818a7c5110b502871bd098c0264b8f443ae69cc"
+        },
+        {
+          "dest": "lib/tiny-nn.js",
+          "src": "/public/mount/opt/apps/distributed-compute/lib/tiny-nn.js",
+          "sha256": "61fe6178b5b0a6ddbc337cf3b86f11ed61dbc26791d497f0249feb3e8a548d04"
+        },
+        {
+          "dest": "examples/map-reduce-demo.js",
+          "src": "/public/mount/opt/apps/distributed-compute/examples/map-reduce-demo.js",
+          "sha256": "32a528240c62e45976114ea03d5339115f97d1ea16b57be3857a5a61d4d65854"
+        },
+        {
+          "dest": "examples/neural-net-training.js",
+          "src": "/public/mount/opt/apps/distributed-compute/examples/neural-net-training.js",
+          "sha256": "98ebde19d1ac357cf212b6e2825f6759d0c1ee8fdc6c76ab759467e37e5f428b"
+        },
+        {
+          "dest": "ui/app.js",
+          "src": "/public/mount/opt/apps/distributed-compute/ui/app.js",
+          "sha256": "48f41d32c1ab84593a1af36b0ca550801310e7cf0afaa01e91e5a63a96c9e06d"
+        },
+        {
+          "dest": "ui/editor.js",
+          "src": "/public/mount/opt/apps/distributed-compute/ui/editor.js",
+          "sha256": "4f48d84654cc3627be1835364278a52f498d06af18737a8504aad77af7772399"
+        },
+        {
+          "dest": "ui/chart.js",
+          "src": "/public/mount/opt/apps/distributed-compute/ui/chart.js",
+          "sha256": "2b98385f3fac2fe6bd1427673a49b06cb7e2e33d01eed576fcf36f08ba61d754"
+        }
       ],
       "main": "main.js"
     },
@@ -596,11 +716,31 @@
       "author": "bootstrapper-js",
       "commandName": "ui.distributed-kv",
       "files": [
-        { "dest": "main.js", "src": "/public/mount/opt/apps/distributed-kv/main.js" },
-        { "dest": "main.html", "src": "/public/mount/opt/apps/distributed-kv/main.html" },
-        { "dest": "lib/mesh-client.js", "src": "/public/mount/opt/apps/distributed-kv/lib/mesh-client.js" },
-        { "dest": "lib/kv-store.js", "src": "/public/mount/opt/apps/distributed-kv/lib/kv-store.js" },
-        { "dest": "ui/app.js", "src": "/public/mount/opt/apps/distributed-kv/ui/app.js" }
+        {
+          "dest": "main.js",
+          "src": "/public/mount/opt/apps/distributed-kv/main.js",
+          "sha256": "76e886e0da98ba583005aa60a59a24481c795b56b7d7135dd97f24c6048ef8db"
+        },
+        {
+          "dest": "main.html",
+          "src": "/public/mount/opt/apps/distributed-kv/main.html",
+          "sha256": "8a72f7064a5aa39d9ee302d99909f693f4a414bfade3287f116d56e89083f3d3"
+        },
+        {
+          "dest": "lib/mesh-client.js",
+          "src": "/public/mount/opt/apps/distributed-kv/lib/mesh-client.js",
+          "sha256": "ba2a677efa8e051361b39f89f2d018a86e4a8ecfd2159063c0e9e42700465b6e"
+        },
+        {
+          "dest": "lib/kv-store.js",
+          "src": "/public/mount/opt/apps/distributed-kv/lib/kv-store.js",
+          "sha256": "2734415cd55d06404b8d0416d5e20b439851981ac4347ce103dee150978a1a5c"
+        },
+        {
+          "dest": "ui/app.js",
+          "src": "/public/mount/opt/apps/distributed-kv/ui/app.js",
+          "sha256": "16dc81802f8f9a4a371bbae17f43ba5748ccf79d86341cc76a8db2318f045305"
+        }
       ],
       "main": "main.js"
     },
@@ -615,7 +755,8 @@
       "files": [
         {
           "dest": "main.html",
-          "src": "/public/mount/opt/apps/totp-auth/main.html"
+          "src": "/public/mount/opt/apps/totp-auth/main.html",
+          "sha256": "ca03463b44e6240547402cf44c062e21ac3965b56aab5fb149331202ef7a193d"
         }
       ],
       "main": "main.html"
@@ -631,7 +772,8 @@
       "files": [
         {
           "dest": "main.html",
-          "src": "/public/mount/opt/apps/fs-inspector/main.html"
+          "src": "/public/mount/opt/apps/fs-inspector/main.html",
+          "sha256": "cb07e457ead06631e11321f9babbd4f6592b6fc25b9a22a9b5c4146baca8d357"
         }
       ],
       "main": "main.html"
@@ -648,11 +790,13 @@
       "files": [
         {
           "dest": "main.js",
-          "src": "/public/mount/opt/apps/snake-game/main.js"
+          "src": "/public/mount/opt/apps/snake-game/main.js",
+          "sha256": "47c2be53f0722d1f0badf801f72aaa7a45a50b8c9e9f92bc8e41a294276ddd8b"
         },
         {
           "dest": "main.html",
-          "src": "/public/mount/opt/apps/snake-game/main.html"
+          "src": "/public/mount/opt/apps/snake-game/main.html",
+          "sha256": "e4e0becdf689df18ccbace556bc7ec3d43402a9b159123dc77c4558c173d4f2f"
         }
       ],
       "main": "main.js"
@@ -669,11 +813,13 @@
       "files": [
         {
           "dest": "main.js",
-          "src": "/public/mount/opt/apps/snake-lstm/main.js"
+          "src": "/public/mount/opt/apps/snake-lstm/main.js",
+          "sha256": "f3e7358408034d7ecbe126c6a30abd05dd19690f8f796ffc39d1db0e6fc6c365"
         },
         {
           "dest": "main.html",
-          "src": "/public/mount/opt/apps/snake-lstm/main.html"
+          "src": "/public/mount/opt/apps/snake-lstm/main.html",
+          "sha256": "3c7696a757ff50d8f13d2a9f480d6688c7d2aebfad361ec9f1052e5d67b47645"
         }
       ],
       "main": "main.js"
@@ -690,11 +836,13 @@
       "files": [
         {
           "dest": "main.js",
-          "src": "/public/mount/opt/apps/snake-qlearning/main.js"
+          "src": "/public/mount/opt/apps/snake-qlearning/main.js",
+          "sha256": "31c1b6e9fbbdc1d194f48d534c1d05e7fe598a92c0ca2df134157bba0a07f61f"
         },
         {
           "dest": "main.html",
-          "src": "/public/mount/opt/apps/snake-qlearning/main.html"
+          "src": "/public/mount/opt/apps/snake-qlearning/main.html",
+          "sha256": "c54d0af237cf7328cf28ee3049b7116affa7f1f29a82211d5daa3d50dd885b89"
         }
       ],
       "main": "main.js"
@@ -711,11 +859,13 @@
       "files": [
         {
           "dest": "main.js",
-          "src": "/public/mount/opt/apps/snake-cnn3d/main.js"
+          "src": "/public/mount/opt/apps/snake-cnn3d/main.js",
+          "sha256": "a63667ad18df21d5b3c548f6fe9c50e04bf7263dedffc8de52e5c15cb6ac1cda"
         },
         {
           "dest": "main.html",
-          "src": "/public/mount/opt/apps/snake-cnn3d/main.html"
+          "src": "/public/mount/opt/apps/snake-cnn3d/main.html",
+          "sha256": "396042097013ffa16b756a0ab820d9fcdc65d678ce99015fd2a83b3f923aff91"
         }
       ],
       "main": "main.js"
@@ -731,7 +881,8 @@
       "files": [
         {
           "dest": "main.html",
-          "src": "/public/mount/opt/apps/webgl-demo/main.html"
+          "src": "/public/mount/opt/apps/webgl-demo/main.html",
+          "sha256": "b485c414710ec6d7cbeed7112332e88db18e94083c534cb21eee6f0b33cee912"
         }
       ],
       "main": "main.html"
@@ -747,7 +898,8 @@
       "files": [
         {
           "dest": "main.html",
-          "src": "/public/mount/opt/apps/webgl-earth/main.html"
+          "src": "/public/mount/opt/apps/webgl-earth/main.html",
+          "sha256": "f235309335385a701443bcde719410d9e8ea31dbf582201e692e6cb130c0caef"
         }
       ],
       "main": "main.html"
@@ -763,7 +915,8 @@
       "files": [
         {
           "dest": "main.html",
-          "src": "/public/mount/opt/apps/threejs-demo/main.html"
+          "src": "/public/mount/opt/apps/threejs-demo/main.html",
+          "sha256": "128621f6bc58dfd100a867a0f9543ab49a83326ed45e18da1479d06bb712b093"
         }
       ],
       "main": "main.html"
@@ -779,7 +932,8 @@
       "files": [
         {
           "dest": "main.html",
-          "src": "/public/mount/opt/apps/threejs-flow/main.html"
+          "src": "/public/mount/opt/apps/threejs-flow/main.html",
+          "sha256": "bbb931e6922b5078d571f3d38974a5d56693001aacc0d536d862f73db84efe1a"
         }
       ],
       "main": "main.html"
@@ -795,27 +949,33 @@
       "files": [
         {
           "dest": "index.html",
-          "src": "/public/mount/opt/apps/glsl-shader/index.html"
+          "src": "/public/mount/opt/apps/glsl-shader/index.html",
+          "sha256": "9602822c7b02123b29b73d208254b8ae2b0d71a3f0dcd477d03b01d30d18fbdb"
         },
         {
           "dest": "index.js",
-          "src": "/public/mount/opt/apps/glsl-shader/index.js"
+          "src": "/public/mount/opt/apps/glsl-shader/index.js",
+          "sha256": "065924e25b166c2fd51312db6c8d5469d9e5cb230e8d27efe2940b5feecf7057"
         },
         {
           "dest": "fragmentShader.js",
-          "src": "/public/mount/opt/apps/glsl-shader/fragmentShader.js"
+          "src": "/public/mount/opt/apps/glsl-shader/fragmentShader.js",
+          "sha256": "4f25b312248e5d13957258a84bfc74b52f9cb25eb162a4df44ed8827e090189c"
         },
         {
           "dest": "vertexShader.js",
-          "src": "/public/mount/opt/apps/glsl-shader/vertexShader.js"
+          "src": "/public/mount/opt/apps/glsl-shader/vertexShader.js",
+          "sha256": "718358fdfd1851c117ff4c5341259d4dd90795078a8a05e012c4ab777b41096b"
         },
         {
           "dest": "lib/jsm/controls/OrbitControls.js",
-          "src": "/public/mount/opt/apps/glsl-shader/lib/jsm/controls/OrbitControls.js"
+          "src": "/public/mount/opt/apps/glsl-shader/lib/jsm/controls/OrbitControls.js",
+          "sha256": "d55e266db18f537b5ff7ee8f5e195e05f987476018e36a026c43ca5b5ce6d324"
         },
         {
           "dest": "lib/three.module.js",
-          "src": "/public/mount/opt/apps/glsl-shader/lib/three.module.js"
+          "src": "/public/mount/opt/apps/glsl-shader/lib/three.module.js",
+          "sha256": "469ce895f36c00107b02b7cced23c0e800ff3811d21dc08b95a900a4d6a4ae44"
         }
       ],
       "main": "index.html"
@@ -831,7 +991,8 @@
       "files": [
         {
           "dest": "main.html",
-          "src": "/public/mount/opt/apps/vscode-online/main.html"
+          "src": "/public/mount/opt/apps/vscode-online/main.html",
+          "sha256": "ba7c126f1847de329b9da055b5bfaed96ed179f4fbad107a8a42ae08e8b43c78"
         }
       ],
       "main": "main.html"
@@ -847,7 +1008,8 @@
       "files": [
         {
           "dest": "main.html",
-          "src": "/public/mount/opt/apps/analyze/main.html"
+          "src": "/public/mount/opt/apps/analyze/main.html",
+          "sha256": "8966e0ca9f414094305f96141f1335960fa6dbf44baca6b1919eefb15e07f13b"
         }
       ],
       "main": "main.html"
@@ -863,7 +1025,8 @@
       "files": [
         {
           "dest": "main.html",
-          "src": "/public/mount/opt/apps/anova/main.html"
+          "src": "/public/mount/opt/apps/anova/main.html",
+          "sha256": "8a3cddbc4ad55598ebd192e57f6f705ac6b6957da91443770f59b54439ab47e1"
         }
       ],
       "main": "main.html"
@@ -879,7 +1042,8 @@
       "files": [
         {
           "dest": "main.html",
-          "src": "/public/mount/opt/apps/screen-reader/main.html"
+          "src": "/public/mount/opt/apps/screen-reader/main.html",
+          "sha256": "78facac71fa67d960b393d9622adbb25dbdd0dfc4add37c3a67f4e3b536334c1"
         }
       ],
       "main": "main.html"
@@ -895,7 +1059,8 @@
       "files": [
         {
           "dest": "main.html",
-          "src": "/public/mount/opt/apps/speed-test/main.html"
+          "src": "/public/mount/opt/apps/speed-test/main.html",
+          "sha256": "81e93c88b79bd3e334f78ca0d37556e3c0fd5ef0ab0309df265b425db5a7bcf8"
         }
       ],
       "main": "main.html"
@@ -912,7 +1077,8 @@
       "files": [
         {
           "dest": "main.js",
-          "src": "/public/mount/opt/apps/sqlite-charts/main.js"
+          "src": "/public/mount/opt/apps/sqlite-charts/main.js",
+          "sha256": "039ebb0fc0452f9a9897a6b2be2c55e181aa9a75d56f5f7e0c31907f2311a936"
         }
       ],
       "main": "main.js"
@@ -929,11 +1095,13 @@
       "files": [
         {
           "dest": "main.js",
-          "src": "/public/mount/opt/apps/notebook/main.js"
+          "src": "/public/mount/opt/apps/notebook/main.js",
+          "sha256": "04954f8423cddac2608896e65c009c209969f24d54ad2d00f4214087e514de5e"
         },
         {
           "dest": "notebook.html",
-          "src": "/public/mount/opt/apps/notebook/notebook.html"
+          "src": "/public/mount/opt/apps/notebook/notebook.html",
+          "sha256": "387836b6b4b7d65bbdf3db0f58f7603822e1329fd774408f8ca67574a82e2926"
         }
       ],
       "main": "main.js"
@@ -950,11 +1118,13 @@
       "files": [
         {
           "dest": "main.js",
-          "src": "/public/mount/opt/apps/trainboard/main.js"
+          "src": "/public/mount/opt/apps/trainboard/main.js",
+          "sha256": "e198f03e629f77d48d847d7c1e4170196ab383faebfd6eaa05d70e8ea4568d3b"
         },
         {
           "dest": "main.html",
-          "src": "/public/mount/opt/apps/trainboard/main.html"
+          "src": "/public/mount/opt/apps/trainboard/main.html",
+          "sha256": "097aa264f9cd182cd4be405b642ef9c2b7ded6b6458002afded29d6b775fe2cb"
         }
       ],
       "main": "main.js"
@@ -971,11 +1141,13 @@
       "files": [
         {
           "dest": "main.js",
-          "src": "/public/mount/opt/apps/python-demo/main.js"
+          "src": "/public/mount/opt/apps/python-demo/main.js",
+          "sha256": "0131f83f8ceb50cc1a4275cbc2ad0015c34b2eb6a0b799bf4dad750749f78ab7"
         },
         {
           "dest": "demo.html",
-          "src": "/public/mount/opt/apps/python-demo/demo.html"
+          "src": "/public/mount/opt/apps/python-demo/demo.html",
+          "sha256": "7e39b0ab1415f13404de6f0bde357446b27213918eff1358a3f3979febf9aa8b"
         }
       ],
       "main": "main.js"
@@ -992,11 +1164,13 @@
       "files": [
         {
           "dest": "main.js",
-          "src": "/public/mount/opt/apps/audio-player/main.js"
+          "src": "/public/mount/opt/apps/audio-player/main.js",
+          "sha256": "7755e84fce80f8571d6f073c356918f14ca8bb41a60503839f496e36ac880eb4"
         },
         {
           "dest": "player.html",
-          "src": "/public/mount/opt/apps/audio-player/player.html"
+          "src": "/public/mount/opt/apps/audio-player/player.html",
+          "sha256": "26011fa6a6132be7afbdf0e99fc5fb393816adbd59cf07a50e398e060f3cfd42"
         }
       ],
       "main": "main.js"
@@ -1013,11 +1187,13 @@
       "files": [
         {
           "dest": "main.js",
-          "src": "/public/mount/opt/apps/colleps/main.js"
+          "src": "/public/mount/opt/apps/colleps/main.js",
+          "sha256": "efae414eaac80983bf46de2ab96efbdfb2120a64a0bc712b095412ef6c4d62bf"
         },
         {
           "dest": "colleps.html",
-          "src": "/public/mount/opt/apps/colleps/colleps.html"
+          "src": "/public/mount/opt/apps/colleps/colleps.html",
+          "sha256": "30153cc9e068138f83d14bcb5ad7700c1eb6d9a89af0df480a6a2d1b7ebafb8b"
         }
       ],
       "main": "main.js"
@@ -1034,11 +1210,13 @@
       "files": [
         {
           "dest": "main.js",
-          "src": "/public/mount/opt/apps/vector-store/main.js"
+          "src": "/public/mount/opt/apps/vector-store/main.js",
+          "sha256": "07306b9668f08edb0fc65b4b1e0a36687f66f6f663e0476366366342437c4bb8"
         },
         {
           "dest": "main.html",
-          "src": "/public/mount/opt/apps/vector-store/main.html"
+          "src": "/public/mount/opt/apps/vector-store/main.html",
+          "sha256": "ceed9e5ca1cd361ea8124a2184f55659c10deed10ff92ec73d5a7aed3461f3c1"
         }
       ],
       "main": "main.js"
@@ -1055,11 +1233,13 @@
       "files": [
         {
           "dest": "main.js",
-          "src": "/public/mount/opt/apps/ai-dom-lens/main.js"
+          "src": "/public/mount/opt/apps/ai-dom-lens/main.js",
+          "sha256": "732fde2148c8015e7ef68bfde29c9818d3f0ce392b9b83c589a0a70277b111a7"
         },
         {
           "dest": "main.html",
-          "src": "/public/mount/opt/apps/ai-dom-lens/main.html"
+          "src": "/public/mount/opt/apps/ai-dom-lens/main.html",
+          "sha256": "56fdf2a8a87353cbbe68ba3eb2b6e19cf8363caa2f4ff2d8654925b95cbc89b6"
         }
       ],
       "main": "main.js"
@@ -1076,11 +1256,13 @@
       "files": [
         {
           "dest": "main.js",
-          "src": "/public/mount/opt/apps/alpine-wasm/main.js"
+          "src": "/public/mount/opt/apps/alpine-wasm/main.js",
+          "sha256": "48e6832d706485ea8b001e58dc59ef68b4dc759047a59c2d25b8315bfa542243"
         },
         {
           "dest": "main.html",
-          "src": "/public/mount/opt/apps/alpine-wasm/main.html"
+          "src": "/public/mount/opt/apps/alpine-wasm/main.html",
+          "sha256": "0234f141e683f564d2633ad4a611961828c6511efcfcb90994e75ae84308904a"
         }
       ],
       "main": "main.js"

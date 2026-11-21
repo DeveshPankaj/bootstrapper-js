@@ -30,16 +30,22 @@ const browser = await chromium.launch({ args: ['--use-fake-ui-for-media-stream',
 const ctxA = await browser.newContext(), ctxB = await browser.newContext(), ctxC = await browser.newContext();
 for (const c of [ctxA, ctxB, ctxC]) await c.grantPermissions(['microphone'], { origin: URL });
 const pA = await ctxA.newPage(), pB = await ctxB.newPage(), pC = await ctxC.newPage();
+// Group invitations and outside webrtc.api calls now ask first (audit NET-11/NET-6) — accept those.
+const acceptWebrtcPrompts = (p) => p.on('dialog', (d) => { if (/wants to add you to the group|asks WebRTC Chat to run/.test(d.message())) d.accept().catch(() => {}); else d.dismiss().catch(() => {}); });
+for (const p of [pA, pB, pC]) acceptWebrtcPrompts(p);
 const errs = []; for (const [n, p] of [['A', pA], ['B', pB], ['C', pC]]) p.on('pageerror', e => errs.push(`${n}: ${e.message}`));
 await boot(pA);
 await pA.evaluate(() => window.platform.host.execCommand("service('001-core.layout','open-window') (command('ui.webrtc'))", window.platform));
 const fA = await appFrame(pA);
+// autoMesh is off by default now (audit NET-11); this test relies on the mesh — turn it on.
+await waitFor(() => fA.evaluate(() => !!window.__webrtcApp)); await fA.evaluate(() => { window.__webrtcApp.settings.autoMesh = true; });
 
 async function connect(pX, name) {
   const inv = await fA.evaluate(async () => (await window.__webrtcApp.createInvite('Alice')).link);
   await pX.goto(inv);
   const fX = await appFrame(pX, 40000);
   await waitFor(() => fX.evaluate(() => window.__webrtcApp.joins.size === 1));
+  await fX.evaluate(() => { window.__webrtcApp.settings.autoMesh = true; });
   const ans = await fX.evaluate(async (nm) => { const j = [...window.__webrtcApp.joins.values()][0]; await window.__webrtcApp.generateAnswer(j, nm); return j.link; }, name);
   await fA.evaluate((l) => window.__webrtcApp.handleIncomingCode(l), ans);
   await fX.evaluate(() => document.querySelectorAll('.modal-head button').forEach(b => b.click()));

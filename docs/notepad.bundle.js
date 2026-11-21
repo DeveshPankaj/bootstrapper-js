@@ -34837,16 +34837,23 @@ const App = (props) => {
         };
     };
     const openIframe = () => {
-        platform.host.execCommand(`service('001-core.layout', 'open-window') (command('ui.iframe'), '${props.file.path}')`, platform);
+        platform.host.openWindow('ui.iframe', props.file.path);
     };
+    // Run buttons run the editor's (possibly unsaved) buffer. Outside the
+    // system folders that's an explicit Run that asks first, naming the file
+    // (decisions.md D10) — the same confirmation as host.runFile.
     const runSource = () => {
         var _a;
+        if (!platform.host.confirmRun(props.file.path))
+            return;
         const code = ((_a = editorRef.current) === null || _a === void 0 ? void 0 : _a.state.doc.toString()) || '';
         platform.host.execCommand(code, platform);
     };
     const runningInstencesRef = React.useRef([]);
     const runJS = () => {
         var _a;
+        if (!platform.host.confirmRun(props.file.path))
+            return;
         runningInstencesRef.current.forEach(ref => typeof ref === 'function' && ref());
         const code = ((_a = editorRef.current) === null || _a === void 0 ? void 0 : _a.state.doc.toString()) || '';
         // const ctx = { platform, React, ReactDOM: { createRoot } }

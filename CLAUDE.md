@@ -16,6 +16,41 @@ icons) and a set of bundled mini-apps that run inside iframe "windows".
 - The webpack build always prints one pre-existing, unrelated warning about
   `src/shared/babel.js` critical dependency expression — ignore it.
 
+## Security model (read before touching the kernel, app hosting or file opening)
+
+Docs: `documentation/security/` — README (trust levels, invariants I1–I8), `audit.md`
+(finding IDs such as KRN-1 / NET-1 used in code comments), `decisions.md` (D1–D16) and
+`runtime-spec.md` (the phase-2 sandbox runtime). Plan and progress live in the root
+`TODO.md`.
+
+- **Trust boundary (D1).** Trusted code is what GitHub Pages serves from `docs/`: the
+  bundles and the immutable `/public/mount/**` copies. **Nothing read from the vfs is
+  trusted code.** Apps, peers, archives and drag-drop can all write it. Never add a code
+  path that executes a vfs file in the top realm without the user's explicit Run.
+- **Target (phase 2+).** Only the layout touches the top document. Every app runs in an
+  opaque-origin `sandbox="allow-scripts …"` iframe, never `allow-same-origin`, and
+  talks to a capability broker over a `MessagePort`. Until then, first-party apps still
+  run same-origin, so treat every XSS in an app as a full compromise.
+- **Hosting limits.** There are no response headers on GitHub Pages: the CSP is a
+  `<meta>` in `docs/public/index.html` (keep it a superset of what inheriting frames
+  need). Framing defence is a boot check in `src/index.ts`; a cross-origin parent means
+  refuse to boot.
+- **Service worker (D11).** Every `/(sw)/` and `/cache/` response carries `CSP: sandbox`,
+  `nosniff` and `CORP` headers and a real type. The only transitional exemption is
+  iframe loads under `/(sw)/opt/apps/**`. So a vfs HTML/SVG opened top-level, or framed
+  anywhere else, runs opaque with no storage and no `window.platform`. Cache Storage is
+  not used; the SW purges it.
+- **Boot integrity.** The kernel is always `/remote.bundle.js`; there's no localStorage
+  override. The server `meta.json` decides what is reloaded, and only same-origin
+  `/public/mount/` sources are accepted.
+- **Peers / network.** Distributed Compute runs other peers' tasks only for groups the
+  user opted into ("Run tasks for others"), inside a no-network, no-storage sandbox.
+  WebRTC group invites need acceptance, and `autoMesh` defaults to off.
+- **Tests.** `testing/scripts/security/`. `test-*.mjs` plus `run-all.mjs` is the
+  regression suite, keyed by finding ID. `verify-*.mjs` are the per-owner checks from the
+  phase-1 fixes. `spike-*.mjs` record browser facts; `spike-ipc-exploit.mjs` must
+  report SAFE.
+
 ## Virtual filesystem
 
 - BrowserFS 2.0, `MountableFileSystem` mounting `/`, `/tmp`, `/mnt` separately, each an
@@ -51,7 +86,8 @@ follow these existing conventions (all bootstrapped via `meta.json`, all current
   `themes/*.json`).
 - `/etc/crontab`, `/etc/widgets/*.js` — cron schedule and desktop widget scripts
   (`force_reload: false`, user-editable).
-- `/opt/window-manager.js` — per-window behavior, re-read on every `createWindow`
+- `/opt/window-manager.js` — per-window behavior. Runs from the shipped static copy
+  (`/public/mount/opt/window-manager.js`), never from the vfs, whose copy is view-only
   (see "Window manager appearance & behavior").
 - `/opt/cron/*.js` — cron job scripts (`force_reload: false`).
 - `/home/user1/` — user home: `settings.html`, `initd.run` (boot script run by
@@ -62,12 +98,17 @@ follow these existing conventions (all bootstrapped via `meta.json`, all current
 Rule of thumb: files under `/usr`, `/etc`, `/opt`, `/bin` are "system" — not meant for
 direct user editing (`force_reload: true`); files under `/home/user1` and `/etc/crontab`
 /`/etc/widgets`/`/opt/cron` are user-editable (`force_reload: false`/absent).
+`src/kernel/path-policy.ts` (`KERNEL_OWNED_PATHS`) is the security version of this rule:
+`/bin`, `/boot`, `/etc`, `/opt`, `/usr`, `/meta.json`, `/.initd.run` and
+`/home/user1/initd.run` are never writable through a namespace or the IPC bus.
 
 ### Storage backend switch (IndexedDB vs LocalStorage)
 
 - `src/index.ts` resolves which backend to mount via `resolveFsBackend()`: reads the
   `__app_fs_backend__` localStorage key (default `'indexeddb'`), overridable/persisted
-  via the `?fsBackend=indexeddb|localstorage` query param.
+  via the `?fsBackend=indexeddb|localstorage` query param. A link that would *change*
+  the backend asks for confirmation first, and the param is stripped from the URL
+  (audit KRN-9).
   - `'indexeddb'` (default, GB-scale): `/`, `/tmp`, `/mnt` each `AsyncMirror` over
     IndexedDB (`createIndexedDBMirror`).
   - `'localstorage'` (~5-10MB, for accessing data saved by older app versions): `/` is
@@ -92,9 +133,18 @@ direct user editing (`force_reload: true`); files under `/home/user1` and `/etc/
 - `Platform.getInstance()` — per-module/per-script platform instance.
 - `platform.host` — shared `Host` singleton:
   - `getFS()` — the virtual fs.
-  - `exec(platform, filepath, ...args)` — opens a file with the right app based on
-    extension (`.js` → `execString`, `.run` → `execCommand`, others → registered UI
-    command via `appExtMap`).
+  - `exec(platform, filepath, ...args)` — **opens** a file (open policy, decisions.md D10).
+    It only *runs* `.js`/`.run` in `/bin`, `/usr/bin` and `/opt/apps`. Scripts anywhere
+    else open in Notepad, `.svg`/`.ico` in the image viewer, `.html` outside `/opt/apps`
+    in the opaque `ui.sandboxed-app`, and other files in the extension's default handler.
+    Defaults come from a fixed system table (`getViewerCommand`), and apps can't take them
+    over.
+  - `runFile(platform, filepath, args = [], { confirm })` — explicit **Run** of a
+    `.js`/`.run`. Outside the system folders it `confirm()`s with the file name unless
+    `confirm: false`, which is for callers that *are* the user's intent: the terminal,
+    cron, the initd boot script.
+  - `openWindow(commandName, ...args)` — structured open-window; args are values, never
+    code.
   - `execString(source, filenameAlias, _platform?)` — Babel-transpiles
     (`env`+`react`+`typescript`, commonjs modules) and runs source via `new Function`,
     returns `module.exports`. This is how `.js` files in the virtual fs and dynamic
@@ -110,20 +160,34 @@ direct user editing (`force_reload: true`); files under `/home/user1` and `/etc/
   - `execCommand(commandStr, platform, ...args)` — runs a small DSL string with
     `service(moduleName, serviceName)`, `command(commandName)`, `$args` in scope (used
     for context-menu actions like
-    `service('001-core.layout', 'open-window') (command('ui.notepad'), '/path')`).
-  - `registerCommand(name, callback, meta)` / `getCommand` / `callCommand`. New
-    registrations are *prepended*, and `command(name)`/`getCommand` use `.find()`, so
-    the most-recently-registered command with a given name wins.
+    `service('001-core.layout', 'open-window') (command('ui.notepad'), $args[0])`).
+    **Never splice data into a DSL string** — no `${…}` in an `execCommand` argument
+    (audit KRN-3: a crafted file name became code). Pass values as `$args`, or call
+    `openWindow` / `callCommand` directly. `testing/scripts/security` has a static check
+    for this.
+  - `registerCommand(name, callback, meta)` / `getCommand` / `callCommand`. Each
+    registration records its **owner** (the registering platform's name; `forPlatform()`
+    gives every `execString` script and first-party page its own). A different owner
+    can't replace an existing name unless the active registration has
+    `meta.fallback: true` (audit KRN-10).
+  - `pathPolicy` — `normalizePath`, `isInside`, `isValidName`, `safeJoin`,
+    `isKernelOwned`, `isValidAppId` (`src/kernel/path-policy.ts`, unit-tested). Use these
+    for every path built from untrusted input: archive entries, peer listings, package
+    `dest`, SSH names.
+  - `registerIpcFrame(win, {id, events, fs})` — the only way a frame gets to use the
+    `wos-ipc` bus (`src/kernel/ipc-bus.ts`, `/usr/lib/ipc.js`). Unregistered senders get
+    no reply. Frame owners must unregister when the frame navigates.
+  - `hardenWindow(win)` — a cross-origin `win.open()` gets `noopener,noreferrer`.
 - `platform.register(name, value)` / `platform.getService(moduleName, serviceName)` —
   cross-module service registry.
 - `UserPreference` — reads/writes `/user-preferences.json` (wallpaper, etc.).
 - `src/remote.ts` registers a fallback `'explorer'` command (delegates to the always-
   available compiled `ui.file-explorer` command) at boot, before `initd.run` runs.
   `docs/public/mount/opt/apps/file-explorer/main.js` registers its own `'explorer'`
-  command later, when `pkg-manager/loader.js` loads it as a `CORE_APP`, and (being
-  prepended) takes precedence when present — the fallback only matters for the brief
-  window before that loads, or if it's ever missing (see Storage backend switch gotcha
-  above).
+  command later, when `pkg-manager/loader.js` loads it as a `CORE_APP`, and takes
+  precedence when present (allowed because the fallback is registered with
+  `fallback: true`). The fallback only matters for the brief window before that loads,
+  or if it's ever missing (see Storage backend switch gotcha above).
 
 ## Layout & window manager (`src/core/layout/index.tsx`, `src/core/window-manager.ts`)
 
@@ -179,11 +243,14 @@ Split into two halves on purpose:
      - `get-window-manager-themes` — lists `{id, name, appearance}` for each file in
        `/etc/wm/themes/`.
 
-2. **Behavior** (event wiring per window) — lives in the virtual fs at
-   `/opt/window-manager.js` and is **re-read + re-executed via `execString` every time
-   `WindowManager.createWindow()` runs** (in `src/core/window-manager.ts`). This means
-   editing `/opt/window-manager.js` through the file explorer's "Edit" action changes
-   behavior for windows opened *after* the edit, with no rebuild. It exports:
+2. **Behavior** (event wiring per window) — `/opt/window-manager.js`, plus the
+   window-style modules `/opt/wm/<id>.js`, the desktop variants `/opt/desktop/<id>.js` and
+   `/usr/lib/ui/menuItem.js`. `src/system/static-code.ts` fetches each from its
+   **immutable static copy** (`/public/mount<path>`) once and evaluates it on first use,
+   so `createWindow` stays synchronous. Ids must be in the shipped lists. Until the fetch
+   lands, or if it fails, compiled defaults apply. Editing the vfs copy has **no
+   effect** (audit WIN-6/BOOT-5: a one-time vfs write used to persist top-realm code). To
+   change behavior, edit the file under `docs/public/mount/` and redeploy. It exports:
    - `DEFAULT_SETTINGS`, `readSettings()` (reads `/etc/wm/current.json`).
    - `setupWindow({ container, head, iframe, command, settings, toggleFullScreen,
      moveOnTop })` — called once per new window; currently wires up
@@ -195,8 +262,9 @@ Split into two halves on purpose:
 Settings → "Window Manager" page (`settings.html`) shows a "Themes" section with
 clickable preset cards (swatch preview from each theme's `appearance`, highlights the
 active theme by matching `current.json`'s `name`), plus color pickers / sliders /
-checkboxes for fine-tuning that write straight to `current.json`. Notes that
-`/opt/window-manager.js` is the place for deeper behavior customization.
+checkboxes for fine-tuning that write straight to `current.json`. Deeper behavior
+customization means editing `docs/public/mount/opt/window-manager.js` in the repo (the
+shipped copy); the vfs copy is view-only.
 
 ## File explorer (macOS Finder-style UI)
 

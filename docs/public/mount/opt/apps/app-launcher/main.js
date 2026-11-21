@@ -130,7 +130,7 @@ const AppLauncher = () => {
 
 const run = (body, props, ...rest) => {
   if (!body) {
-    platform.host.execCommand("service('001-core.layout','open-window')(command('ui.app-launcher'))", platform)
+    platform.host.openWindow('ui.app-launcher')
     return
   }
   const doc = body.ownerDocument

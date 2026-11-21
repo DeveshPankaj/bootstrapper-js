@@ -1,16 +1,113 @@
 import { draggable } from "@shared/draggable";
 import { Command, Platform } from "@shared/index";
 import { removeRecursive, readJsonFile, writeJsonFile, ensureDir } from "@shared/fs-utils";
-import { PROC_DIR, WINDOW_MANAGER_MODULE_PATH, WM_DIR } from "@shared/constants";
+import { PROC_DIR, WINDOW_MANAGER_MODULE_PATH, WM_CURRENT_PATH, WM_DIR } from "@shared/constants";
 import { BehaviorSubject, Subject } from "rxjs";
 import { ProcessManager } from "../platform/process-manager";
 import { ProxyFS } from "../platform/proxy-fs";
 import { WindowManager as Wm2 } from "../system/window-manager";
 import { LayoutManager } from "../system/layout-manager";
+import { getSystemModule, preloadSystemModule } from "../system/static-code";
 const platform = Platform.getInstance();
 
 export const WINDOWS_CONTAINER_CLASS = "windows";
 export const DESKTOP_CONTAINER_CLASS = "desktop";
+
+// ── Window chrome input checks (audit WIN-5) ─────────────────────────────────
+// Titles, icons, header styles and geometry come from apps and from command
+// metadata (often derived from file names). They are applied to the top
+// document only as text, as allowlisted style properties, or as clamped numbers.
+
+// Icons are Material Symbols ligature names, rendered as text. Anything else
+// (markup, entities, long strings) is replaced by `fallback`.
+export const ICON_NAME_RE = /^[a-z0-9_]+$/;
+export const safeIconName = (icon: unknown, fallback = ""): string =>
+  typeof icon === "string" && icon.length <= 64 && ICON_NAME_RE.test(icon) ? icon : fallback;
+
+const MAX_TITLE_LENGTH = 1024;
+const toTitleText = (title: unknown): string => String(title ?? "").slice(0, MAX_TITLE_LENGTH);
+
+// Header styles: the properties apps actually set (colours, shadow, borders),
+// as CSSOM names or CSS names. Values are short, made of a conservative
+// character set (no quotes, backslashes, ';', ':', '!', braces) and may only
+// call colour/gradient functions — so no url(), image-set(), expression().
+const HEADER_STYLE_PROPERTIES: Readonly<Record<string, string>> = Object.freeze({
+  background: "background", backgroundColor: "background-color", "background-color": "background-color",
+  color: "color", boxShadow: "box-shadow", "box-shadow": "box-shadow",
+  border: "border", borderColor: "border-color", "border-color": "border-color",
+  borderBottom: "border-bottom", "border-bottom": "border-bottom",
+  borderTop: "border-top", "border-top": "border-top",
+  opacity: "opacity", fontWeight: "font-weight", "font-weight": "font-weight",
+});
+const HEADER_STYLE_VALUE_RE = /^[a-zA-Z0-9#%(),./\s-]*$/;
+const HEADER_STYLE_FUNCTIONS = new Set([
+  "rgb", "rgba", "hsl", "hsla", "hwb", "lab", "lch", "oklab", "oklch", "color-mix", "var", "calc",
+  "linear-gradient", "radial-gradient", "conic-gradient",
+  "repeating-linear-gradient", "repeating-radial-gradient", "repeating-conic-gradient",
+]);
+const MAX_HEADER_STYLE_VALUE = 200;
+const MAX_HEADER_STYLE_KEYS = 16;
+
+export const sanitizeHeaderStyles = (styles: unknown): Array<[string, string]> => {
+  if (!styles || typeof styles !== "object" || Array.isArray(styles)) return [];
+  const out: Array<[string, string]> = [];
+  for (const [key, raw] of Object.entries(styles as Record<string, unknown>).slice(0, MAX_HEADER_STYLE_KEYS)) {
+    const property = Object.prototype.hasOwnProperty.call(HEADER_STYLE_PROPERTIES, key) ? HEADER_STYLE_PROPERTIES[key] : undefined;
+    if (!property) continue;
+    const value = typeof raw === "number" && Number.isFinite(raw) ? String(raw) : raw;
+    if (typeof value !== "string" || value.length > MAX_HEADER_STYLE_VALUE || !HEADER_STYLE_VALUE_RE.test(value)) continue;
+    const functions = Array.from(value.matchAll(/([a-zA-Z-]+)\s*\(/g), m => m[1].toLowerCase());
+    if (functions.some(name => !HEADER_STYLE_FUNCTIONS.has(name))) continue;
+    out.push([property, value]);
+  }
+  return out;
+};
+
+const applyHeaderStyles = (head: HTMLElement, styles: unknown) => {
+  for (const [property, value] of sanitizeHeaderStyles(styles)) {
+    if (value === "") head.style.removeProperty(property);
+    else head.style.setProperty(property, value);
+  }
+};
+
+// Geometry: only finite numeric left/top/width/height, in px. Sizes are
+// clamped to the viewport; the position keeps the window inside the area it
+// is placed in (the viewport, or the scrollable canvas of the canvas WM).
+const MIN_WINDOW_WIDTH = 120;
+const MIN_WINDOW_HEIGHT = 80;
+const clampNumber = (n: number, min: number, max: number) => Math.min(Math.max(n, min), Math.max(min, max));
+
+// A window's corner radius as a bounded CSS length — the only style besides
+// geometry an app may set through setBoundingClientRect (Settings rounds its
+// window). Numbers are px; strings must be a plain number + px/rem/em/%.
+const RADIUS_RE = /^(\d{1,3}(?:\.\d{1,3})?)(px|rem|em|%)$/;
+const RADIUS_MAX: Record<string, number> = { px: 64, rem: 4, em: 4, "%": 50 };
+export const safeBorderRadius = (value: unknown): string | undefined => {
+  if (typeof value === "number") return Number.isFinite(value) ? `${clampNumber(value, 0, RADIUS_MAX.px)}px` : undefined;
+  if (typeof value !== "string") return undefined;
+  const m = RADIUS_RE.exec(value.trim());
+  if (!m) return undefined;
+  return `${Math.min(parseFloat(m[1]), RADIUS_MAX[m[2]])}${m[2]}`;
+};
+
+export const clampWindowRect = (
+  rect: unknown,
+  current: { width: number; height: number },
+  viewport: { width: number; height: number },
+  area: { width: number; height: number },
+): Partial<Record<"left" | "top" | "width" | "height", number>> => {
+  if (!rect || typeof rect !== "object") return {};
+  const r = rect as Record<string, unknown>;
+  const num = (k: string) => (typeof r[k] === "number" && Number.isFinite(r[k] as number) ? (r[k] as number) : undefined);
+  const out: Partial<Record<"left" | "top" | "width" | "height", number>> = {};
+  const width = num("width"), height = num("height"), left = num("left"), top = num("top");
+  if (width !== undefined) out.width = clampNumber(width, MIN_WINDOW_WIDTH, viewport.width);
+  if (height !== undefined) out.height = clampNumber(height, MIN_WINDOW_HEIGHT, viewport.height);
+  const w = out.width ?? current.width, h = out.height ?? current.height;
+  if (left !== undefined) out.left = clampNumber(left, 0, Math.max(area.width, viewport.width) - w);
+  if (top !== undefined) out.top = clampNumber(top, 0, Math.max(area.height, viewport.height) - h);
+  return out;
+};
 
 // Tracks every currently-open window so the taskbar can render an icon per
 // running window and show minimize state on hover.
@@ -161,9 +258,13 @@ const registerProcessCommands = () => {
   platform.host.registerCommand("process.memory", (pid: number | string) => readWindowMemory(Number(pid)));
 };
 
-// Behavior (event wiring, etc.) for new windows lives in the virtual
-// filesystem so it can be edited (via the file explorer) and takes effect
-// for the next window opened, without rebuilding the app.
+// Per-window behavior (event wiring, snapping) comes from /opt/window-manager.js
+// and the optional header/container style from /opt/wm/<id>.js — both run from
+// the immutable static copy that ships with the build (decisions.md D1, audit
+// WIN-6/BOOT-5); the vfs copies are view-only. Their sources are preloaded at
+// layout start and evaluated once, so createWindow stays synchronous; until
+// they're available (or if they can't be loaded) the compiled defaults below
+// apply.
 const FALLBACK_WM_SETTINGS = {
   behavior: {
     dblClickHeaderFullscreen: true,
@@ -173,40 +274,67 @@ const FALLBACK_WM_SETTINGS = {
 
 const MANAGERS_CONFIG_PATH = '/etc/managers.json';
 
-const loadWindowManagerModule = (): any => {
+// Window-manager styles that ship in docs/public/mount/opt/wm/. The id in
+// /etc/managers.json (writable) only selects one of these.
+const WM_STYLE_IDS: readonly string[] = ['canvas', 'classic', 'glass', 'minimal', 'tiling', 'ubuntu'];
+const SYSTEM_ID_RE = /^[a-z0-9-]+$/;
+const wmStylePath = (id: string) => `/opt/wm/${id}.js`;
+
+export const preloadWindowManagerCode = () => {
+  if (!platform?.host) return;
+  preloadSystemModule(WINDOW_MANAGER_MODULE_PATH);
+  WM_STYLE_IDS.forEach(id => preloadSystemModule(wmStylePath(id)));
+};
+
+const warnedWmIds = new Set<string>();
+const readWmStyleId = (): string => {
+  let id: unknown = 'default';
   try {
     const fs = platform.host.getFS();
-
-    // Load base module — provides setupWindow, readSettings, snap zones, etc.
-    const baseModule: any = (() => {
-      if (!fs.existsSync(WINDOW_MANAGER_MODULE_PATH)) return {};
-      const source = fs.readFileSync(WINDOW_MANAGER_MODULE_PATH, "utf-8") as string;
-      return platform.host.execString(source, WINDOW_MANAGER_MODULE_PATH);
-    })();
-
-    // Check for an active WM style override in /etc/managers.json.
-    let wmId = 'default';
-    try {
-      if (fs.existsSync(MANAGERS_CONFIG_PATH)) {
-        const config = JSON.parse(fs.readFileSync(MANAGERS_CONFIG_PATH, 'utf-8') as string);
-        if (config.windowManager) wmId = config.windowManager;
-      }
-    } catch (_) {}
-
-    if (wmId === 'default') return baseModule;
-
-    // Load style override from /opt/wm/<id>.js — exports createHeader (and
-    // optionally createContainer). Merges over base: style overrides win for
-    // visual hooks, base keeps setupWindow/readSettings/etc.
-    const wmStylePath = `/opt/wm/${wmId}.js`;
-    if (!fs.existsSync(wmStylePath)) return baseModule;
-    const wmStyleSource = fs.readFileSync(wmStylePath, "utf-8") as string;
-    const wmStyleModule = platform.host.execString(wmStyleSource, wmStylePath);
-    return { ...baseModule, ...wmStyleModule };
-  } catch (err) {
-    console.error("Failed to load window manager module", err);
-    return {};
+    if (fs.existsSync(MANAGERS_CONFIG_PATH)) {
+      id = JSON.parse(fs.readFileSync(MANAGERS_CONFIG_PATH, 'utf-8') as string)?.windowManager ?? 'default';
+    }
+  } catch (_) {}
+  if (typeof id === 'string' && SYSTEM_ID_RE.test(id) && WM_STYLE_IDS.includes(id)) return id;
+  if (id !== 'default' && !warnedWmIds.has(String(id))) {
+    warnedWmIds.add(String(id));
+    console.warn('[wm] /etc/managers.json windowManager is not a shipped style — using the default:', id);
   }
+  return 'default';
+};
+
+const loadWindowManagerModule = (): any => {
+  // Base module: setupWindow, readSettings, snap zones. undefined (still
+  // loading) and null (unavailable) both mean "use the compiled defaults".
+  const baseModule = getSystemModule(WINDOW_MANAGER_MODULE_PATH) ?? {};
+  const wmId = readWmStyleId();
+  if (wmId === 'default') return baseModule;
+  // Style override (createHeader, optionally createContainer/setupWindow),
+  // merged over base: style hooks win, base keeps the rest.
+  const wmStyleModule = getSystemModule(wmStylePath(wmId));
+  return wmStyleModule ? { ...baseModule, ...wmStyleModule } : baseModule;
+};
+
+// Compiled stand-ins for the base module's readSettings/setupWindow.
+const readFallbackWmSettings = () => {
+  try {
+    const raw = JSON.parse(platform.host.getFS().readFileSync(WM_CURRENT_PATH, 'utf-8') as string);
+    return { ...raw, behavior: { ...FALLBACK_WM_SETTINGS.behavior, ...raw?.behavior } };
+  } catch (_) {
+    return FALLBACK_WM_SETTINGS;
+  }
+};
+
+const fallbackSetupWindow = ({ container, head, settings, toggleFullScreen, moveOnTop }: {
+  container: HTMLElement; head: HTMLElement; settings: any; toggleFullScreen: () => void; moveOnTop: () => void;
+}) => {
+  if (settings?.behavior?.dblClickHeaderFullscreen) {
+    head.addEventListener('dblclick', (event) => {
+      if ((event.target as Element | null)?.closest?.('.window-action')) return;
+      toggleFullScreen();
+    });
+  }
+  if (settings?.behavior?.bringToFrontOnClick) container.addEventListener('mousedown', () => moveOnTop());
 };
 
 export class WindowManager {
@@ -216,6 +344,7 @@ export class WindowManager {
   > = {};
   constructor(private contentRef: { current: HTMLDivElement | null }) {
     registerProcessCommands();
+    preloadWindowManagerCode();
   }
 
   public createWindow(command_name: string, ...args: unknown[]) {
@@ -237,12 +366,12 @@ export class WindowManager {
       proxyFs = new ProxyFS(rawFs, ns);
     } catch (_) {}
 
-    // Load the VFS window-manager module once at the top so its hooks
+    // Resolve the window-manager module once at the top so its hooks
     // (createContainer, createHeader, setupWindow) are all available.
     const wmModule = loadWindowManagerModule();
-    const wmSettings = wmModule.readSettings?.() ?? FALLBACK_WM_SETTINGS;
+    const wmSettings = wmModule.readSettings?.() ?? readFallbackWmSettings();
 
-    // --- VFS hook: createContainer({ command, settings }) ---
+    // --- Module hook: createContainer({ command, settings }) ---
     // Return an HTMLElement to replace the default <div class="window">.
     // Mandatory attributes/classes are still applied by compiled code below.
     // Use nodeType === 1 (ELEMENT_NODE) instead of instanceof HTMLElement so
@@ -272,7 +401,9 @@ export class WindowManager {
     const signalCallbacks = new Map<string, Array<Function>>();
     const emitSignal = (name: string) => {
       (signalCallbacks.get(name) ?? []).forEach(cb => { try { cb() } catch (_) {} });
-      try { iframe.contentWindow?.postMessage({ type: 'signal', name }, '*') } catch (_) {}
+      // The window frame is same-origin; pin the target so a document it
+      // navigated to elsewhere isn't told (audit KRN-13).
+      try { iframe.contentWindow?.postMessage({ type: 'signal', name }, platform.window.location.origin) } catch (_) {}
     };
     // SIGTERM — notifies the app then closes.
     const closeFunction = () => {
@@ -292,7 +423,7 @@ export class WindowManager {
     const minimizeCallback = () => this.toggleMinimize(windowRef);
     const fullscreenCallback = () => toggleFullScreen(this.contentRef.current!, container);
 
-    // --- VFS hook: createHeader({ command, settings, close, minimize, fullscreen }) ---
+    // --- Module hook: createHeader({ command, settings, close, minimize, fullscreen }) ---
     // Return an HTMLElement to replace the default header.
     // The callbacks are provided so custom headers can wire their own controls.
     // If null/undefined is returned, the default compiled header is used instead.
@@ -313,7 +444,7 @@ export class WindowManager {
 
     if (customHead?.nodeType === 1) {
       head = customHead;
-      // VFS-provided header has already received the callbacks — don't wire compiled buttons.
+      // Module-provided header has already received the callbacks — don't wire compiled buttons.
       closeButton = null;
       fullScreenButton = null;
       minimizeButton = null;
@@ -330,16 +461,19 @@ export class WindowManager {
         createWindowHeader(command);
     }
 
-    const setTitle = (newTitle: string) => {
+    // Titles are plain text everywhere (header, taskbar, docks, /proc); icons
+    // are checked ligature names (audit WIN-5).
+    const icon = safeIconName(command.meta?.icon);
+    const setTitle = (rawTitle: string) => {
+      const newTitle = toTitleText(rawTitle);
       setTitleRaw(newTitle);
-      writeProcMeta(pid, { pid, name: command.name, title: newTitle, icon: (command.meta?.icon as string) || "", startedAt: Date.now() });
+      writeProcMeta(pid, { pid, name: command.name, title: newTitle, icon, startedAt: Date.now() });
       windowsSubject.next(
         windowsSubject.getValue().map(w => w.pid === pid ? { ...w, title: newTitle } : w)
       );
     };
 
-    const title = (command.meta.title as string) || command.name;
-    const icon = (command.meta?.icon as string) || "";
+    const title = toTitleText(command.meta?.title || command.name);
     writeProcMeta(pid, { pid, name: command.name, title, icon, startedAt: Date.now() });
     windowsSubject.next([
       ...windowsSubject.getValue(),
@@ -379,7 +513,24 @@ export class WindowManager {
       iframe,
     });
 
+    // What app loaders get of the ProxyFS (vector-store, model-builder use
+    // mkdir/exists/writeText): bound promise methods in a frozen object.
+    const proxyFsFacade = proxyFs ? Object.freeze({
+      readText: (p: string) => proxyFs!.readText(p),
+      readBinary: (p: string) => proxyFs!.readBinary(p),
+      writeText: (p: string, c: string) => proxyFs!.writeText(p, c),
+      mkdir: (p: string) => proxyFs!.mkdir(p),
+      remove: (p: string) => proxyFs!.remove(p),
+      list: (p: string) => proxyFs!.list(p),
+      exists: (p: string) => proxyFs!.exists(p),
+      stat: (p: string) => proxyFs!.stat(p),
+      rename: (from: string, to: string) => proxyFs!.rename(from, to),
+    }) : undefined;
+
     iframe.onload = () => {
+      // Cross-origin window.open from this window gets noopener,noreferrer
+      // (audit KRN-11/APP-9).
+      platform.host.hardenWindow(iframe.contentWindow);
       const iframeBody = iframe.contentWindow?.document?.body;
       if (!iframeBody) return;
       iframeBody.style.margin = "0";
@@ -400,9 +551,10 @@ export class WindowManager {
           // `/proc/<pid>/...`, and use it as the target for `process.kill`
           // and `process.send-message` from other scripts.
           pid,
-          // Ring 1: scoped VFS proxy — app loaders use this instead of host.getFS()
-          proxyFs,
-          namespace: ns,
+          // Ring 1: scoped VFS proxy — app loaders use this instead of
+          // host.getFS(). A frozen set of its async methods, not the instance or
+          // the namespace, whose ACL is reachable and mutable (audit WIN-10).
+          proxyFs: proxyFsFacade,
           close: closeFunction,
           onMessage: (cb: (message: unknown) => void) => {
             const subscription = messages$.subscribe(cb);
@@ -438,16 +590,29 @@ export class WindowManager {
             // bridge below — the AppSDK is the only endorsed API for VFS access.
             appIframe.setAttribute('sandbox',
               'allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-downloads')
+            // One channel per document (decisions.md D4, audit KRN-6/WIN-10): the
+            // port is posted once, after that document's load, and only to this
+            // origin (these frames stay same-origin until phase 2), so a page the
+            // frame navigated to elsewhere never receives it. A later load is a
+            // restart: the previous port is closed and the new document gets a
+            // fresh channel with the same ACL.
+            const targetOrigin = platform.window.location.origin
+            let port: MessagePort | null = null
+            const closePort = () => { try { port?.close() } catch (_) {} port = null }
+            onCloseCallbacks.push(closePort)
             appIframe.addEventListener('load', () => {
+              closePort()
+              const appWindow = appIframe.contentWindow
+              if (!appWindow) return
+              platform.host.hardenWindow(appWindow)
               try {
                 const channel = new MessageChannel()
-                appIframe.contentWindow!.postMessage({ type: 'wos:sdk-init' }, '*', [channel.port2])
-                const port = channel.port1
-                port.start()
-                port.onmessage = (ev: MessageEvent) => {
+                const sdkPort = port = channel.port1
+                sdkPort.onmessage = (ev: MessageEvent) => {
                   const d = ev.data as { t: string; id: number; a: unknown[] }
-                  const ok  = (r: unknown) => port.postMessage({ id: d.id, r, err: null })
-                  const err = (e: Error)   => port.postMessage({ id: d.id, r: null, err: e.message })
+                  const ok  = (r: unknown) => sdkPort.postMessage({ id: d.id, r, err: null })
+                  const err = (e: Error)   => sdkPort.postMessage({ id: d.id, r: null, err: e.message })
+                  if (!d || typeof d !== 'object' || !Array.isArray(d.a)) return
                   const fs  = proxyFs
                   if (!fs) { err(new Error('no sandbox fs')); return }
                   switch (d.t) {
@@ -464,8 +629,10 @@ export class WindowManager {
                     default:      err(new Error('unknown: ' + d.t))
                   }
                 }
+                sdkPort.start()
+                appWindow.postMessage({ type: 'wos:sdk-init' }, targetOrigin, [channel.port2])
               } catch (_) {}
-            }, { once: true })
+            })
           },
           setWindowView: (show: boolean) =>
             show
@@ -473,12 +640,21 @@ export class WindowManager {
               : container.classList.add("hidden"),
           toggleFullScreen: fullscreenCallback,
           getBoundingClientRect: () => container.getBoundingClientRect(),
+          // Only finite numeric left/top/width/height, clamped (audit WIN-5) —
+          // other keys (cssText, position, zIndex, right/bottom, …) are ignored.
           setBoundingClientRect: (rect: Record<string, number>) => {
-            const newCord: Record<string, string> = {};
-            Object.keys(rect).forEach(
-              (attr: any) => (newCord[attr] = `${rect[attr]}${typeof rect[attr] === "number" ? "px" : ""}`)
+            const area = container.offsetParent as HTMLElement | null;
+            const next = clampWindowRect(
+              rect,
+              { width: container.offsetWidth, height: container.offsetHeight },
+              { width: platform.window.innerWidth, height: platform.window.innerHeight },
+              { width: area?.scrollWidth ?? 0, height: area?.scrollHeight ?? 0 },
             );
-            Object.assign(container.style, newCord);
+            for (const [key, value] of Object.entries(next)) {
+              container.style[key as "left" | "top" | "width" | "height"] = `${value}px`;
+            }
+            const radius = safeBorderRadius((rect as Record<string, unknown> | null)?.borderRadius);
+            if (radius !== undefined) container.style.borderRadius = radius;
           },
           host: hostDimension,
         },
@@ -490,9 +666,9 @@ export class WindowManager {
       this.moveOnTop(windowRef);
       head.addEventListener("mousedown", () => this.moveOnTop(windowRef));
 
-      // setupWindow receives close/minimize/setTitle so VFS-custom headers can
+      // setupWindow receives close/minimize/setTitle so custom headers can
       // wire their controls here rather than in createHeader.
-      wmModule.setupWindow?.({
+      (wmModule.setupWindow ?? fallbackSetupWindow)({
         container,
         head,
         iframe,
@@ -509,7 +685,7 @@ export class WindowManager {
     if (this.contentRef.current) {
       container.appendChild(iframe);
       appendWindow(this.contentRef.current, container);
-      // Wire compiled default-header controls only when VFS didn't supply a custom header.
+      // Wire compiled default-header controls only when no module supplied a custom header.
       if (closeButton) closeButton.onclick = closeFunction;
       if (fullScreenButton) fullScreenButton.onclick = fullscreenCallback;
       if (minimizeButton) minimizeButton.onclick = minimizeCallback;
@@ -594,7 +770,7 @@ const createWindowHeader = (command: Command) => {
   const title = platform.window.document.createElement("span");
   const icon = platform.window.document.createElement("span");
   const titleText = platform.window.document.createElement("span");
-  titleText.innerHTML = (command.meta.title as string) || command.name;
+  titleText.textContent = toTitleText(command.meta?.title || command.name);
   title.appendChild(icon);
   title.appendChild(titleText);
   title.classList.add("title");
@@ -602,7 +778,7 @@ const createWindowHeader = (command: Command) => {
   icon.classList.add("material-symbols-outlined");
   icon.style.cursor = "pointer";
   icon.style.marginLeft = "auto";
-  icon.innerHTML = `${command.meta?.icon}`;
+  icon.textContent = safeIconName(command.meta?.icon);
 
   const gap = platform.window.document.createElement("span");
   gap.classList.add("window-gap");
@@ -614,7 +790,7 @@ const createWindowHeader = (command: Command) => {
   const minimize = platform.window.document.createElement("span");
   minimize.classList.add("material-symbols-outlined", "window-action", "wm-minimize");
   minimize.style.cursor = "pointer";
-  minimize.innerHTML = "remove";
+  minimize.textContent = "remove";
   minimize.title = "minimize window";
   minimize.setAttribute("role", "button");
   minimize.setAttribute("tabindex", "0");
@@ -622,7 +798,7 @@ const createWindowHeader = (command: Command) => {
   const fullScreen = platform.window.document.createElement("span");
   fullScreen.classList.add("material-symbols-outlined", "window-action", "wm-fullscreen");
   fullScreen.style.cursor = "pointer";
-  fullScreen.innerHTML = "fullscreen";
+  fullScreen.textContent = "fullscreen";
   fullScreen.title = "toggle fullscreen";
   fullScreen.setAttribute("role", "button");
   fullScreen.setAttribute("tabindex", "0");
@@ -630,7 +806,7 @@ const createWindowHeader = (command: Command) => {
   const close = platform.window.document.createElement("span");
   close.classList.add("material-symbols-outlined", "window-action", "wm-close");
   close.style.cursor = "pointer";
-  close.innerHTML = "close";
+  close.textContent = "close";
   close.title = "close window";
   close.setAttribute("role", "button");
   close.setAttribute("tabindex", "0");
@@ -645,15 +821,13 @@ const createWindowHeader = (command: Command) => {
 
   head.classList.add("window-header");
 
-  const setHeaderStyles = (styles: Record<string, string>) => {
-    Object.assign(head.style, styles)
-  }
+  // Allowlisted properties and values only — never cssText, position or url().
+  const setHeaderStyles = (styles: Record<string, string>) => applyHeaderStyles(head, styles);
 
-  const headerStyles = (command.meta?.header as any)?.style || {};
-  setHeaderStyles(headerStyles)
+  setHeaderStyles((command.meta?.header as any)?.style || {})
 
   const setTitle = (title: string) => {
-    titleText.innerText = title;
+    titleText.textContent = toTitleText(title);
   };
 
   const appendActionButton = (props: {
@@ -664,9 +838,9 @@ const createWindowHeader = (command: Command) => {
     const newButton = platform.window.document.createElement("span");
     newButton.classList.add("material-symbols-outlined", "window-action");
     newButton.style.cursor = "pointer";
-    newButton.innerHTML = props.icon;
-    newButton.title = props.title;
-    newButton.onclick = props.onClick;
+    newButton.textContent = safeIconName(props?.icon, "more_horiz");
+    newButton.title = toTitleText(props?.title);
+    newButton.onclick = typeof props?.onClick === "function" ? props.onClick : null;
     gap.after(newButton);
 
     return {

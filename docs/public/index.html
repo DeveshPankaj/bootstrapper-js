@@ -2,6 +2,11 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <!-- Transitional policy (decisions.md D12, audit KRN-11). about:blank and srcdoc frames
+         (windows, docks, sandboxed apps) inherit it. 'unsafe-inline'/'unsafe-eval' stay until no
+         vfs code runs in the top realm (Babel/execString, new Function); blob: is for the canvas
+         wallpaper's module. Keep the CDN list in sync with docs/404.html. -->
+    <meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com https://esm.sh">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bootstrapper</title>
     <link rel="manifest" href="/public/manifest.json">

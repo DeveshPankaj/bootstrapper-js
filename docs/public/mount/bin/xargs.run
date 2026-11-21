@@ -52,7 +52,9 @@ if (!tokens.length) { return; }
 const [cmdName, ...initialArgs] = rest;
 
 const PATH = (context.PATH || '/bin:/usr/bin').split(':');
+// A command *name* only — '/', '\' and '..' are refused (audit BOOT-12), like the terminal.
 function findCommandFile(name) {
+  if (!name || /[\/\\]/.test(name) || name.includes('..')) return null;
   for (const dir of PATH) {
     const f = `${dir}/${name}.run`;
     if (fs.existsSync(f)) return f;
@@ -65,6 +67,8 @@ if (!commandFile) { write(`xargs: ${cmdName}: command not found\n`); return; }
 
 // Run once per token (a valid, explicitly-allowed alternative to batching
 // all tokens into a single trailing-args invocation).
+// Typed by the user, so it runs (host.runFile, decisions.md D10) — host.exec would only
+// "open" a command file that isn't in a system folder.
 for (const token of tokens) {
-  await platform.host.exec(platform, commandFile, pwd, ...initialArgs, token);
+  await platform.host.runFile(platform, commandFile, [pwd, ...initialArgs, token], { confirm: false });
 }

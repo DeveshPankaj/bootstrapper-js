@@ -139,6 +139,21 @@ every interface but `lo`, load, each core) and keeps the last hour (`metrics.his
 History starts when the session does (the bridge keeps it per connection), so a fresh connection shows
 "Collecting the first samples" for a few seconds.
 
+## Security behaviour (audit NET-4, NET-7)
+
+- **Bridge approval:** credentials and the bridge token go only to an approved bridge origin. Signing in
+  through an address that isn't approved, or has changed since it was approved, asks first. Declining
+  opens no socket at all. Saving the address in *Bridge* settings approves it, and the default localhost
+  bridge is approved on first use. The approved origin is sealed in `secrets.json` together with the
+  token.
+- **Names from the bridge:** names are validated before anything touches the vfs. `.`/`..`, separators
+  and control characters are refused and counted. `/mnt/ssh/<name>` paths and *Save to Files*
+  destinations are built with `pathPolicy.safeJoin`, so a malicious bridge can't write outside the
+  mirror or the chosen folder.
+- **Still open until phase 2:** the AES key protecting `secrets.json` is non-extractable but lives in
+  origin-wide IndexedDB, so other same-origin code could still use it. The fix is a broker-held per-app
+  secret store (`documentation/security/runtime-spec.md`, `secrets.*`).
+
 ## Testing
 
 `testing/scripts/remote-machines-e2e.mjs` (needs a bridge and a reachable SSH machine; see its header).

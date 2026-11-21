@@ -1,0 +1,226 @@
+{
+  "label": "phase1-pass1-dsl-rerun",
+  "baseUrl": "http://localhost:8080",
+  "root": null,
+  "finishedAt": "2026-11-21T03:30:57.008Z",
+  "totals": {
+    "info": {
+      "findings": 1,
+      "pass": 1,
+      "fail": 0,
+      "error": 0,
+      "checks": 1,
+      "checksPassed": 1
+    },
+    "phase1": {
+      "findings": 3,
+      "pass": 3,
+      "fail": 0,
+      "error": 0,
+      "checks": 17,
+      "checksPassed": 17
+    }
+  },
+  "scripts": [
+    {
+      "script": "test-dsl-injection.mjs",
+      "exit": 0,
+      "timedOut": false,
+      "seconds": 124,
+      "checks": 18,
+      "stderrTail": ""
+    }
+  ],
+  "table": {
+    "info": [
+      {
+        "id": "KRN-3",
+        "status": "PASS",
+        "pass": 1,
+        "total": 1,
+        "failing": [],
+        "scripts": [
+          "test-dsl-injection.mjs"
+        ]
+      }
+    ],
+    "phase1": [
+      {
+        "id": "APP-1",
+        "status": "PASS",
+        "pass": 1,
+        "total": 1,
+        "failing": [],
+        "scripts": [
+          "test-dsl-injection.mjs"
+        ]
+      },
+      {
+        "id": "KRN-3",
+        "status": "PASS",
+        "pass": 12,
+        "total": 12,
+        "failing": [],
+        "scripts": [
+          "test-dsl-injection.mjs"
+        ]
+      },
+      {
+        "id": "WIN-2",
+        "status": "PASS",
+        "pass": 4,
+        "total": 4,
+        "failing": [],
+        "scripts": [
+          "test-dsl-injection.mjs"
+        ]
+      }
+    ]
+  },
+  "checks": [
+    {
+      "id": "KRN-3",
+      "status": "PASS",
+      "phase": "info",
+      "check": "control-payload-is-live",
+      "detail": "sentinel after hand-built DSL: [\"__sec_k3\"]",
+      "script": "test-dsl-injection.mjs"
+    },
+    {
+      "id": "KRN-3",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "host-exec-txt",
+      "detail": "sentinel=[] windows=[\"ui.notepad\"]",
+      "script": "test-dsl-injection.mjs"
+    },
+    {
+      "id": "KRN-3",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "host-exec-md",
+      "detail": "sentinel=[] windows=[\"ui.markdown\"]",
+      "script": "test-dsl-injection.mjs"
+    },
+    {
+      "id": "KRN-3",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "host-exec-png",
+      "detail": "sentinel=[] windows=[\"ui.imageviewer\"]",
+      "script": "test-dsl-injection.mjs"
+    },
+    {
+      "id": "KRN-3",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "host-exec-unknown-ext",
+      "detail": "sentinel=[] windows=[\"ui.notepad\"]",
+      "script": "test-dsl-injection.mjs"
+    },
+    {
+      "id": "KRN-3",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "host-exec-folder",
+      "detail": "sentinel=[] windows=[\"explorer\"]",
+      "script": "test-dsl-injection.mjs"
+    },
+    {
+      "id": "KRN-3",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "ui-settings-initial-section",
+      "detail": "sentinel=[]",
+      "script": "test-dsl-injection.mjs"
+    },
+    {
+      "id": "KRN-3",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "files-double-click-txt",
+      "detail": "sentinel=[]",
+      "script": "test-dsl-injection.mjs"
+    },
+    {
+      "id": "KRN-3",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "files-double-click-audio",
+      "detail": "sentinel=[]",
+      "script": "test-dsl-injection.mjs"
+    },
+    {
+      "id": "KRN-3",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "files-context-menu-file",
+      "detail": "fired on: []; actions tried: [\"Edit\",\"Open\",\"Download\",\"Rename\",\"Compare with…\",\"Compress to ZIP\",\"Copy\",\"Cut\",\"Properties\",\"Edit (about.html)\",\"VS Code\",\"Browser\",\"Delete\"]",
+      "script": "test-dsl-injection.mjs"
+    },
+    {
+      "id": "KRN-3",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "files-context-menu-folder",
+      "detail": "fired on: []; actions tried: [\"Open in explorer\",\"Rename\",\"Compress to ZIP\",\"Copy\",\"Cut\",\"Properties\",\"Delete\"]",
+      "script": "test-dsl-injection.mjs"
+    },
+    {
+      "id": "WIN-2",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "files-multi-select-menu",
+      "detail": "menu=[\"Download\",\"Delete 2 items\"] fired on: []",
+      "script": "test-dsl-injection.mjs"
+    },
+    {
+      "id": "WIN-2",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "compiled-explorer-double-click-audio",
+      "detail": "sentinel=[]",
+      "script": "test-dsl-injection.mjs"
+    },
+    {
+      "id": "WIN-2",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "compiled-explorer-context-menu",
+      "detail": "fired on: []; actions tried: [\"Edit\",\"Open\",\"Download\",\"Rename\",\"Copy\",\"Cut\",\"Properties\",\"Delete\"]",
+      "script": "test-dsl-injection.mjs"
+    },
+    {
+      "id": "WIN-2",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "markdown-edit-in-notepad",
+      "detail": "sentinel=[]",
+      "script": "test-dsl-injection.mjs"
+    },
+    {
+      "id": "KRN-3",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "desktop-icon-double-click",
+      "detail": "sentinel=[]",
+      "script": "test-dsl-injection.mjs"
+    },
+    {
+      "id": "KRN-3",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "desktop-icon-context-menu",
+      "detail": "fired on: []; actions tried: [\"Edit\",\"Open\",\"Edit (about.html)\",\"VS Code\",\"Browser\",\"Delete\"]",
+      "script": "test-dsl-injection.mjs"
+    },
+    {
+      "id": "APP-1",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "explorer-sifi-double-click-and-menu",
+      "detail": "double-click sentinel=[]; menu fired on: []; actions: [\"Edit\",\"Open\",\"Rename\",\"Compare with…\",\"Compress to ZIP\",\"Copy\",\"Cut\",\"Properties\",\"Text Editor\",\"VS Code\",\"Spreadsheet\",\"Image Viewer\",\"Music Player\",\"SQLite Browser\",\"Python REPL\",\"Browser\",\"Delete\"]",
+      "script": "test-dsl-injection.mjs"
+    }
+  ]
+}

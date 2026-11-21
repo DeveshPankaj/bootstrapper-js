@@ -24,8 +24,9 @@ exports.default = ({item, onClick}) => {
       </div>
       {item.children.map(child =>
         <button key={child.id} className="ctx-child-btn" onClick={ev => {
+          // The layout renders "Open with" groups itself and runs their
+          // structured actions (audit KRN-3) — this template only closes the menu.
           closeContextMenu(ev.currentTarget);
-          if (child.cmd) platform.host.execCommand(child.cmd, platform);
         }}>
           {child.title}
         </button>

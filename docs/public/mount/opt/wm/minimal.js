@@ -1,6 +1,6 @@
 // Windows-style window header: title left, square control buttons right.
-// Drop this in /opt/wm/minimal.js and set windowManager:"minimal" in
-// /etc/managers.json to activate.
+// Ships in /opt/wm/minimal.js (runs from the static copy); select it with
+// windowManager:"minimal" in /etc/managers.json (Settings → Managers).
 
 export const createHeader = ({ command, settings, close, minimize, fullscreen }) => {
     

@@ -58,11 +58,9 @@ function OpenWithModal({ cmd, onClose }) {
     if (!p) return
     onClose()
     try {
-      // Use execCommand so the window manager passes body+props correctly
-      platform.host.execCommand(
-        `service('001-core.layout', 'open-window') (command('${cmd.name}'), '${p.replace(/'/g, "\\'")}')`,
-        platform
-      )
+      // open-window so the window manager passes body+props correctly; the path
+      // travels as a value, never as DSL source (audit APP-1/KRN-3)
+      platform.host.openWindow(cmd.name, p)
     } catch(e) {
       try { platform.host.callCommand('notify', { title:'Open error', body:String(e.message||e), duration:3000 }) } catch(_){}
     }

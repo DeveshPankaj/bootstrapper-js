@@ -26,6 +26,58 @@ const resolveFileUrl = (src, registryUrl) => {
   try { return new URL(src, registryUrl).href; } catch(_) { return src; }
 };
 
+// ── Package checks (audit BOOT-4, decisions.md D6) ───────────────────────────
+// A registry entry is data from the network: its id names the app's folder and
+// its file `dest`s and `main` are joined onto that folder, so all of them are
+// validated before anything is fetched or written, and every download is checked
+// against the entry's sha256 (docs/registry.json gets them from
+// scripts/gen-registry-integrity.mjs).
+
+const SHA256_RE = /^[0-9a-f]{64}$/i;
+
+const appDirFor = (id) => {
+  if (!platform.host.pathPolicy.isValidAppId(id)) throw new Error(`invalid app id ${JSON.stringify(id)}`);
+  return `/opt/apps/${id}`;
+};
+
+// { appDir, files: [{src, dest, destPath, sha256}], mainFile } — or throws.
+const planInstall = (appMeta) => {
+  const { safeJoin } = platform.host.pathPolicy;
+  const appDir = appDirFor(appMeta && appMeta.id);
+  const inside = (rel, what) => {
+    try { return safeJoin(appDir, rel); }
+    catch (_) { throw new Error(`${what} ${JSON.stringify(rel)} is not a path inside ${appDir}`); }
+  };
+  const files = (Array.isArray(appMeta.files) ? appMeta.files : []).map((file) => {
+    if (!file || typeof file.src !== 'string' || !file.src) throw new Error('a file entry has no src');
+    if (file.sha256 !== undefined && !(typeof file.sha256 === 'string' && SHA256_RE.test(file.sha256))) {
+      throw new Error(`malformed sha256 for ${JSON.stringify(file.dest)}`);
+    }
+    return { src: file.src, dest: file.dest, destPath: inside(file.dest, 'file destination'), sha256: file.sha256 ? file.sha256.toLowerCase() : null };
+  });
+  return { appDir, files, mainFile: inside(appMeta.main, 'main file') };
+};
+
+const sha256Hex = async (data) => {
+  const subtle = typeof crypto !== 'undefined' && crypto.subtle;
+  if (!subtle) throw new Error('integrity check unavailable (crypto.subtle needs https or localhost)');
+  const digest = await subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
+};
+
+// Apps from the built-in registry whose files all carry a sha256 install without
+// asking. Anything else — another registry, or a file without a hash — needs the
+// user's explicit OK, naming where it comes from.
+const confirmInstallSource = (appMeta, registryUrl, files) => {
+  const builtIn = registryUrl === BUILTIN_REGISTRY_URL;
+  const unhashed = files.filter((f) => !f.sha256).length;
+  if (builtIn && !unhashed) return true;
+  const reasons = [];
+  if (!builtIn) reasons.push(`It comes from a registry that isn't built in:\n${registryUrl}`);
+  if (unhashed) reasons.push(`${unhashed} of its ${files.length} file(s) have no integrity hash, so their content can't be verified.`);
+  return confirm(`Install "${appMeta.name || appMeta.id}"?\n\n${reasons.join('\n\n')}\n\nInstalled apps run with full access to your files and other apps. Only install apps from sources you trust.`);
+};
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 const pick = (obj, keys) => keys.reduce((acc, k) => { acc[k] = obj[k]; return acc; }, {});
@@ -127,16 +179,29 @@ const findRegistryMatch = (pkg, registryApps) => {
 // Launches an already-installed app — shared by InstalledView and (so an
 // installed app can also be opened straight from its Discover card, not
 // just from the Installed tab) DiscoverView.
+// An installed app's main file, only if it lies inside the app's own /opt/apps/<id>
+// folder (installed.json is writable by any app, audit BOOT-10); otherwise null.
+const installedMainFile = (pkg) => {
+  const { isValidAppId, isInside, normalizePath } = platform.host.pathPolicy;
+  if (!pkg || !isValidAppId(pkg.id) || typeof pkg.mainFile !== 'string') return null;
+  try {
+    const mainFile = normalizePath(pkg.mainFile);
+    const appDir = `/opt/apps/${pkg.id}`;
+    return mainFile !== appDir && isInside(appDir, mainFile) ? mainFile : null;
+  } catch (_) { return null; }
+};
+
 const openInstalledApp = (pkg) => {
   try {
     if (pkg.commandName) {
-      platform.host.execCommand(
-        `service('001-core.layout','open-window')(command('${pkg.commandName}'))`,
-        platform
-      );
+      // The command name comes from writable installed.json: pass it as a value,
+      // never as DSL source (audit BOOT-2/KRN-3).
+      platform.host.openWindow(pkg.commandName);
     } else {
-      // HTML apps or apps without a registered command: exec the main file directly
-      platform.host.exec(platform, pkg.mainFile);
+      // HTML apps or apps without a registered command: open the main file directly
+      const mainFile = installedMainFile(pkg);
+      if (mainFile) platform.host.exec(platform, mainFile);
+      else console.warn('[pkg-manager] not opening a main file outside its app folder:', pkg.id, pkg.mainFile);
     }
   } catch (e) {
     console.warn('[pkg-manager] open failed:', pkg.id, e);
@@ -147,12 +212,16 @@ const openInstalledApp = (pkg) => {
 
 const BACKUPS_DIR = '/etc/pkg/backups';
 
+// Backups live in /etc/pkg/backups/<id>/<version>/ — id and version are validated
+// (single, plain path segments) wherever they are joined into a path (audit BOOT-10).
 const readBackupManifest = (id) => {
+  if (!platform.host.pathPolicy.isValidAppId(id)) return [];
   try { return JSON.parse(fs.readFileSync(`${BACKUPS_DIR}/${id}/manifest.json`, 'utf8') || '[]'); }
   catch (_) { return []; }
 };
 
 const writeBackupManifest = (id, list) => {
+  appDirFor(id); // throws on an invalid id
   const dir = `${BACKUPS_DIR}/${id}`;
   mkdirpSync(dir);
   fs.writeFileSync(`${dir}/manifest.json`, JSON.stringify(list, null, 2));
@@ -168,17 +237,23 @@ const getLatestBackup = (id) => {
 // Snapshot an installed app's CURRENT on-disk files (as named by the registry entry's
 // `files` array, i.e. the files an update is about to overwrite) into
 // /etc/pkg/backups/<id>/<old-version>/<relative-filename>, and record it in that app's
-// manifest.json. Best-effort — skips files that don't currently exist.
+// manifest.json. Best-effort — skips files that don't currently exist. Paths come
+// from the validated id (never installed.json's `appDir`), a single-segment
+// version and safeJoin'ed `dest`s (audit BOOT-4/BOOT-10).
 const backupAppFiles = (pkg, registryApp) => {
-  const oldVersion = pkg.version;
+  const { safeJoin, isValidName } = platform.host.pathPolicy;
+  const oldVersion = String(pkg.version);
+  if (!isValidName(oldVersion)) return false;
+  const appDir = appDirFor(pkg.id);
   const backupDir = `${BACKUPS_DIR}/${pkg.id}/${oldVersion}`;
   let backedUpAny = false;
   for (const file of (registryApp.files || [])) {
-    const srcPath = `${pkg.appDir}/${file.dest}`;
+    let srcPath, destPath;
+    try { srcPath = safeJoin(appDir, file.dest); destPath = safeJoin(backupDir, file.dest); }
+    catch (_) { continue; }
     if (!fs.existsSync(srcPath)) continue;
     try {
       const data = fs.readFileSync(srcPath);
-      const destPath = `${backupDir}/${file.dest}`;
       const parentDir = destPath.split('/').slice(0, -1).join('/');
       mkdirpSync(parentDir);
       fs.writeFileSync(destPath, data);
@@ -193,7 +268,8 @@ const backupAppFiles = (pkg, registryApp) => {
   return backedUpAny;
 };
 
-// Recursively copy every file under `dir` back into `pkg.appDir`, preserving relative paths.
+// Recursively copy every file under `dir` back into `appDir`, preserving relative paths
+// (each destination safeJoin'ed onto appDir).
 const restoreFilesInto = (dir, appDir, relBase = '') => {
   let entries = [];
   try { entries = fs.readdirSync(dir); } catch (_) { return; }
@@ -204,7 +280,8 @@ const restoreFilesInto = (dir, appDir, relBase = '') => {
     if (stat.isDirectory()) {
       restoreFilesInto(full, appDir, `${relBase}${entry}/`);
     } else {
-      const destPath = `${appDir}/${relBase}${entry}`;
+      let destPath;
+      try { destPath = platform.host.pathPolicy.safeJoin(appDir, `${relBase}${entry}`); } catch (_) { continue; }
       const parentDir = destPath.split('/').slice(0, -1).join('/');
       try {
         mkdirpSync(parentDir);
@@ -216,12 +293,17 @@ const restoreFilesInto = (dir, appDir, relBase = '') => {
 };
 
 // Restore the most recently backed-up version's files over the current ones and revert
-// the installed.json version field to match.
+// the installed.json version field to match. Only this app's own backup folder
+// (/etc/pkg/backups/<id>/<version>) is read, and only into /opt/apps/<id> — the folder
+// comes from the validated id, never from installed.json's writable `appDir` (BOOT-10).
 const rollbackApp = (pkg) => {
+  const appDir = appDirFor(pkg.id);
   const latest = getLatestBackup(pkg.id);
   if (!latest) throw new Error('No backup available to roll back to.');
-  const backupDir = `${BACKUPS_DIR}/${pkg.id}/${latest.version}`;
-  restoreFilesInto(backupDir, pkg.appDir);
+  const version = String(latest.version);
+  if (!platform.host.pathPolicy.isValidName(version)) throw new Error(`invalid backup version ${JSON.stringify(latest.version)}`);
+  const backupDir = `${BACKUPS_DIR}/${pkg.id}/${version}`;
+  restoreFilesInto(backupDir, appDir);
 
   const installed = readInstalled();
   const idx = installed.findIndex(p => p.id === pkg.id);
@@ -233,23 +315,37 @@ const rollbackApp = (pkg) => {
 
 // ── Install / Uninstall ──────────────────────────────────────────────────────
 
-const installApp = async (appMeta, registryUrl) => {
-  ensureDirs();
-  const appDir = `/opt/apps/${appMeta.id}`;
-  try { fs.mkdirSync(appDir, { recursive: true }); } catch (_) {}
+// Installs (or updates) an app. Validates the entry, asks for consent when the
+// source isn't verifiable, downloads and checks every file before writing any of
+// them (a bad file never leaves a half-installed app), then runs `beforeWrite`
+// (the update's backup) and writes. Returns false when the user declined.
+const installApp = async (appMeta, registryUrl, { beforeWrite } = {}) => {
+  const { appDir, files, mainFile } = planInstall(appMeta);
+  if (!confirmInstallSource(appMeta, registryUrl, files)) return false;
 
-  for (const file of (appMeta.files || [])) {
+  const downloads = [];
+  for (const file of files) {
     const fileUrl = resolveFileUrl(file.src, registryUrl);
     const response = await fetch(fileUrl);
     if (!response.ok) throw new Error(`Failed to fetch ${fileUrl}: ${response.status}`);
     const data = await response.arrayBuffer();
-    const destPath = `${appDir}/${file.dest}`;
-    const parentDir = destPath.split('/').slice(0, -1).join('/');
-    try { mkdirpSync(parentDir); } catch (_) {}
-    fs.writeFileSync(destPath, Buffer.from(data));
+    if (file.sha256) {
+      const actual = await sha256Hex(data);
+      if (actual !== file.sha256) {
+        throw new Error(`integrity check failed for ${file.dest} (sha256 ${actual.slice(0, 12)}…, expected ${file.sha256.slice(0, 12)}…) — nothing was installed`);
+      }
+    }
+    downloads.push({ ...file, data });
   }
 
-  const mainFile = `${appDir}/${appMeta.main}`;
+  if (beforeWrite) beforeWrite();
+  ensureDirs();
+  try { mkdirpSync(appDir); } catch (_) {}
+  for (const file of downloads) {
+    const parentDir = file.destPath.split('/').slice(0, -1).join('/');
+    try { mkdirpSync(parentDir); } catch (_) {}
+    fs.writeFileSync(file.destPath, Buffer.from(file.data));
+  }
 
   // Use registry-provided commandName as primary source; fall back to dynamic detection.
   // commands$ may be a Subject (no getValue) in some contexts — fall back gracefully.
@@ -260,8 +356,10 @@ const installApp = async (appMeta, registryUrl) => {
       try { cmdsBefore = new Set((platform.host.commands$.getValue() || []).map(c => c.name)); } catch (_) {}
     }
     try {
+      // The user just chose to install it (D10: explicit intent → runFile, no second prompt);
+      // mainFile is inside /opt/apps/<id> (planInstall).
       platform._appDir = appDir;
-      platform.host.exec(platform, mainFile);
+      platform.host.runFile(platform, mainFile, [], { confirm: false });
     } catch (e) {
       console.warn('[pkg-manager] failed to load after install:', appMeta.id, e);
     } finally {
@@ -296,23 +394,23 @@ const installApp = async (appMeta, registryUrl) => {
     installed.push(record);
   }
   writeInstalled(installed);
+  return true;
 };
 
+// Removes /opt/apps/<id> — the folder comes from the validated id, never from
+// installed.json's `appDir`, which any app can rewrite (audit BOOT-10). Packages'
+// pre-uninstall.js hooks are not run: they'd execute package code with full privileges
+// at removal time. A record with an invalid id is dropped without deleting anything.
 const uninstallApp = async (pkg) => {
-  const preUninstall = `${pkg.appDir}/pre-uninstall.js`;
-  try {
-    if (fs.existsSync(preUninstall)) {
-      platform.host.exec(platform, preUninstall);
-    }
-  } catch (e) { console.warn('[pkg-manager] pre-uninstall failed:', e); }
-
-  deleteDirRecursive(pkg.appDir);
+  const validId = platform.host.pathPolicy.isValidAppId(pkg && pkg.id);
+  if (validId) deleteDirRecursive(appDirFor(pkg.id));
+  else console.warn('[pkg-manager] invalid app id, removing its record only:', pkg && pkg.id);
 
   const installed = readInstalled().filter(p => p.id !== pkg.id);
   writeInstalled(installed);
 
   const blocked = readUninstalled();
-  if (!blocked.includes(pkg.id)) {
+  if (validId && !blocked.includes(pkg.id)) {
     blocked.push(pkg.id);
     writeUninstalled(blocked);
   }
@@ -1106,6 +1204,9 @@ const RegistriesView = ({ registries, onAdd, onRemove, onRefresh, loading }) => 
           Registries must return JSON with <code>name</code>, <code>version</code>, and <code>apps</code> array.
           Each app needs: <code>id</code>, <code>name</code>, <code>version</code>, <code>files</code> (<code>[{'{dest, src}'}]</code>), and <code>main</code>.
           File <code>src</code> can be absolute URLs or paths starting with <code>/</code> (resolved against registry origin).
+          The <code>id</code> must be a plain app id, and every <code>dest</code> and <code>main</code> a relative path inside the app's folder.
+          A file may carry a <code>sha256</code> (hex) that is verified before install; apps from added registries, or with files
+          without one, ask for your confirmation first.
         </div>
       </div>
     </>
@@ -1169,7 +1270,7 @@ const App = ({ initialSearch = '' }) => {
     setInstallingId(appMeta.id);
     setInstallError('');
     try {
-      await installApp(appMeta, registryUrl);
+      await installApp(appMeta, registryUrl); // false = the user declined: nothing to report
       setInstalled(readInstalled());
     } catch (e) {
       setInstallError(`Install failed for "${appMeta.name}": ${e.message}`);
@@ -1208,8 +1309,8 @@ const App = ({ initialSearch = '' }) => {
     setUpdatingId(pkg.id);
     setInstallError('');
     try {
-      backupAppFiles(pkg, match);
-      await installApp(match, match._registryUrl || pkg.registryUrl);
+      // The backup is taken only once the new files are downloaded and verified.
+      await installApp(match, match._registryUrl || pkg.registryUrl, { beforeWrite: () => backupAppFiles(pkg, match) });
       setInstalled(readInstalled());
     } catch (e) {
       setInstallError(`Update failed for "${pkg.name}": ${e.message}`);
@@ -1337,7 +1438,7 @@ const App = ({ initialSearch = '' }) => {
 const run = (...args) => {
   const [body, props, initialSearch] = args;
   if (!body) {
-    platform.host.execCommand("service('001-core.layout','open-window')(command('ui.pkg-manager'))", platform);
+    platform.host.openWindow('ui.pkg-manager');
     return;
   }
   const container = platform.window.document.createElement('div');

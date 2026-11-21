@@ -28,9 +28,20 @@ const BookmarksApp = () => {
 
   const persist = (list) => { setItems(list); writeBookmarks(list) }
 
+  // A bookmark opens in a Browser window: the URL travels as a value to ui.iframe (which
+  // gives cross-origin pages a restrictive sandbox and no referrer). If that fails, a new
+  // tab that can't reach this window — noopener,noreferrer, so the site gets no
+  // window.opener to post IPC messages to (audit APP-9). http(s) only: bookmarks.json is
+  // writable by other apps, so a stored javascript:/data: URL is never opened.
   const openUrl = (url) => {
-    try { platform.host.callCommand('ui.iframe', url) }
-    catch (_) { window.top.open(url, '_blank') }
+    let parsed
+    try { parsed = new URL(url) } catch (_) { parsed = null }
+    if (!parsed || (parsed.protocol !== 'https:' && parsed.protocol !== 'http:')) {
+      try { platform.host.callCommand('notify', { title: 'Bookmark not opened', body: `Only http(s) links can be opened: ${String(url).slice(0, 80)}`, duration: 4000 }) } catch (_) {}
+      return
+    }
+    try { platform.host.openWindow('ui.iframe', parsed.href) }
+    catch (_) { window.top.open(parsed.href, '_blank', 'noopener,noreferrer') }
   }
 
   const add = () => {
@@ -109,7 +120,7 @@ const BookmarksApp = () => {
 
 const run = (body, props) => {
   if (!body) {
-    platform.host.execCommand("service('001-core.layout', 'open-window') (command('ui.bookmarks'))", platform)
+    platform.host.openWindow('ui.bookmarks')
     return
   }
   props.setTitle('Bookmarks')

@@ -35367,14 +35367,43 @@ const Taskbar = ({ onCommandClick, vertical, align = 'start' }) => {
 "use strict";
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   ContextMenu: () => (/* binding */ ContextMenu)
+/* harmony export */   ContextMenu: () => (/* binding */ ContextMenu),
+/* harmony export */   runContextMenuItem: () => (/* binding */ runContextMenuItem)
 /* harmony export */ });
 /* harmony import */ var _shared_index__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @shared/index */ "./src/shared/index.ts");
 /* harmony import */ var react__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! react */ "./node_modules/.pnpm/react@19.3.0/node_modules/react/index.js");
 /* harmony import */ var react__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(react__WEBPACK_IMPORTED_MODULE_1__);
+/* harmony import */ var _system_static_code__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../../system/static-code */ "./src/system/static-code.ts");
+
 
 
 const platform = _shared_index__WEBPACK_IMPORTED_MODULE_0__.Platform.getInstance();
+const MENU_ITEM_TEMPLATE_PATH = '/usr/lib/ui/menuItem.js';
+const runContextMenuItem = (item) => {
+    if (!item || typeof item !== 'object')
+        return;
+    if (typeof item.onSelect === 'function')
+        return item.onSelect();
+    const args = Array.isArray(item.args) ? item.args : [];
+    if (typeof item.command === 'string' && item.command) {
+        return item.window
+            ? platform.host.openWindow(item.command, ...args)
+            : platform.host.callCommand(item.command, ...args);
+    }
+    if (typeof item.cmd === 'string' && item.cmd) {
+        return platform.host.execCommand(item.cmd, platform, ...args);
+    }
+};
+// Group entries ("Open with …") are rendered here rather than by the item
+// template, so a child's selection goes through runContextMenuItem like any
+// other entry. Same look as /usr/lib/ui/menuItem.js (its `.ctx-child-btn`
+// styles apply).
+const ContextMenuGroup = ({ item, onSelect }) => {
+    var _a;
+    return (react__WEBPACK_IMPORTED_MODULE_1___default().createElement((react__WEBPACK_IMPORTED_MODULE_1___default().Fragment), null,
+        react__WEBPACK_IMPORTED_MODULE_1___default().createElement("div", { style: { padding: '4px 14px 2px', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', opacity: 0.45, userSelect: 'none', pointerEvents: 'none', flexShrink: 0 } }, item.title),
+        ((_a = item.children) !== null && _a !== void 0 ? _a : []).map(child => react__WEBPACK_IMPORTED_MODULE_1___default().createElement("button", { key: child.id, className: 'ctx-child-btn', onClick: () => onSelect(child) }, child.title))));
+};
 const ContextMenu = ({ componentRef }) => {
     const id = 'context-menu-' + Math.random().toString(36).substring(2, 9);
     const [items, setItems] = react__WEBPACK_IMPORTED_MODULE_1___default().useState([
@@ -35385,21 +35414,29 @@ const ContextMenu = ({ componentRef }) => {
     const onClickRef = react__WEBPACK_IMPORTED_MODULE_1___default().useRef(null);
     const [customModule, setCustomModule] = react__WEBPACK_IMPORTED_MODULE_1___default().useState(null);
     const ComponentTemplateRef = react__WEBPACK_IMPORTED_MODULE_1___default().useRef(({ item, onClick }) => {
+        if (item.type === 'divider')
+            return react__WEBPACK_IMPORTED_MODULE_1___default().createElement("hr", { style: { margin: '4px 10px', border: 'none', borderTop: '1px solid rgba(127,127,127,0.2)', flexShrink: 0 } });
         return react__WEBPACK_IMPORTED_MODULE_1___default().createElement("button", { className: 'action-default-btn', key: item.id, onClick: ev => onClick(ev) }, item.title);
     });
+    const select = (item) => { if (onClickRef.current)
+        onClickRef.current(item); };
     react__WEBPACK_IMPORTED_MODULE_1___default().useEffect(() => {
         componentRef({ setItems, setOnClick: callback => onClickRef.current = callback });
-        const fs = platform.host.getFS();
-        const templateFilePath = '/usr/lib/ui/menuItem.js';
-        const fileExist = fs.existsSync(templateFilePath);
-        if (fileExist) {
-            const fileContent = fs.readFileSync(templateFilePath);
-            const mod = platform.host.execString(fileContent.toString(), templateFilePath);
-            setCustomModule(mod);
-            ComponentTemplateRef.current = mod.default || ComponentTemplateRef.current;
-            // setCustomStyles(mod?.getStyles?.(id, items) || "")
-        }
     }, [items]);
+    // The item template (/usr/lib/ui/menuItem.js) runs from the immutable static
+    // copy, loaded once — not from the writable vfs (decisions.md D1, audit
+    // BOOT-11). Until it's there, or if it can't be loaded, the compiled
+    // default template above renders the menu.
+    react__WEBPACK_IMPORTED_MODULE_1___default().useEffect(() => {
+        let cancelled = false;
+        (0,_system_static_code__WEBPACK_IMPORTED_MODULE_2__.loadSystemModule)(MENU_ITEM_TEMPLATE_PATH).then(mod => {
+            if (cancelled || !mod || typeof mod.default !== 'function')
+                return;
+            ComponentTemplateRef.current = mod.default;
+            setCustomModule(mod);
+        });
+        return () => { cancelled = true; };
+    }, []);
     return (react__WEBPACK_IMPORTED_MODULE_1___default().createElement("div", { id: id },
         react__WEBPACK_IMPORTED_MODULE_1___default().createElement("style", { dangerouslySetInnerHTML: { __html: `
                 #${id} { 
@@ -35428,10 +35465,31 @@ const ContextMenu = ({ componentRef }) => {
                     color: white;
                     // border-radius: 12px;
                 }
-                
-                ${customModule ? customModule.getStyles(id, items) : ''}
+
+                /* Group children, when no item template is loaded (:where keeps
+                   this below the template's own .ctx-child-btn rules). */
+                :where(#${id}) > button.ctx-child-btn {
+                    cursor: pointer;
+                    text-align: start;
+                    width: 15rem;
+                    height: 2.5rem;
+                    border: none;
+                    padding-left: 26px;
+                    background: transparent;
+                    color: inherit;
+                    font: inherit;
+                }
+
+                :where(#${id}) > button.ctx-child-btn:hover {
+                    background: black;
+                    color: white;
+                }
+
+                ${typeof (customModule === null || customModule === void 0 ? void 0 : customModule.getStyles) === 'function' ? customModule.getStyles(id, items) : ''}
             ` } }),
-        items.map(item => react__WEBPACK_IMPORTED_MODULE_1___default().createElement(ComponentTemplateRef.current, { key: item.id, item: item, onClick: () => onClickRef.current ? onClickRef.current(item) : null }))));
+        items.map(item => item.type === 'group'
+            ? react__WEBPACK_IMPORTED_MODULE_1___default().createElement(ContextMenuGroup, { key: item.id, item: item, onSelect: select })
+            : react__WEBPACK_IMPORTED_MODULE_1___default().createElement(ComponentTemplateRef.current, { key: item.id, item: item, onClick: () => select(item) }))));
 };
 
 
@@ -36246,8 +36304,14 @@ const WINDOW_CSS = `
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   DESKTOP_CONTAINER_CLASS: () => (/* binding */ DESKTOP_CONTAINER_CLASS),
+/* harmony export */   ICON_NAME_RE: () => (/* binding */ ICON_NAME_RE),
 /* harmony export */   WINDOWS_CONTAINER_CLASS: () => (/* binding */ WINDOWS_CONTAINER_CLASS),
 /* harmony export */   WindowManager: () => (/* binding */ WindowManager),
+/* harmony export */   clampWindowRect: () => (/* binding */ clampWindowRect),
+/* harmony export */   preloadWindowManagerCode: () => (/* binding */ preloadWindowManagerCode),
+/* harmony export */   safeBorderRadius: () => (/* binding */ safeBorderRadius),
+/* harmony export */   safeIconName: () => (/* binding */ safeIconName),
+/* harmony export */   sanitizeHeaderStyles: () => (/* binding */ sanitizeHeaderStyles),
 /* harmony export */   windowsSubject: () => (/* binding */ windowsSubject)
 /* harmony export */ });
 /* harmony import */ var _shared_draggable__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @shared/draggable */ "./src/shared/draggable.ts");
@@ -36259,6 +36323,8 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _platform_process_manager__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ../platform/process-manager */ "./src/platform/process-manager.ts");
 /* harmony import */ var _platform_proxy_fs__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ../platform/proxy-fs */ "./src/platform/proxy-fs.ts");
 /* harmony import */ var _system_window_manager__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! ../system/window-manager */ "./src/system/window-manager.ts");
+/* harmony import */ var _system_static_code__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! ../system/static-code */ "./src/system/static-code.ts");
+
 
 
 
@@ -36270,6 +36336,102 @@ __webpack_require__.r(__webpack_exports__);
 const platform = _shared_index__WEBPACK_IMPORTED_MODULE_1__.Platform.getInstance();
 const WINDOWS_CONTAINER_CLASS = "windows";
 const DESKTOP_CONTAINER_CLASS = "desktop";
+// ── Window chrome input checks (audit WIN-5) ─────────────────────────────────
+// Titles, icons, header styles and geometry come from apps and from command
+// metadata (often derived from file names). They are applied to the top
+// document only as text, as allowlisted style properties, or as clamped numbers.
+// Icons are Material Symbols ligature names, rendered as text. Anything else
+// (markup, entities, long strings) is replaced by `fallback`.
+const ICON_NAME_RE = /^[a-z0-9_]+$/;
+const safeIconName = (icon, fallback = "") => typeof icon === "string" && icon.length <= 64 && ICON_NAME_RE.test(icon) ? icon : fallback;
+const MAX_TITLE_LENGTH = 1024;
+const toTitleText = (title) => String(title !== null && title !== void 0 ? title : "").slice(0, MAX_TITLE_LENGTH);
+// Header styles: the properties apps actually set (colours, shadow, borders),
+// as CSSOM names or CSS names. Values are short, made of a conservative
+// character set (no quotes, backslashes, ';', ':', '!', braces) and may only
+// call colour/gradient functions — so no url(), image-set(), expression().
+const HEADER_STYLE_PROPERTIES = Object.freeze({
+    background: "background", backgroundColor: "background-color", "background-color": "background-color",
+    color: "color", boxShadow: "box-shadow", "box-shadow": "box-shadow",
+    border: "border", borderColor: "border-color", "border-color": "border-color",
+    borderBottom: "border-bottom", "border-bottom": "border-bottom",
+    borderTop: "border-top", "border-top": "border-top",
+    opacity: "opacity", fontWeight: "font-weight", "font-weight": "font-weight",
+});
+const HEADER_STYLE_VALUE_RE = /^[a-zA-Z0-9#%(),./\s-]*$/;
+const HEADER_STYLE_FUNCTIONS = new Set([
+    "rgb", "rgba", "hsl", "hsla", "hwb", "lab", "lch", "oklab", "oklch", "color-mix", "var", "calc",
+    "linear-gradient", "radial-gradient", "conic-gradient",
+    "repeating-linear-gradient", "repeating-radial-gradient", "repeating-conic-gradient",
+]);
+const MAX_HEADER_STYLE_VALUE = 200;
+const MAX_HEADER_STYLE_KEYS = 16;
+const sanitizeHeaderStyles = (styles) => {
+    if (!styles || typeof styles !== "object" || Array.isArray(styles))
+        return [];
+    const out = [];
+    for (const [key, raw] of Object.entries(styles).slice(0, MAX_HEADER_STYLE_KEYS)) {
+        const property = Object.prototype.hasOwnProperty.call(HEADER_STYLE_PROPERTIES, key) ? HEADER_STYLE_PROPERTIES[key] : undefined;
+        if (!property)
+            continue;
+        const value = typeof raw === "number" && Number.isFinite(raw) ? String(raw) : raw;
+        if (typeof value !== "string" || value.length > MAX_HEADER_STYLE_VALUE || !HEADER_STYLE_VALUE_RE.test(value))
+            continue;
+        const functions = Array.from(value.matchAll(/([a-zA-Z-]+)\s*\(/g), m => m[1].toLowerCase());
+        if (functions.some(name => !HEADER_STYLE_FUNCTIONS.has(name)))
+            continue;
+        out.push([property, value]);
+    }
+    return out;
+};
+const applyHeaderStyles = (head, styles) => {
+    for (const [property, value] of sanitizeHeaderStyles(styles)) {
+        if (value === "")
+            head.style.removeProperty(property);
+        else
+            head.style.setProperty(property, value);
+    }
+};
+// Geometry: only finite numeric left/top/width/height, in px. Sizes are
+// clamped to the viewport; the position keeps the window inside the area it
+// is placed in (the viewport, or the scrollable canvas of the canvas WM).
+const MIN_WINDOW_WIDTH = 120;
+const MIN_WINDOW_HEIGHT = 80;
+const clampNumber = (n, min, max) => Math.min(Math.max(n, min), Math.max(min, max));
+// A window's corner radius as a bounded CSS length — the only style besides
+// geometry an app may set through setBoundingClientRect (Settings rounds its
+// window). Numbers are px; strings must be a plain number + px/rem/em/%.
+const RADIUS_RE = /^(\d{1,3}(?:\.\d{1,3})?)(px|rem|em|%)$/;
+const RADIUS_MAX = { px: 64, rem: 4, em: 4, "%": 50 };
+const safeBorderRadius = (value) => {
+    if (typeof value === "number")
+        return Number.isFinite(value) ? `${clampNumber(value, 0, RADIUS_MAX.px)}px` : undefined;
+    if (typeof value !== "string")
+        return undefined;
+    const m = RADIUS_RE.exec(value.trim());
+    if (!m)
+        return undefined;
+    return `${Math.min(parseFloat(m[1]), RADIUS_MAX[m[2]])}${m[2]}`;
+};
+const clampWindowRect = (rect, current, viewport, area) => {
+    var _a, _b;
+    if (!rect || typeof rect !== "object")
+        return {};
+    const r = rect;
+    const num = (k) => (typeof r[k] === "number" && Number.isFinite(r[k]) ? r[k] : undefined);
+    const out = {};
+    const width = num("width"), height = num("height"), left = num("left"), top = num("top");
+    if (width !== undefined)
+        out.width = clampNumber(width, MIN_WINDOW_WIDTH, viewport.width);
+    if (height !== undefined)
+        out.height = clampNumber(height, MIN_WINDOW_HEIGHT, viewport.height);
+    const w = (_a = out.width) !== null && _a !== void 0 ? _a : current.width, h = (_b = out.height) !== null && _b !== void 0 ? _b : current.height;
+    if (left !== undefined)
+        out.left = clampNumber(left, 0, Math.max(area.width, viewport.width) - w);
+    if (top !== undefined)
+        out.top = clampNumber(top, 0, Math.max(area.height, viewport.height) - h);
+    return out;
+};
 const windowsSubject = new rxjs__WEBPACK_IMPORTED_MODULE_5__.BehaviorSubject([]);
 // Mirror windowsSubject into Ring 2 WindowManager so external consumers
 // (task-manager, spotlight, etc.) can subscribe to Wm2.getInstance().windows$.
@@ -36394,9 +36556,13 @@ const registerProcessCommands = () => {
     // for callers that don't need a full `process.list()` snapshot.
     platform.host.registerCommand("process.memory", (pid) => readWindowMemory(Number(pid)));
 };
-// Behavior (event wiring, etc.) for new windows lives in the virtual
-// filesystem so it can be edited (via the file explorer) and takes effect
-// for the next window opened, without rebuilding the app.
+// Per-window behavior (event wiring, snapping) comes from /opt/window-manager.js
+// and the optional header/container style from /opt/wm/<id>.js — both run from
+// the immutable static copy that ships with the build (decisions.md D1, audit
+// WIN-6/BOOT-5); the vfs copies are view-only. Their sources are preloaded at
+// layout start and evaluated once, so createWindow stays synchronous; until
+// they're available (or if they can't be loaded) the compiled defaults below
+// apply.
 const FALLBACK_WM_SETTINGS = {
     behavior: {
         dblClickHeaderFullscreen: true,
@@ -36404,52 +36570,82 @@ const FALLBACK_WM_SETTINGS = {
     },
 };
 const MANAGERS_CONFIG_PATH = '/etc/managers.json';
-const loadWindowManagerModule = () => {
+// Window-manager styles that ship in docs/public/mount/opt/wm/. The id in
+// /etc/managers.json (writable) only selects one of these.
+const WM_STYLE_IDS = ['canvas', 'classic', 'glass', 'minimal', 'tiling', 'ubuntu'];
+const SYSTEM_ID_RE = /^[a-z0-9-]+$/;
+const wmStylePath = (id) => `/opt/wm/${id}.js`;
+const preloadWindowManagerCode = () => {
+    if (!(platform === null || platform === void 0 ? void 0 : platform.host))
+        return;
+    (0,_system_static_code__WEBPACK_IMPORTED_MODULE_9__.preloadSystemModule)(_shared_constants__WEBPACK_IMPORTED_MODULE_3__.WINDOW_MANAGER_MODULE_PATH);
+    WM_STYLE_IDS.forEach(id => (0,_system_static_code__WEBPACK_IMPORTED_MODULE_9__.preloadSystemModule)(wmStylePath(id)));
+};
+const warnedWmIds = new Set();
+const readWmStyleId = () => {
+    var _a, _b;
+    let id = 'default';
     try {
         const fs = platform.host.getFS();
-        // Load base module — provides setupWindow, readSettings, snap zones, etc.
-        const baseModule = (() => {
-            if (!fs.existsSync(_shared_constants__WEBPACK_IMPORTED_MODULE_3__.WINDOW_MANAGER_MODULE_PATH))
-                return {};
-            const source = fs.readFileSync(_shared_constants__WEBPACK_IMPORTED_MODULE_3__.WINDOW_MANAGER_MODULE_PATH, "utf-8");
-            return platform.host.execString(source, _shared_constants__WEBPACK_IMPORTED_MODULE_3__.WINDOW_MANAGER_MODULE_PATH);
-        })();
-        // Check for an active WM style override in /etc/managers.json.
-        let wmId = 'default';
-        try {
-            if (fs.existsSync(MANAGERS_CONFIG_PATH)) {
-                const config = JSON.parse(fs.readFileSync(MANAGERS_CONFIG_PATH, 'utf-8'));
-                if (config.windowManager)
-                    wmId = config.windowManager;
-            }
+        if (fs.existsSync(MANAGERS_CONFIG_PATH)) {
+            id = (_b = (_a = JSON.parse(fs.readFileSync(MANAGERS_CONFIG_PATH, 'utf-8'))) === null || _a === void 0 ? void 0 : _a.windowManager) !== null && _b !== void 0 ? _b : 'default';
         }
-        catch (_) { }
-        if (wmId === 'default')
-            return baseModule;
-        // Load style override from /opt/wm/<id>.js — exports createHeader (and
-        // optionally createContainer). Merges over base: style overrides win for
-        // visual hooks, base keeps setupWindow/readSettings/etc.
-        const wmStylePath = `/opt/wm/${wmId}.js`;
-        if (!fs.existsSync(wmStylePath))
-            return baseModule;
-        const wmStyleSource = fs.readFileSync(wmStylePath, "utf-8");
-        const wmStyleModule = platform.host.execString(wmStyleSource, wmStylePath);
-        return Object.assign(Object.assign({}, baseModule), wmStyleModule);
     }
-    catch (err) {
-        console.error("Failed to load window manager module", err);
-        return {};
+    catch (_) { }
+    if (typeof id === 'string' && SYSTEM_ID_RE.test(id) && WM_STYLE_IDS.includes(id))
+        return id;
+    if (id !== 'default' && !warnedWmIds.has(String(id))) {
+        warnedWmIds.add(String(id));
+        console.warn('[wm] /etc/managers.json windowManager is not a shipped style — using the default:', id);
     }
+    return 'default';
+};
+const loadWindowManagerModule = () => {
+    var _a;
+    // Base module: setupWindow, readSettings, snap zones. undefined (still
+    // loading) and null (unavailable) both mean "use the compiled defaults".
+    const baseModule = (_a = (0,_system_static_code__WEBPACK_IMPORTED_MODULE_9__.getSystemModule)(_shared_constants__WEBPACK_IMPORTED_MODULE_3__.WINDOW_MANAGER_MODULE_PATH)) !== null && _a !== void 0 ? _a : {};
+    const wmId = readWmStyleId();
+    if (wmId === 'default')
+        return baseModule;
+    // Style override (createHeader, optionally createContainer/setupWindow),
+    // merged over base: style hooks win, base keeps the rest.
+    const wmStyleModule = (0,_system_static_code__WEBPACK_IMPORTED_MODULE_9__.getSystemModule)(wmStylePath(wmId));
+    return wmStyleModule ? Object.assign(Object.assign({}, baseModule), wmStyleModule) : baseModule;
+};
+// Compiled stand-ins for the base module's readSettings/setupWindow.
+const readFallbackWmSettings = () => {
+    try {
+        const raw = JSON.parse(platform.host.getFS().readFileSync(_shared_constants__WEBPACK_IMPORTED_MODULE_3__.WM_CURRENT_PATH, 'utf-8'));
+        return Object.assign(Object.assign({}, raw), { behavior: Object.assign(Object.assign({}, FALLBACK_WM_SETTINGS.behavior), raw === null || raw === void 0 ? void 0 : raw.behavior) });
+    }
+    catch (_) {
+        return FALLBACK_WM_SETTINGS;
+    }
+};
+const fallbackSetupWindow = ({ container, head, settings, toggleFullScreen, moveOnTop }) => {
+    var _a, _b;
+    if ((_a = settings === null || settings === void 0 ? void 0 : settings.behavior) === null || _a === void 0 ? void 0 : _a.dblClickHeaderFullscreen) {
+        head.addEventListener('dblclick', (event) => {
+            var _a, _b;
+            if ((_b = (_a = event.target) === null || _a === void 0 ? void 0 : _a.closest) === null || _b === void 0 ? void 0 : _b.call(_a, '.window-action'))
+                return;
+            toggleFullScreen();
+        });
+    }
+    if ((_b = settings === null || settings === void 0 ? void 0 : settings.behavior) === null || _b === void 0 ? void 0 : _b.bringToFrontOnClick)
+        container.addEventListener('mousedown', () => moveOnTop());
 };
 class WindowManager {
     constructor(contentRef) {
         this.contentRef = contentRef;
         this.windows = {};
         registerProcessCommands();
+        preloadWindowManagerCode();
     }
     createWindow(command_name, ...args) {
-        var _a, _b, _c, _d, _e, _f, _g;
-        var _h, _j;
+        var _a, _b, _c, _d, _e, _f, _g, _h;
+        var _j, _k;
         const command = platform.host.getCommand(command_name);
         if (!command) {
             throw `Command not found [${command_name}]`;
@@ -36466,11 +36662,11 @@ class WindowManager {
             proxyFs = new _platform_proxy_fs__WEBPACK_IMPORTED_MODULE_7__.ProxyFS(rawFs, ns);
         }
         catch (_) { }
-        // Load the VFS window-manager module once at the top so its hooks
+        // Resolve the window-manager module once at the top so its hooks
         // (createContainer, createHeader, setupWindow) are all available.
         const wmModule = loadWindowManagerModule();
-        const wmSettings = (_c = (_b = wmModule.readSettings) === null || _b === void 0 ? void 0 : _b.call(wmModule)) !== null && _c !== void 0 ? _c : FALLBACK_WM_SETTINGS;
-        // --- VFS hook: createContainer({ command, settings }) ---
+        const wmSettings = (_c = (_b = wmModule.readSettings) === null || _b === void 0 ? void 0 : _b.call(wmModule)) !== null && _c !== void 0 ? _c : readFallbackWmSettings();
+        // --- Module hook: createContainer({ command, settings }) ---
         // Return an HTMLElement to replace the default <div class="window">.
         // Mandatory attributes/classes are still applied by compiled code below.
         // Use nodeType === 1 (ELEMENT_NODE) instead of instanceof HTMLElement so
@@ -36487,7 +36683,7 @@ class WindowManager {
         container.classList.add("hidden");
         // windowRef must exist before closeFunction since closeFunction calls closeWindow(windowRef).
         const windowRef = { container, command, pid };
-        (_e = (_h = this.windows)[_j = command.name]) !== null && _e !== void 0 ? _e : (_h[_j] = []);
+        (_e = (_j = this.windows)[_k = command.name]) !== null && _e !== void 0 ? _e : (_j[_k] = []);
         this.windows[command.name].push(windowRef);
         Object.freeze(windowRef);
         // Declare iframe early so emitSignal can close over it before its assignment below.
@@ -36500,8 +36696,10 @@ class WindowManager {
                 cb();
             }
             catch (_) { } });
+            // The window frame is same-origin; pin the target so a document it
+            // navigated to elsewhere isn't told (audit KRN-13).
             try {
-                (_b = iframe.contentWindow) === null || _b === void 0 ? void 0 : _b.postMessage({ type: 'signal', name }, '*');
+                (_b = iframe.contentWindow) === null || _b === void 0 ? void 0 : _b.postMessage({ type: 'signal', name }, platform.window.location.origin);
             }
             catch (_) { }
         };
@@ -36525,7 +36723,7 @@ class WindowManager {
         // Shared minimize/fullscreen callbacks — passed to createHeader and setupWindow.
         const minimizeCallback = () => this.toggleMinimize(windowRef);
         const fullscreenCallback = () => toggleFullScreen(this.contentRef.current, container);
-        // --- VFS hook: createHeader({ command, settings, close, minimize, fullscreen }) ---
+        // --- Module hook: createHeader({ command, settings, close, minimize, fullscreen }) ---
         // Return an HTMLElement to replace the default header.
         // The callbacks are provided so custom headers can wire their own controls.
         // If null/undefined is returned, the default compiled header is used instead.
@@ -36539,7 +36737,7 @@ class WindowManager {
         let head, closeButton, fullScreenButton, minimizeButton, setTitleRaw, appendActionButton, setHeaderStyles;
         if ((customHead === null || customHead === void 0 ? void 0 : customHead.nodeType) === 1) {
             head = customHead;
-            // VFS-provided header has already received the callbacks — don't wire compiled buttons.
+            // Module-provided header has already received the callbacks — don't wire compiled buttons.
             closeButton = null;
             fullScreenButton = null;
             minimizeButton = null;
@@ -36559,14 +36757,16 @@ class WindowManager {
             [head, closeButton, fullScreenButton, minimizeButton, setTitleRaw, appendActionButton, setHeaderStyles] =
                 createWindowHeader(command);
         }
-        const setTitle = (newTitle) => {
-            var _a;
+        // Titles are plain text everywhere (header, taskbar, docks, /proc); icons
+        // are checked ligature names (audit WIN-5).
+        const icon = safeIconName((_g = command.meta) === null || _g === void 0 ? void 0 : _g.icon);
+        const setTitle = (rawTitle) => {
+            const newTitle = toTitleText(rawTitle);
             setTitleRaw(newTitle);
-            writeProcMeta(pid, { pid, name: command.name, title: newTitle, icon: ((_a = command.meta) === null || _a === void 0 ? void 0 : _a.icon) || "", startedAt: Date.now() });
+            writeProcMeta(pid, { pid, name: command.name, title: newTitle, icon, startedAt: Date.now() });
             windowsSubject.next(windowsSubject.getValue().map(w => w.pid === pid ? Object.assign(Object.assign({}, w), { title: newTitle }) : w));
         };
-        const title = command.meta.title || command.name;
-        const icon = ((_g = command.meta) === null || _g === void 0 ? void 0 : _g.icon) || "";
+        const title = toTitleText(((_h = command.meta) === null || _h === void 0 ? void 0 : _h.title) || command.name);
         writeProcMeta(pid, { pid, name: command.name, title, icon, startedAt: Date.now() });
         windowsSubject.next([
             ...windowsSubject.getValue(),
@@ -36605,8 +36805,24 @@ class WindowManager {
             proxyFs,
             iframe,
         });
+        // What app loaders get of the ProxyFS (vector-store, model-builder use
+        // mkdir/exists/writeText): bound promise methods in a frozen object.
+        const proxyFsFacade = proxyFs ? Object.freeze({
+            readText: (p) => proxyFs.readText(p),
+            readBinary: (p) => proxyFs.readBinary(p),
+            writeText: (p, c) => proxyFs.writeText(p, c),
+            mkdir: (p) => proxyFs.mkdir(p),
+            remove: (p) => proxyFs.remove(p),
+            list: (p) => proxyFs.list(p),
+            exists: (p) => proxyFs.exists(p),
+            stat: (p) => proxyFs.stat(p),
+            rename: (from, to) => proxyFs.rename(from, to),
+        }) : undefined;
         iframe.onload = () => {
             var _a, _b, _c;
+            // Cross-origin window.open from this window gets noopener,noreferrer
+            // (audit KRN-11/APP-9).
+            platform.host.hardenWindow(iframe.contentWindow);
             const iframeBody = (_b = (_a = iframe.contentWindow) === null || _a === void 0 ? void 0 : _a.document) === null || _b === void 0 ? void 0 : _b.body;
             if (!iframeBody)
                 return;
@@ -36624,9 +36840,10 @@ class WindowManager {
                 // `/proc/<pid>/...`, and use it as the target for `process.kill`
                 // and `process.send-message` from other scripts.
                 pid,
-                // Ring 1: scoped VFS proxy — app loaders use this instead of host.getFS()
-                proxyFs,
-                namespace: ns,
+                // Ring 1: scoped VFS proxy — app loaders use this instead of
+                // host.getFS(). A frozen set of its async methods, not the instance or
+                // the namespace, whose ACL is reachable and mutable (audit WIN-10).
+                proxyFs: proxyFsFacade,
                 close: closeFunction,
                 onMessage: (cb) => {
                     const subscription = messages$.subscribe(cb);
@@ -36663,16 +36880,34 @@ class WindowManager {
                     // Access control is enforced by the ProxyFS ACL in the MessageChannel
                     // bridge below — the AppSDK is the only endorsed API for VFS access.
                     appIframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-downloads');
+                    // One channel per document (decisions.md D4, audit KRN-6/WIN-10): the
+                    // port is posted once, after that document's load, and only to this
+                    // origin (these frames stay same-origin until phase 2), so a page the
+                    // frame navigated to elsewhere never receives it. A later load is a
+                    // restart: the previous port is closed and the new document gets a
+                    // fresh channel with the same ACL.
+                    const targetOrigin = platform.window.location.origin;
+                    let port = null;
+                    const closePort = () => { try {
+                        port === null || port === void 0 ? void 0 : port.close();
+                    }
+                    catch (_) { } port = null; };
+                    onCloseCallbacks.push(closePort);
                     appIframe.addEventListener('load', () => {
+                        closePort();
+                        const appWindow = appIframe.contentWindow;
+                        if (!appWindow)
+                            return;
+                        platform.host.hardenWindow(appWindow);
                         try {
                             const channel = new MessageChannel();
-                            appIframe.contentWindow.postMessage({ type: 'wos:sdk-init' }, '*', [channel.port2]);
-                            const port = channel.port1;
-                            port.start();
-                            port.onmessage = (ev) => {
+                            const sdkPort = port = channel.port1;
+                            sdkPort.onmessage = (ev) => {
                                 const d = ev.data;
-                                const ok = (r) => port.postMessage({ id: d.id, r, err: null });
-                                const err = (e) => port.postMessage({ id: d.id, r: null, err: e.message });
+                                const ok = (r) => sdkPort.postMessage({ id: d.id, r, err: null });
+                                const err = (e) => sdkPort.postMessage({ id: d.id, r: null, err: e.message });
+                                if (!d || typeof d !== 'object' || !Array.isArray(d.a))
+                                    return;
                                 const fs = proxyFs;
                                 if (!fs) {
                                     err(new Error('no sandbox fs'));
@@ -36714,19 +36949,29 @@ class WindowManager {
                                     default: err(new Error('unknown: ' + d.t));
                                 }
                             };
+                            sdkPort.start();
+                            appWindow.postMessage({ type: 'wos:sdk-init' }, targetOrigin, [channel.port2]);
                         }
                         catch (_) { }
-                    }, { once: true });
+                    });
                 },
                 setWindowView: (show) => show
                     ? container.classList.remove("hidden")
                     : container.classList.add("hidden"),
                 toggleFullScreen: fullscreenCallback,
                 getBoundingClientRect: () => container.getBoundingClientRect(),
+                // Only finite numeric left/top/width/height, clamped (audit WIN-5) —
+                // other keys (cssText, position, zIndex, right/bottom, …) are ignored.
                 setBoundingClientRect: (rect) => {
-                    const newCord = {};
-                    Object.keys(rect).forEach((attr) => (newCord[attr] = `${rect[attr]}${typeof rect[attr] === "number" ? "px" : ""}`));
-                    Object.assign(container.style, newCord);
+                    var _a, _b;
+                    const area = container.offsetParent;
+                    const next = clampWindowRect(rect, { width: container.offsetWidth, height: container.offsetHeight }, { width: platform.window.innerWidth, height: platform.window.innerHeight }, { width: (_a = area === null || area === void 0 ? void 0 : area.scrollWidth) !== null && _a !== void 0 ? _a : 0, height: (_b = area === null || area === void 0 ? void 0 : area.scrollHeight) !== null && _b !== void 0 ? _b : 0 });
+                    for (const [key, value] of Object.entries(next)) {
+                        container.style[key] = `${value}px`;
+                    }
+                    const radius = safeBorderRadius(rect === null || rect === void 0 ? void 0 : rect.borderRadius);
+                    if (radius !== undefined)
+                        container.style.borderRadius = radius;
                 },
                 host: hostDimension,
             }, ...args);
@@ -36734,9 +36979,9 @@ class WindowManager {
             addResizeHandles(container);
             this.moveOnTop(windowRef);
             head.addEventListener("mousedown", () => this.moveOnTop(windowRef));
-            // setupWindow receives close/minimize/setTitle so VFS-custom headers can
+            // setupWindow receives close/minimize/setTitle so custom headers can
             // wire their controls here rather than in createHeader.
-            (_c = wmModule.setupWindow) === null || _c === void 0 ? void 0 : _c.call(wmModule, {
+            ((_c = wmModule.setupWindow) !== null && _c !== void 0 ? _c : fallbackSetupWindow)({
                 container,
                 head,
                 iframe,
@@ -36752,7 +36997,7 @@ class WindowManager {
         if (this.contentRef.current) {
             container.appendChild(iframe);
             appendWindow(this.contentRef.current, container);
-            // Wire compiled default-header controls only when VFS didn't supply a custom header.
+            // Wire compiled default-header controls only when no module supplied a custom header.
             if (closeButton)
                 closeButton.onclick = closeFunction;
             if (fullScreenButton)
@@ -36799,19 +37044,19 @@ class WindowManager {
     }
 }
 const createWindowHeader = (command) => {
-    var _a, _b, _c;
+    var _a, _b, _c, _d;
     const head = platform.window.document.createElement("div");
     const title = platform.window.document.createElement("span");
     const icon = platform.window.document.createElement("span");
     const titleText = platform.window.document.createElement("span");
-    titleText.innerHTML = command.meta.title || command.name;
+    titleText.textContent = toTitleText(((_a = command.meta) === null || _a === void 0 ? void 0 : _a.title) || command.name);
     title.appendChild(icon);
     title.appendChild(titleText);
     title.classList.add("title");
     icon.classList.add("material-symbols-outlined");
     icon.style.cursor = "pointer";
     icon.style.marginLeft = "auto";
-    icon.innerHTML = `${(_a = command.meta) === null || _a === void 0 ? void 0 : _a.icon}`;
+    icon.textContent = safeIconName((_b = command.meta) === null || _b === void 0 ? void 0 : _b.icon);
     const gap = platform.window.document.createElement("span");
     gap.classList.add("window-gap");
     gap.style.marginLeft = "auto";
@@ -36820,21 +37065,21 @@ const createWindowHeader = (command) => {
     const minimize = platform.window.document.createElement("span");
     minimize.classList.add("material-symbols-outlined", "window-action", "wm-minimize");
     minimize.style.cursor = "pointer";
-    minimize.innerHTML = "remove";
+    minimize.textContent = "remove";
     minimize.title = "minimize window";
     minimize.setAttribute("role", "button");
     minimize.setAttribute("tabindex", "0");
     const fullScreen = platform.window.document.createElement("span");
     fullScreen.classList.add("material-symbols-outlined", "window-action", "wm-fullscreen");
     fullScreen.style.cursor = "pointer";
-    fullScreen.innerHTML = "fullscreen";
+    fullScreen.textContent = "fullscreen";
     fullScreen.title = "toggle fullscreen";
     fullScreen.setAttribute("role", "button");
     fullScreen.setAttribute("tabindex", "0");
     const close = platform.window.document.createElement("span");
     close.classList.add("material-symbols-outlined", "window-action", "wm-close");
     close.style.cursor = "pointer";
-    close.innerHTML = "close";
+    close.textContent = "close";
     close.title = "close window";
     close.setAttribute("role", "button");
     close.setAttribute("tabindex", "0");
@@ -36845,21 +37090,19 @@ const createWindowHeader = (command) => {
     head.appendChild(gap);
     head.appendChild(controls);
     head.classList.add("window-header");
-    const setHeaderStyles = (styles) => {
-        Object.assign(head.style, styles);
-    };
-    const headerStyles = ((_c = (_b = command.meta) === null || _b === void 0 ? void 0 : _b.header) === null || _c === void 0 ? void 0 : _c.style) || {};
-    setHeaderStyles(headerStyles);
+    // Allowlisted properties and values only — never cssText, position or url().
+    const setHeaderStyles = (styles) => applyHeaderStyles(head, styles);
+    setHeaderStyles(((_d = (_c = command.meta) === null || _c === void 0 ? void 0 : _c.header) === null || _d === void 0 ? void 0 : _d.style) || {});
     const setTitle = (title) => {
-        titleText.innerText = title;
+        titleText.textContent = toTitleText(title);
     };
     const appendActionButton = (props) => {
         const newButton = platform.window.document.createElement("span");
         newButton.classList.add("material-symbols-outlined", "window-action");
         newButton.style.cursor = "pointer";
-        newButton.innerHTML = props.icon;
-        newButton.title = props.title;
-        newButton.onclick = props.onClick;
+        newButton.textContent = safeIconName(props === null || props === void 0 ? void 0 : props.icon, "more_horiz");
+        newButton.title = toTitleText(props === null || props === void 0 ? void 0 : props.title);
+        newButton.onclick = typeof (props === null || props === void 0 ? void 0 : props.onClick) === "function" ? props.onClick : null;
         gap.after(newButton);
         return {
             remove: () => newButton.remove(),
@@ -36962,10 +37205,16 @@ const toggleFullScreen = (contentArea, win) => {
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   broadcastIpcEvent: () => (/* binding */ broadcastIpcEvent),
+/* harmony export */   checkIpcFsAccess: () => (/* binding */ checkIpcFsAccess),
+/* harmony export */   getIpcFramePolicy: () => (/* binding */ getIpcFramePolicy),
+/* harmony export */   hardenWindow: () => (/* binding */ hardenWindow),
 /* harmony export */   initIpcBus: () => (/* binding */ initIpcBus),
+/* harmony export */   isIpcEventAllowed: () => (/* binding */ isIpcEventAllowed),
+/* harmony export */   registerIpcFrame: () => (/* binding */ registerIpcFrame),
 /* harmony export */   registerIpcHandler: () => (/* binding */ registerIpcHandler),
 /* harmony export */   registerWmBridge: () => (/* binding */ registerWmBridge)
 /* harmony export */ });
+/* harmony import */ var _path_policy__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./path-policy */ "./src/kernel/path-policy.ts");
 // Ring 0 — IPC bus kernel module
 // Raw postMessage router. All inter-process messaging goes through here.
 // Platform (Ring 1) builds higher-level MessageBus on top of this.
@@ -36978,15 +37227,249 @@ var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _argume
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
+
+/**
+ * Wraps `win.open` so that cross-origin URLs always open with
+ * `noopener,noreferrer`: the opened page gets no `window.opener` reference
+ * back into the OS (audit KRN-11, APP-9). Same-origin opens, and about:blank
+ * (which takes our origin), are unchanged. Idempotent per document: a
+ * WindowProxy survives navigation, so "already hardened" is read from the
+ * current document's own `open` property (our wrapper is locked), and a frame
+ * that navigated to a new document is wrapped again. Ignores windows it can't
+ * touch.
+ */
+function hardenWindow(win) {
+    if (!win)
+        return;
+    let nativeOpen;
+    try {
+        const current = Object.getOwnPropertyDescriptor(win, 'open');
+        if (current && current.configurable === false)
+            return;
+        nativeOpen = win.open.bind(win);
+    }
+    catch (_) {
+        return;
+    }
+    const wrapped = function (url, target, features) {
+        let resolved = null;
+        try {
+            resolved = new URL(String(url !== null && url !== void 0 ? url : ''), win.location.href);
+        }
+        catch (_) { /* let the browser reject it */ }
+        if (resolved && resolved.protocol !== 'about:' && resolved.origin !== win.location.origin) {
+            const list = String(features !== null && features !== void 0 ? features : '').split(',').map(s => s.trim()).filter(Boolean);
+            for (const f of ['noopener', 'noreferrer'])
+                if (!list.includes(f))
+                    list.push(f);
+            return nativeOpen(resolved.href, target !== null && target !== void 0 ? target : '_blank', list.join(','));
+        }
+        return nativeOpen(url, target, features);
+    };
+    try {
+        Object.defineProperty(win, 'open', { value: wrapped, writable: false, configurable: false });
+    }
+    catch (_) { /* already locked or cross-origin */ }
+}
+const ipcFrames = new WeakMap();
+// The same windows, iterable, for broadcasts. Discarded frames (closed) are
+// pruned on the next broadcast.
+const ipcFrameWindows = new Set();
+// True only in the bundle copy that installed the listener (see initIpcBus).
+let isKernelCopy = false;
+// The hook installed by the kernel copy, looked up from this realm upwards
+// (a module iframe's own window has none; its parent — the OS window — does).
+function findKernelHook() {
+    let w = window;
+    for (let depth = 0; depth < 16; depth++) {
+        try {
+            if (w.__wosKernel)
+                return w.__wosKernel;
+        }
+        catch (_) {
+            return undefined;
+        }
+        if (w.parent === w)
+            return undefined;
+        w = w.parent;
+    }
+    return undefined;
+}
+const toStringList = (list) => Array.isArray(list) ? list.filter((s) => typeof s === 'string' && s !== '') : [];
+// fs scopes must be absolute, normalisable paths; anything else is dropped.
+const toScopeList = (list) => toStringList(list).filter(p => {
+    try {
+        return p.startsWith('/') && (0,_path_policy__WEBPACK_IMPORTED_MODULE_0__.normalizePath)(p) !== undefined;
+    }
+    catch (_) {
+        return false;
+    }
+});
+/** Registers a kernel-created frame's window with a policy. Returns an unregister function. */
+function registerIpcFrame(win, policy) {
+    var _a, _b, _c;
+    if (!win)
+        return () => { };
+    // Another bundle's copy of this module: register in the kernel's registry,
+    // the only one the listener reads.
+    if (!isKernelCopy) {
+        const hook = findKernelHook();
+        if (hook && hook.registerIpcFrame !== registerIpcFrame)
+            return hook.registerIpcFrame(win, policy);
+    }
+    const frozen = Object.freeze({
+        id: String((_a = policy === null || policy === void 0 ? void 0 : policy.id) !== null && _a !== void 0 ? _a : ''),
+        events: Object.freeze(toStringList(policy === null || policy === void 0 ? void 0 : policy.events)),
+        fs: Object.freeze({
+            read: Object.freeze(toScopeList((_b = policy === null || policy === void 0 ? void 0 : policy.fs) === null || _b === void 0 ? void 0 : _b.read)),
+            write: Object.freeze(toScopeList((_c = policy === null || policy === void 0 ? void 0 : policy.fs) === null || _c === void 0 ? void 0 : _c.write)),
+        }),
+    });
+    const entry = { policy: frozen };
+    ipcFrames.set(win, entry);
+    ipcFrameWindows.add(win);
+    return () => {
+        if (ipcFrames.get(win) !== entry)
+            return;
+        ipcFrames.delete(win);
+        ipcFrameWindows.delete(win);
+    };
+}
+/** The policy registered for a message source, or undefined for anything the kernel didn't register. */
+function getIpcFramePolicy(source) {
+    var _a;
+    return source ? (_a = ipcFrames.get(source)) === null || _a === void 0 ? void 0 : _a.policy : undefined;
+}
+/** True when `event` is in the policy's list — exactly, or under a trailing-'*' prefix entry ('dock.*'). */
+function isIpcEventAllowed(policy, event) {
+    return policy.events.some(p => p === event || (p.endsWith('*') && event.startsWith(p.slice(0, -1))));
+}
+// fs.* events by the scope they need. An fs.* event in neither set is refused.
+const FS_READ_EVENTS = ['fs.read', 'fs.readText', 'fs.list', 'fs.exists', 'fs.stat'];
+const FS_WRITE_EVENTS = ['fs.write', 'fs.mkdir', 'fs.rm'];
+/**
+ * Checks an fs.* request against the frame's policy and returns the
+ * normalised path the handler must use. Throws when it isn't allowed:
+ * read events need policy.fs.read, write events policy.fs.write, and system
+ * paths (path-policy isKernelOwned, invariant I4) are never writable over IPC.
+ */
+function checkIpcFsAccess(policy, event, data) {
+    var _a, _b, _c;
+    const isWrite = FS_WRITE_EVENTS.includes(event);
+    if (!isWrite && !FS_READ_EVENTS.includes(event))
+        throw new Error(`${event}: not available over IPC`);
+    const raw = data && typeof data === 'object' ? data.path : undefined;
+    if (typeof raw !== 'string' || !raw.startsWith('/'))
+        throw new Error(`${event}: an absolute path is required`);
+    const path = (0,_path_policy__WEBPACK_IMPORTED_MODULE_0__.normalizePath)(raw);
+    if (isWrite && (0,_path_policy__WEBPACK_IMPORTED_MODULE_0__.isKernelOwned)(path))
+        throw new Error(`${event}: permission denied: ${path} is a system path`);
+    const scopes = (_c = (isWrite ? (_a = policy.fs) === null || _a === void 0 ? void 0 : _a.write : (_b = policy.fs) === null || _b === void 0 ? void 0 : _b.read)) !== null && _c !== void 0 ? _c : [];
+    if (!scopes.some(base => (0,_path_policy__WEBPACK_IMPORTED_MODULE_0__.isInside)(base, path)))
+        throw new Error(`${event}: permission denied: ${path}`);
+    return path;
+}
+// Non-fs events that act on one file: the path is checked exactly like a read
+// (the frame may only name files inside its fs.read scope).
+const PATH_READ_EVENTS = ['editor.open'];
+// postMessage can't target an opaque origin by name, so sandboxed frames get
+// '*' — the message still goes only to that one window.
+const replyTargetOrigin = (origin) => (origin && origin !== 'null' ? origin : '*');
+function handleIpcMessage(e) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const msg = e.data;
+        if (!msg || typeof msg !== 'object' || msg.type !== 'wos-ipc')
+            return;
+        const source = e.source;
+        const entry = source ? ipcFrames.get(source) : undefined;
+        // Unregistered or foreign sender (other sites via opener/popup/embed, frames
+        // the kernel didn't create): no reply at all.
+        if (!source || !entry)
+            return;
+        if (entry.origin === undefined)
+            entry.origin = e.origin;
+        else if (entry.origin !== e.origin)
+            return;
+        const { id, event, data } = msg;
+        const reply = (body) => {
+            // Only to that registered window, and only while it still holds the
+            // registration it had when it asked.
+            if (ipcFrames.get(source) !== entry)
+                return;
+            try {
+                source.postMessage(Object.assign({ type: 'wos-ipc-response', id }, body), replyTargetOrigin(e.origin));
+            }
+            catch (_) { }
+        };
+        if (typeof event !== 'string' || !isIpcEventAllowed(entry.policy, event)) {
+            reply({ error: `IPC event not permitted: ${String(event)}` });
+            return;
+        }
+        const handler = handlers.get(event);
+        if (!handler) {
+            reply({ error: `Unknown IPC event: ${event}` });
+            return;
+        }
+        try {
+            const arg = event.startsWith('fs.')
+                ? Object.assign(Object.assign({}, data), { path: checkIpcFsAccess(entry.policy, event, data) }) : PATH_READ_EVENTS.includes(event)
+                ? Object.assign(Object.assign({}, data), { path: checkIpcFsAccess(entry.policy, 'fs.readText', data) }) : data;
+            const result = yield handler(arg, source);
+            reply({ result: result !== null && result !== void 0 ? result : null });
+        }
+        catch (err) {
+            reply({ error: String(err) });
+        }
+    });
+}
 const handlers = new Map();
 function registerIpcHandler(event, handler) {
     handlers.set(event, handler);
 }
-function broadcastIpcEvent(event, data, targetDoc = document) {
-    targetDoc.querySelectorAll('iframe').forEach(f => {
+// A broadcast `ns.name` reaches a registered frame whose policy allows that
+// event (isIpcEventAllowed) or any other event in the same namespace — a dock
+// allowed 'wm.getWindows' also gets 'wm.windowsChanged'; a frame with only
+// fs.* gets no window titles (audit KRN-13).
+function isIpcBroadcastFor(policy, event) {
+    if (isIpcEventAllowed(policy, event))
+        return true;
+    const dot = event.indexOf('.');
+    if (dot <= 0)
+        return false;
+    const ns = event.slice(0, dot + 1);
+    return policy.events.some(p => p.startsWith(ns));
+}
+/**
+ * Posts a `wos-ipc-event` to the frames registered with registerIpcFrame whose
+ * policy covers `event`, and to nothing else (audit KRN-13). `targetDoc` is
+ * kept for compatibility and no longer used: registered frames are reached
+ * wherever they are. Other bundles' copies delegate to the kernel's registry.
+ */
+function broadcastIpcEvent(event, data, _targetDoc) {
+    if (!isKernelCopy) {
+        const hook = findKernelHook();
+        if ((hook === null || hook === void 0 ? void 0 : hook.broadcastIpcEvent) && hook.broadcastIpcEvent !== broadcastIpcEvent)
+            hook.broadcastIpcEvent(event, data);
+        return;
+    }
+    ipcFrameWindows.forEach(win => {
         var _a;
+        const entry = ipcFrames.get(win);
+        let closed = true;
         try {
-            (_a = f.contentWindow) === null || _a === void 0 ? void 0 : _a.postMessage({ type: 'wos-ipc-event', event, data }, '*');
+            closed = win.closed;
+        }
+        catch (_) { }
+        if (!entry || closed) {
+            ipcFrameWindows.delete(win);
+            if (entry && closed)
+                ipcFrames.delete(win);
+            return;
+        }
+        if (!isIpcBroadcastFor(entry.policy, event))
+            return;
+        try {
+            win.postMessage({ type: 'wos-ipc-event', event, data }, replyTargetOrigin((_a = entry.origin) !== null && _a !== void 0 ? _a : ''));
         }
         catch (_) { }
     });
@@ -36999,43 +37482,67 @@ function registerWmBridge(getWindows, toggleWindow, mainWindow = window, getLaun
     };
 }
 function initIpcBus(fs) {
-    if (!window.__wosIpcInit) {
+    if (!window.__wosIpcInit && !Object.getOwnPropertyDescriptor(window, '__wosKernel')) {
         window.__wosIpcInit = true;
-        window.addEventListener('message', (e) => __awaiter(this, void 0, void 0, function* () {
-            if (!e.data || e.data.type !== 'wos-ipc')
-                return;
-            const { id, event, data } = e.data;
-            const source = e.source;
-            if (!source)
-                return;
-            const handler = handlers.get(event);
-            if (!handler) {
-                source.postMessage({ type: 'wos-ipc-response', id, error: `Unknown IPC event: ${event}` }, '*');
-                return;
-            }
-            try {
-                const result = yield handler(data, source);
-                source.postMessage({ type: 'wos-ipc-response', id, result: result !== null && result !== void 0 ? result : null }, '*');
-            }
-            catch (err) {
-                source.postMessage({ type: 'wos-ipc-response', id, error: String(err) }, '*');
-            }
-        }));
+        isKernelCopy = true;
+        // Cross-bundle entry point to the registry above (see the comment there).
+        Object.defineProperty(window, '__wosKernel', {
+            value: Object.freeze({ registerIpcFrame, hardenWindow, broadcastIpcEvent }),
+            writable: false,
+            configurable: false,
+            enumerable: false,
+        });
+        // The only wos-ipc listener (audit KRN-1): it answers frames registered
+        // through registerIpcFrame, within their policy, and nobody else.
+        window.addEventListener('message', (e) => { void handleIpcMessage(e); });
     }
     // Window manager bridge handlers
     registerIpcHandler('wm.getWindows', () => { var _a, _b; return (_b = (_a = window.__wosWmBridge) === null || _a === void 0 ? void 0 : _a.getWindows()) !== null && _b !== void 0 ? _b : []; });
     registerIpcHandler('wm.toggleWindow', (d) => { var _a; (_a = window.__wosWmBridge) === null || _a === void 0 ? void 0 : _a.toggleWindow(Number(d.pid)); return true; });
     registerIpcHandler('wm.getLaunchItems', () => { var _a, _b; return (_b = (_a = window.__wosWmBridge) === null || _a === void 0 ? void 0 : _a.getLaunchItems()) !== null && _b !== void 0 ? _b : []; });
-    registerIpcHandler('wm.launch', (d) => { var _a, _b; (_b = (_a = window.__wosWmBridge) === null || _a === void 0 ? void 0 : _a.launch) === null || _b === void 0 ? void 0 : _b.call(_a, String(d.name)); return true; });
+    // Launches only what the dock was offered (wm.getLaunchItems), not any
+    // command by name (audit WIN-7).
+    registerIpcHandler('wm.launch', (d) => {
+        var _a, _b, _c, _d, _e;
+        const name = String((_a = d === null || d === void 0 ? void 0 : d.name) !== null && _a !== void 0 ? _a : '');
+        const offered = ((_c = (_b = window.__wosWmBridge) === null || _b === void 0 ? void 0 : _b.getLaunchItems()) !== null && _c !== void 0 ? _c : []).some(item => item.name === name);
+        if (!offered)
+            throw new Error(`wm.launch: ${name} is not a launch item`);
+        (_e = (_d = window.__wosWmBridge) === null || _d === void 0 ? void 0 : _d.launch) === null || _e === void 0 ? void 0 : _e.call(_d, name);
+        return true;
+    });
+    // Opens a file the frame may read in the system editor (Notepad). The path
+    // was already checked against the frame's fs.read scope; the editor is the
+    // user's tool, so saving needs the user. Throttled so a page can't flood
+    // the desktop with windows.
+    const lastEditorOpen = new WeakMap();
+    registerIpcHandler('editor.open', (d, source) => {
+        var _a, _b;
+        const now = Date.now();
+        if (now - ((_a = lastEditorOpen.get(source)) !== null && _a !== void 0 ? _a : 0) < 1000)
+            throw new Error('editor.open: too many requests');
+        lastEditorOpen.set(source, now);
+        if (!fs.existsSync(d.path) || fs.statSync(d.path).isDirectory())
+            throw new Error(`editor.open: not a file: ${d.path}`);
+        const host = (_b = window.platform) === null || _b === void 0 ? void 0 : _b.host;
+        if (typeof (host === null || host === void 0 ? void 0 : host.openWindow) !== 'function')
+            throw new Error('editor.open: the desktop is not ready');
+        host.openWindow('ui.notepad', d.path);
+        return true;
+    });
     // Dock bridge handlers
-    registerIpcHandler('dock.registerSettings', (d) => {
-        var _a, _b, _c, _d;
+    registerIpcHandler('dock.registerSettings', (d, source) => {
+        var _a, _b, _c, _d, _e;
+        // A dock frame the layout registered as `dock:<id>` is that dock,
+        // whatever dockId it reports about itself.
+        const pinned = /^dock:([a-z0-9-]{1,64})$/.exec((_b = (_a = ipcFrames.get(source)) === null || _a === void 0 ? void 0 : _a.policy.id) !== null && _b !== void 0 ? _b : '');
+        const dockId = pinned ? pinned[1] : String((_c = d === null || d === void 0 ? void 0 : d.dockId) !== null && _c !== void 0 ? _c : '');
         if (window.__wosDockBridge) {
-            window.__wosDockBridge.schema = (_a = d.schema) !== null && _a !== void 0 ? _a : [];
-            window.__wosDockBridge.dockId = (_b = d.dockId) !== null && _b !== void 0 ? _b : '';
+            window.__wosDockBridge.schema = (_d = d === null || d === void 0 ? void 0 : d.schema) !== null && _d !== void 0 ? _d : [];
+            window.__wosDockBridge.dockId = dockId;
         }
         else {
-            window.__wosDockBridge = { schema: (_c = d.schema) !== null && _c !== void 0 ? _c : [], dockId: (_d = d.dockId) !== null && _d !== void 0 ? _d : '', set: () => { } };
+            window.__wosDockBridge = { schema: (_e = d === null || d === void 0 ? void 0 : d.schema) !== null && _e !== void 0 ? _e : [], dockId, set: () => { } };
         }
         broadcastIpcEvent('dock.schemaChanged', { schema: window.__wosDockBridge.schema, dockId: window.__wosDockBridge.dockId });
         return true;
@@ -37055,8 +37562,9 @@ function initIpcBus(fs) {
     registerIpcHandler('dock.getSettings', () => window.__wosDockBridge
         ? window.__wosDockBridge.schema.reduce((acc, e) => { acc[e.key] = e.value; return acc; }, {})
         : {});
-    // FS handlers — accessed through platform's ProxyFS in Ring 1;
-    // these raw handlers remain for trusted system callers (SW bridge, dock, etc.)
+    // FS handlers. handleIpcMessage has already checked the event and the
+    // path against the calling frame's policy (checkIpcFsAccess) and passes
+    // the normalised path in `d.path`.
     registerIpcHandler('fs.read', (d) => Array.from(fs.readFileSync(d.path)));
     registerIpcHandler('fs.readText', (d) => fs.readFileSync(d.path, 'utf8'));
     registerIpcHandler('fs.write', (d) => {
@@ -37081,6 +37589,143 @@ function initIpcBus(fs) {
 
 /***/ },
 
+/***/ "./src/kernel/path-policy.ts"
+/*!***********************************!*\
+  !*** ./src/kernel/path-policy.ts ***!
+  \***********************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   APP_ID_RE: () => (/* binding */ APP_ID_RE),
+/* harmony export */   KERNEL_OWNED_PATHS: () => (/* binding */ KERNEL_OWNED_PATHS),
+/* harmony export */   PathPolicyError: () => (/* binding */ PathPolicyError),
+/* harmony export */   isInside: () => (/* binding */ isInside),
+/* harmony export */   isKernelOwned: () => (/* binding */ isKernelOwned),
+/* harmony export */   isValidAppId: () => (/* binding */ isValidAppId),
+/* harmony export */   isValidName: () => (/* binding */ isValidName),
+/* harmony export */   normalizePath: () => (/* binding */ normalizePath),
+/* harmony export */   pathPolicy: () => (/* binding */ pathPolicy),
+/* harmony export */   safeJoin: () => (/* binding */ safeJoin)
+/* harmony export */ });
+// Ring 0 — path policy (documentation/security/decisions.md, D6).
+//
+// The one implementation of path normalisation and containment checks. Every
+// caller that turns untrusted input into a vfs path uses it: namespace ACLs,
+// package installs, archive extraction, WebRTC / SSH mounts, shell commands.
+// vfs scripts reach it as `platform.host.pathPolicy` (compiled, so a vfs
+// write can't weaken it). path-policy.test.ts is the spec.
+//
+// No imports on purpose — this module must stay dependency-free so anything
+// (kernel, platform, host, SW-side code, tests) can import it without cycles.
+class PathPolicyError extends Error {
+    constructor(message) {
+        super(message);
+        this.name = 'PathPolicyError';
+    }
+}
+// C0 controls, DEL and C1 controls: never valid in a vfs path or name.
+const CONTROL_CHARS = /[\u0000-\u001f\u007f-\u009f]/;
+/**
+ * Resolves `.`, `..` and repeated slashes in a vfs path. Relative paths resolve
+ * against `cwd`. `..` above the root stays at the root (POSIX semantics).
+ * Rejects non-strings, control characters (incl. NUL) and backslashes.
+ * Returns an absolute path with no trailing slash ('/' for the root).
+ */
+function normalizePath(path, cwd = '/') {
+    if (typeof path !== 'string')
+        throw new PathPolicyError('path must be a string');
+    if (CONTROL_CHARS.test(path))
+        throw new PathPolicyError('control character in path');
+    if (path.includes('\\'))
+        throw new PathPolicyError('backslash in path');
+    const full = path.startsWith('/') ? path : `${cwd}/${path}`;
+    const out = [];
+    for (const segment of full.split('/')) {
+        if (segment === '' || segment === '.')
+            continue;
+        if (segment === '..') {
+            out.pop();
+            continue;
+        }
+        out.push(segment);
+    }
+    return '/' + out.join('/');
+}
+/**
+ * True when `path` is `base` or lies under it, compared segment by segment
+ * ('/a/bc' is not inside '/a/b'). Both sides are normalised first.
+ */
+function isInside(base, path) {
+    const b = normalizePath(base);
+    const p = normalizePath(path);
+    if (b === '/')
+        return true;
+    return p === b || p.startsWith(b + '/');
+}
+/**
+ * True for a single, safe path segment coming from an untrusted source: a
+ * peer's file listing, an SSH host, an archive entry segment, a package file.
+ */
+function isValidName(name, maxLength = 255) {
+    return typeof name === 'string'
+        && name.length > 0
+        && name.length <= maxLength
+        && name !== '.'
+        && name !== '..'
+        && !name.includes('/')
+        && !name.includes('\\')
+        && !CONTROL_CHARS.test(name);
+}
+/**
+ * Joins an untrusted relative path (it may contain '/'-separated segments, like
+ * an archive entry 'dir/file.txt') onto `base`. Throws on absolute paths, '..'
+ * or otherwise invalid segments, and on any result outside `base`.
+ */
+function safeJoin(base, relative) {
+    if (typeof relative !== 'string' || relative === '')
+        throw new PathPolicyError('empty path');
+    if (relative.startsWith('/'))
+        throw new PathPolicyError(`absolute path not allowed: ${relative}`);
+    const segments = relative.split('/').filter(s => s !== '' && s !== '.');
+    if (segments.length === 0)
+        throw new PathPolicyError(`empty path: ${relative}`);
+    for (const segment of segments) {
+        if (!isValidName(segment))
+            throw new PathPolicyError(`invalid path segment: ${JSON.stringify(segment)}`);
+    }
+    const b = normalizePath(base);
+    const full = normalizePath(`${b}/${segments.join('/')}`);
+    if (!isInside(b, full) || full === b)
+        throw new PathPolicyError(`path escapes ${b}: ${relative}`);
+    return full;
+}
+/**
+ * System paths only the kernel may write (invariant I4). Enforced for every
+ * caller that goes through a namespace (ProxyFS, the IPC bus, the broker).
+ */
+const KERNEL_OWNED_PATHS = Object.freeze([
+    '/bin', '/boot', '/etc', '/opt', '/usr', '/meta.json', '/.initd.run', '/home/user1/initd.run',
+]);
+function isKernelOwned(path) {
+    const p = normalizePath(path);
+    return KERNEL_OWNED_PATHS.some(k => isInside(k, p));
+}
+/** App ids double as directory names under /opt/apps and ~/.local/share. */
+const APP_ID_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
+function isValidAppId(id) {
+    return typeof id === 'string' && APP_ID_RE.test(id) && !id.includes('..');
+}
+/** Frozen bundle of the helpers, exposed to vfs code as `platform.host.pathPolicy`. */
+const pathPolicy = Object.freeze({
+    normalizePath, isInside, isValidName, safeJoin, isKernelOwned, isValidAppId,
+    KERNEL_OWNED_PATHS, APP_ID_RE, PathPolicyError,
+});
+
+
+/***/ },
+
 /***/ "./src/kernel/vfs.ts"
 /*!***************************!*\
   !*** ./src/kernel/vfs.ts ***!
@@ -37097,6 +37742,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   resolveFsBackend: () => (/* binding */ resolveFsBackend)
 /* harmony export */ });
 /* harmony import */ var _ipc_bus__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./ipc-bus */ "./src/kernel/ipc-bus.ts");
+/* harmony import */ var _path_policy__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./path-policy */ "./src/kernel/path-policy.ts");
 // Ring 0 — VFS kernel module
 // Owns BrowserFS mount, path bootstrap from meta.json, and segment-safe mkdir.
 // No business logic. Called once at boot from src/index.ts.
@@ -37110,15 +37756,55 @@ var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _argume
     });
 };
 
+
 const FS_BACKEND_STORAGE_KEY = '__app_fs_backend__';
 const FS_BACKEND_QUERY_PARAM = 'fsBackend';
-function resolveFsBackend() {
-    const fromQuery = new URLSearchParams(window.location.search).get(FS_BACKEND_QUERY_PARAM);
-    if (fromQuery === 'indexeddb' || fromQuery === 'localstorage') {
-        localStorage.setItem(FS_BACKEND_STORAGE_KEY, fromQuery);
-        return fromQuery;
+// Removes one query parameter from the address bar, keeping the rest of the
+// URL (other params, the deep-link hash) as it was.
+function stripQueryParam(name) {
+    try {
+        const url = new URL(window.location.href);
+        if (!url.searchParams.has(name))
+            return;
+        url.searchParams.delete(name);
+        window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
     }
-    return localStorage.getItem(FS_BACKEND_STORAGE_KEY) === 'localstorage' ? 'localstorage' : 'indexeddb';
+    catch (_) { /* best effort */ }
+}
+function resolveFsBackend() {
+    let stored = 'indexeddb';
+    try {
+        if (localStorage.getItem(FS_BACKEND_STORAGE_KEY) === 'localstorage')
+            stored = 'localstorage';
+    }
+    catch (_) { }
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has(FS_BACKEND_QUERY_PARAM))
+        return stored;
+    const fromQuery = params.get(FS_BACKEND_QUERY_PARAM);
+    // Consumed either way, so a reload or a copied link doesn't apply it again.
+    stripQueryParam(FS_BACKEND_QUERY_PARAM);
+    if ((fromQuery !== 'indexeddb' && fromQuery !== 'localstorage') || fromQuery === stored)
+        return stored;
+    // The two backends are separate filesystems: a link must not switch this
+    // browser to another one without the user agreeing (audit KRN-9). Settings
+    // > Storage stores the choice before reloading, so it never gets here.
+    let ok = false;
+    try {
+        ok = window.confirm(`This link asks to switch this browser's file system storage from "${stored}" to "${fromQuery}".\n\n` +
+            'The two are separate file systems — your files stay where they are, but you will see ' +
+            'the other one until you switch back in Settings > Storage.\n\nSwitch now?');
+    }
+    catch (_) {
+        ok = false;
+    }
+    if (!ok)
+        return stored;
+    try {
+        localStorage.setItem(FS_BACKEND_STORAGE_KEY, fromQuery);
+    }
+    catch (_) { }
+    return fromQuery;
 }
 // BrowserFS ignores { recursive: true } — create each segment individually.
 function mkdirRecursive(fs, path) {
@@ -37187,33 +37873,92 @@ function initVFS(bootLog) {
         return fs;
     });
 }
+const META_SERVER_PATH = '/public/mount/meta.json';
+const STATIC_ROOT = '/public/mount';
+// Where a meta.json entry may be written: an absolute, already-normalised vfs path.
+function metaTargetPath(path) {
+    if (typeof path !== 'string' || !path.startsWith('/'))
+        return null;
+    try {
+        return (0,_path_policy__WEBPACK_IMPORTED_MODULE_1__.normalizePath)(path) === path && path !== '/' ? path : null;
+    }
+    catch (_) {
+        return null;
+    }
+}
+// The static copy a meta.json entry may come from: a path under /public/mount on
+// this origin. Absolute or protocol-relative URLs, '..', query/fragment
+// characters, backslashes and control characters are refused.
+function metaSourceUrl(file) {
+    if (typeof file !== 'string' || file === '')
+        return null;
+    if (/^[a-z][a-z0-9+.-]*:/i.test(file) || file.startsWith('//') || /[?#%\\]/.test(file))
+        return null;
+    if (file.split('/').includes('..'))
+        return null;
+    let rel;
+    try {
+        rel = (0,_path_policy__WEBPACK_IMPORTED_MODULE_1__.normalizePath)(file.startsWith('/') ? file : `/${file}`);
+    }
+    catch (_) {
+        return null;
+    }
+    const url = STATIC_ROOT + rel;
+    return url !== STATIC_ROOT && (0,_path_policy__WEBPACK_IMPORTED_MODULE_1__.isInside)(STATIC_ROOT, url) ? url : null;
+}
 function bootstrapMetaFiles(fs, bootLog) {
     return __awaiter(this, void 0, void 0, function* () {
         const t1 = Date.now();
-        const metaFilePath = '/meta.json';
-        const metaFileServerPath = '/public/mount/meta.json';
-        let defaultFiles = [];
-        if (fs.existsSync(metaFilePath)) {
-            defaultFiles = JSON.parse(fs.readFileSync(metaFilePath).toString());
+        // The server's meta.json decides what is restored and from where (audit
+        // BOOT-6, decisions.md D12). The vfs copy at /meta.json is plain data —
+        // any app can write it — so it can no longer switch refreshing off or name
+        // other sources; it is just overwritten with the server copy.
+        let entries;
+        try {
+            const res = yield fetch(META_SERVER_PATH);
+            if (!res.ok)
+                throw new Error(`HTTP ${res.status}`);
+            const list = yield res.json();
+            if (!Array.isArray(list))
+                throw new Error('not a list');
+            entries = list;
         }
-        const ignoreMetaReload = defaultFiles.find(item => item.path === metaFilePath && item.force_reload === false);
-        if (!ignoreMetaReload)
-            defaultFiles = yield (yield fetch(metaFileServerPath)).json();
+        catch (err) {
+            bootLog('meta.json bootstrap', t1, `server meta.json unavailable: ${err}`);
+            return;
+        }
         let fileCount = 0;
-        yield Promise.all(defaultFiles.map((item) => __awaiter(this, void 0, void 0, function* () {
-            if (fs.existsSync(item.path) && !item.force_reload)
+        const rejected = [];
+        const failed = [];
+        yield Promise.all(entries.map((item) => __awaiter(this, void 0, void 0, function* () {
+            const target = metaTargetPath(item === null || item === void 0 ? void 0 : item.path);
+            const source = metaSourceUrl(item === null || item === void 0 ? void 0 : item.file);
+            if (!target || !source) {
+                rejected.push(String(item === null || item === void 0 ? void 0 : item.path));
                 return;
-            const serverPath = item.file.startsWith('http')
-                ? item.file
-                : `/public/mount${item.file.startsWith('/') ? '' : '/'}${item.file}`;
-            const fileData = yield (yield fetch(serverPath)).arrayBuffer();
-            const dir = item.path.slice(0, item.path.lastIndexOf('/')) || '/';
-            if (!fs.existsSync(dir))
-                mkdirRecursive(fs, dir);
-            fs.writeFileSync(item.path, Buffer.from(fileData));
-            fileCount++;
+            }
+            if (fs.existsSync(target) && !item.force_reload)
+                return;
+            try {
+                const res = yield fetch(source);
+                if (!res.ok)
+                    throw new Error(`HTTP ${res.status}`);
+                const fileData = yield res.arrayBuffer();
+                const dir = target.slice(0, target.lastIndexOf('/')) || '/';
+                if (!fs.existsSync(dir))
+                    mkdirRecursive(fs, dir);
+                fs.writeFileSync(target, Buffer.from(fileData));
+                fileCount++;
+            }
+            catch (err) {
+                failed.push(target);
+                console.warn('[vfs] meta.json entry not restored:', target, err);
+            }
         })));
-        bootLog(`meta.json bootstrap (${fileCount} files written)`, t1);
+        if (rejected.length)
+            console.warn('[vfs] meta.json entries rejected (not a /public/mount source or bad path):', rejected);
+        const problems = [rejected.length && `${rejected.length} rejected`, failed.length && `${failed.length} failed`].filter(Boolean).join(', ');
+        bootLog(`meta.json bootstrap (${fileCount} files written)`, t1, problems || undefined);
     });
 }
 
@@ -37256,7 +38001,14 @@ class CommandRegistry {
         return CommandRegistry._instance;
     }
     register(name, exec, meta = {}, platformName = 'unknown') {
+        var _a;
         const existing = this._commands.getValue().find(x => x.name === name);
+        // Same rule as Host.registerCommand (audit KRN-10): another owner may
+        // replace a name only when the registration it replaces is a fallback.
+        if (existing && existing.servicePlatformName !== platformName && ((_a = existing.meta) === null || _a === void 0 ? void 0 : _a.fallback) !== true) {
+            console.error(`[command-registry] '${name}' belongs to ${existing.servicePlatformName}; ${platformName} can't replace it`);
+            return { remove: () => { } };
+        }
         if (existing) {
             console.warn(`[command-registry] '${name}' already registered — new registration takes precedence`);
         }
@@ -37319,59 +38071,129 @@ CommandRegistry._instance = null;
 "use strict";
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   Namespace: () => (/* binding */ Namespace)
+/* harmony export */   APP_DATA_ROOT: () => (/* binding */ APP_DATA_ROOT),
+/* harmony export */   APP_TMP_ROOT: () => (/* binding */ APP_TMP_ROOT),
+/* harmony export */   Namespace: () => (/* binding */ Namespace),
+/* harmony export */   SHARED_APP_DATA: () => (/* binding */ SHARED_APP_DATA),
+/* harmony export */   ownIdsOf: () => (/* binding */ ownIdsOf)
 /* harmony export */ });
+/* harmony import */ var _kernel_path_policy__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ../kernel/path-policy */ "./src/kernel/path-policy.ts");
 // Ring 1 — Namespace
 // Per-app context. Each spawned process gets one Namespace that defines its
 // identity (pid, id) and its access control list for VFS paths.
+//
+// Path rules (audit KRN-5, decisions.md D5/D6) — every target and every ACL
+// entry goes through the kernel path policy (src/kernel/path-policy.ts):
+//   - targets and entries are normalised ('.', '..', '//'; NUL, control
+//     characters and '\' are rejected), entries match segment by segment;
+//   - the id must be a valid app id (APP_ID_RE); an invalid id gets no write
+//     scope at all;
+//   - kernel-owned paths (/bin, /boot, /etc, /opt, /usr, /meta.json, init
+//     scripts) are never writable through a namespace, whatever the ACL says;
+//   - an app writes only its own data dir (~/.local/share/<id>), its own
+//     /tmp/<id>, and TrainBoard's shared log (see below);
+//   - other apps' data dirs under ~/.local/share are not readable either;
+//     everything else stays readable in phase 1 (apps open user files).
+// The ACL is still advisory until phase 2 (apps also reach host.getFS()), but
+// it is the rule set the broker will enforce.
+
+const APP_DATA_ROOT = '/home/user1/.local/share';
+const APP_TMP_ROOT = '/tmp';
+// TrainBoard's shared cross-app metrics log: any app writes {run,step,metric,value}
+// rows to log.jsonl there so TrainBoard can chart them (nn-ide, model-builder,
+// snake-cnn3d, snake-qlearning, snake-lstm, robot-sim). Every app may read and
+// write it — the one deliberate exception to "own data dir only".
+const SHARED_APP_DATA = Object.freeze([`${APP_DATA_ROOT}/trainboard`]);
+// Deliberate cross-app reads, keyed by app id: AI DOM Lens offers Vector Store's
+// projects as knowledge bases (it lists and reads ~/.local/share/ui.vector-store).
+const CROSS_APP_READS = Object.freeze({
+    'ai-dom-lens': Object.freeze(['ui.vector-store', 'vector-store']),
+});
+// A window's namespace id is its command name. First-party apps install to
+// /opt/apps/<app-id> and register `ui.<app-id>`, and both names appear in their
+// data paths (snake-game keeps ~/.local/share/snake-game, ts-ide keeps
+// ~/.local/share/ui.ts-ide), so `ui.<app-id>` owns the dirs of both names.
+const ownIdsOf = (id) => {
+    if (!(0,_kernel_path_policy__WEBPACK_IMPORTED_MODULE_0__.isValidAppId)(id))
+        return [];
+    const ids = [id];
+    if (id.startsWith('ui.') && (0,_kernel_path_policy__WEBPACK_IMPORTED_MODULE_0__.isValidAppId)(id.slice(3)))
+        ids.push(id.slice(3));
+    return ids;
+};
+const tryNormalize = (path) => {
+    try {
+        return typeof path === 'string' && path.startsWith('/') ? (0,_kernel_path_policy__WEBPACK_IMPORTED_MODULE_0__.normalizePath)(path) : null;
+    }
+    catch (_) {
+        return null;
+    }
+};
 class Namespace {
     constructor(opts) {
-        var _a, _b;
+        var _a, _b, _c;
         this.pid = opts.pid;
-        this.id = opts.id;
-        this.appDir = (_a = opts.appDir) !== null && _a !== void 0 ? _a : `/opt/apps/${opts.id}`;
-        // Default ACL: read+write own app dir and user data dir.
-        // System paths (/tmp, /var/log) are readable + writable.
-        // Everything else is read-only by default.
-        //
-        // /home/user1/.local/share/trainboard is a deliberate exception:
-        // it's TrainBoard's shared cross-app metrics log (any app writes
-        // {run,step,metric,value} rows to log.jsonl there so TrainBoard
-        // can chart them), so every sandboxed app needs write access to
-        // it specifically, not just its own id's data dir. Without this,
-        // every app following that convention (nn-ide, model-builder,
-        // snake-cnn3d, snake-qlearning, snake-lstm, and now robot-sim)
-        // fails silently — each wraps the write in its own try/catch,
-        // so the ACL denial never surfaced as a visible error anywhere.
-        this.acl = [
-            { path: this.appDir, read: true, write: true },
-            { path: `/home/user1/.local/share/${opts.id}`, read: true, write: true },
-            { path: '/home/user1/.local/share/trainboard', read: true, write: true },
-            { path: '/tmp', read: true, write: true },
-            { path: '/var/log', read: true, write: true },
-            { path: '/', read: true, write: false }, // catch-all read
-            ...((_b = opts.extraAcl) !== null && _b !== void 0 ? _b : []),
-        ];
-    }
-    bestMatch(path) {
-        // Find the most-specific ACL entry whose path is a prefix of the target path.
-        // Special-case e.path === '/' so the catch-all works: any '/foo' starts with '/'
-        // without adding an extra slash (which would require '//').
-        return this.acl
-            .filter(e => path === e.path || e.path === '/' || path.startsWith(e.path + '/'))
-            .sort((a, b) => b.path.length - a.path.length)[0];
-    }
-    checkRead(path) {
-        const match = this.bestMatch(path);
-        if (!match || !match.read) {
-            throw new Error(`[acl] read denied: pid=${this.pid} id=${this.id} path=${path}`);
+        this.id = String(opts.id);
+        const ownIds = ownIdsOf(this.id);
+        const appId = ownIds[ownIds.length - 1];
+        // appDir is informational (task manager) and readable; /opt is kernel-owned.
+        this.appDir = (_a = tryNormalize(opts.appDir)) !== null && _a !== void 0 ? _a : (appId ? `/opt/apps/${appId}` : '');
+        const entries = [];
+        for (const own of ownIds) {
+            entries.push({ path: `${APP_DATA_ROOT}/${own}`, read: true, write: true });
+            entries.push({ path: `${APP_TMP_ROOT}/${own}`, read: true, write: true });
         }
+        if (ownIds.length) {
+            for (const shared of SHARED_APP_DATA)
+                entries.push({ path: shared, read: true, write: true });
+            for (const other of (_b = CROSS_APP_READS[appId]) !== null && _b !== void 0 ? _b : [])
+                entries.push({ path: `${APP_DATA_ROOT}/${other}`, read: true, write: false });
+        }
+        if (this.appDir)
+            entries.push({ path: this.appDir, read: true, write: false });
+        entries.push({ path: APP_DATA_ROOT, read: false, write: false }); // other apps' private data
+        entries.push({ path: '/', read: true, write: false }); // catch-all read (phase 1)
+        for (const e of (_c = opts.extraAcl) !== null && _c !== void 0 ? _c : [])
+            entries.push(e);
+        // Normalise every entry; drop the ones that don't name an absolute path.
+        const acl = [];
+        for (const e of entries) {
+            const path = tryNormalize(e === null || e === void 0 ? void 0 : e.path);
+            if (path)
+                acl.push(Object.freeze({ path, read: e.read === true, write: e.write === true }));
+        }
+        this.acl = Object.freeze(acl);
+        Object.freeze(this);
+    }
+    // The most specific entry containing the (already normalised) path; later
+    // entries win ties, so an extraAcl entry can override a default one.
+    bestMatch(path) {
+        let best;
+        for (const e of this.acl) {
+            if (!(0,_kernel_path_policy__WEBPACK_IMPORTED_MODULE_0__.isInside)(e.path, path))
+                continue;
+            if (!best || e.path.length >= best.path.length)
+                best = e;
+        }
+        return best;
+    }
+    // Both checks return the normalised path — callers must use it for the
+    // actual fs operation, so what was checked is what gets touched.
+    checkRead(path) {
+        const p = tryNormalize(path);
+        const match = p ? this.bestMatch(p) : undefined;
+        if (!p || !match || !match.read) {
+            throw new Error(`[acl] read denied: pid=${this.pid} id=${this.id} path=${String(path)}`);
+        }
+        return p;
     }
     checkWrite(path) {
-        const match = this.bestMatch(path);
-        if (!match || !match.write) {
-            throw new Error(`[acl] write denied: pid=${this.pid} id=${this.id} path=${path}`);
+        const p = tryNormalize(path);
+        const match = p ? this.bestMatch(p) : undefined;
+        if (!p || !match || !match.write || (0,_kernel_path_policy__WEBPACK_IMPORTED_MODULE_0__.isKernelOwned)(p)) {
+            throw new Error(`[acl] write denied: pid=${this.pid} id=${this.id} path=${String(path)}`);
         }
+        return p;
     }
     canRead(path) {
         try {
@@ -37492,6 +38314,10 @@ __webpack_require__.r(__webpack_exports__);
 // Ring 1 — ProxyFS
 // Wraps the raw kernel VFS with per-namespace ACL enforcement.
 // Apps receive a ProxyFS instance — they never touch the raw fs directly.
+//
+// Every operation checks its path with the namespace (which normalises it,
+// src/platform/namespace.ts) and then uses the normalised path it got back, so
+// '/tmp/<id>/../../etc/crontab' is checked — and refused — as '/etc/crontab'.
 
 class ProxyFS {
     constructor(fs, ns) {
@@ -37500,13 +38326,13 @@ class ProxyFS {
     }
     // --- Read operations ---
     readFileSync(path, encoding) {
-        this.ns.checkRead(path);
-        return encoding ? this.fs.readFileSync(path, encoding) : this.fs.readFileSync(path);
+        const p = this.ns.checkRead(path);
+        return encoding ? this.fs.readFileSync(p, encoding) : this.fs.readFileSync(p);
     }
     readText(path) {
         try {
-            this.ns.checkRead(path);
-            return Promise.resolve(this.fs.readFileSync(path, 'utf8'));
+            const p = this.ns.checkRead(path);
+            return Promise.resolve(this.fs.readFileSync(p, 'utf8'));
         }
         catch (e) {
             return Promise.reject(e);
@@ -37514,47 +38340,47 @@ class ProxyFS {
     }
     readBinary(path) {
         try {
-            this.ns.checkRead(path);
-            return Promise.resolve(this.fs.readFileSync(path));
+            const p = this.ns.checkRead(path);
+            return Promise.resolve(this.fs.readFileSync(p));
         }
         catch (e) {
             return Promise.reject(e);
         }
     }
     existsSync(path) {
-        this.ns.checkRead(path);
-        return this.fs.existsSync(path);
+        const p = this.ns.checkRead(path);
+        return this.fs.existsSync(p);
     }
     exists(path) {
         try {
-            this.ns.checkRead(path);
-            return Promise.resolve(this.fs.existsSync(path));
+            const p = this.ns.checkRead(path);
+            return Promise.resolve(this.fs.existsSync(p));
         }
         catch (e) {
             return Promise.reject(e);
         }
     }
     readdirSync(path) {
-        this.ns.checkRead(path);
-        return this.fs.readdirSync(path);
+        const p = this.ns.checkRead(path);
+        return this.fs.readdirSync(p);
     }
     list(path) {
         try {
-            this.ns.checkRead(path);
-            return Promise.resolve(this.fs.readdirSync(path));
+            const p = this.ns.checkRead(path);
+            return Promise.resolve(this.fs.readdirSync(p));
         }
         catch (e) {
             return Promise.reject(e);
         }
     }
     statSync(path) {
-        this.ns.checkRead(path);
-        return this.fs.statSync(path);
+        const p = this.ns.checkRead(path);
+        return this.fs.statSync(p);
     }
     stat(path) {
         try {
-            this.ns.checkRead(path);
-            const s = this.fs.statSync(path);
+            const p = this.ns.checkRead(path);
+            const s = this.fs.statSync(p);
             return Promise.resolve({ isDirectory: s.isDirectory(), isFile: s.isFile(), size: s.size });
         }
         catch (e) {
@@ -37563,17 +38389,17 @@ class ProxyFS {
     }
     // --- Write operations ---
     writeFileSync(path, data) {
-        this.ns.checkWrite(path);
-        this.fs.writeFileSync(path, data);
+        const p = this.ns.checkWrite(path);
+        this.fs.writeFileSync(p, data);
     }
     writeText(path, content) {
         try {
-            this.ns.checkWrite(path);
+            const p = this.ns.checkWrite(path);
             // Auto-create parent dirs (BrowserFS doesn't support recursive)
-            const dir = path.slice(0, path.lastIndexOf('/')) || '/';
+            const dir = p.slice(0, p.lastIndexOf('/')) || '/';
             if (dir && !this.fs.existsSync(dir))
                 (0,_kernel_vfs__WEBPACK_IMPORTED_MODULE_0__.mkdirRecursive)(this.fs, dir);
-            this.fs.writeFileSync(path, content);
+            this.fs.writeFileSync(p, content);
             return Promise.resolve(true);
         }
         catch (e) {
@@ -37581,32 +38407,32 @@ class ProxyFS {
         }
     }
     mkdirSync(path) {
-        this.ns.checkWrite(path);
-        this.fs.mkdirSync(path);
+        const p = this.ns.checkWrite(path);
+        this.fs.mkdirSync(p);
     }
     mkdir(path) {
         try {
-            this.ns.checkWrite(path);
-            (0,_kernel_vfs__WEBPACK_IMPORTED_MODULE_0__.mkdirRecursive)(this.fs, path);
+            const p = this.ns.checkWrite(path);
+            (0,_kernel_vfs__WEBPACK_IMPORTED_MODULE_0__.mkdirRecursive)(this.fs, p);
             return Promise.resolve(true);
         }
         catch (e) {
             return Promise.reject(e);
         }
     }
-    // mkdirRecursive exposed for convenience — checks write on each segment
+    // mkdirRecursive exposed for convenience — the target must be writable
     mkdirRecursive(path) {
-        this.ns.checkWrite(path);
-        (0,_kernel_vfs__WEBPACK_IMPORTED_MODULE_0__.mkdirRecursive)(this.fs, path);
+        const p = this.ns.checkWrite(path);
+        (0,_kernel_vfs__WEBPACK_IMPORTED_MODULE_0__.mkdirRecursive)(this.fs, p);
     }
     unlinkSync(path) {
-        this.ns.checkWrite(path);
-        this.fs.unlinkSync(path);
+        const p = this.ns.checkWrite(path);
+        this.fs.unlinkSync(p);
     }
     remove(path) {
         try {
-            this.ns.checkWrite(path);
-            this.fs.unlinkSync(path);
+            const p = this.ns.checkWrite(path);
+            this.fs.unlinkSync(p);
             return Promise.resolve(true);
         }
         catch (e) {
@@ -37614,15 +38440,15 @@ class ProxyFS {
         }
     }
     renameSync(from, to) {
-        this.ns.checkWrite(from);
-        this.ns.checkWrite(to);
-        this.fs.renameSync(from, to);
+        const f = this.ns.checkWrite(from);
+        const t = this.ns.checkWrite(to);
+        this.fs.renameSync(f, t);
     }
     rename(from, to) {
         try {
-            this.ns.checkWrite(from);
-            this.ns.checkWrite(to);
-            this.fs.renameSync(from, to);
+            const f = this.ns.checkWrite(from);
+            const t = this.ns.checkWrite(to);
+            this.fs.renameSync(f, t);
             return Promise.resolve(true);
         }
         catch (e) {
@@ -37925,13 +38751,16 @@ const ensureDir = (fileSystem, path) => {
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   Host: () => (/* binding */ Host),
-/* harmony export */   Platform: () => (/* binding */ Platform)
+/* harmony export */   Platform: () => (/* binding */ Platform),
+/* harmony export */   isSystemExecutablePath: () => (/* binding */ isSystemExecutablePath)
 /* harmony export */ });
 /* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.2/node_modules/rxjs/dist/esm5/internal/Subject.js");
 /* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.2/node_modules/rxjs/dist/esm5/internal/BehaviorSubject.js");
 /* harmony import */ var _platform_command_registry__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../platform/command-registry */ "./src/platform/command-registry.ts");
 /* harmony import */ var _platform_process_manager__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../platform/process-manager */ "./src/platform/process-manager.ts");
 /* harmony import */ var _platform_proxy_fs__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ../platform/proxy-fs */ "./src/platform/proxy-fs.ts");
+/* harmony import */ var _kernel_path_policy__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ../kernel/path-policy */ "./src/kernel/path-policy.ts");
+
 
 
 
@@ -37943,6 +38772,75 @@ const babelOpts = (filename, cwd) => ({
     filename,
     cwd,
 });
+// ── Open policy (decisions.md D10: opening is not running; audit WIN-3, BOOT-3,
+// APP-2, NET-8) ──────────────────────────────────────────────────────────────
+// `.js`/`.run` files in these system folders are executables: opening one runs
+// it. Anywhere else (home, /tmp, /mnt, downloads, received files) opening a
+// script shows it in the editor, and running it is an explicit `Host.runFile`
+// that asks for confirmation naming the file.
+const SYSTEM_EXEC_DIRS = ['/bin', '/usr/bin', '/opt/apps'];
+// Transitional compatibility net: the shipped callers now use `host.runFile`
+// (/opt/systemd/lib/shell-init.js for /home/user1/initd.run; src/core/cron.ts
+// and /etc/widgets/public-ip.js for /opt/cron/*.js), but older vfs copies of
+// those scripts — and a new bundle meeting a cached old meta.json during
+// GitHub Pages' 10-minute cache window — still reach them through `host.exec`.
+// Both are kernel-owned system paths (path-policy), not user or peer content.
+// Remove in phase 4 (legacy removal, TODO.md).
+const LEGACY_AUTORUN_PATHS = ['/home/user1/initd.run', '/opt/cron'];
+const SCRIPT_EXTS = new Set(['js', 'run']);
+const EDITOR_COMMAND = 'ui.notepad';
+// Pages under /opt/apps are first-party and open same-origin (they get
+// window.platform); any other .html opens in an opaque sandbox.
+const FIRST_PARTY_PAGES_DIR = '/opt/apps';
+// System default handler per extension. Apps add handlers for other extensions
+// (meta.fileExtensions) and appear under "Open with", but can't take over these
+// (audit KRN-10). '' is the fallback for anything without a handler.
+const SYSTEM_FILE_HANDLERS = Object.freeze({
+    '': EDITOR_COMMAND, txt: EDITOR_COMMAND, ts: EDITOR_COMMAND,
+    png: 'ui.imageviewer', jpg: 'ui.imageviewer', jpeg: 'ui.imageviewer', gif: 'ui.imageviewer',
+    webp: 'ui.imageviewer', bmp: 'ui.imageviewer', avif: 'ui.imageviewer',
+    svg: 'ui.imageviewer', ico: 'ui.imageviewer',
+    md: 'ui.markdown', csv: 'ui.csv-viewer',
+    db: 'ui.sqlite', sqlite: 'ui.sqlite', sqlite3: 'ui.sqlite',
+    mmd: 'ui.mermaid', mermaid: 'ui.mermaid',
+});
+/** Lower-case extension of a path's last segment, without the dot ('' for none or a dotfile). */
+const fileExtOf = (path) => {
+    const name = path.slice(path.lastIndexOf('/') + 1);
+    const dot = name.lastIndexOf('.');
+    return dot > 0 ? name.slice(dot + 1).toLowerCase() : '';
+};
+/** True for `.js`/`.run` files that are system executables (D10): they run on open and Run without asking. */
+const isSystemExecutablePath = (path) => {
+    try {
+        return SYSTEM_EXEC_DIRS.some(dir => _kernel_path_policy__WEBPACK_IMPORTED_MODULE_5__.pathPolicy.isInside(dir, path));
+    }
+    catch (_) {
+        return false;
+    }
+};
+// The kernel's cross-bundle hook (src/kernel/ipc-bus.ts) lives on the OS
+// window — the one the bootstrapper booted in. Look there first: the OS may
+// itself run inside a same-origin frame (allowed since KRN-11), where `top`
+// is someone else's page. Fall back to `top` only when this Host was built
+// for a window without the hook; a cross-origin `top` yields undefined.
+const kernelHookOf = (win) => {
+    var _a;
+    if (win.__wosKernel)
+        return win.__wosKernel;
+    try {
+        return (_a = win.top) === null || _a === void 0 ? void 0 : _a.__wosKernel;
+    }
+    catch (_) {
+        return undefined;
+    }
+};
+// The layout module (src/modules/modules.json), the only owner of the top document (D2).
+const LAYOUT_MODULE = '001-core.layout';
+// Platforms of scripts (execString) and first-party pages (ui.iframe) by name,
+// so getModulePlatform/process.list can find them like module platforms. Every
+// Host instance is created by the remote bundle, so this map is shared.
+const scriptPlatforms = new Map();
 class Host {
     constructor(window, platform, commands, widgets = new rxjs__WEBPACK_IMPORTED_MODULE_1__.BehaviorSubject([]), modulesMap = new Map(), settingsSections = new rxjs__WEBPACK_IMPORTED_MODULE_1__.BehaviorSubject([]), widgetTypes = new Map(), activities = new rxjs__WEBPACK_IMPORTED_MODULE_1__.BehaviorSubject([])) {
         this.window = window;
@@ -37964,10 +38862,24 @@ class Host {
     // is the same `Map` instance passed to every `Host` across bundles. Used
     // by the task manager to inspect which services a process has requested.
     getModulePlatform(name) {
-        var _a;
-        return (_a = this.modulesMap.get(name)) === null || _a === void 0 ? void 0 : _a.platform;
+        var _a, _b;
+        return (_b = (_a = this.modulesMap.get(name)) === null || _a === void 0 ? void 0 : _a.platform) !== null && _b !== void 0 ? _b : scriptPlatforms.get(name);
     }
+    // A view of this Host for another platform: the same registries and state
+    // (everything is inherited from this instance), but what it registers is
+    // owned by — and its getFS() is accounted to — that platform. Scripts run by
+    // execString and first-party pages framed by ui.iframe get one, so a command
+    // registration records the script or page that made it (audit KRN-10).
+    forPlatform(platform) {
+        scriptPlatforms.set(platform.name, platform);
+        return Object.create(this, { platform: { value: platform } });
+    }
+    // Appends to the top document's body — the layout's job alone (decisions.md
+    // D2, audit WIN-5): apps render into their own window, never the top document.
     appendDomElement(el) {
+        if (this.platform.name !== LAYOUT_MODULE) {
+            throw new Error(`appendDomElement is reserved for the layout (called by ${this.platform.name})`);
+        }
         this.window.document.body.appendChild(el);
     }
     createCSSStyleSheet() {
@@ -37983,11 +38895,21 @@ class Host {
             this.window.document.adoptedStyleSheets.filter((x) => x !== style);
     }
     registerCommand(command_name, callback, meta = {}) {
+        var _a;
         // New registrations are prepended and `getCommand`/`callCommand` use `.find()`,
         // so the most-recently-registered command with a given name wins and any earlier
-        // one is shadowed (used intentionally for the 'explorer' fallback in remote.ts).
-        // Warn so accidental shadowing elsewhere doesn't go unnoticed.
-        if (this.commands.getValue().find((x) => x.name === command_name)) {
+        // one is shadowed. A name belongs to whoever registered it (the registering
+        // platform: a module, or the script/page for code run by execString/ui.iframe):
+        // another owner can replace it only when that registration is marked
+        // `meta.fallback === true` — the 'explorer' fallback in remote.ts, the
+        // compiled Markdown viewer (audit KRN-10, decisions.md D9).
+        const owner = this.platform.name;
+        const active = this.getCommand(command_name);
+        if (active && active.servicePlatformName !== owner && ((_a = active.meta) === null || _a === void 0 ? void 0 : _a.fallback) !== true) {
+            console.error(`registerCommand: '${command_name}' belongs to ${active.servicePlatformName}; ${owner} can't replace it.`);
+            return { remove: () => { } };
+        }
+        if (active) {
             console.warn(`registerCommand: '${command_name}' is already registered — the new registration will take precedence.`);
         }
         const newCommandObject = Object.freeze({
@@ -38164,7 +39086,8 @@ class Host {
             const pwd = lastSlash > -1 ? filenameAlias.slice(0, lastSlash) || "/" : "/";
             let newPlatform = _platform ? _platform : new Platform(platformEventEmitter, filenameAlias, pwd);
             if (!_platform) {
-                newPlatform.setHost(this);
+                // The script's own view of this Host: what it registers is owned by it.
+                newPlatform.setHost(this.forPlatform(newPlatform));
                 newPlatform.register('props', {});
                 newPlatform.register('$args', []);
                 newPlatform.register('React', this.platform.getService('React'));
@@ -38186,56 +39109,132 @@ class Host {
         };
         return runJS(source);
     }
+    // "Open" a file or folder — double-click, Open, `files <path>`. Opening views
+    // (decisions.md D10): folders open in the explorer; `.js`/`.run` files run
+    // only when they are system executables (/bin, /usr/bin, /opt/apps) and open
+    // in the editor anywhere else; `.html` opens same-origin only under /opt/apps
+    // and in the opaque `ui.sandboxed-app` anywhere else; every other file opens
+    // with its system default handler. To run a script on purpose use runFile().
     exec(callerPlatform, filepath, ...args) {
+        const path = _kernel_path_policy__WEBPACK_IMPORTED_MODULE_5__.pathPolicy.normalizePath(filepath);
+        console.log(`$${path}`);
+        const stat = this.getFS().statSync(path);
+        // Opens a window with values, never DSL source (audit KRN-3). Returns a
+        // promise like the execCommand call this replaced, so callers that await
+        // exec() or ignore its result behave as before.
+        const openWith = (commandName) => {
+            try {
+                return Promise.resolve(this.openWindow(commandName, path, ...args));
+            }
+            catch (err) {
+                return Promise.reject(err);
+            }
+        };
+        if (stat.isDirectory())
+            return openWith('explorer');
+        if (!stat.isFile())
+            return Promise.resolve(undefined);
+        const autorun = SCRIPT_EXTS.has(fileExtOf(path))
+            && (isSystemExecutablePath(path) || LEGACY_AUTORUN_PATHS.some(p => _kernel_path_policy__WEBPACK_IMPORTED_MODULE_5__.pathPolicy.isInside(p, path)));
+        if (autorun)
+            return this.runFile(callerPlatform, path, args, { confirm: false });
+        return openWith(this.getViewerCommand(path));
+    }
+    // The command that shows a file without running anything (the open policy
+    // above minus system executables): the explorer for folders, the editor for
+    // scripts, the first-party Browser for .html under /opt/apps and the opaque
+    // `ui.sandboxed-app` for any other .html, else the extension's default.
+    getViewerCommand(filepath) {
+        const path = _kernel_path_policy__WEBPACK_IMPORTED_MODULE_5__.pathPolicy.normalizePath(filepath);
+        try {
+            if (this.getFS().statSync(path).isDirectory())
+                return 'explorer';
+        }
+        catch (_) { /* missing: by extension */ }
+        const ext = fileExtOf(path);
+        if (SCRIPT_EXTS.has(ext))
+            return EDITOR_COMMAND;
+        if (ext === 'html')
+            return _kernel_path_policy__WEBPACK_IMPORTED_MODULE_5__.pathPolicy.isInside(FIRST_PARTY_PAGES_DIR, path) ? 'ui.iframe' : 'ui.sandboxed-app';
+        return this.getDefaultCommandForExtension(ext);
+    }
+    // Explicit-intent "Run" of a `.js` (execString) or `.run` (execCommand) file
+    // — a Run button, the terminal, an init script. Outside the system folders
+    // (/bin, /usr/bin, /opt/apps) it first asks the user, naming the file
+    // (decisions.md D10); pass `{ confirm: false }` only when the caller already
+    // is the user's explicit intent (e.g. a command typed in the terminal).
+    // Returns what execString/execCommand return, or undefined if declined.
+    runFile(callerPlatform, filepath, args = [], opts = {}) {
+        const path = _kernel_path_policy__WEBPACK_IMPORTED_MODULE_5__.pathPolicy.normalizePath(filepath);
+        const ext = fileExtOf(path);
+        if (!SCRIPT_EXTS.has(ext))
+            throw new Error(`runFile: ${path} is not a .js or .run file`);
+        if (opts.confirm !== false && !this.confirmRun(path))
+            return undefined;
+        const source = this.getFS().readFileSync(path).toString();
+        if (ext === 'js') {
+            const appDir = callerPlatform === null || callerPlatform === void 0 ? void 0 : callerPlatform._appDir;
+            return this.execString(source, '/(sw)' + path, undefined, appDir ? { _appDir: appDir } : undefined);
+        }
+        return this.execCommand(source, callerPlatform, ...(Array.isArray(args) ? args : []));
+    }
+    // The confirmation runFile() asks before running a script outside the
+    // system folders. True when the script may run. Also used by editors whose
+    // Run button runs the unsaved buffer of a file.
+    confirmRun(filepath) {
+        let path;
+        try {
+            path = _kernel_path_policy__WEBPACK_IMPORTED_MODULE_5__.pathPolicy.normalizePath(filepath);
+        }
+        catch (_) {
+            return false;
+        }
+        if (isSystemExecutablePath(path))
+            return true;
+        return this.window.confirm(`Run "${path}"?\n\nScripts run with full access to your files and apps. Only run files you trust.`);
+    }
+    // The command that opens files with this extension by default: the system
+    // default if that app is installed, otherwise the first app (in load order)
+    // that declared the extension, otherwise the editor. Never decided by title,
+    // so an app can't take over an extension by naming itself "AAA" (KRN-10).
+    getDefaultCommandForExtension(ext) {
+        const systemDefault = SYSTEM_FILE_HANDLERS[ext];
+        if (systemDefault && this.getCommand(systemDefault))
+            return systemDefault;
+        const dotExt = `.${ext}`;
+        const oldestFirst = [...this.commands.getValue()].reverse();
+        const claimant = ext && oldestFirst.find(cmd => {
+            var _a;
+            const exts = (_a = cmd.meta) === null || _a === void 0 ? void 0 : _a.fileExtensions;
+            return Array.isArray(exts) && exts.some((e) => typeof e === 'string' && (e.startsWith('.') ? e : `.${e}`).toLowerCase() === dotExt);
+        });
+        return claimant ? claimant.name : SYSTEM_FILE_HANDLERS[''];
+    }
+    // Structured replacement for the DSL string
+    // `service('001-core.layout','open-window')(command(name), ...args)`.
+    // Arguments travel as values, never as source code (audit KRN-2/KRN-3,
+    // decisions.md D9) — use this wherever a file path, URL or other data is
+    // passed to a window.
+    openWindow(commandName, ...args) {
+        const command = this.getCommand(commandName);
+        if (!command)
+            throw new Error(`Command: [${commandName}] not found`);
+        const open = this.getService('001-core.layout', 'open-window');
+        if (typeof open !== 'function')
+            throw new Error('open-window service is not available yet');
+        return open(command, ...args);
+    }
+    // Installs the kernel's window hardening (cross-origin `window.open` gets
+    // `noopener,noreferrer`, audit KRN-11/APP-9) on a same-origin window this
+    // module created, e.g. a window or module iframe. No-op until the kernel
+    // hook provides it.
+    hardenWindow(win) {
         var _a;
-        console.log(`$${filepath}`);
-        const fs = this.getFS();
-        const stat = fs.statSync(filepath);
-        let script = "";
-        if (stat.isDirectory()) {
-            script = `service('001-core.layout', 'open-window') (command('explorer'), '${filepath}' ${args.length ? "," : ""} ${args.map((x) => `"${x}"`).join(", ")})`;
+        const kernel = kernelHookOf(this.window);
+        try {
+            (_a = kernel === null || kernel === void 0 ? void 0 : kernel.hardenWindow) === null || _a === void 0 ? void 0 : _a.call(kernel, win);
         }
-        if (stat.isFile()) {
-            const fileExt = filepath.split(".").at(-1);
-            const appExtMap = {
-                "": "ui.notepad",
-                html: "ui.iframe",
-                ts: "ui.notepad",
-                png: "ui.imageviewer",
-                jpg: "ui.imageviewer",
-                jpeg: "ui.imageviewer",
-                gif: "ui.imageviewer",
-                webp: "ui.imageviewer",
-                svg: "ui.iframe",
-                bmp: "ui.imageviewer",
-                ico: "ui.iframe",
-                avif: "ui.imageviewer",
-                txt: "ui.notepad",
-                md: "ui.markdown",
-                csv: "ui.csv-viewer",
-                db: "ui.sqlite",
-                mmd: "ui.mermaid",
-                mermaid: "ui.mermaid",
-            };
-            if (fileExt === 'js') {
-                const fs = this.getFS();
-                const source = fs.readFileSync(filepath);
-                const appDir = callerPlatform === null || callerPlatform === void 0 ? void 0 : callerPlatform._appDir;
-                return this.execString(source.toString(), '/(sw)' + filepath, undefined, appDir ? { _appDir: appDir } : undefined);
-            }
-            else if (fileExt === 'run') {
-                const fs = this.getFS();
-                const source = fs.readFileSync(filepath);
-                return this.execCommand(source.toString(), callerPlatform, ...args);
-            }
-            else {
-                const registered = this.getCommandsForExtension(fileExt);
-                const bestMatch = registered.find(r => !r.wildcard) || registered[0];
-                const cmdName = bestMatch ? bestMatch.name : ((_a = appExtMap[fileExt]) !== null && _a !== void 0 ? _a : appExtMap[""]);
-                script = `service('001-core.layout', 'open-window') (command('${cmdName}'), '${filepath}'${args.length ? ", " : ""}${args.map((x) => `"${x}"`).join(", ")})`;
-            }
-        }
-        return this.execCommand(script, callerPlatform, ...args);
+        catch (_) { /* cross-origin or closed frame */ }
     }
     getService(moduleName, serviceName) {
         if (!moduleName)
@@ -38258,6 +39257,25 @@ class Host {
         this.platform.requestedServices.add('fs');
         // @ts-ignore
         return this.window.fs;
+    }
+    // Path normalisation / containment helpers (src/kernel/path-policy.ts,
+    // decisions.md D6). vfs code must use these instead of hand-rolled joins —
+    // this copy is compiled into the bundle, so a vfs write can't weaken it.
+    get pathPolicy() {
+        return _kernel_path_policy__WEBPACK_IMPORTED_MODULE_5__.pathPolicy;
+    }
+    // Registers a frame this module created (dock, wallpaper, sandboxed app)
+    // with the kernel IPC bus, so it may use the events/paths in `policy` and
+    // nothing else (audit KRN-1). Returns an unregister function. The registry
+    // lives in the bootstrapper bundle and is reached through the frozen
+    // `__wosKernel` hook it installs on the top window (src/kernel/ipc-bus.ts).
+    registerIpcFrame(win, policy) {
+        const kernel = kernelHookOf(this.window);
+        if (!kernel) {
+            console.warn('[ipc] kernel hook missing — frame not registered:', policy === null || policy === void 0 ? void 0 : policy.id);
+            return () => { };
+        }
+        return kernel.registerIpcFrame(win, policy);
     }
     getServiceWorker() {
         return navigator.serviceWorker.controller;
@@ -38671,6 +39689,108 @@ class LayoutManager {
     }
 }
 LayoutManager._instance = null;
+
+
+/***/ },
+
+/***/ "./src/system/static-code.ts"
+/*!***********************************!*\
+  !*** ./src/system/static-code.ts ***!
+  \***********************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   getSystemModule: () => (/* binding */ getSystemModule),
+/* harmony export */   loadSystemModule: () => (/* binding */ loadSystemModule),
+/* harmony export */   preloadSystemModule: () => (/* binding */ preloadSystemModule)
+/* harmony export */ });
+/* harmony import */ var _shared_index__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @shared/index */ "./src/shared/index.ts");
+// Ring 2 — the layout's own pluggable code, loaded only from the immutable
+// static build (documentation/security/decisions.md D1; audit WIN-6, BOOT-5,
+// BOOT-11).
+//
+// /opt/window-manager.js, /opt/wm/<id>.js, /opt/desktop/<id>.js and
+// /usr/lib/ui/menuItem.js used to be read from the writable vfs and executed in
+// the top realm, so any vfs write became persistent code execution. Their
+// source now comes from the copy GitHub Pages serves from docs/
+// (`/public/mount<path>`); the vfs copies are view-only. Sources are fetched
+// once (callers preload them at layout start) and each module is evaluated at
+// most once, on first use, so window creation can stay synchronous: until a
+// module is available — or if it can't be loaded — callers use their compiled
+// defaults.
+var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+
+const STATIC_MOUNT_ROOT = '/public/mount';
+// Absolute paths of plain segments ending in .js — never a URL, '..' or a query.
+const SYSTEM_MODULE_PATH_RE = /^(\/[a-z0-9][a-z0-9_-]*)+(\/[A-Za-z0-9][A-Za-z0-9._-]*\.js)$/;
+const entries = new Map();
+const fetchSource = (path) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        if (!SYSTEM_MODULE_PATH_RE.test(path) || path.includes('..'))
+            throw new Error('not a system module path');
+        const origin = _shared_index__WEBPACK_IMPORTED_MODULE_0__.Platform.getInstance().window.location.origin;
+        const res = yield fetch(new URL(STATIC_MOUNT_ROOT + path, origin).href, { credentials: 'same-origin' });
+        if (!res.ok)
+            throw new Error(`HTTP ${res.status}`);
+        return yield res.text();
+    }
+    catch (err) {
+        console.warn(`[layout] ${path}: static copy unavailable — using the built-in default`, err);
+        return null;
+    }
+});
+const entryFor = (path) => {
+    let entry = entries.get(path);
+    if (!entry) {
+        const created = { source: undefined, loaded: Promise.resolve() };
+        created.loaded = fetchSource(path).then(source => { created.source = source; });
+        entries.set(path, created);
+        entry = created;
+    }
+    return entry;
+};
+const evaluate = (path, entry) => {
+    var _a;
+    if (!entry.evaluated) {
+        let exports = null;
+        if (entry.source) {
+            try {
+                exports = (_a = _shared_index__WEBPACK_IMPORTED_MODULE_0__.Platform.getInstance().host.execString(entry.source, path)) !== null && _a !== void 0 ? _a : null;
+            }
+            catch (err) {
+                console.error(`[layout] ${path}: failed to evaluate the static copy`, err);
+            }
+        }
+        entry.evaluated = { exports };
+    }
+    return entry.evaluated.exports;
+};
+/** Starts fetching a module's static source (idempotent). */
+const preloadSystemModule = (path) => { entryFor(path); };
+/**
+ * Synchronous access: the module's exports once its source has arrived, `null`
+ * if it can't be loaded, `undefined` while the fetch is still in flight.
+ */
+const getSystemModule = (path) => {
+    const entry = entryFor(path);
+    return entry.source === undefined ? undefined : evaluate(path, entry);
+};
+/** Resolves to the module's exports, or null if it can't be loaded. */
+const loadSystemModule = (path) => __awaiter(void 0, void 0, void 0, function* () {
+    const entry = entryFor(path);
+    yield entry.loaded;
+    return evaluate(path, entry);
+});
 
 
 /***/ },
@@ -164129,18 +165249,20 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _commands__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ./commands */ "./src/core/layout/commands.tsx");
 /* harmony import */ var _contextmenu__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! ./contextmenu */ "./src/core/layout/contextmenu.tsx");
 /* harmony import */ var _window_manager__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! ../window-manager */ "./src/core/window-manager.ts");
-/* harmony import */ var _ipc__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(/*! ../ipc */ "./src/core/ipc.ts");
-/* harmony import */ var _system_layout_manager__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(/*! ../../system/layout-manager */ "./src/system/layout-manager.ts");
-/* harmony import */ var _system_desktop_manager__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(/*! ../../system/desktop-manager */ "./src/system/desktop-manager.ts");
-/* harmony import */ var _apps_file_explorer_desktop__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(/*! ../../apps/file-explorer/desktop */ "./src/apps/file-explorer/desktop.tsx");
-/* harmony import */ var _styles_base__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(/*! ./styles/base */ "./src/core/layout/styles/base.ts");
-/* harmony import */ var _styles_layout__WEBPACK_IMPORTED_MODULE_15__ = __webpack_require__(/*! ./styles/layout */ "./src/core/layout/styles/layout.ts");
-/* harmony import */ var _ambient_color__WEBPACK_IMPORTED_MODULE_16__ = __webpack_require__(/*! ./ambient-color */ "./src/core/layout/ambient-color.ts");
-/* harmony import */ var _styles_window__WEBPACK_IMPORTED_MODULE_17__ = __webpack_require__(/*! ./styles/window */ "./src/core/layout/styles/window.ts");
-/* harmony import */ var _styles_taskbar__WEBPACK_IMPORTED_MODULE_18__ = __webpack_require__(/*! ./styles/taskbar */ "./src/core/layout/styles/taskbar.ts");
-/* harmony import */ var _styles_widgets__WEBPACK_IMPORTED_MODULE_19__ = __webpack_require__(/*! ./styles/widgets */ "./src/core/layout/styles/widgets.ts");
-/* harmony import */ var _styles_contextmenu__WEBPACK_IMPORTED_MODULE_20__ = __webpack_require__(/*! ./styles/contextmenu */ "./src/core/layout/styles/contextmenu.ts");
-/* harmony import */ var _styles_desktop_env__WEBPACK_IMPORTED_MODULE_21__ = __webpack_require__(/*! ./styles/desktop-env */ "./src/core/layout/styles/desktop-env.ts");
+/* harmony import */ var _system_static_code__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(/*! ../../system/static-code */ "./src/system/static-code.ts");
+/* harmony import */ var _ipc__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(/*! ../ipc */ "./src/core/ipc.ts");
+/* harmony import */ var _system_layout_manager__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(/*! ../../system/layout-manager */ "./src/system/layout-manager.ts");
+/* harmony import */ var _system_desktop_manager__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(/*! ../../system/desktop-manager */ "./src/system/desktop-manager.ts");
+/* harmony import */ var _apps_file_explorer_desktop__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(/*! ../../apps/file-explorer/desktop */ "./src/apps/file-explorer/desktop.tsx");
+/* harmony import */ var _styles_base__WEBPACK_IMPORTED_MODULE_15__ = __webpack_require__(/*! ./styles/base */ "./src/core/layout/styles/base.ts");
+/* harmony import */ var _styles_layout__WEBPACK_IMPORTED_MODULE_16__ = __webpack_require__(/*! ./styles/layout */ "./src/core/layout/styles/layout.ts");
+/* harmony import */ var _ambient_color__WEBPACK_IMPORTED_MODULE_17__ = __webpack_require__(/*! ./ambient-color */ "./src/core/layout/ambient-color.ts");
+/* harmony import */ var _styles_window__WEBPACK_IMPORTED_MODULE_18__ = __webpack_require__(/*! ./styles/window */ "./src/core/layout/styles/window.ts");
+/* harmony import */ var _styles_taskbar__WEBPACK_IMPORTED_MODULE_19__ = __webpack_require__(/*! ./styles/taskbar */ "./src/core/layout/styles/taskbar.ts");
+/* harmony import */ var _styles_widgets__WEBPACK_IMPORTED_MODULE_20__ = __webpack_require__(/*! ./styles/widgets */ "./src/core/layout/styles/widgets.ts");
+/* harmony import */ var _styles_contextmenu__WEBPACK_IMPORTED_MODULE_21__ = __webpack_require__(/*! ./styles/contextmenu */ "./src/core/layout/styles/contextmenu.ts");
+/* harmony import */ var _styles_desktop_env__WEBPACK_IMPORTED_MODULE_22__ = __webpack_require__(/*! ./styles/desktop-env */ "./src/core/layout/styles/desktop-env.ts");
+
 
 
 
@@ -164377,6 +165499,56 @@ const resolveWallpaperUrl = (wallpaper) => {
         return wallpaper;
     }
 };
+const layoutFrames = new Set();
+// Call right after the iframe is inserted (contentWindow exists from then on,
+// and the srcdoc hasn't run yet). The first `load` is the srcdoc we built; a
+// later one means the frame navigated away from it, and the new document must
+// not inherit the registration or our event stream (D4: re-navigation is a
+// restart) — the frame is detached and `onRenavigate` tears it down.
+const attachLayoutFrame = (iframe, policy, events, hooks) => {
+    const unregister = platform.host.registerIpcFrame(iframe.contentWindow, policy);
+    let loads = 0;
+    const onLoad = () => {
+        var _a;
+        loads += 1;
+        if (loads === 1) {
+            (_a = hooks.onFirstLoad) === null || _a === void 0 ? void 0 : _a.call(hooks);
+            return;
+        }
+        console.warn(`[layout] ${policy.id} navigated away from its srcdoc — closing it`);
+        frame.detach();
+        hooks.onRenavigate();
+    };
+    const frame = {
+        iframe,
+        events: new Set(events),
+        detach: () => {
+            iframe.removeEventListener('load', onLoad);
+            unregister();
+            layoutFrames.delete(frame);
+        },
+    };
+    iframe.addEventListener('load', onLoad);
+    layoutFrames.add(frame);
+    return frame;
+};
+// Opaque frames have origin 'null', so '*' is the only usable targetOrigin;
+// what keeps the posts contained is that only attached frames get them.
+const postToLayoutFrame = (frame, message) => {
+    var _a;
+    if (!layoutFrames.has(frame))
+        return;
+    try {
+        (_a = frame.iframe.contentWindow) === null || _a === void 0 ? void 0 : _a.postMessage(message, '*');
+    }
+    catch (_) { }
+};
+const postLayoutEvent = (event, data) => {
+    layoutFrames.forEach(frame => {
+        if (frame.events.has(event))
+            postToLayoutFrame(frame, { type: 'wos-ipc-event', event, data });
+    });
+};
 // A canvas wallpaper is a VFS .js file exporting `render(canvas)`, run
 // live behind the desktop (fixed, z-index:-1) instead of a static
 // background-image. It executes in a sandboxed iframe (allow-scripts,
@@ -164385,6 +165557,7 @@ const resolveWallpaperUrl = (wallpaper) => {
 // can use real `export function render(canvas) {...}` syntax.
 const CANVAS_WALLPAPER_PREFIX = 'canvas:';
 let canvasWallpaperIframe = null;
+let canvasWallpaperFrame = null;
 let canvasWallpaperMouseHandler = null;
 let canvasWallpaperWindowsSub = null;
 const unmountCanvasWallpaper = () => {
@@ -164395,6 +165568,10 @@ const unmountCanvasWallpaper = () => {
     if (canvasWallpaperWindowsSub) {
         canvasWallpaperWindowsSub.unsubscribe();
         canvasWallpaperWindowsSub = null;
+    }
+    if (canvasWallpaperFrame) {
+        canvasWallpaperFrame.detach();
+        canvasWallpaperFrame = null;
     }
     if (canvasWallpaperIframe) {
         canvasWallpaperIframe.remove();
@@ -164470,60 +165647,69 @@ const mountCanvasWallpaper = (vfsPath) => {
     iframe.srcdoc = buildCanvasWallpaperSrcdoc(code);
     doc.body.insertBefore(iframe, doc.body.firstChild);
     canvasWallpaperIframe = iframe;
+    const postWindowCount = () => postToLayoutFrame(frame, { t: 'windows', count: _window_manager__WEBPACK_IMPORTED_MODULE_9__.windowsSubject.getValue().length });
+    // The wallpaper uses no wos-ipc events at all: an empty policy records it
+    // as a layout frame the bus answers nothing (audit WIN-7). Its only input
+    // is the pointer position and window count the layout posts below.
+    const frame = canvasWallpaperFrame = attachLayoutFrame(iframe, { id: 'wallpaper:canvas', events: [] }, [], {
+        // Posts made before the srcdoc's listener exists are lost, so send the
+        // current count once it has loaded.
+        onFirstLoad: postWindowCount,
+        onRenavigate: unmountCanvasWallpaper,
+    });
     // Forwards real mouse position over the desktop into the sandboxed
     // wallpaper (see the message listener built into the srcdoc above) —
     // this is what lets a wallpaper be "interactive" without the iframe
     // itself ever intercepting real pointer events.
     canvasWallpaperMouseHandler = (e) => {
-        var _a;
-        (_a = iframe.contentWindow) === null || _a === void 0 ? void 0 : _a.postMessage({ t: 'mouse', x: e.clientX, y: e.clientY }, '*');
+        postToLayoutFrame(frame, { t: 'mouse', x: e.clientX, y: e.clientY });
     };
     doc.addEventListener('mousemove', canvasWallpaperMouseHandler);
     // Forwards live open-window count so a wallpaper can react to the
     // desktop being empty (see api.windows.count in buildCanvasWallpaperSrcdoc).
-    canvasWallpaperWindowsSub = _window_manager__WEBPACK_IMPORTED_MODULE_9__.windowsSubject.subscribe(wins => {
-        var _a;
-        (_a = iframe.contentWindow) === null || _a === void 0 ? void 0 : _a.postMessage({ t: 'windows', count: wins.length }, '*');
-    });
+    canvasWallpaperWindowsSub = _window_manager__WEBPACK_IMPORTED_MODULE_9__.windowsSubject.subscribe(postWindowCount);
 };
 const applyCss = ({ wallpaper, grid }) => {
     if (wallpaper.startsWith(CANVAS_WALLPAPER_PREFIX)) {
         mountCanvasWallpaper(wallpaper.slice(CANVAS_WALLPAPER_PREFIX.length));
         styles.replace([
-            _styles_base__WEBPACK_IMPORTED_MODULE_14__.RESET_CSS,
-            _styles_base__WEBPACK_IMPORTED_MODULE_14__.MATERIAL_SYMBOLS_CSS,
-            (0,_styles_layout__WEBPACK_IMPORTED_MODULE_15__.layoutCss)(grid, 'none'),
-            _styles_widgets__WEBPACK_IMPORTED_MODULE_19__.WIDGETS_CSS,
-            _styles_window__WEBPACK_IMPORTED_MODULE_17__.WINDOW_CSS,
-            _styles_taskbar__WEBPACK_IMPORTED_MODULE_18__.TASKBAR_CSS,
-            _styles_contextmenu__WEBPACK_IMPORTED_MODULE_20__.CONTEXTMENU_CSS,
-            _styles_desktop_env__WEBPACK_IMPORTED_MODULE_21__.DESKTOP_ENV_CSS,
+            _styles_base__WEBPACK_IMPORTED_MODULE_15__.RESET_CSS,
+            _styles_base__WEBPACK_IMPORTED_MODULE_15__.MATERIAL_SYMBOLS_CSS,
+            (0,_styles_layout__WEBPACK_IMPORTED_MODULE_16__.layoutCss)(grid, 'none'),
+            _styles_widgets__WEBPACK_IMPORTED_MODULE_20__.WIDGETS_CSS,
+            _styles_window__WEBPACK_IMPORTED_MODULE_18__.WINDOW_CSS,
+            _styles_taskbar__WEBPACK_IMPORTED_MODULE_19__.TASKBAR_CSS,
+            _styles_contextmenu__WEBPACK_IMPORTED_MODULE_21__.CONTEXTMENU_CSS,
+            _styles_desktop_env__WEBPACK_IMPORTED_MODULE_22__.DESKTOP_ENV_CSS,
         ].join('\n'));
-        (0,_ambient_color__WEBPACK_IMPORTED_MODULE_16__.updateAmbientColor)(platform.window.document, wallpaper, '');
+        (0,_ambient_color__WEBPACK_IMPORTED_MODULE_17__.updateAmbientColor)(platform.window.document, wallpaper, '');
         return;
     }
     unmountCanvasWallpaper();
     const wallpaperUrl = resolveWallpaperUrl(wallpaper);
     styles.replace([
-        _styles_base__WEBPACK_IMPORTED_MODULE_14__.RESET_CSS,
-        _styles_base__WEBPACK_IMPORTED_MODULE_14__.MATERIAL_SYMBOLS_CSS,
-        (0,_styles_layout__WEBPACK_IMPORTED_MODULE_15__.layoutCss)(grid, wallpaperUrl),
-        _styles_widgets__WEBPACK_IMPORTED_MODULE_19__.WIDGETS_CSS,
-        _styles_window__WEBPACK_IMPORTED_MODULE_17__.WINDOW_CSS,
-        _styles_taskbar__WEBPACK_IMPORTED_MODULE_18__.TASKBAR_CSS,
-        _styles_contextmenu__WEBPACK_IMPORTED_MODULE_20__.CONTEXTMENU_CSS,
-        _styles_desktop_env__WEBPACK_IMPORTED_MODULE_21__.DESKTOP_ENV_CSS,
+        _styles_base__WEBPACK_IMPORTED_MODULE_15__.RESET_CSS,
+        _styles_base__WEBPACK_IMPORTED_MODULE_15__.MATERIAL_SYMBOLS_CSS,
+        (0,_styles_layout__WEBPACK_IMPORTED_MODULE_16__.layoutCss)(grid, wallpaperUrl),
+        _styles_widgets__WEBPACK_IMPORTED_MODULE_20__.WIDGETS_CSS,
+        _styles_window__WEBPACK_IMPORTED_MODULE_18__.WINDOW_CSS,
+        _styles_taskbar__WEBPACK_IMPORTED_MODULE_19__.TASKBAR_CSS,
+        _styles_contextmenu__WEBPACK_IMPORTED_MODULE_21__.CONTEXTMENU_CSS,
+        _styles_desktop_env__WEBPACK_IMPORTED_MODULE_22__.DESKTOP_ENV_CSS,
     ].join('\n'));
-    (0,_ambient_color__WEBPACK_IMPORTED_MODULE_16__.updateAmbientColor)(platform.window.document, wallpaper, wallpaperUrl);
+    (0,_ambient_color__WEBPACK_IMPORTED_MODULE_17__.updateAmbientColor)(platform.window.document, wallpaper, wallpaperUrl);
 };
 const userPrefWallpaper = platform.userPref.getWallpaper();
 applyCss({ wallpaper: userPrefWallpaper || '/public/wp-11.jpg', grid: getCurrentLayout().grid });
 applyWmSettings(readWmSettings());
+// Fetch the static copies of /opt/window-manager.js and the /opt/wm styles now,
+// so they're in memory before the first window opens (src/system/static-code.ts).
+(0,_window_manager__WEBPACK_IMPORTED_MODULE_9__.preloadWindowManagerCode)();
 // Init Ring 2 managers so they mirror the current system state
 try {
-    _system_layout_manager__WEBPACK_IMPORTED_MODULE_11__.LayoutManager.getInstance().init(platform.host.getFS());
+    _system_layout_manager__WEBPACK_IMPORTED_MODULE_12__.LayoutManager.getInstance().init(platform.host.getFS());
     if (userPrefWallpaper)
-        _system_desktop_manager__WEBPACK_IMPORTED_MODULE_12__.DesktopManager.getInstance().setWallpaper(userPrefWallpaper);
+        _system_desktop_manager__WEBPACK_IMPORTED_MODULE_13__.DesktopManager.getInstance().setWallpaper(userPrefWallpaper);
 }
 catch (_) { }
 const applyWindowManagerSettings = (settings) => {
@@ -164539,7 +165725,7 @@ platform.host.registerCommand('get-window-manager-themes', readThemes);
 platform.register('set-wallpaper', (wallpaperUrl) => {
     applyCss({ wallpaper: wallpaperUrl, grid: getCurrentLayout().grid });
     platform.userPref.setWallpaper(wallpaperUrl);
-    _system_desktop_manager__WEBPACK_IMPORTED_MODULE_12__.DesktopManager.getInstance().setWallpaper(wallpaperUrl);
+    _system_desktop_manager__WEBPACK_IMPORTED_MODULE_13__.DesktopManager.getInstance().setWallpaper(wallpaperUrl);
 });
 platform.register('add-wallpaper', (wallpaperUrl) => {
     platform.userPref.addWallpaper(wallpaperUrl);
@@ -164547,7 +165733,7 @@ platform.register('add-wallpaper', (wallpaperUrl) => {
 platform.host.registerCommand('set-wallpaper', (wallpaperUrl) => {
     applyCss({ wallpaper: wallpaperUrl, grid: getCurrentLayout().grid });
     platform.userPref.setWallpaper(wallpaperUrl);
-    _system_desktop_manager__WEBPACK_IMPORTED_MODULE_12__.DesktopManager.getInstance().setWallpaper(wallpaperUrl);
+    _system_desktop_manager__WEBPACK_IMPORTED_MODULE_13__.DesktopManager.getInstance().setWallpaper(wallpaperUrl);
 });
 platform.host.registerCommand('add-wallpaper', (wallpaperUrl) => {
     platform.userPref.addWallpaper(wallpaperUrl);
@@ -164573,7 +165759,7 @@ const applyLayout = (layoutId) => {
     layoutSubject.next(layoutId);
     applyCss({ wallpaper: platform.userPref.getWallpaper() || '/public/wp-11.jpg', grid: getCurrentLayout().grid });
     // Sync Ring 2 LayoutManager
-    _system_layout_manager__WEBPACK_IMPORTED_MODULE_11__.LayoutManager.getInstance().setLayout(layoutId, platform.host.getFS());
+    _system_layout_manager__WEBPACK_IMPORTED_MODULE_12__.LayoutManager.getInstance().setLayout(layoutId, platform.host.getFS());
 };
 platform.register('set-layout', applyLayout);
 platform.host.registerCommand('set-layout', applyLayout);
@@ -164924,23 +166110,30 @@ const WidgetsPanel = () => {
         return null;
     return (react__WEBPACK_IMPORTED_MODULE_6___default().createElement("div", { className: "widgets-panel", ref: panelRef }, visibleWidgets.map((widget, i) => (react__WEBPACK_IMPORTED_MODULE_6___default().createElement(WidgetItem, { key: widget.name, widget: widget, savedPosition: positions[widget.name], defaultTop: i * 100, panelRef: panelRef, onRemove: handleRemove })))));
 };
-// VFS Desktop Manager — pluggable desktop-icon renderer, mirroring the dock's
-// variant system (see openVfsDock below) but running in-process (execString,
-// direct FS/callback access) instead of a sandboxed iframe, since desktop
-// icons need tight synchronous access to openFile/showFileActions - the same
-// trust level as /opt/wm/*.js window-manager styles, not the dock's untrusted
-// postMessage boundary.
+// Desktop Manager — pluggable desktop-icon renderer, mirroring the dock's
+// variant system (see openVfsDock below) but running in-process (direct
+// callback access) instead of a sandboxed iframe, since desktop icons need
+// tight synchronous access to openFile/showFileActions - the same trust level
+// as /opt/wm/*.js window-manager styles, not the dock's postMessage boundary.
 //
-// id 'default' preserves the pre-existing behavior exactly: use
-// /opt/desktop/manager.js if present (the original single hand-editable
-// override file), else fall back to the compiled ListDirComponent. Any other
-// id loads /opt/desktop/<id>.js, which must export render(container, api)
-// and may optionally export getSettingsSchema(storedValues)/
-// applySetting(key, value) for a live per-variant settings panel in
-// Settings > Managers (see get-desktop-schema/set-desktop-setting below,
-// which mirror get-dock-schema/set-dock-setting but stay in-process).
-const VFS_DESKTOP_PATH = '/opt/desktop/manager.js';
-const DESKTOP_VARIANTS_DIR = '/opt/desktop';
+// Variants are the modules that ship in docs/public/mount/opt/desktop/
+// ('default' is manager.js, the original single file) and run from that
+// immutable static copy, never from the writable vfs (decisions.md D1, audit
+// WIN-6/BOOT-5) — the vfs copies are view-only. An id (Settings > Managers,
+// /etc/managers.json) only selects one of them; an unknown id, or a variant
+// whose static copy can't be loaded, gets the compiled ListDirComponent. A
+// variant exports render(container, api) and optionally
+// getSettingsSchema(storedValues)/applySetting(key, value) for a live
+// per-variant settings panel in Settings > Managers (see
+// get-desktop-schema/set-desktop-setting below, which mirror
+// get-dock-schema/set-dock-setting but stay in-process).
+const DESKTOP_VARIANT_PATHS = Object.freeze({
+    'default': '/opt/desktop/manager.js',
+    'windows-tiles': '/opt/desktop/windows-tiles.js',
+    'scifi': '/opt/desktop/scifi.js',
+    'interactive': '/opt/desktop/interactive.js',
+});
+const desktopVariantPath = (id) => typeof id === 'string' && Object.prototype.hasOwnProperty.call(DESKTOP_VARIANT_PATHS, id) ? DESKTOP_VARIANT_PATHS[id] : undefined;
 const desktopManagerSubject = new rxjs__WEBPACK_IMPORTED_MODULE_0__.BehaviorSubject('default');
 let activeDesktopModule = null;
 let activeDesktopId = 'default';
@@ -164969,29 +166162,26 @@ const DesktopMount = ({ openFile, showFileActionsHandler }) => {
         const container = ref.current;
         if (!container)
             return;
-        const fs = platform.host.getFS();
-        const loadFrom = (path) => platform.host.execString(fs.readFileSync(path, 'utf-8'), path);
         if (desktopId === 'none') {
             activeDesktopModule = null;
             activeDesktopId = desktopId;
             activeDesktopSchema = [];
             return undefined;
         }
-        let mod = null;
-        try {
-            if (desktopId !== 'default') {
-                const path = `${DESKTOP_VARIANTS_DIR}/${desktopId}.js`;
-                if (fs.existsSync(path))
-                    mod = loadFrom(path);
-            }
-            else if (fs.existsSync(VFS_DESKTOP_PATH)) {
-                mod = loadFrom(VFS_DESKTOP_PATH);
-            }
-        }
-        catch (err) {
-            console.error('[desktop-manager] VFS load failed:', err);
-        }
-        if (mod && typeof mod.render === 'function') {
+        const path = desktopVariantPath(desktopId);
+        let cancelled = false;
+        let cleanup;
+        // Compile-time ListDirComponent: unknown ids, and any variant whose
+        // static copy can't be loaded.
+        const mountFallback = () => {
+            activeDesktopModule = null;
+            activeDesktopId = path ? desktopId : 'default';
+            activeDesktopSchema = [];
+            const root = (0,react_dom_client__WEBPACK_IMPORTED_MODULE_5__.createRoot)(container);
+            root.render(react__WEBPACK_IMPORTED_MODULE_6___default().createElement(_apps_file_explorer_desktop__WEBPACK_IMPORTED_MODULE_14__.ListDirComponent, { openFile: openFile, showFileActions: showFileActionsHandler, customClass: 'desktop-icons' }));
+            cleanup = () => setTimeout(() => root.unmount(), 0);
+        };
+        const mountModule = (mod) => {
             activeDesktopModule = mod;
             activeDesktopId = desktopId;
             try {
@@ -165002,22 +166192,48 @@ const DesktopMount = ({ openFile, showFileActionsHandler }) => {
                 console.error('[desktop-manager] getSettingsSchema failed:', err);
                 activeDesktopSchema = [];
             }
-            const cleanup = mod.render(container, { openFile, showFileActions: showFileActionsHandler });
-            return () => {
+            const done = mod.render(container, { openFile, showFileActions: showFileActionsHandler });
+            cleanup = () => {
                 activeDesktopModule = null;
                 activeDesktopSchema = [];
-                if (typeof cleanup === 'function')
-                    cleanup();
+                if (typeof done === 'function')
+                    done();
             };
+        };
+        const mount = (mod) => {
+            if (cancelled)
+                return;
+            if (!mod || typeof mod.render !== 'function') {
+                mountFallback();
+                return;
+            }
+            try {
+                mountModule(mod);
+            }
+            catch (err) {
+                console.error('[desktop-manager] render failed:', err);
+                cleanup === null || cleanup === void 0 ? void 0 : cleanup();
+                container.replaceChildren();
+                mountFallback();
+            }
+        };
+        if (!path) {
+            console.warn('[desktop-manager] unknown desktop variant — using the built-in icons:', desktopId);
+            mountFallback();
         }
-        // Fallback: compile-time ListDirComponent (also covers 'default' when
-        // /opt/desktop/manager.js is missing).
-        activeDesktopModule = null;
-        activeDesktopId = desktopId;
-        activeDesktopSchema = [];
-        const root = (0,react_dom_client__WEBPACK_IMPORTED_MODULE_5__.createRoot)(container);
-        root.render(react__WEBPACK_IMPORTED_MODULE_6___default().createElement(_apps_file_explorer_desktop__WEBPACK_IMPORTED_MODULE_13__.ListDirComponent, { openFile: openFile, showFileActions: showFileActionsHandler, customClass: 'desktop-icons' }));
-        return () => setTimeout(() => root.unmount(), 0);
+        else {
+            // Synchronous when the source is already here (hot swap); otherwise
+            // the desktop stays empty for the moment the fetch takes.
+            const ready = (0,_system_static_code__WEBPACK_IMPORTED_MODULE_10__.getSystemModule)(path);
+            if (ready !== undefined)
+                mount(ready);
+            else
+                (0,_system_static_code__WEBPACK_IMPORTED_MODULE_10__.loadSystemModule)(path).then(mount);
+        }
+        return () => {
+            cancelled = true;
+            cleanup === null || cleanup === void 0 ? void 0 : cleanup();
+        };
     }, [desktopId]);
     return react__WEBPACK_IMPORTED_MODULE_6___default().createElement("div", { ref: ref, style: { width: '100%', height: '100%' } });
 };
@@ -165075,15 +166291,20 @@ const render = (container) => {
             const pinned = fs.existsSync('/etc/taskbar.json')
                 ? (_a = JSON.parse(fs.readFileSync('/etc/taskbar.json', 'utf-8')).pinned) !== null && _a !== void 0 ? _a : []
                 : ['ui.app-drawer', 'explorer', 'ui.notepad', 'ui.terminal', 'ui.pkg-manager', 'ui.settings'];
-            return pinned.map(name => {
-                var _a, _b, _c, _d;
+            return (Array.isArray(pinned) ? pinned : [])
+                .filter((name) => typeof name === 'string')
+                .map(name => {
+                var _a, _b, _c;
                 const cmd = platform.host.getCommand(name);
                 const meta = (_a = cmd === null || cmd === void 0 ? void 0 : cmd.meta) !== null && _a !== void 0 ? _a : {};
                 return {
                     name,
-                    label: (_b = meta.title) !== null && _b !== void 0 ? _b : name,
-                    icon: (_d = (_c = meta.icon) !== null && _c !== void 0 ? _c : DEFAULT_ICON[name]) !== null && _d !== void 0 ? _d : 'apps',
-                    cmd: `service('001-core.layout','open-window')(command('${name}'))`,
+                    label: String((_b = meta.title) !== null && _b !== void 0 ? _b : name),
+                    icon: (0,_window_manager__WEBPACK_IMPORTED_MODULE_9__.safeIconName)((_c = meta.icon) !== null && _c !== void 0 ? _c : DEFAULT_ICON[name], 'apps'),
+                    // Kept only for the kernel's WmBridge type: no consumer runs it,
+                    // and it no longer carries generated DSL (audit KRN-3) — docks
+                    // launch by name through wm.launch.
+                    cmd: '',
                 };
             });
         }
@@ -165091,15 +166312,23 @@ const render = (container) => {
             return [];
         }
     };
-    (0,_ipc__WEBPACK_IMPORTED_MODULE_10__.registerWindowIpcHandlers)(() => _window_manager__WEBPACK_IMPORTED_MODULE_9__.windowsSubject.getValue().map(w => ({
+    // What docks see of the window list: plain data, icons as checked names.
+    const dockWindowList = (wins) => wins.map(w => ({
         pid: w.pid, name: w.name, title: w.title,
-        icon: w.icon, minimized: w.minimized, active: w.active,
-    })), (pid) => {
+        icon: (0,_window_manager__WEBPACK_IMPORTED_MODULE_9__.safeIconName)(w.icon), minimized: w.minimized, active: w.active,
+    }));
+    (0,_ipc__WEBPACK_IMPORTED_MODULE_11__.registerWindowIpcHandlers)(() => dockWindowList(_window_manager__WEBPACK_IMPORTED_MODULE_9__.windowsSubject.getValue()), (pid) => {
         const win = _window_manager__WEBPACK_IMPORTED_MODULE_9__.windowsSubject.getValue().find(w => w.pid === pid);
         win === null || win === void 0 ? void 0 : win.toggle();
     }, platform.window, getLaunchItems);
+    // Docks may launch only what they were offered (audit WIN-7): a name from
+    // getLaunchItems(), never an arbitrary command or callable.
     platform.window.__wosWmBridge.launch = (name) => {
         var _a;
+        if (!getLaunchItems().some(item => item.name === name)) {
+            console.warn('[layout] wm.launch refused — not a launch item:', name);
+            return;
+        }
         const cmd = platform.host.getCommand(name);
         if (!cmd)
             return;
@@ -165112,31 +166341,41 @@ const render = (container) => {
             windowManager.createWindow(cmd.name);
         }
     };
-    // Broadcast window-list changes to all iframes in the main document.
-    // Pass platform.window.document explicitly — bare `document` inside the
-    // layout bundle resolves to the hidden-iframe document (no child iframes).
+    // Window-list changes go only to the layout frames that asked for them
+    // (the dock), not to every iframe in the document (audit KRN-13).
     _window_manager__WEBPACK_IMPORTED_MODULE_9__.windowsSubject.subscribe(wins => {
-        (0,_ipc__WEBPACK_IMPORTED_MODULE_10__.broadcastIpcEvent)('wm.windowsChanged', wins.map(w => ({
-            pid: w.pid, name: w.name, title: w.title,
-            icon: w.icon, minimized: w.minimized, active: w.active,
-        })), platform.window.document);
+        postLayoutEvent('wm.windowsChanged', dockWindowList(wins));
     });
     platform.register('open-window', onCommandClick);
     // Dock settings commands — read/write dock schema and persist to /etc/dock/{id}.json.
-    const getDockSchema = () => {
+    // Dock ids name /opt/apps/dock/<id>.html and /etc/dock/<id>.json, so they
+    // must be a plain name. The settings file path is built from the id the
+    // layout opened, never from the dockId a dock frame reports about itself
+    // through dock.registerSettings.
+    const DOCK_ID_RE = /^[a-z0-9-]{1,64}$/;
+    let activeDockId = '';
+    // The kernel keeps the last dock.registerSettings payload; it only counts
+    // when it came from the dock that is open now.
+    const getActiveDockBridge = () => {
         const bridge = platform.window.__wosDockBridge;
-        return bridge ? { schema: bridge.schema, dockId: bridge.dockId } : { schema: [], dockId: '' };
+        return bridge && activeDockId && bridge.dockId === activeDockId ? bridge : undefined;
+    };
+    const getDockSchema = () => {
+        const bridge = getActiveDockBridge();
+        return bridge ? { schema: bridge.schema, dockId: activeDockId } : { schema: [], dockId: '' };
     };
     const setDockSetting = (data) => {
-        const bridge = platform.window.__wosDockBridge;
-        if (!bridge)
+        const bridge = getActiveDockBridge();
+        if (!bridge || typeof (data === null || data === void 0 ? void 0 : data.key) !== 'string')
             return false;
+        // Only keys the dock declared in its schema are persisted.
         const entry = bridge.schema.find((e) => e.key === data.key);
-        if (entry)
-            entry.value = data.value;
+        if (!entry)
+            return false;
+        entry.value = data.value;
         try {
             const fs = platform.host.getFS();
-            const settingsPath = `/etc/dock/${bridge.dockId}.json`;
+            const settingsPath = `/etc/dock/${activeDockId}.json`;
             let current = {};
             try {
                 current = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
@@ -165148,7 +166387,7 @@ const render = (container) => {
             fs.writeFileSync(settingsPath, JSON.stringify(current, null, 2));
         }
         catch (_) { }
-        ;(0,_ipc__WEBPACK_IMPORTED_MODULE_10__.broadcastIpcEvent)('dock.settingChanged', { key: data.key, value: data.value }, platform.window.document);
+        postLayoutEvent('dock.settingChanged', { key: data.key, value: data.value });
         return true;
     };
     platform.register('get-dock-schema', getDockSchema);
@@ -165163,9 +166402,14 @@ const render = (container) => {
     const getDesktopSchema = () => ({ desktopId: activeDesktopId, schema: activeDesktopSchema });
     const setDesktopSetting = (data) => {
         var _a;
+        // Only keys the active (shipped, validated) variant declared are persisted,
+        // to /etc/desktop/<its id>.json.
+        if (typeof (data === null || data === void 0 ? void 0 : data.key) !== 'string' || !desktopVariantPath(activeDesktopId))
+            return false;
         const entry = activeDesktopSchema.find(e => e.key === data.key);
-        if (entry)
-            entry.value = data.value;
+        if (!entry)
+            return false;
+        entry.value = data.value;
         try {
             const fs = platform.host.getFS();
             if (!fs.existsSync('/etc/desktop'))
@@ -165203,9 +166447,9 @@ const render = (container) => {
     // Auto-hide behaviour: dock starts hidden below the viewport (translateY 100%,
     // pointer-events:none) so it never blocks app content. Moving the mouse within
     // TRIGGER_PX of the bottom edge reveals it; moving away hides it after a delay.
-    const openVfsDock = (id) => {
+    const closeVfsDock = () => {
         const doc = platform.window.document;
-        // Abort previous dock's listeners before replacing it.
+        // Abort previous dock's listeners (and its IPC registration) before replacing it.
         const existing = doc.getElementById('vfs-dock-iframe');
         if (existing) {
             const cleanup = existing.__dockCleanup;
@@ -165213,11 +166457,20 @@ const render = (container) => {
                 cleanup();
             existing.remove();
         }
+        activeDockId = '';
         doc.body.classList.remove('vfs-dock-active');
         doc.body.classList.remove('vfs-dock-occupy');
         doc.documentElement.style.removeProperty('--vfs-dock-height');
+    };
+    const openVfsDock = (id) => {
+        const doc = platform.window.document;
+        closeVfsDock();
         if (!id || id === 'none')
             return;
+        if (typeof id !== 'string' || !DOCK_ID_RE.test(id)) {
+            console.warn('[dock] invalid dock id:', id);
+            return;
+        }
         const fs = platform.host.getFS();
         const dockPath = `/opt/apps/dock/${id}.html`;
         if (!fs.existsSync(dockPath)) {
@@ -165244,6 +166497,16 @@ const render = (container) => {
             // Transition eases the slide-in/out animation.
             iframe.style.cssText = `position:fixed;bottom:0;left:0;width:100%;height:${h}px;border:none;background:transparent;z-index:9000;pointer-events:none;transform:translateY(100%);transition:transform 0.18s ease;`;
             doc.body.appendChild(iframe);
+            activeDockId = id;
+            // Exactly what docks/*.html use (audit WIN-7): the window list,
+            // toggling a window, launching one of the offered launch items,
+            // registering their settings schema, and reading their own
+            // settings file. They are sent the window-list and setting events.
+            const dockFrame = attachLayoutFrame(iframe, {
+                id: `dock:${id}`,
+                events: ['wm.getWindows', 'wm.toggleWindow', 'wm.getLaunchItems', 'wm.launch', 'dock.registerSettings', 'fs.readText'],
+                fs: { read: [`/etc/dock/${id}.json`] },
+            }, ['wm.windowsChanged', 'dock.settingChanged'], { onRenavigate: closeVfsDock });
             doc.body.classList.add('vfs-dock-active');
             doc.documentElement.style.setProperty('--vfs-dock-height', `${h}px`);
             // ── Auto-hide logic ──────────────────────────────────────────────
@@ -165321,6 +166584,7 @@ const render = (container) => {
             if (!windowsOpen)
                 showDock();
             iframe.__dockCleanup = () => {
+                dockFrame.detach();
                 doc.removeEventListener('mousemove', onDocMouseMove);
                 iframe.removeEventListener('mouseenter', onIframeEnter);
                 iframe.removeEventListener('mouseleave', onIframeLeave);
@@ -165394,21 +166658,24 @@ const render = (container) => {
             setOnClick: (callback) => { }
         }
     });
+    // Desktop icon actions: the path travels as a value (audit KRN-3) — a file
+    // name can't become code however it is spelled.
     const showFileActionsHandler = (file, event) => {
         var _a;
+        const path = file.path;
         const items = [
-            { id: 'edit_file', type: 'action', title: 'Edit', cmd: `service('001-core.layout', 'open-window') (command('ui.notepad'), '${file.path}')` },
-            { id: 'open_file', type: 'action', title: 'Open', cmd: `service('001-core.layout', 'open-window') (command('ui.iframe'), '${file.path}')` },
-            { id: 'delete_file', type: 'action', title: 'Delete', cmd: `service('root', 'fs')('rm', '${file.path}')` },
+            { id: 'edit_file', type: 'action', title: 'Edit', command: 'ui.notepad', args: [path], window: true },
+            { id: 'open_file', type: 'action', title: 'Open', command: 'ui.iframe', args: [path], window: true },
+            { id: 'delete_file', type: 'action', title: 'Delete', onSelect: () => platform.host.getService('root', 'fs')('rm', path) },
         ];
         if (file.type === 'file') {
             const ext = ((_a = file.name.split('.').pop()) === null || _a === void 0 ? void 0 : _a.toLowerCase()) || '';
             const registered = platform.host.getCommandsForExtension(ext);
             const owChildren = registered.map(app => ({
                 id: `ow_${app.name}`, type: 'action', title: app.title,
-                cmd: `service('001-core.layout','open-window')(command('${app.name}'),'${file.path}')`,
+                command: app.name, args: [path], window: true,
             }));
-            owChildren.push({ id: 'ow_browser', type: 'action', title: 'Browser', cmd: `service('001-core.layout','open-window')(command('ui.iframe'),'${file.path}')` });
+            owChildren.push({ id: 'ow_browser', type: 'action', title: 'Browser', command: 'ui.iframe', args: [path], window: true });
             items.push({ id: 'divider_ow', type: 'divider', title: '' });
             items.push({ id: 'open_with', type: 'group', title: 'Open with', children: owChildren });
         }
@@ -165420,8 +166687,13 @@ const render = (container) => {
         contextMenuComponentRef.current.setItems(items);
         contextMenuComponentRef.current.setOnClick(item => {
             contextMenuRef.current.style.display = 'none';
-            if (item.cmd) {
-                platform.host.execCommand(item.cmd, platform);
+            try {
+                const result = (0,_contextmenu__WEBPACK_IMPORTED_MODULE_8__.runContextMenuItem)(item);
+                if (result && typeof result.catch === 'function')
+                    result.catch((err) => console.error('[contextmenu]', err));
+            }
+            catch (err) {
+                console.error('[contextmenu]', err);
             }
         });
         contextMenuRef.current.style.visibility = 'hidden';
@@ -165445,23 +166717,35 @@ const render = (container) => {
         }, 0);
     };
     platform.register('show-context-menu', showContextMenuHandler);
-    const onCommandClickHandler = (command, ...args) => {
-        platform.host.execCommand(`service('001-core.layout', 'open-window') (command('${command.name}')${args.length ? ',' : ''} ${args.map(x => "'" + x + "'").join(', ')})`, platform);
-    };
     // Desktop right-click menu: load items from /etc/contextmenu.json (VFS),
     // falling back to a minimal hardcoded set if the file is absent or invalid.
+    // Entries there are user-authored DSL (`cmd`, decisions.md D9) and get no
+    // values from the layout; anything that isn't a plain entry is dropped.
     const loadContextMenuItems = () => {
         const fallback = [
-            { id: '1', type: 'action', title: 'Explorer', cmd: `service('001-core.layout', 'open-window') (command('explorer'))` },
-            { id: '4', type: 'action', title: 'Settings', cmd: `service('001-core.layout', 'open-window') (command('ui.settings'))` },
-            { id: '0', type: 'action', title: 'Terminal', cmd: `service('001-core.layout', 'open-window') (command('ui.terminal'))` },
+            { id: '1', type: 'action', title: 'Explorer', command: 'explorer', window: true },
+            { id: '4', type: 'action', title: 'Settings', command: 'ui.settings', window: true },
+            { id: '0', type: 'action', title: 'Terminal', command: 'ui.terminal', window: true },
         ];
+        const toEntry = (item, index) => {
+            var _a, _b;
+            if (!item || typeof item !== 'object' || Array.isArray(item))
+                return null;
+            const type = ['action', 'group', 'divider'].includes(item.type) ? item.type : 'action';
+            const children = Array.isArray(item.children)
+                ? item.children.map(toEntry).filter((c) => !!c)
+                : undefined;
+            return Object.assign(Object.assign({}, item), { id: String((_a = item.id) !== null && _a !== void 0 ? _a : index), title: String((_b = item.title) !== null && _b !== void 0 ? _b : ''), type, children, onSelect: undefined });
+        };
         try {
             const fs = platform.host.getFS();
             if (fs.existsSync('/etc/contextmenu.json')) {
                 const parsed = JSON.parse(fs.readFileSync('/etc/contextmenu.json', 'utf-8'));
-                if (Array.isArray(parsed) && parsed.length)
-                    return parsed;
+                const entries = Array.isArray(parsed)
+                    ? parsed.map(toEntry).filter((e) => !!e)
+                    : [];
+                if (entries.length)
+                    return entries;
             }
         }
         catch (_) { }

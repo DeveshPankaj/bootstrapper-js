@@ -197,6 +197,43 @@ webrtc voice <#group>
 webrtc ice | ice add <url> [user] [pass] | ice rm <n> | ice relay on|off | ice test
 ```
 
+## Security behaviour (audit NET-1…NET-13, decisions D13)
+
+Peers are untrusted by default:
+- **Mesh:** `autoMesh` (auto-dialing peers a contact introduces) defaults to **off** for new users; a
+  saved choice is kept.
+- **Groups:** being added to a group by a peer asks first (`confirm()`). Until you accept, that group
+  delivers nothing — no chat, `app-relay` or Distributed Compute traffic. Declining ignores that peer's
+  invitations for 60 s.
+- **Commands from outside:** `webrtc.api` calls from another app or `/bin/webrtc.run` that change
+  anything — share, grant, revoke, mount, sync, kick, ICE, say, sendfile, listen, call — prompt in the
+  WebRTC window, showing the exact command. Read-only subcommands don't.
+- **Shares:**
+  - Read-write shares are refused for `/etc`, `/opt`, `/usr`, `/bin`, `/boot`, `/proc`, `/mnt/ssh`,
+    `/mnt/webrtc`, anything inside them, and their ancestors (`/`, `/mnt`).
+  - `~/.local/share` (other apps' data and secrets) is never shared and is hidden inside shared folders.
+  - Kernel-owned files such as `~/initd.run` can't be written through a share, and saved shares are
+    re-checked at load.
+- **Mounts:** every name in a peer's listing is validated (`pathPolicy.isValidName`) and joined with
+  `safeJoin` onto the mount root. Traversal names are skipped and logged, so nothing lands outside
+  `/mnt/webrtc/<label>`.
+- **Received files:**
+  - Download links are `application/octet-stream`, so they download rather than open.
+  - SVG previews are `data:` URLs shown only in `<img>`; no SVG or HTML ever becomes a same-origin `blob:`
+    document.
+  - Oversized or high-ratio invite links are rejected while inflating.
+- **Distributed Compute** (rides the mesh):
+  - Another peer's tasks run only for groups you ticked under **"Run tasks for others"**. The setting is
+    saved in `~/.local/share/distributed-compute/settings.json`, keyed by group id, creator and name.
+  - Accepted tasks run in a hidden opaque-origin sandbox, in a Worker created from the sandbox's own
+    `blob:` URL, with CSP `default-src 'none'`: no network, no storage, no access to the OS.
+  - Tasks get a 60 s timeout (120 s max) and at most 4 run at once. Refusals are logged.
+  - Messages over ~2.5 MB are refused, and partial reassemblies expire.
+
+Still open until phase 2 (the sandbox runtime): peer identity in `hello` is self-asserted, the WebRTC
+window runs same-origin (`window.__webrtcApp` is reachable by other same-origin code), and the group
+`confirm()` blocks the tab while open.
+
 ## Testing
 
 `node testing/scripts/test-webrtc-e2e.mjs` (needs `webpack serve --port 8103`): three isolated browser

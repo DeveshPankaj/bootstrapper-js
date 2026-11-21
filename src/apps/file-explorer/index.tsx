@@ -43,6 +43,29 @@ const getBreadcrumbs = (path: string) => {
 
 const platform = Platform.getInstance()
 
+// Context-menu entries (audit KRN-3/WIN-2/APP-1, decisions.md D9): what an entry
+// does is a function over values — the layout's ContextMenuItem `onSelect` —
+// so no file name is ever turned into DSL source.
+type MenuEntry = { id: string, title: string, run: () => unknown } | { id: string, divider: true }
+// Explicit "Run" of a .js/.run file through host.runFile (which asks for
+// confirmation outside /bin, /usr/bin and /opt/apps); failures become a
+// notification. Mirrors runScript in opt/apps/file-explorer/main.js.
+const runScript = (path: string) => {
+    const report = (e: any) => platform.host.callCommand('notify', {
+        title: 'Run failed', body: `${path.split('/').pop()}: ${(e && e.message) || e}`, duration: 4000,
+    })
+    try {
+        const result: any = platform.host.runFile(platform, path, [path.split('/').slice(0, -1).join('/') || '/'])
+        if (result && typeof result.catch === 'function') result.catch(report)
+        return result
+    } catch (e) { report(e) }
+}
+
+const toContextMenuItems = (entries: MenuEntry[]) => entries.map(entry =>
+    'divider' in entry
+        ? { id: entry.id, type: 'divider', title: '' }
+        : { id: entry.id, type: 'action', title: entry.title, onSelect: entry.run })
+
 const fullScreenCallbackRef = {
     current: (...args: any[]) => { }
 }
@@ -765,7 +788,7 @@ const App = (props: UICallbackProps & { file: FileType }) => {
 
         const ext = getFileExtension(selectedFilePath)
         if (AUDIO_EXTS.has(ext)) {
-            platform.host.execCommand(`service('001-core.layout', 'open-window') (command('ui.audioplayer'), '${selectedFilePath}')`, platform)
+            platform.host.openWindow('ui.audioplayer', selectedFilePath)
             return
         }
 
@@ -833,54 +856,51 @@ const App = (props: UICallbackProps & { file: FileType }) => {
         if (!openContextMenu) return;
         const rect = props.getBoundingClientRect()
         const k = cmdPrefix.current
+        const call = (name: string, ...values: unknown[]) => () => platform.host.callCommand(`${k}.${name}`, ...values)
+        const fsService = (op: 'rm' | 'rmdir', path: string) => () => (platform.host.getService('root', 'fs') as Function)(op, path)
 
         // Batch actions for a multi-selection - shown instead of the single-item
         // action list below when the right-clicked item is part of a selection
         // of more than one item.
         if (Array.isArray(selection) && selection.length > 1) {
-            const encoded = encodeURIComponent(JSON.stringify(selection))
-            const hasFolder = selection.some(p => { try { return fs.statSync(p).isDirectory() } catch (_) { return false } })
-            const batchActions = [
-                {
-                    id: 'download_selected', type: 'action',
-                    title: hasFolder ? 'Download files (skips folders)' : 'Download',
-                    cmd: `platform.host.callCommand('${k}.download-files', JSON.parse(decodeURIComponent('${encoded}')))`,
-                },
-                { id: 'div_batch', type: 'divider', title: '' },
-                {
-                    id: 'delete_selected', type: 'action',
-                    title: `Delete ${selection.length} items`,
-                    cmd: `platform.host.callCommand('${k}.delete-files', JSON.parse(decodeURIComponent('${encoded}')))`,
-                },
+            const paths = [...selection]
+            const hasFolder = paths.some(p => { try { return fs.statSync(p).isDirectory() } catch (_) { return false } })
+            const batchActions: MenuEntry[] = [
+                { id: 'download_selected', title: hasFolder ? 'Download files (skips folders)' : 'Download', run: call('download-files', paths) },
+                { id: 'div_batch', divider: true },
+                { id: 'delete_selected', title: `Delete ${paths.length} items`, run: call('delete-files', paths) },
             ]
-            openContextMenu(event.clientX + rect.x, event.clientY + rect.y, batchActions)
+            openContextMenu(event.clientX + rect.x, event.clientY + rect.y, toContextMenuItems(batchActions))
             return
         }
 
-        const actions = [];
-        file.path = file.path.replace(/\/\//g, '/')
-        const stats = fs.statSync(file.path)
+        const actions: MenuEntry[] = [];
+        const path = file.path = normalizePath(file.path)
+        const stats = fs.statSync(path)
         if (stats.isFile()) {
-            actions.push({ id: 'edit_file', type: 'action', title: 'Edit', cmd: `service('001-core.layout', 'open-window') (command('ui.notepad'), '${file.path}')` })
-            actions.push({ id: 'open_file', type: 'action', title: 'Open', cmd: `service('001-core.layout', 'open-window') (command('ui.iframe'), '${file.path}')` })
-            actions.push({ id: 'download_file', type: 'action', title: 'Download', cmd: `platform.host.callCommand('${k}.download-file', '${file.path}')` })
-            actions.push({ id: 'delete_file', type: 'action', title: 'Delete', cmd: `service('root', 'fs')('rm', '${file.path}')` })
-            actions.push({ id: 'rename_file', type: 'action', title: 'Rename', cmd: `platform.host.callCommand('${k}.rename', '${file.path}')` })
-            actions.push({ id: 'copy_file', type: 'action', title: 'Copy', cmd: `platform.host.callCommand('${k}.copy-file', '${file.path}')` })
-            actions.push({ id: 'cut_file', type: 'action', title: 'Cut', cmd: `platform.host.callCommand('${k}.cut-file', '${file.path}')` })
-            actions.push({ id: 'props_file', type: 'action', title: 'Properties', cmd: `platform.host.callCommand('${k}.show-properties', '${file.path}')` })
+            actions.push({ id: 'edit_file', title: 'Edit', run: () => platform.host.openWindow('ui.notepad', path) })
+            // Explicit Run (decisions.md D10) — mirrors opt/apps/file-explorer/main.js.
+            // host.runFile confirms, naming the file, outside the system folders.
+            if (/\.(js|run)$/i.test(path)) actions.push({ id: 'run_file', title: 'Run', run: () => runScript(path) })
+            actions.push({ id: 'open_file', title: 'Open', run: () => platform.host.openWindow('ui.iframe', path) })
+            actions.push({ id: 'download_file', title: 'Download', run: call('download-file', path) })
+            actions.push({ id: 'delete_file', title: 'Delete', run: fsService('rm', path) })
+            actions.push({ id: 'rename_file', title: 'Rename', run: call('rename', path) })
+            actions.push({ id: 'copy_file', title: 'Copy', run: call('copy-file', path) })
+            actions.push({ id: 'cut_file', title: 'Cut', run: call('cut-file', path) })
+            actions.push({ id: 'props_file', title: 'Properties', run: call('show-properties', path) })
         }
 
         else {
-            actions.push({ id: 'open_file', type: 'action', title: 'Open in explorer', cmd: `service('001-core.layout', 'open-window') (command('ui.file-explorer'), '${file.path}')` })
-            actions.push({ id: 'delete_file', type: 'action', title: 'Delete', cmd: `service('root', 'fs')('rmdir', '${file.path}')` })
-            actions.push({ id: 'rename_dir', type: 'action', title: 'Rename', cmd: `platform.host.callCommand('${k}.rename', '${file.path}')` })
-            actions.push({ id: 'copy_dir', type: 'action', title: 'Copy', cmd: `platform.host.callCommand('${k}.copy-file', '${file.path}')` })
-            actions.push({ id: 'cut_dir', type: 'action', title: 'Cut', cmd: `platform.host.callCommand('${k}.cut-file', '${file.path}')` })
-            actions.push({ id: 'props_dir', type: 'action', title: 'Properties', cmd: `platform.host.callCommand('${k}.show-properties', '${file.path}')` })
+            actions.push({ id: 'open_file', title: 'Open in explorer', run: () => platform.host.openWindow('ui.file-explorer', path) })
+            actions.push({ id: 'delete_file', title: 'Delete', run: fsService('rmdir', path) })
+            actions.push({ id: 'rename_dir', title: 'Rename', run: call('rename', path) })
+            actions.push({ id: 'copy_dir', title: 'Copy', run: call('copy-file', path) })
+            actions.push({ id: 'cut_dir', title: 'Cut', run: call('cut-file', path) })
+            actions.push({ id: 'props_dir', title: 'Properties', run: call('show-properties', path) })
         }
 
-        openContextMenu(event.clientX + rect.x, event.clientY + rect.y, actions)
+        openContextMenu(event.clientX + rect.x, event.clientY + rect.y, toContextMenuItems(actions))
     }
 
     // --- Drag & drop: move files between explorer windows, and import files from the OS ---
@@ -1022,12 +1042,12 @@ const App = (props: UICallbackProps & { file: FileType }) => {
         if (!openContextMenu) return
         const rect = props.getBoundingClientRect()
         const k = cmdPrefix.current
-        const actions = [
-            { id: 'paste',    type: 'action', title: 'Paste',      cmd: `platform.host.callCommand('${k}.paste-files')` },
-            { id: 'new_dir',  type: 'action', title: 'New Folder',  cmd: `platform.host.callCommand('${k}.make-dir')` },
-            { id: 'new_file', type: 'action', title: 'New File',    cmd: `platform.host.callCommand('${k}.make-file')` },
+        const actions: MenuEntry[] = [
+            { id: 'paste',    title: 'Paste',      run: () => platform.host.callCommand(`${k}.paste-files`) },
+            { id: 'new_dir',  title: 'New Folder', run: () => platform.host.callCommand(`${k}.make-dir`) },
+            { id: 'new_file', title: 'New File',   run: () => platform.host.callCommand(`${k}.make-file`) },
         ]
-        openContextMenu(event.clientX + rect.x, event.clientY + rect.y, actions)
+        openContextMenu(event.clientX + rect.x, event.clientY + rect.y, toContextMenuItems(actions))
     }
 
     const breadcrumbs = getBreadcrumbs(dirRef.current)

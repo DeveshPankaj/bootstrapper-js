@@ -25,6 +25,10 @@ class WindowService {
 
         const host = new Host(this.window, newPlatform, commands, widgets, modulesMap, settingsSections, widgetTypes, activities);
         newPlatform.setHost(host);
+        // Cross-origin window.open from module code gets noopener,noreferrer
+        // (kernel hook; audit KRN-11/APP-9). The frame never navigates, so
+        // hardening its initial window covers the module script loaded next.
+        host.hardenWindow(iframe.contentWindow);
 
         resolve([iframe.contentWindow!, platformEventEmitter]);
       };
@@ -154,8 +158,6 @@ const widgetTypes = new Map<string, import('@shared/index').WidgetTypeRenderer>(
 const activities = new BehaviorSubject<Array<ActivityDef>>([]);
 const host = new Host(window, hostPlatform, commands, widgets, modulesMap, settingsSections, widgetTypes, activities);
 hostPlatform.setHost(host);
-// Expose for ExecEngine's lazy _getHost() accessor (avoids circular import)
-(window as any).__wosHost = host;
 
 modulesMap.set('root', {platform} as any)
 
@@ -233,31 +235,62 @@ platform.host.registerCommand('reload-keybindings', wireKeybindings);
 setTimeout(wireKeybindings, 3000);
 
 // Query-param app launcher — opens apps on page load via URL params.
-// Single app:   ?app=<commandName>&args=<base64(JSON.stringify([...]))>
+// Single app:   ?app=<commandName>[&args=<base64(JSON.stringify([...strings]))>]
 // Multiple apps: ?apps=<base64(JSON.stringify([{app, args?}]))>
-// base64 encoding lets args carry arbitrary strings (paths, JSON, etc.) safely.
+//
+// SECURITY (audit KRN-2/BOOT-1, decisions.md D9): the URL is untrusted input.
+// The name is validated, only launchable apps open (title + icon, the app
+// drawer's rule), everything travels as values through host.openWindow —
+// never as DSL source — and args are accepted only by commands that opt in
+// with `deepLink: true` in their registerCommand meta (like `#open=` links).
+const QUERY_APP_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
+const QUERY_MAX_APPS = 8
+const QUERY_MAX_ARGS = 8
+const QUERY_MAX_ARG_LENGTH = 20000
+
+const launchFromQuery = (app: unknown, args: unknown) => {
+  if (typeof app !== 'string' || !QUERY_APP_NAME_RE.test(app) || app.includes('..')) {
+    console.warn('[query-launch] ignored an invalid app name:', JSON.stringify(String(app)).slice(0, 80))
+    return
+  }
+  const cmd = platform.host.getCommand(app)
+  const meta = (cmd?.meta ?? {}) as Record<string, unknown>
+  if (!cmd || !meta.title || !meta.icon || meta.callable === false) {
+    console.warn(`[query-launch] "${app}" is not an app that can be opened from a link`)
+    return
+  }
+  let values: string[] = []
+  if (Array.isArray(args) && args.length) {
+    if (meta.deepLink !== true) {
+      console.warn(`[query-launch] "${app}" does not accept arguments from links (no deepLink opt-in); opening it without them`)
+    } else if (args.length <= QUERY_MAX_ARGS && args.every(a => typeof a === 'string' && a.length <= QUERY_MAX_ARG_LENGTH)) {
+      values = args as string[]
+    } else {
+      console.warn(`[query-launch] "${app}": link arguments must be at most ${QUERY_MAX_ARGS} strings`)
+      return
+    }
+  }
+  platform.host.openWindow(app, ...values)
+}
+
 const launchFromQueryParams = () => {
   const params = new URLSearchParams(window.location.search)
-  const openWindow = (app: string, args: unknown[]) => {
-    const argsStr = args.map(a => `'${String(a).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`).join(',')
-    const script = `service('001-core.layout','open-window')(command('${app}')${argsStr ? ',' + argsStr : ''})`
-    platform.host.execCommand(script, platform)
-  }
+  const decode = (b64: string): unknown => JSON.parse(atob(b64))
   try {
     const appsParam = params.get('apps')
     if (appsParam) {
-      const entries: Array<{ app: string; args?: unknown[] }> = JSON.parse(atob(appsParam))
-      for (const entry of entries) {
-        try { openWindow(entry.app, entry.args ?? []) }
-        catch (e) { console.error('[query-launch]', entry.app, e) }
+      const entries = decode(appsParam)
+      if (!Array.isArray(entries)) throw new Error('?apps= must be a list')
+      for (const entry of entries.slice(0, QUERY_MAX_APPS)) {
+        try { launchFromQuery(entry?.app, entry?.args) }
+        catch (e) { console.error('[query-launch]', e) }
       }
       return
     }
     const appParam = params.get('app')
     if (appParam) {
       const argsParam = params.get('args')
-      const args: unknown[] = argsParam ? JSON.parse(atob(argsParam)) : []
-      openWindow(appParam, args)
+      launchFromQuery(appParam, argsParam ? decode(argsParam) : [])
     }
   } catch (e) { console.error('[query-launch] failed:', e) }
 }
@@ -391,7 +424,7 @@ platform.host.registerCommand('activity.kill', (id: string) => host.killActivity
 // (e.g. from a keybinding via callCommand), they open a new window for themselves.
 platform.host.registerCommand('ui.terminal', (body: any, props: any) => {
     if (!body) {
-        platform.host.execCommand("service('001-core.layout', 'open-window') (command('ui.terminal'))", platform)
+        platform.host.openWindow('ui.terminal')
         return
     }
     platform.host.getCommand('ui.iframe')?.exec(body, props, '/opt/apps/terminal/main.html')
@@ -403,13 +436,15 @@ platform.host.registerCommand('ui.terminal', (body: any, props: any) => {
 // reads it via props.$args[0].
 platform.host.registerCommand('ui.settings', (body: any, props: any, initialSection?: string) => {
     if (!body) {
-        platform.host.execCommand(`service('001-core.layout', 'open-window') (command('ui.settings')${initialSection ? `, '${initialSection}'` : ''})`, platform)
+        platform.host.openWindow('ui.settings', ...(initialSection ? [initialSection] : []))
         return
     }
     platform.host.getCommand('ui.iframe')?.exec(body, props, '/opt/apps/settings/main.html', initialSection)
 }, { icon: 'settings', title: 'Settings' })
 
 // Fallback 'explorer' command, delegating to the compiled ui.file-explorer module.
+// Registered with `fallback: true`: it is the one registration another owner
+// (file-explorer/main.js) may replace (audit KRN-10, decisions.md D9).
 // docs/public/mount/opt/apps/file-explorer/main.js registers the real 'explorer'
 // command when pkg-manager/loader.js loads it as a CORE_APP (prepended, so it takes
 // precedence). This fallback handles two cases:
@@ -418,22 +453,26 @@ platform.host.registerCommand('ui.settings', (body: any, props: any, initialSect
 //    'explorer' always resolves.
 // 2. Called with no args (e.g. from a keybinding or Spotlight) — routes through
 //    open-window so the window manager sets up body/props correctly.
+// Explorers the "Default File Explorer" preference may name. /user-preferences.json
+// is writable by any app, so the preference must not route every folder open to
+// an arbitrary command (audit KRN-10 follow-up from TODO 1D).
+const ALTERNATE_EXPLORERS: ReadonlySet<string> = new Set(['explorer-sifi'])
 platform.host.registerCommand('explorer', (...args: unknown[]) => {
     // Respect Settings > Apps > Default File Explorer preference
     try {
         const prefs = JSON.parse(host.getFS().readFileSync('/user-preferences.json', 'utf-8') as string)
-        if (prefs.default_explorer && prefs.default_explorer !== 'explorer') {
+        if (prefs.default_explorer && ALTERNATE_EXPLORERS.has(prefs.default_explorer)) {
             const alt = platform.host.getCommand(prefs.default_explorer)
             if (alt) { alt.exec(...args); return }
         }
     } catch (_) {}
     if (!args.length || args[0] == null) {
-        platform.host.execCommand("service('001-core.layout', 'open-window') (command('explorer'))", platform)
+        platform.host.openWindow('explorer')
         return
     }
     const fileExplorer = platform.host.getCommand('ui.file-explorer')!
     return fileExplorer.exec(...args)
-}, { icon: 'folder', title: 'Files' })
+}, { icon: 'folder', title: 'Files', fallback: true })
 
 
 platform.register('fs', (cmd: string, ...args: string[]) => {
@@ -456,9 +495,17 @@ platform.register('fs', (cmd: string, ...args: string[]) => {
       }
   }
 })
-platform.register('exec', 
-  (filepath: string, ...args: string[]) => platform.host.exec(platform, filepath, ...args)
-)
+// `service('root', 'exec')(path, ...args)` — the DSL's "run" verb, used by
+// author-written scripts and config (initd.run, /.initd.run, crontab entries,
+// /etc/contextmenu.json). A script given here runs because its author asked
+// for it (decisions.md D9/D10); any other file opens like a double-click.
+platform.register('exec', (filepath: string, ...args: string[]) => {
+  const name = String(filepath ?? '').split('/').pop() ?? ''
+  const isScript = /.\.(js|run)$/i.test(name)
+  return isScript
+    ? platform.host.runFile(platform, filepath, args, { confirm: false })
+    : platform.host.exec(platform, filepath, ...args)
+})
 
 export const windowService = new WindowService(window, window.document.body);
 modules.subscribe((modules) => loadModules(modules));

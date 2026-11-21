@@ -210,16 +210,19 @@ html, body {
     el.className = className + (running ? ' running' : '');
     el.style.width = sz + 'px';
     el.style.height = sz + 'px';
-    el.innerHTML =
-      '<span class="bar"></span>' +
-      '<span class="icon">' + icon + '</span>' +
-      '<span class="tip">' + label + '</span>';
+    // Labels are window titles, which apps set from file names: text only (audit APP-14).
+    [['bar'], ['icon', icon], ['tip', label]].forEach(function(p) {
+      var s = document.createElement('span');
+      s.className = p[0];
+      if (p.length > 1) s.textContent = String(p[1]);
+      el.appendChild(s);
+    });
     el.onclick = onclick;
     return el;
   }
 
   function render() {
-    dock.innerHTML = '';
+    dock.textContent = '';
 
     // Pinned launchers, stacked vertically
     launchItems.forEach(function(item) {

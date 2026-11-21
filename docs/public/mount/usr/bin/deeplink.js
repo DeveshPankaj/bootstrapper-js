@@ -18,16 +18,38 @@
 const CHANNEL = 'wos-deeplink'
 const NAME_RE = /^[A-Za-z0-9._-]{1,64}$/
 const MAX_ARG = 20000
+const INSTALLED_PATH = '/etc/pkg/installed.json'
+const UNINSTALLED_PATH = '/etc/pkg/uninstalled.json'
 const top = window.top
+
+// Command names: letters, digits, '.', '_', '-' — no leading dot and no '..'
+// (audit KRN-12, BOOT-9; same rule as src/kernel/deeplink.ts). App ids follow
+// the kernel's app-id rule (path-policy isValidAppId), since they name
+// /opt/apps/<id>.
+const isCommandName = (s) => typeof s === 'string' && NAME_RE.test(s) && !s.startsWith('.') && !s.includes('..')
+const pathPolicy = platform.host.pathPolicy
+const isAppId = (s) => typeof s === 'string' && (pathPolicy
+  ? pathPolicy.isValidAppId(s)
+  : /^[a-z0-9][a-z0-9._-]{0,63}$/.test(s) && !s.includes('..'))
 
 const parse = (hash) => {
   if (!hash || hash.length < 2) return null
   const params = new URLSearchParams(hash.slice(1))
   const command = params.get('open')
-  if (!command || !NAME_RE.test(command)) return null
+  if (!isCommandName(command)) return null
   const app = params.get('app')
-  return { command, app: app && NAME_RE.test(app) ? app : null, arg: (params.get('arg') || '').slice(0, MAX_ARG) }
+  return { command, app: isAppId(app) ? app : null, arg: (params.get('arg') || '').slice(0, MAX_ARG) }
 }
+
+const readList = (fs, path) => {
+  try { const v = JSON.parse(fs.readFileSync(path, 'utf8') || '[]'); return Array.isArray(v) ? v : [] }
+  catch (_) { return [] }
+}
+// Only an installed, not uninstalled, app may be loaded for a link (audit
+// BOOT-9). Core apps are already loaded by pkg-manager/loader.js before this
+// runs, so the fallback below only ever concerns /etc/pkg/installed.json.
+const isInstalledApp = (fs, id) => !readList(fs, UNINSTALLED_PATH).includes(id)
+  && readList(fs, INSTALLED_PATH).some((pkg) => pkg && pkg.id === id)
 
 const isOptedIn = (cmd) => !!(cmd && cmd.meta && cmd.meta.deepLink === true)
 const hasTarget = (cmd) => {
@@ -45,7 +67,7 @@ if (typeof BroadcastChannel !== 'undefined') {
     if (!msg || typeof msg !== 'object') return
     if (msg.t === 'ack') { claimed.add(msg.id); return }
     if (msg.t !== 'open' || typeof msg.id !== 'string' || typeof msg.command !== 'string' || typeof msg.arg !== 'string') return
-    if (!NAME_RE.test(msg.command)) return
+    if (!isCommandName(msg.command)) return
     const cmd = platform.host.getCommand(msg.command)
     if (!hasTarget(cmd)) return
     // If several tabs could take it, the first to ack wins (small random
@@ -64,9 +86,11 @@ const openLocally = async (link) => {
   const fs = platform.host.getFS()
   let cmd = platform.host.getCommand(link.command)
   if (!cmd && link.app) {
-    // App not installed/loaded in this browser yet: load it from its own dir.
+    // Installed app whose command isn't registered yet: load it from its own dir.
     const mainFile = `/opt/apps/${link.app}/main.js`
-    if (fs.existsSync(mainFile)) {
+    if (!isInstalledApp(fs, link.app)) {
+      console.warn(`[deeplink] app "${link.app}" is not installed — not loading it for this link`)
+    } else if (fs.existsSync(mainFile)) {
       platform._appDir = `/opt/apps/${link.app}`
       try { platform.host.exec(platform, mainFile) } catch (e) { console.warn('[deeplink] loading app failed:', e) }
       finally { delete platform._appDir }

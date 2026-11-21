@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>TypeScript / WebGL IDE</title>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css" integrity="sha384-zaeBlB/vwYsDRSlFajnDd7OydJ0cWk+c2OWybl3eSUf6hW2EbhlCsQPqKr3gkznT" crossorigin="anonymous">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css" integrity="sha384-ccdJwIIg/K0Ab6aXF4MPACh7ckk61tvQFTrfkhXZEALgAETURNZIAuQLcS/aPbrM" crossorigin="anonymous">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{width:100%;height:100%;overflow:hidden;background:#0d1117;color:#e2e8f0;font-family:'JetBrains Mono',ui-monospace,monospace}
@@ -128,7 +128,9 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0d1117;color:#e2e8f
       </div>
       <div id="preview-body">
         <canvas id="canvas-preview"></canvas>
-        <iframe id="iframe-preview" sandbox="allow-scripts allow-same-origin"></iframe>
+        <!-- Project code runs in an opaque sandbox: no allow-same-origin, so it can't reach
+             this page, the OS or its storage (audit APP-12). Logs come back by postMessage. -->
+        <iframe id="iframe-preview" sandbox="allow-scripts"></iframe>
         <div id="console-right">
           <div id="console-lines"></div>
         </div>
@@ -155,15 +157,15 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0d1117;color:#e2e8f
   </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/css/css.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/htmlmixed/htmlmixed.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/typescript/5.3.3/typescript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js" integrity="sha384-ZYmwuq4n2gOcNxMSiJ6jyTj+BbIrilr7p6dlq6q5nmSWKmsH9UU4K1qqjycMkfmR" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js" integrity="sha384-g0o+WW9mdIxA7LaaCKTkRm0M5TVT+Bb4s9eocxPsI2G0Xm0POG9iD6G6qP1IIsfS" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/css/css.min.js" integrity="sha384-fpeIC2FZuPmw7mIsTvgB5BNc8QVxQC/nWg2W+CgPYOAiBiYVuHe2E8HiTWHBMIJQ" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.min.js" integrity="sha384-xPpkMo5nDgD98fIcuRVYhxkZV6/9Y4L8s3p0J5c4MxgJkyKJ8BJr+xfRkq7kn6Tw" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/htmlmixed/htmlmixed.min.js" integrity="sha384-xYIbc5F55vPi7pb/lUnFj3wu24HlpAMZdtBHkNrb2YhPzJV3pX7+eqXT2PXSNMrw" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js" integrity="sha384-o9m634t2Hy35pPNKd9Xe16ntbSw11jCOuKPDrzQGXI8k87L2JZthaA3rwmJjnF7Z" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js" integrity="sha384-LjCI3E8qhhxXZvu7+FCvqx9eZYSowFvuJ7z54KsgI/BDPGKEuysqCg/vYiKHvC4Y" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js" integrity="sha384-69mJoUoPPF/C7qPs6lLjvXvrt6w225+rmxWqGO3a1glVjITdnnwPQOtG9FRTd2Ni" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/typescript/5.3.3/typescript.min.js" integrity="sha384-+TnN9CC4fV0FdxIIC1wjQF0YN5CAfnvN8Sli7TGEgnQisn3sTQRFIM1ejx5h3V7S" crossorigin="anonymous"></script>
 <script>
 // AppSDK bridge
 function sdk(){ return window.AppSDK||{readText:()=>Promise.reject(new Error('SDK not ready')),writeText:()=>Promise.reject(new Error('SDK not ready')),mkdir:()=>Promise.resolve(),list:()=>Promise.resolve([]),exists:()=>Promise.resolve(false),remove:()=>Promise.resolve(),rename:()=>Promise.resolve()}; }
@@ -390,6 +392,8 @@ function ensureMsgHandler(btn){
   if (msgHandlerInstalled) return;
   msgHandlerInstalled = true;
   window.addEventListener('message', function(ev){
+    // only the preview frame may write to this console
+    if(ev.source !== document.getElementById('iframe-preview').contentWindow) return;
     if(!ev.data||typeof ev.data!=='object') return;
     if(ev.data.t==='log'){ log(ev.data.d,'out'); }
     else if(ev.data.t==='err'){ log(ev.data.d,'err'); setStatus('Runtime error','st-err'); }
@@ -640,14 +644,8 @@ function runScript(btn){
   // already CSS-responsive (position:absolute;inset:0;width/height:100%)
   // — so it tracks the real preview area continuously, including later
   // resizes (dragging the panel dividers, resizing the whole window).
-  // BUT: for canvas-only scripts (see usesCanvas below) this iframe is
-  // immediately set to display:none — it's only used as an offscreen
-  // render source that copyFrame() mirrors onto the visible cv canvas —
-  // and a display:none iframe's own window.innerWidth/innerHeight collapse
-  // to 0, which made every canvas-based script draw onto a 0x0 canvas
-  // ("Canvas rendered! W=0 H=0", nothing visible). Fall back to the mirror
-  // canvas's current size (already correct — fitCanvasPreview() just ran
-  // above) whenever the iframe's own window size reads as 0.
+  // The mirror canvas's size (fitCanvasPreview() just ran above) is only a
+  // fallback for the moment the frame's own window size still reads as 0.
   var srcdoc = `<!doctype html><html><head><meta charset="utf-8"><style>
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{width:100%;height:100%;background:#0a0d13;overflow:hidden;font-family:system-ui,sans-serif;color:#e2e8f0}
@@ -680,33 +678,11 @@ ${jsCode}
   var ifr = document.getElementById('iframe-preview');
   ifr.srcdoc = srcdoc;
 
-  var usesCanvas = /getContext\s*\(|WebGLRenderingContext|CanvasRenderingContext/.test(code);
-  var usesDOM = /innerHTML|createElement|getElementById|querySelector/.test(code) && !usesCanvas;
-
-  if (usesDOM){
-    cv.style.display='none';
-    ifr.style.display='block';
-  } else {
-    cv.style.display='block';
-    ifr.style.display='none';
-    // The mirror canvas's own width/height are kept current by the
-    // ResizeObserver in fitCanvasPreview() — drawImage here just scales
-    // whatever the inner canvas currently holds onto it, so both stay
-    // full-size even if the preview panel is resized mid-run.
-    var copyFrame = function(){
-      try {
-        var ifrCv = ifr.contentDocument && ifr.contentDocument.getElementById('preview');
-        if (ifrCv && ifrCv.tagName === 'CANVAS') cv.getContext('2d').drawImage(ifrCv, 0, 0, cv.width, cv.height);
-      } catch(e){}
-    };
-    setTimeout(copyFrame, 300);
-    var frames = 0;
-    var anim = function(){
-      copyFrame();
-      if (frames++ < 300) requestAnimationFrame(anim);
-    };
-    requestAnimationFrame(anim);
-  }
+  // The preview is an opaque sandbox (audit APP-12), so its canvas can't be
+  // mirrored onto #canvas-preview through contentDocument any more: show the
+  // preview frame itself — its own canvas already fills it (fit() above).
+  cv.style.display='none';
+  ifr.style.display='block';
 
   // The 'ready' postMessage from the iframe also resets the button
   // (see ensureMsgHandler) once the sandboxed code actually starts
@@ -1020,48 +996,82 @@ async function openFolder(){
   await loadProjectFromDir(dir.trim().replace(/\/+$/,''));
 }
 
+// Sidebar rows are built as DOM nodes with listeners: project and file names
+// come from the vfs ("Open Folder" opens any folder), so they're never put
+// into markup or inline handlers (audit APP-14).
+function sbEl(tag, cls, text, title){
+  var e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  if (title) e.title = title;
+  return e;
+}
+function sbGroup(label, actionIcon, actionTitle, onAction){
+  var g = sbEl('div', 'sb-group');
+  g.style.marginTop = '8px';
+  g.appendChild(sbEl('span', null, label));
+  var a = sbEl('span', 'sb-action', actionIcon, actionTitle);
+  a.addEventListener('click', onAction);
+  g.appendChild(a);
+  return g;
+}
+function sbItem(icon, name, title, active, onClick){
+  var it = sbEl('div', 'sb-item'+(active?' active':''), null, title);
+  it.appendChild(sbEl('span', 'ic', icon));
+  it.appendChild(sbEl('span', 'nm', name));
+  it.addEventListener('click', onClick);
+  return it;
+}
+
 async function refreshSidebar(){
   var sb = document.getElementById('sb-content');
 
-  var filesHtml = '';
+  var filesFrag = document.createDocumentFragment();
   var fileNames = Object.keys(files);
   if (fileNames.length){
-    filesHtml += '<div class="sb-group" style="margin-top:8px"><span>Files</span><span class="sb-action" onclick="addFileToProject()" title="Add file">＋</span></div>';
+    filesFrag.appendChild(sbGroup('Files', '＋', 'Add file', function(){ addFileToProject(); }));
     fileNames.sort().forEach(function(fn){
-      filesHtml += '<div class="sb-item'+(activeFile===fn?' active':'')+'" data-file="'+fn+'" onclick="switchFile(\''+fn+'\')" ondblclick="renameFile(\''+fn+'\')" title="'+fn+' (double-click to rename)">'
-            + '<span class="ic">'+iconFor(fn)+'</span><span class="nm">'+fn+'</span>'
-            + '<span class="sb-mod-dot'+(isFileModified(fn)?' show':'')+'" title="Modified since last save"></span>'
-            + '<span class="sb-del" onclick="event.stopPropagation();deleteFile(\''+fn+'\')" title="Delete">✕</span></div>';
+      var it = sbItem(iconFor(fn), fn, fn+' (double-click to rename)', activeFile===fn, function(){ switchFile(fn); });
+      it.dataset.file = fn;
+      it.addEventListener('dblclick', function(){ renameFile(fn); });
+      it.appendChild(sbEl('span', 'sb-mod-dot'+(isFileModified(fn)?' show':''), null, 'Modified since last save'));
+      var del = sbEl('span', 'sb-del', '✕', 'Delete');
+      del.addEventListener('click', function(ev){ ev.stopPropagation(); deleteFile(fn); });
+      it.appendChild(del);
+      filesFrag.appendChild(it);
     });
   }
 
-  var startersHtml = '<div class="sb-group" style="margin-top:8px">Starters</div>';
+  var startersFrag = document.createDocumentFragment();
+  var sg = sbEl('div', 'sb-group', 'Starters');
+  sg.style.marginTop = '8px';
+  startersFrag.appendChild(sg);
   STARTERS.forEach(function(st,i){
-    startersHtml += '<div class="sb-item" onclick="loadStarter('+i+')" title="'+st.name+'"><span class="ic">'+st.icon+'</span><span class="nm">'+st.name+'</span></div>';
+    startersFrag.appendChild(sbItem(st.icon, st.name, st.name, false, function(){ loadStarter(i); }));
   });
 
   var projects = await listProjects();
-  var projectsHtml = '<div class="sb-group" style="margin-top:8px"><span>Projects</span><span class="sb-action" onclick="openFolder()" title="Open any folder">📂</span></div>';
-  if (projects.length){
-    projects.forEach(function(n){
-      projectsHtml += '<div class="sb-item'+(projectName()===n?' active':'')+'" onclick="loadProjectFromDir(VFS_BASE+\'/\'+\''+n+'\')" title="'+n+'"><span class="ic">📁</span><span class="nm">'+n+'</span></div>';
-    });
-  }
+  var projectsFrag = document.createDocumentFragment();
+  projectsFrag.appendChild(sbGroup('Projects', '📂', 'Open any folder', function(){ openFolder(); }));
+  projects.forEach(function(n){
+    projectsFrag.appendChild(sbItem('📁', n, n, projectName()===n, function(){ loadProjectFromDir(VFS_BASE+'/'+n); }));
+  });
 
-  var html;
+  sb.textContent = '';
   if (projectDir) {
     // A real project is open — VSCode Explorer order: the open folder's
     // own name as a prominent header, directly followed by its file tree.
     // Starters/other-projects move below, de-emphasized — they're "switch
     // away from this" actions, not what you came here to look at.
-    html = '<div class="sb-project-head" title="'+projectDir+'"><span class="ic">📁</span><span>'+projectName()+'</span></div>'
-         + filesHtml + projectsHtml + startersHtml;
+    var head = sbEl('div', 'sb-project-head', null, projectDir);
+    head.appendChild(sbEl('span', 'ic', '📁'));
+    head.appendChild(sbEl('span', null, projectName()));
+    sb.append(head, filesFrag, projectsFrag, startersFrag);
   } else {
     // No real project yet (a freshly-loaded starter, or an unsaved scratch
     // buffer) — starters are the primary action here, so they lead.
-    html = startersHtml + filesHtml + projectsHtml;
+    sb.append(startersFrag, filesFrag, projectsFrag);
   }
-  sb.innerHTML = html;
 }
 
 // --- Git-lite diff view ---

@@ -196,8 +196,8 @@ input.num{background:#21262d;color:#c9d1d9;border:1px solid #30363d;border-radiu
   </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js" integrity="sha384-CI3ELBVUz9XQO+97x6nwMDPosPR5XvsxW2ua7N1Xeygeh1IxtgqtCkGfQY9WWdHu" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js" integrity="sha384-I+vlbhtggPtDgOcGQ3rwhQl9JEO7qonTByw9baD7Vlc+1bJdn2ucktJAsbo3nmGA" crossorigin="anonymous"></script>
 <script>
 'use strict';
 
@@ -1727,6 +1727,8 @@ window.addEventListener('resize', resizeCanvases);
 
 var tfScript = document.createElement('script');
 tfScript.src = 'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.15.0/dist/tf.min.js';
+tfScript.integrity = 'sha384-h/XNDFVVo8fubLoOyBCXZW8B+OPOs7cpygLoTtS6f8DDTPRPCoFNMaE4JXtqrSWj';
+tfScript.crossOrigin = 'anonymous';
 tfScript.onload = function() {
   tfReady = true;
   clog('TensorFlow.js loaded — DQN ready', 'ok');

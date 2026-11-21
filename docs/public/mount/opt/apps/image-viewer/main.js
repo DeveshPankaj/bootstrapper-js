@@ -22,6 +22,7 @@ const ImageViewer = ({ filePath }) => {
   const imgRef = React.useRef(null);
 
   React.useEffect(() => {
+    if (!filePath) return;   // opened without a file (e.g. App Manager → Open): empty state below
     const ext = getExt(filePath);
     const mime = IMAGE_MIME[ext] || 'application/octet-stream';
     try {
@@ -54,6 +55,14 @@ const ImageViewer = ({ filePath }) => {
     setPan({ x: e.clientX - dragging.startX, y: e.clientY - dragging.startY });
   };
   const onMouseUp = () => setDragging(null);
+
+  if (!filePath) {
+    return (
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%', background:'#111', color:'#888', fontSize:13 }}>
+        No image open — open an image file from Files.
+      </div>
+    );
+  }
 
   const name = filePath.split('/').pop();
 
@@ -105,7 +114,8 @@ const run = (...args) => {
   const [body, props, filePath] = args;
   if (!body) {
     const path = filePath || args[2] || '';
-    platform.host.execCommand(`service('001-core.layout','open-window')(command('ui.imageviewer'),'${path.replace(/'/g,"\\'")}')`, platform);
+    // the path travels as a value, never as DSL source (audit KRN-3)
+    platform.host.openWindow('ui.imageviewer', path);
     return;
   }
   const container = platform.window.document.createElement('div');
@@ -121,4 +131,4 @@ const run = (...args) => {
   props.setWindowView(true);
 };
 
-platform.host.registerCommand('ui.imageviewer', run, { icon: 'image', title: 'Image Viewer', fileExtensions: ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.avif', '.svg'] });
+platform.host.registerCommand('ui.imageviewer', run, { icon: 'image', title: 'Image Viewer', fileExtensions: ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.avif', '.svg', '.ico'] });

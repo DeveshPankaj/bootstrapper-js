@@ -400,24 +400,24 @@
     import { EditorView, keymap, lineNumbers, highlightActiveLine,
              highlightActiveLineGutter, drawSelection, dropCursor,
              rectangularSelection, crosshairCursor, highlightSpecialChars
-           } from 'https://esm.sh/@codemirror/view@6'
-    import { EditorState, Compartment } from 'https://esm.sh/@codemirror/state@6'
-    import { history, defaultKeymap, historyKeymap } from 'https://esm.sh/@codemirror/commands@6'
+           } from 'https://esm.sh/@codemirror/view@6.43.15'
+    import { EditorState, Compartment } from 'https://esm.sh/@codemirror/state@6.7.6'
+    import { history, defaultKeymap, historyKeymap } from 'https://esm.sh/@codemirror/commands@6.11.1'
     import { foldGutter, indentOnInput, syntaxHighlighting,
              defaultHighlightStyle, bracketMatching, foldKeymap
-           } from 'https://esm.sh/@codemirror/language@6'
+           } from 'https://esm.sh/@codemirror/language@6.13.1'
     import { closeBrackets, autocompletion,
              closeBracketsKeymap, completionKeymap
-           } from 'https://esm.sh/@codemirror/autocomplete@6'
-    import { searchKeymap, highlightSelectionMatches } from 'https://esm.sh/@codemirror/search@6'
-    import { javascript } from 'https://esm.sh/@codemirror/lang-javascript@6'
-    import { html as langHtml } from 'https://esm.sh/@codemirror/lang-html@6'
-    import { css as langCss } from 'https://esm.sh/@codemirror/lang-css@6'
-    import { json as langJson } from 'https://esm.sh/@codemirror/lang-json@6'
-    import { python as langPython } from 'https://esm.sh/@codemirror/lang-python@6'
-    import { markdown as langMarkdown } from 'https://esm.sh/@codemirror/lang-markdown@6'
-    import { sql as langSql } from 'https://esm.sh/@codemirror/lang-sql@6'
-    import { oneDark } from 'https://esm.sh/@codemirror/theme-one-dark@6'
+           } from 'https://esm.sh/@codemirror/autocomplete@6.20.4'
+    import { searchKeymap, highlightSelectionMatches } from 'https://esm.sh/@codemirror/search@6.7.2'
+    import { javascript } from 'https://esm.sh/@codemirror/lang-javascript@6.2.5'
+    import { html as langHtml } from 'https://esm.sh/@codemirror/lang-html@6.4.12'
+    import { css as langCss } from 'https://esm.sh/@codemirror/lang-css@6.3.1'
+    import { json as langJson } from 'https://esm.sh/@codemirror/lang-json@6.0.2'
+    import { python as langPython } from 'https://esm.sh/@codemirror/lang-python@6.2.1'
+    import { markdown as langMarkdown } from 'https://esm.sh/@codemirror/lang-markdown@6.5.2'
+    import { sql as langSql } from 'https://esm.sh/@codemirror/lang-sql@6.10.0'
+    import { oneDark } from 'https://esm.sh/@codemirror/theme-one-dark@6.1.3'
 
     const basicSetup = [
       lineNumbers(), highlightActiveLineGutter(), highlightSpecialChars(),
@@ -511,12 +511,24 @@
     // ── Breadcrumb ──
     const renderBreadcrumb = () => {
       const parts = [...parentDirHandles.map(h => h.name), currentDirHandle?.name].filter(Boolean)
-      $('breadcrumb').innerHTML = parts.map((p, i) =>
-        i < parts.length - 1
-          ? `<span class="crumb" data-idx="${i}">${p}</span> /`
-          : `<b>${p}</b>`
-      ).join(' ')
-      $('breadcrumb').querySelectorAll('.crumb').forEach(el => {
+      // folder names come from the real disk (audit APP-14): text only
+      const bc = $('breadcrumb')
+      bc.textContent = ''
+      parts.forEach((p, i) => {
+        if (i > 0) bc.append(' ')
+        if (i < parts.length - 1) {
+          const crumb = document.createElement('span')
+          crumb.className = 'crumb'
+          crumb.dataset.idx = String(i)
+          crumb.textContent = p
+          bc.append(crumb, ' /')
+        } else {
+          const b = document.createElement('b')
+          b.textContent = p
+          bc.append(b)
+        }
+      })
+      bc.querySelectorAll('.crumb').forEach(el => {
         el.addEventListener('click', async () => {
           const idx = parseInt(el.dataset.idx)
           const steps = parentDirHandles.length - idx
@@ -603,7 +615,13 @@
     const makeItem = (icon, name, cls) => {
       const li = document.createElement('li')
       li.className = cls
-      li.innerHTML = `<span class="file-icon">${icon}</span><span class="file-name">${name}</span>`
+      const iconEl = document.createElement('span')
+      iconEl.className = 'file-icon'
+      iconEl.textContent = icon
+      const nameEl = document.createElement('span')
+      nameEl.className = 'file-name'
+      nameEl.textContent = name
+      li.append(iconEl, nameEl)
       return li
     }
 

@@ -20,6 +20,8 @@
 // `deepLink: true` in their registerCommand meta - the URL is untrusted
 // input, so it must not be able to launch arbitrary commands.
 
+import { isValidAppId } from './path-policy'
+
 export const DEEPLINK_CHANNEL = 'wos-deeplink'
 const NAME_RE = /^[A-Za-z0-9._-]{1,64}$/
 const MAX_ARG = 20000
@@ -27,15 +29,24 @@ const SKIP_HANDOFF_KEY = '__wosNoHandoff'
 
 export type DeepLink = { command: string; app: string | null; arg: string }
 
+/**
+ * A command name a link may name: letters, digits, '.', '_', '-', at most 64
+ * characters, no leading dot and no '..' (audit KRN-12, BOOT-9). Keep in sync
+ * with /usr/bin/deeplink.js. App ids follow path-policy's isValidAppId.
+ */
+export function isValidDeepLinkCommand(name: unknown): name is string {
+    return typeof name === 'string' && NAME_RE.test(name) && !name.startsWith('.') && !name.includes('..')
+}
+
 export function parseDeepLink(hash: string): DeepLink | null {
     if (!hash || hash.length < 2) return null
     const params = new URLSearchParams(hash.slice(1))
     const command = params.get('open')
-    if (!command || !NAME_RE.test(command)) return null
+    if (!isValidDeepLinkCommand(command)) return null
     const app = params.get('app')
     return {
         command,
-        app: app && NAME_RE.test(app) ? app : null,
+        app: app && isValidAppId(app) ? app : null,
         arg: (params.get('arg') || '').slice(0, MAX_ARG),
     }
 }

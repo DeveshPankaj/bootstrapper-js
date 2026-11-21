@@ -38,6 +38,12 @@ export class CommandRegistry {
         platformName = 'unknown',
     ): { remove: () => void } {
         const existing = this._commands.getValue().find(x => x.name === name)
+        // Same rule as Host.registerCommand (audit KRN-10): another owner may
+        // replace a name only when the registration it replaces is a fallback.
+        if (existing && existing.servicePlatformName !== platformName && (existing.meta as any)?.fallback !== true) {
+            console.error(`[command-registry] '${name}' belongs to ${existing.servicePlatformName}; ${platformName} can't replace it`)
+            return { remove: () => {} }
+        }
         if (existing) {
             console.warn(`[command-registry] '${name}' already registered — new registration takes precedence`)
         }

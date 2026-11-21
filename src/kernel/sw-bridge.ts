@@ -17,29 +17,34 @@ export function initSwBridge(fs: typeof _fs) {
                     if (worker.state === 'activated') location.reload()
                 })
             }
+            // Requests come only from our own service worker (this container
+            // receives nothing else). The SW sends a normalised path and a
+            // random request id, and accepts the reply only from this tab
+            // (src/sw.ts, audit KRN-8). The reply goes back to the worker
+            // that asked, even while a newer one is taking over.
             navigator.serviceWorker.addEventListener('message', event => {
                 const { type, payload } = event.data ?? {}
                 if (type !== 'fs/file-request') return
                 const { path, request_id } = payload ?? {}
+                if (typeof path !== 'string' || typeof request_id !== 'string') return
 
-                if (!window.fs) {
-                    navigator.serviceWorker.controller?.postMessage({
-                        type: 'fs/reply',
-                        payload: { data: 'File system not mounted!', error: 'File system not mounted!', request_id },
-                    })
-                    return
+                const sw = (event.source as ServiceWorker | null) ?? navigator.serviceWorker.controller
+                const reply = (data: unknown, error: string) => {
+                    try { sw?.postMessage({ type: 'fs/reply', payload: { data, error, request_id } }) } catch (_) {}
                 }
 
-                if (fs.existsSync(path)) {
-                    navigator.serviceWorker.controller?.postMessage({
-                        type: 'fs/reply',
-                        payload: { data: fs.readFileSync(path), error: '', request_id },
-                    })
-                } else {
-                    navigator.serviceWorker.controller?.postMessage({
-                        type: 'fs/reply',
-                        payload: { data: `File not found! ${path}`, error: 'File not found!', request_id },
-                    })
+                if (!window.fs) {
+                    reply('File system not mounted!', 'File system not mounted!')
+                    return
+                }
+                try {
+                    if (fs.existsSync(path) && !fs.statSync(path).isDirectory()) {
+                        reply(fs.readFileSync(path), '')
+                    } else {
+                        reply(`File not found! ${path}`, 'File not found!')
+                    }
+                } catch (err) {
+                    reply(`File not readable! ${path}`, String(err?.code || err?.message || err))
                 }
             })
         })

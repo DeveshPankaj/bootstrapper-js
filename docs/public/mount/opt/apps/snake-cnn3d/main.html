@@ -753,7 +753,10 @@ async function loadCheckpoint() {
   try { cp = JSON.parse(raw); } catch (e) { return false; }
   if (!cp || !Array.isArray(cp.layers) || !Array.isArray(cp.genome)) return false;
 
-  layers = cp.layers;
+  // the checkpoint is a file: its layer sizes are rendered into inputs, so numbers only
+  layers = cp.layers.map(l => (l && l.type === 'conv3d')
+    ? { ...l, type: 'conv3d', filters: Number(l.filters) || 1, kernel: Number(l.kernel) || 1 }
+    : { ...l, type: 'dense', units: Number(l && l.units) || 1 });
   renderLayers();
 
   const s = cp.settings || {};

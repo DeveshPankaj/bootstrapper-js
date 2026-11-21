@@ -21,7 +21,7 @@
       /* margin: 0 auto; Center horizontally */
     }
   </style>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.1.0/github-markdown.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.1.0/github-markdown.min.css" integrity="sha384-PhArtbfN++em6NjYVX3d0xH3nLY35rxDgFxlfrXKsICeXxItBHCcCkg/Ktxii4xc" crossorigin="anonymous">
   
   <div id='react-root' class="markdown-body"></div>
   <script type="module">
@@ -55,8 +55,8 @@
     // Import React and ReactDOM
     // import React from 'https://esm.sh/stable/react@18.2.0/es2022/react.mjs';
     // import ReactDOM from 'https://esm.sh/stable/react-dom@18.2.0/es2022/react-dom.mjs';
-    import Markdown from 'https://esm.sh/react-markdown@latest?bundle';
-    import remarkGfm from 'https://esm.sh/remark-gfm';
+    import Markdown from 'https://esm.sh/react-markdown@10.1.0?bundle';
+    import remarkGfm from 'https://esm.sh/remark-gfm@4.0.1';
     
     const content = fs.readFileSync(props.$args[0]).toString();
     // console.log(content)

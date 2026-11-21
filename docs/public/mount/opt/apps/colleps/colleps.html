@@ -316,12 +316,17 @@ function genTileId() { return 'tile_' + Date.now().toString(36) + Math.random().
 
 function selectTile(id) { selectedTileId = id; renderTileList(); renderEditor(); }
 
+// Tile sets are loaded from vfs JSON files: every value is escaped (audit APP-14).
+function escAttr(v) {
+  return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
 function renderTileList() {
   const list = document.getElementById('tile-list');
   list.innerHTML = tiles.map(t => `
-    <div class="tile-chip${t.id === selectedTileId ? ' sel' : ''}" data-id="${t.id}">
-      <span class="tile-swatch" style="background:${t.color}"></span>
-      <span class="tile-chip-name" title="${t.name}">${t.name}</span>
+    <div class="tile-chip${t.id === selectedTileId ? ' sel' : ''}" data-id="${escAttr(t.id)}">
+      <span class="tile-swatch" style="background:${escAttr(t.color)}"></span>
+      <span class="tile-chip-name" title="${escAttr(t.name)}">${escAttr(t.name)}</span>
     </div>`).join('');
   list.querySelectorAll('.tile-chip').forEach(el => el.addEventListener('click', () => selectTile(el.dataset.id)));
 }
@@ -345,22 +350,22 @@ function renderEditor() {
   slot.innerHTML = `
     <div class="editor">
       <div class="sidebar-hd">Edit Tile</div>
-      <div class="row"><label>Name</label><input type="text" id="ed-name" value="${t.name.replace(/"/g,'&quot;')}"></div>
-      <div class="row"><label>Color</label><input type="color" id="ed-color" value="${t.color}"><label style="width:auto;margin-left:8px">Weight</label><input type="number" id="ed-weight" min="0.1" step="0.5" value="${t.weight}"></div>
+      <div class="row"><label>Name</label><input type="text" id="ed-name" value="${escAttr(t.name)}"></div>
+      <div class="row"><label>Color</label><input type="color" id="ed-color" value="${escAttr(t.color)}"><label style="width:auto;margin-left:8px">Weight</label><input type="number" id="ed-weight" min="0.1" step="0.5" value="${escAttr(t.weight)}"></div>
       <div class="row chk"><input type="checkbox" id="ed-rotate" ${t.rotate ? 'checked' : ''}><label for="ed-rotate">Rotatable (4-way, 2D/3D horizontal)</label></div>
       <div class="row chk"><input type="checkbox" id="ed-solid" ${t.solid !== false ? 'checked' : ''}><label for="ed-solid">Solid block in 3D view</label></div>
       <div class="compass-lbl">Horizontal sockets</div>
       <div class="compass">
-        <input class="n" id="ed-N" value="${t.sockets.N}">
-        <input class="w" id="ed-W" value="${t.sockets.W}">
+        <input class="n" id="ed-N" value="${escAttr(t.sockets.N)}">
+        <input class="w" id="ed-W" value="${escAttr(t.sockets.W)}">
         <div class="c">tile</div>
-        <input class="e" id="ed-E" value="${t.sockets.E}">
-        <input class="s" id="ed-S" value="${t.sockets.S}">
+        <input class="e" id="ed-E" value="${escAttr(t.sockets.E)}">
+        <input class="s" id="ed-S" value="${escAttr(t.sockets.S)}">
       </div>
       <div class="compass-lbl">Vertical sockets</div>
       <div class="vert-row">
-        <div><span>Up</span><input id="ed-U" value="${t.sockets.U}"></div>
-        <div><span>Down</span><input id="ed-D" value="${t.sockets.D}"></div>
+        <div><span>Up</span><input id="ed-U" value="${escAttr(t.sockets.U)}"></div>
+        <div><span>Down</span><input id="ed-D" value="${escAttr(t.sockets.D)}"></div>
       </div>
       <div class="editor-actions">
         <button class="tb-btn" id="ed-delete">🗑 Delete</button>

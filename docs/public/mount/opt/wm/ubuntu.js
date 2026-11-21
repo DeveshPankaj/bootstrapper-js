@@ -1,6 +1,6 @@
 // GNOME/Ubuntu-style window header: app icon + title left, circular buttons right.
-// Drop this in /opt/wm/ubuntu.js and set windowManager:"ubuntu" in
-// /etc/managers.json to activate.
+// Ships in /opt/wm/ubuntu.js (runs from the static copy); select it with
+// windowManager:"ubuntu" in /etc/managers.json (Settings → Managers).
 
 export const createHeader = ({ command, settings, close, minimize, fullscreen }) => {
     

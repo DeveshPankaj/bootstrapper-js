@@ -852,12 +852,15 @@ function parseJSONDataset(text) {
 // here. Same cdnjs version as sqlite-browser/sqlite-charts, for consistency.
 const SQL_JS_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js';
 const SQL_WASM_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.wasm';
+const SQL_JS_SRI = 'sha384-8D3Rsfo535FqoC1pHCCQMrNf75UgzyoG/HQm9zOzITRrz3QKzecc2E7JXKGCXoWu'; // the .wasm is fetched by sql.js itself (no SRI possible)
 let sqlJsPromise = null;
 function loadSqlJs() {
   if (sqlJsPromise) return sqlJsPromise;
   sqlJsPromise = new Promise((resolve, reject) => {
     const script = document.createElement('script');
     script.src = SQL_JS_CDN;
+    script.integrity = SQL_JS_SRI;
+    script.crossOrigin = 'anonymous';
     script.onload = () => { window.initSqlJs({ locateFile: () => SQL_WASM_CDN }).then(resolve).catch(reject); };
     script.onerror = () => reject(new Error('Failed to load sql.js'));
     document.head.appendChild(script);
@@ -1168,14 +1171,15 @@ function anyColumnOfType(type) { return Object.values(dsColumnConfig).some(c => 
 
 function renderDatasetModal() {
   const { columns } = dsParsed;
-  let html = `<div class="dsHint">${dsParsed.__sourceLabel}${dsParsed.table ? ` — table "${dsParsed.table}"${dsParsed.tableCount > 1 ? ` (of ${dsParsed.tableCount}, first one used)` : ''}` : ''} — ${dsParsed.records.length} row(s), ${columns.length} column(s). Pick exactly one Output column and at least one Input column.</div>`;
+  // file / table / column names come from the uploaded dataset (audit APP-14): escaped
+  let html = `<div class="dsHint">${escapeHtml(dsParsed.__sourceLabel)}${dsParsed.table ? ` — table "${escapeHtml(dsParsed.table)}"${dsParsed.tableCount > 1 ? ` (of ${dsParsed.tableCount}, first one used)` : ''}` : ''} — ${dsParsed.records.length} row(s), ${columns.length} column(s). Pick exactly one Output column and at least one Input column.</div>`;
   html += `<div class="dsSection"><h4>Columns</h4>`;
   for (const col of columns) {
     const cfg = dsColumnConfig[col];
     const typeOptions = cfg.role === 'output'
       ? ['number', 'class', 'text', 'image']
       : ['number', 'text', 'image'];
-    html += `<div class="dsColRow" data-col="${col}">
+    html += `<div class="dsColRow" data-col="${escapeHtml(col)}">
       <span class="dsColName" title="${escapeHtml(col)}">${escapeHtml(col)}</span>
       <span class="dsColSample" title="${escapeHtml(sampleValuesFor(col))}">${escapeHtml(sampleValuesFor(col))}</span>
       <select class="dsRole">

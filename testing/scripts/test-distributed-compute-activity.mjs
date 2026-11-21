@@ -42,6 +42,8 @@ const dumpTerminalBuffer = (frame) => frame.evaluate(() => {
 
 const browser = await chromium.launch();
 const pA = await (await browser.newContext()).newPage(), pB = await (await browser.newContext()).newPage();
+// Joining a group a peer creates needs the user's OK (audit NET-11) — accept it.
+pB.on('dialog', (d) => d.accept());
 const errs = []; pA.on('pageerror', e => errs.push('A ' + e.message)); pB.on('pageerror', e => errs.push('B ' + e.message));
 await boot(pA);
 await openWindow(pA, 'ui.webrtc');
@@ -68,6 +70,8 @@ const dcA = await appFrame(pA, 'distributed-compute/main.html');
 const dcB = await appFrame(pB, 'distributed-compute/main.html');
 await waitFor(() => dcA.evaluate(() => window.__distComputeReady === true));
 await waitFor(() => dcB.evaluate(() => window.__distComputeReady === true));
+// Bob answers other peers' tasks only for groups he opted in to (audit NET-1) — opt in.
+check('Bob opts in to running tasks for the group', await waitFor(() => dcB.evaluate((g) => window.__distComputeSetAccept(g, true), gid), 8000));
 
 // --- Layout fix sanity checks -------------------------------------------------
 const layout = await dcB.evaluate(() => {

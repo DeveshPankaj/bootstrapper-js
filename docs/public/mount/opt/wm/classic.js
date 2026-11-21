@@ -1,7 +1,8 @@
 // macOS-style window header: traffic-light buttons left, centred title.
-// Drop this in /opt/wm/classic.js and set windowManager:"classic" in
-// /etc/managers.json to activate. Only exports createHeader — everything
-// else (setupWindow, readSettings, snap zones) comes from /opt/window-manager.js.
+// Ships in /opt/wm/classic.js (runs from the static copy); select it with
+// windowManager:"classic" in /etc/managers.json (Settings → Managers).
+// Only exports createHeader — everything else (setupWindow, readSettings,
+// snap zones) comes from /opt/window-manager.js.
 
 export const createHeader = ({ command, settings, close, minimize, fullscreen }) => {
     

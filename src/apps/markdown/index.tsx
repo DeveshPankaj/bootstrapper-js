@@ -1,6 +1,7 @@
 import { Platform, UICallbackProps } from "@shared/index";
 import React from "react";
 import { createRoot } from "react-dom/client";
+import { parseMarkdown } from "./markdown";
 
 const platform: Platform = window.platform;
 
@@ -48,67 +49,12 @@ platform.host.registerCommand('ui.markdown', (body: HTMLBodyElement, props: UICa
     }
 
     subscriptions.push({ unsubscribe: () => { root.unmount(); container.remove() } })
-}, { icon: 'description', title: 'Markdown', fullScreen: false, fileExtensions: ['.md'] })
-
-
-function parseMarkdown(src: string): string {
-    let html = src
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-
-    html = html.replace(/^```(\w*)\n([\s\S]*?)^```/gm, (_m, lang, code) =>
-        `<pre><code class="lang-${lang}">${code.trim()}</code></pre>`)
-
-    html = html.replace(/`([^`\n]+)`/g, '<code>$1</code>')
-
-    html = html.replace(/^######\s+(.+)$/gm, '<h6>$1</h6>')
-    html = html.replace(/^#####\s+(.+)$/gm, '<h5>$1</h5>')
-    html = html.replace(/^####\s+(.+)$/gm, '<h4>$1</h4>')
-    html = html.replace(/^###\s+(.+)$/gm, '<h3>$1</h3>')
-    html = html.replace(/^##\s+(.+)$/gm, '<h2>$1</h2>')
-    html = html.replace(/^#\s+(.+)$/gm, '<h1>$1</h1>')
-
-    html = html.replace(/^---$/gm, '<hr>')
-
-    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    html = html.replace(/__(.+?)__/g, '<strong>$1</strong>')
-    html = html.replace(/\*(.+?)\*/g, '<em>$1</em>')
-    html = html.replace(/_(.+?)_/g, '<em>$1</em>')
-    html = html.replace(/~~(.+?)~~/g, '<del>$1</del>')
-
-    html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img alt="$1" src="$2" style="max-width:100%">')
-    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
-
-    html = html.replace(/^(\s*)[-*]\s+(.+)$/gm, '$1<li>$2</li>')
-    html = html.replace(/^(\s*)\d+\.\s+(.+)$/gm, '$1<li>$2</li>')
-    html = html.replace(/((?:^<li>.*<\/li>\n?)+)/gm, '<ul>$1</ul>')
-
-    html = html.replace(/^&gt;\s?(.+)$/gm, '<blockquote>$1</blockquote>')
-    html = html.replace(/<\/blockquote>\n<blockquote>/g, '\n')
-
-    const lines = html.split('\n')
-    const result: string[] = []
-    let inParagraph = false
-    for (const line of lines) {
-        const trimmed = line.trim()
-        const isBlock = /^<(h[1-6]|pre|ul|ol|li|hr|blockquote|div|table)/.test(trimmed)
-        const isClosingBlock = /^<\/(ul|ol|pre|blockquote|div|table)/.test(trimmed)
-        if (!trimmed) {
-            if (inParagraph) { result.push('</p>'); inParagraph = false }
-            result.push('')
-        } else if (isBlock || isClosingBlock) {
-            if (inParagraph) { result.push('</p>'); inParagraph = false }
-            result.push(line)
-        } else {
-            if (!inParagraph) { result.push('<p>'); inParagraph = true }
-            result.push(line)
-        }
-    }
-    if (inParagraph) result.push('</p>')
-
-    return result.join('\n')
-}
+}, {
+    icon: 'description', title: 'Markdown', fullScreen: false, fileExtensions: ['.md'],
+    // The built-in viewer: the Markdown app from the registry (markdown-reader,
+    // commandName ui.markdown) may replace it when the user installs it (KRN-10).
+    fallback: true,
+})
 
 
 const MarkdownViewer = ({ filePath, props }: { filePath?: string, props: UICallbackProps }) => {
@@ -131,10 +77,7 @@ const MarkdownViewer = ({ filePath, props }: { filePath?: string, props: UICallb
             icon: 'edit_note',
             title: 'Edit in Notepad',
             onClick: () => {
-                platform.host.execCommand(
-                    `service('001-core.layout', 'open-window') (command('ui.notepad'), '${filePath}')`,
-                    platform
-                )
+                if (filePath) platform.host.openWindow('ui.notepad', filePath)
             }
         })
         return () => remove()

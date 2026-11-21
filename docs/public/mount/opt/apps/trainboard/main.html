@@ -150,7 +150,7 @@ function renderChart(metric, seriesByRun) {
     }
 
     const item = document.createElement('span');
-    item.innerHTML = `<span class="swatch" style="background:${color}"></span>${run}`;
+    item.append(swatch(color), run);
     legend.appendChild(item);
   }
 
@@ -159,11 +159,31 @@ function renderChart(metric, seriesByRun) {
   return card;
 }
 
-async function readRows() {
+// The log is a shared file any training app appends to (audit APP-10): only rows
+// whose run and metric are plain names and whose step/value are numbers are shown,
+// and everything from it is rendered as text.
+const NAME_RE = /^[\w.-]{1,64}$/;
+
+function swatch(color) {
+  const s = document.createElement('span');
+  s.className = 'swatch';
+  s.style.background = color;
+  return s;
+}
+
+async function readRawRows() {
   const text = await AppSDK.readText(LOG_PATH);
   return text.split('\n').filter(Boolean).map(line => {
     try { return JSON.parse(line); } catch (_) { return null; }
   }).filter(Boolean);
+}
+
+async function readRows() {
+  return (await readRawRows())
+    .filter(r => r && typeof r.run === 'string' && NAME_RE.test(r.run)
+      && typeof r.metric === 'string' && NAME_RE.test(r.metric)
+      && Number.isFinite(Number(r.step)) && Number.isFinite(Number(r.value)))
+    .map(r => ({ run: r.run, metric: r.metric, step: Number(r.step), value: Number(r.value) }));
 }
 
 async function writeRows(rows) {
@@ -180,8 +200,8 @@ async function writeRows(rows) {
 async function deleteRun(runId) {
   if (!confirm(`Delete all logged data for run "${runId}"? This cannot be undone.`)) return;
   try {
-    const rows = await readRows();
-    await writeRows(rows.filter(r => r.run !== runId));
+    const rows = await readRawRows();
+    await writeRows(rows.filter(r => !r || r.run !== runId));
     refresh();
   } catch (err) {
     document.getElementById('status').textContent = 'Delete failed: ' + ((err && err.message) || err);
@@ -211,7 +231,7 @@ function renderRuns(rows) {
   for (const runId of runIds) {
     const pill = document.createElement('span');
     pill.className = 'run-pill';
-    pill.innerHTML = `<span class="swatch" style="background:${colorFor(runId)}"></span>${runId}`;
+    pill.append(swatch(colorFor(runId)), runId);
     const del = document.createElement('button');
     del.textContent = '✕';
     del.title = `Delete "${runId}"`;
@@ -234,9 +254,10 @@ async function refresh() {
       return;
     }
 
-    const byMetric = {};
+    // null-prototype maps: names like "__proto__" are valid run/metric names
+    const byMetric = Object.create(null);
     for (const row of rows) {
-      byMetric[row.metric] ??= {};
+      byMetric[row.metric] ??= Object.create(null);
       (byMetric[row.metric][row.run] ??= []).push({ step: row.step, value: row.value });
     }
 

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <title>Distributed Compute</title>
-<link rel="stylesheet" href="https://unpkg.com/codemirror@5.65.16/lib/codemirror.css">
+<link rel="stylesheet" href="https://unpkg.com/codemirror@5.65.16/lib/codemirror.css" integrity="sha384-bsaAhvdduZPAwUb7RRLRvDgtEtOsggrgjkr/EjPO1i/vdoi+DmdLaG79UOt6M5hD" crossorigin="anonymous">
 <style>
   :root {
     --bg: #141517;
@@ -81,6 +81,11 @@
   .status-done { color: #06210f; background: var(--ok); }
   .status-timeout, .status-failed { color: #2b0707; background: var(--danger); }
 
+  #accept-list { display: flex; flex-direction: column; gap: 4px; }
+  .accept-row { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 6px; background: var(--surface2); font-size: 12px; cursor: pointer; }
+  .accept-row input { flex-shrink: 0; accent-color: var(--accent); }
+  .accept-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .accept-hint { font-size: 11px; color: var(--text-dim); line-height: 1.35; margin-top: 2px; }
   #activity-list { display: flex; flex-direction: column; gap: 4px; }
   .activity-empty { font-size: 11.5px; color: var(--text-dim); font-style: italic; }
   .activity-row { display: flex; align-items: center; gap: 6px; padding: 4px 5px; font-size: 11px; border-radius: 4px; background: var(--surface2); }
@@ -115,6 +120,10 @@
         <div id="roster-list"></div>
       </div>
       <div class="nav-section">
+        <h2>Run tasks for others</h2>
+        <div id="accept-list"></div>
+      </div>
+      <div class="nav-section">
         <h2>Worker Activity</h2>
         <div id="activity-list"></div>
       </div>
@@ -145,8 +154,8 @@
   </div>
 </div>
 
-<script src="https://unpkg.com/codemirror@5.65.16/lib/codemirror.js"></script>
-<script src="https://unpkg.com/codemirror@5.65.16/mode/javascript/javascript.js"></script>
+<script src="https://unpkg.com/codemirror@5.65.16/lib/codemirror.js" integrity="sha384-/WlgLpnUCi+5eS6SnLPKTwRY0l8X4TxBIroMKS0KpFjlFoST+ZbSMKqTpgS24m8i" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/codemirror@5.65.16/mode/javascript/javascript.js" integrity="sha384-UEBcG5Bts/NmkO8UcF+Jq5qLb7Z1SVsz66bvds73oF8/I6p33YGu3l9bgAs27nNj" crossorigin="anonymous"></script>
 <script type="module" src="./ui/app.js"></script>
 </body>
 </html>

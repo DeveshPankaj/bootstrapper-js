@@ -19,3 +19,4 @@ testing/screenshots/
 # outbound network relay (see relay/README.md); a local dev tool, not
 # something meant to ship with the publicly-hosted app.
 relay/
+testing/**/*.log

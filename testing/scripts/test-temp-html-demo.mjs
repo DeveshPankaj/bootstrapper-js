@@ -10,10 +10,11 @@ let failed = 0;
 const check = (n, ok, x = '') => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${n}${x ? '  — ' + x : ''}`); if (!ok) failed++; };
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 async function waitFor(fn, ms = 20000) { const t0 = Date.now(); while (Date.now() - t0 < ms) { try { if (await fn()) return true; } catch (_) {} await sleep(300); } return false; }
-async function appFrame(page, urlPart, timeout = 30000) {
+// The demo runs in an opaque srcdoc sandbox (ui.sandboxed-app), so find its frame by content.
+async function appFrame(page, text, timeout = 30000) {
   const t0 = Date.now();
-  while (Date.now() - t0 < timeout) { for (const fr of page.frames()) { try { if (fr.url().includes(urlPart) && await fr.evaluate(() => true).catch(() => false)) return fr; } catch (_) {} } await sleep(400); }
-  throw new Error('frame not found: ' + urlPart);
+  while (Date.now() - t0 < timeout) { for (const fr of page.frames()) { try { if (await fr.evaluate(t => !!document.body && document.body.textContent.includes(t), text).catch(() => false)) return fr; } catch (_) {} } await sleep(400); }
+  throw new Error('frame not found: ' + text);
 }
 
 const browser = await chromium.launch();
@@ -23,12 +24,11 @@ const errs = []; page.on('pageerror', e => errs.push(e.message));
 await page.goto(URL); await page.waitForTimeout(3000); await page.reload(); await page.waitForTimeout(3000); await page.reload(); await page.waitForTimeout(6000);
 await waitFor(() => page.evaluate(() => !!window.platform?.host?.getCommand('ui.notepad')));
 
-// Open temp.html the same way the file explorer would (extension -> app via host.exec).
-await page.evaluate(() => {
-  window.platform.host.execCommand(`service('001-core.layout', 'open-window') (command('ui.iframe'), '/home/user1/projects/temp.html')`, window.platform);
-});
+// Open temp.html the same way the file explorer does (host.exec → open policy →
+// ui.sandboxed-app, an opaque sandbox with the window.ipc SDK).
+await page.evaluate(() => window.platform.host.exec(window.platform, '/home/user1/projects/temp.html'));
 await page.waitForTimeout(2000);
-const frame = await appFrame(page, 'projects/temp.html');
+const frame = await appFrame(page, 'Live React Playground');
 
 check('card UI renders with the eyebrow label', await frame.locator('text=Live React Playground').count() > 0);
 check('header greeting renders', await frame.locator('h3:has-text("Babel and React")').count() > 0);
@@ -69,10 +69,9 @@ await page.waitForTimeout(300);
 const afterHeaderColor = await frame.locator('h3').evaluate(el => getComputedStyle(el).color);
 check('changing the text color picker actually recolors the header text', afterHeaderColor === 'rgb(0, 255, 136)', afterHeaderColor);
 
-// The "edit this file" link still opens temp.js in Notepad.
+// The "edit this file" link asks the OS (sandbox SDK ipc.editor.open) to open temp.js in Notepad.
 await frame.locator('.edit-link').click();
-await page.waitForTimeout(1500);
-const notepadOpened = await waitFor(() => page.evaluate(() => [...document.querySelectorAll('.window')].some(w => w.textContent.includes('temp.js'))), 8000);
+const notepadOpened = await waitFor(() => page.evaluate(() => [...document.querySelectorAll('.window[data-name="ui.notepad"]')].length > 0), 8000);
 check('clicking the edit link opens temp.js in Notepad', notepadOpened);
 
 await page.screenshot({ path: `${SHOT}/temp-html-demo-enhanced.png` });

@@ -1,6 +1,6 @@
 // Glass/frosted window header: translucent blur, minimal controls.
-// Drop this in /opt/wm/glass.js and set windowManager:"glass" in
-// /etc/managers.json to activate.
+// Ships in /opt/wm/glass.js (runs from the static copy); select it with
+// windowManager:"glass" in /etc/managers.json (Settings → Managers).
 
 export const createContainer = ({ command, settings }) => {
     

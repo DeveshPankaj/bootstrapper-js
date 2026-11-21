@@ -353,7 +353,7 @@ html, body { margin: 0; padding: 0; height: 100%; background: #fff; }
 
 const run = (body, winApi) => {
   if (!body) {
-    platform.host.execCommand("service('001-core.layout','open-window')(command('ui.task-manager'))", platform);
+    platform.host.openWindow('ui.task-manager');
     return;
   }
   winApi.setTitle('Task Manager');

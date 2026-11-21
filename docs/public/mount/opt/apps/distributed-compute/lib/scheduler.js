@@ -5,14 +5,18 @@
 // fallback, no mesh needed at all) or many (real distributed dispatch over
 // the mesh bridge).
 //
-// Also runs the stateless "worker responder" side of the protocol: any peer
-// with this app open answers `dc-task` messages addressed to it (via
-// task-runtime.js) regardless of whether it is itself currently coordinating
-// a job — every open window is a potential worker for anyone else's job.
+// Also runs the "worker responder" side of the protocol: answering `dc-task`
+// messages addressed to this peer. A task is code written by ANOTHER peer, so
+// (audit NET-1) the responder refuses every task unless `opts.acceptTask(gid,
+// fromPeerId)` says this group was opted in, and runs accepted tasks only through
+// `opts.runInWorker` — in the app, worker-task-runtime.js's opaque-origin sandbox.
+// There is no in-realm fallback: without a runner, incoming tasks are refused.
 import { runTask } from './task-runtime.js';
 
 const MSG_TASK = 'dc-task';
 const MSG_RESULT = 'dc-result';
+const MAX_TASK_ID_LEN = 64;
+const MAX_CONCURRENT_INCOMING = 4;   // sandboxed tasks running here for other peers at once
 
 function randomId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -24,22 +28,26 @@ export class Scheduler {
   // visible to this app's own "Worker Activity" panel, Task Manager, and the
   // `activities.run` CLI command. Omitted in unit tests that only need the
   // dispatch/combine logic — activity tracking is then simply skipped.
-  // opts.runInWorker (optional) — (source, args) => { promise, kill() },
-  // typically `runTaskInWorker` from worker-task-runtime.js. When given, the
-  // RESPONDER side (answering another peer's dc-task) executes inside a real
-  // Worker instead of the default synchronous `runTask`, which is what makes
-  // `activity.onKill` able to genuinely interrupt an in-flight task instead of
-  // only marking it cancelled while it keeps running. Local self-dispatch
-  // (this peer working on its own job) and the combine step are unaffected —
-  // they keep using synchronous `runTask` directly, since they already have
-  // UI feedback via the progress panel.
+  // opts.runInWorker — (source, args, { timeoutMs }) => { promise, kill() },
+  // in the app `createSandboxRunner().run` from worker-task-runtime.js. The
+  // RESPONDER side (answering another peer's dc-task) executes ONLY through it —
+  // an isolated Worker that `activity.onKill` can genuinely interrupt. Without
+  // it, incoming tasks are refused. Local self-dispatch (this peer working on its
+  // own job) and the combine step run the user's own code and keep using
+  // synchronous `runTask` directly.
+  // opts.acceptTask (optional) — (gid, fromPeerId, fromName) => boolean, the
+  // per-group opt-in. Default: refuse everything (the responder is off).
+  // opts.onRefused (optional) — (gid, fromPeerId, fromName, reason) => void,
+  // e.g. to tell the user a group's task was refused.
   constructor(mesh, opts = {}) {
     this.mesh = mesh;
     this.myId = opts.myId || 'self';
-    this._pending = new Map(); // taskId -> { resolve }
+    this._pending = new Map(); // taskId -> { workerId, resolve }
     this._sub = null;
     this._host = opts.host || null;
-    this._runInWorker = opts.runInWorker || null;
+    this._runInWorker = typeof opts.runInWorker === 'function' ? opts.runInWorker : null;
+    this._acceptTask = typeof opts.acceptTask === 'function' ? opts.acceptTask : () => false;
+    this._onRefused = typeof opts.onRefused === 'function' ? opts.onRefused : null;
     // Local, per-instance record of this scheduler's own worker-task activity
     // (id -> activity-like object), independent of `this._host`'s GLOBAL,
     // cross-window registry. The app's own "Worker Activity" panel reads this
@@ -62,31 +70,42 @@ export class Scheduler {
     this._sub = this.mesh.onMessage((gid, fromPeerId, fromName, msg) => {
       if (!msg || typeof msg !== 'object') return;
       if (msg.type === MSG_TASK && msg.to === this.myId) {
+        if (typeof msg.taskId !== 'string' || !msg.taskId || msg.taskId.length > MAX_TASK_ID_LEN) return;
         this._handleIncomingTask(gid, fromPeerId, fromName, msg);
       } else if (msg.type === MSG_RESULT && msg.to === this.myId) {
         const pending = this._pending.get(msg.taskId);
-        if (pending) {
+        // Only the worker the chunk was sent to may answer it (every group member
+        // sees every dc-task, so anyone else could otherwise forge the result).
+        if (pending && pending.workerId === fromPeerId) {
           this._pending.delete(msg.taskId);
-          pending.resolve({ ok: msg.ok, result: msg.result, error: msg.error, fromPeerId });
+          pending.resolve({ ok: msg.ok === true, result: msg.result, error: msg.error == null ? undefined : String(msg.error).slice(0, 500), fromPeerId });
         }
       }
     });
   }
 
   // Runs an incoming dc-task (answering another peer's job) and replies with
-  // dc-result — via a Worker (killable) when `this._runInWorker` is set,
-  // otherwise the original synchronous `runTask` (matches pre-existing
-  // behavior exactly when no worker/host is configured, e.g. in unit tests).
-  // Registers an activity (if `this._host` is set) so the in-flight task is
-  // visible/killable from the app UI and CLI, left up for a few seconds after
-  // completion so a listing has a chance to see the final state.
+  // dc-result. Refused (with a dc-result error, so the dispatcher moves on at
+  // once instead of waiting for its timeout) unless the group is opted in and a
+  // sandboxed runner is configured. Registers an activity (if `this._host` is
+  // set) so the in-flight task is visible/killable from the app UI and CLI, left
+  // up for a few seconds after completion so a listing can see the final state.
   _handleIncomingTask(gid, fromPeerId, fromName, msg) {
-    const useWorker = typeof this._runInWorker === 'function';
-    const handle = useWorker ? this._runInWorker(msg.taskSource, msg.args) : null;
+    const refuse = (reason) => {
+      this.mesh.send(gid, { type: MSG_RESULT, to: fromPeerId, taskId: msg.taskId, ok: false, refused: true, error: reason });
+      if (this._onRefused) { try { this._onRefused(gid, fromPeerId, fromName, reason); } catch (_) {} }
+    };
+    let accepted = false;
+    try { accepted = this._acceptTask(gid, fromPeerId, fromName) === true; } catch (_) { accepted = false; }
+    if (!accepted) return refuse('not accepting tasks from this group');
+    if (!this._runInWorker) return refuse('no task sandbox available on this peer');
     const id = `worker-task-${msg.taskId}`;
-    const onKill = handle ? () => handle.kill() : undefined;
+    if (this._local.has(id)) return refuse('duplicate task id');
+    if ([...this._local.values()].filter((a) => a.state === 'running').length >= MAX_CONCURRENT_INCOMING) return refuse('busy: too many tasks running here');
+    const handle = this._runInWorker(msg.taskSource, msg.args, { timeoutMs: msg.timeoutMs });
+    const onKill = () => handle.kill();
 
-    const localEntry = { id, kind: 'distributed-compute.worker-task', label: `task from ${fromName || fromPeerId}`, state: 'running', startedAt: Date.now(), meta: { taskId: msg.taskId, fromPeerId, fromName, gid, killable: useWorker }, onKill };
+    const localEntry = { id, kind: 'distributed-compute.worker-task', label: `task from ${fromName || fromPeerId}`, state: 'running', startedAt: Date.now(), meta: { taskId: msg.taskId, fromPeerId, fromName, gid, killable: true, sandboxed: true }, onKill };
     this._local.set(id, localEntry);
 
     const globalActivity = this._host && this._host.registerActivity({ ...localEntry });
@@ -101,8 +120,7 @@ export class Scheduler {
       if (globalActivity) globalActivity.end();
     };
 
-    const promise = useWorker ? handle.promise : Promise.resolve(runTask(msg.taskSource, msg.args));
-    promise.then((outcome) => {
+    handle.promise.then((outcome) => {
       setState('sending');
       this.mesh.send(gid, {
         type: MSG_RESULT,
@@ -143,6 +161,7 @@ export class Scheduler {
         resolve({ ok: false, error: 'timeout waiting for worker', timedOut: true, fromPeerId: worker.id });
       }, timeoutMs);
       this._pending.set(taskId, {
+        workerId: worker.id,
         resolve: (outcome) => {
           if (settled) return;
           settled = true;
@@ -150,7 +169,7 @@ export class Scheduler {
           resolve(outcome);
         },
       });
-      const sent = this.mesh.send(gid, { type: MSG_TASK, to: worker.id, taskId, taskSource, args });
+      const sent = this.mesh.send(gid, { type: MSG_TASK, to: worker.id, taskId, taskSource, args, timeoutMs });
       if (sent && sent.ok === false) {
         // send failed outright (e.g. peer dropped) — don't wait for the timeout.
         if (!settled) {

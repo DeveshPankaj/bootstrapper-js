@@ -29,10 +29,11 @@ const DOCK_OPTIONS = [
 ]
 
 // Desktop-icon variants — /opt/desktop/<id>.js for every id but 'default',
-// which instead uses /opt/desktop/manager.js (the original single
-// hand-editable file) so pre-existing customisations of that file keep
-// working unchanged. See src/core/layout/index.tsx's DesktopMount/
-// openVfsDesktop for the loader and hot-swap mechanics.
+// which uses /opt/desktop/manager.js. Like the window-chrome styles
+// (/opt/wm/<id>.js) and /opt/window-manager.js, they run from the copy that
+// ships with the build (/public/mount/...), never from the vfs copy, which is
+// view-only (decisions.md D1; src/system/static-code.ts). See
+// src/core/layout/index.tsx's DesktopMount/openVfsDesktop for the hot-swap.
 const DESKTOP_OPTIONS = [
     { id: 'none',          label: 'None',           icon: 'indeterminate_check_box', desc: 'No desktop icons — a completely empty desktop.' },
     { id: 'default',       label: 'Default',       icon: 'grid_view',       desc: 'Classic desktop icon grid — drag to reorder, double-click to open.' },
@@ -364,15 +365,16 @@ const ManagersSettings = () => {
         React.createElement('p', { className: 'muted-small', style: { margin: '20px 0 6px' } }, 'VFS CONFIGURATION FILES'),
         React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 4 } },
             [
-                { path: '/opt/desktop/manager.js', label: 'Desktop icons ("Default" variant)', desc: 'Export render(container, api) — and optionally getSettingsSchema/applySetting. Edit to customise, or pick a different variant above.' },
+                { path: '/opt/desktop/manager.js', label: 'Desktop icons ("Default" variant)', desc: 'Reference copy, view-only: desktop variants run from the copy that ships with the build, so editing this file changes nothing. Pick a different variant above.' },
                 { path: '/etc/contextmenu.json',   label: 'Desktop context menu',   desc: 'JSON array of { id, type, title, cmd } items.' },
                 { path: '/etc/taskbar.json',        label: 'Taskbar pinned apps',    desc: 'JSON { pinned: ["command-name", ...] }.' },
-                { path: '/opt/window-manager.js',  label: 'WM behavior script',     desc: 'Per-window event wiring; re-read on every new window.' },
+                { path: '/opt/window-manager.js',  label: 'WM behavior script',     desc: 'Reference copy, view-only: per-window event wiring runs from the copy that ships with the build, loaded once at startup — editing this file changes nothing.' },
             ].map(({ path, label, desc }) =>
                 React.createElement('div', {
                     key: path,
                     style: { background: 'rgba(128,128,128,0.07)', borderRadius: 6, padding: '6px 10px', cursor: 'pointer' },
-                    onClick: () => platform.host.execCommand(`service('001-core.layout','open-window')(command('ui.notepad'),'${path}')`, platform),
+                    // the path travels as a value, never as DSL source (audit KRN-3)
+                    onClick: () => platform.host.openWindow('ui.notepad', path),
                     title: 'Open in editor',
                 },
                     React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },

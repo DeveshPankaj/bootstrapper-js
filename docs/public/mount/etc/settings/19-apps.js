@@ -21,11 +21,9 @@ const isAppInstalled = (commandName) => {
   return !!platform.host.getCommand(commandName)
 }
 
+// the search term travels as a value, never as DSL source (audit KRN-3)
 const openAppManager = (searchTerm) => {
-  platform.host.execCommand(
-    `service('001-core.layout','open-window')(command('ui.pkg-manager'),'${searchTerm}')`,
-    platform
-  )
+  platform.host.openWindow('ui.pkg-manager', searchTerm)
 }
 
 const AppsSettings = () => {

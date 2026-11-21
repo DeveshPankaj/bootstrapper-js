@@ -19,10 +19,8 @@ try {
   if (stats.isDirectory()) {
     write(`edit: ${fileName}: Not a file\r\n`);
   } else {
-    // Open the file in the notepad editor
-    platform.host.execCommand(
-      service('001-core.layout', 'open-window')(command('ui.notepad'), filePath)
-    );
+    // Open the file in the notepad editor (the path travels as a value)
+    platform.host.openWindow('ui.notepad', filePath);
   }
 } catch (err) {
   // Handle cases where the file doesn't exist

@@ -69,7 +69,13 @@
   <div id="body">
     <div id="video-pane">
       <div id="placeholder">Paste a YouTube link above to start watching.</div>
+      <!-- Third-party embed (audit NET-2): its own origin, restricted by sandbox — scripts,
+           its own storage, forms, the "Watch on YouTube" popup and casting; never top
+           navigation or popups that escape the sandbox. YouTube needs a referrer for embeds,
+           so only this page's origin is sent (strict-origin-when-cross-origin). -->
       <iframe id="video-frame"
+        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation"
+        referrerpolicy="strict-origin-when-cross-origin"
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
         allowfullscreen></iframe>
     </div>

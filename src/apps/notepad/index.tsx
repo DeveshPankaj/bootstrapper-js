@@ -185,10 +185,14 @@ const App = (props: UICallbackProps & { file: FileType }) => {
     }
 
     const openIframe = () => {
-        platform.host.execCommand(`service('001-core.layout', 'open-window') (command('ui.iframe'), '${props.file.path}')`, platform)
+        platform.host.openWindow('ui.iframe', props.file.path)
     }
 
+    // Run buttons run the editor's (possibly unsaved) buffer. Outside the
+    // system folders that's an explicit Run that asks first, naming the file
+    // (decisions.md D10) — the same confirmation as host.runFile.
     const runSource = () => {
+        if (!platform.host.confirmRun(props.file.path)) return
         const code = editorRef.current?.state.doc.toString() || '';
         platform.host.execCommand(code, platform)
     }
@@ -196,6 +200,7 @@ const App = (props: UICallbackProps & { file: FileType }) => {
 
     const runningInstencesRef = React.useRef<Array<() => void>>([])
     const runJS = () => {
+        if (!platform.host.confirmRun(props.file.path)) return
         runningInstencesRef.current.forEach(ref => typeof ref === 'function' && ref())
 
         const code = editorRef.current?.state.doc.toString() || '';

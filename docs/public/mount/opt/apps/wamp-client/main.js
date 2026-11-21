@@ -141,18 +141,40 @@ const openPlayer = () => {
   }
 };
 
+// Webamp 2.2.0, vendored (audit NET-12): docs/public/vendor/webamp/2.2.0/webamp.bundle.min.js is
+// byte-for-byte npm webamp@2.2.0 package/built/webamp.bundle.min.js (tarball integrity
+// sha512-XzKr65Z4d+4rxA1J//aPkZRqvPS0aqAxpryNKaWt/EDQ4uCJadxjr966QElagH+iZxWMCDekW5dV/dTx5b+WPQ==,
+// MIT, LICENSE.txt alongside). It's fetched with Subresource Integrity, so only those exact bytes
+// ever run — they render into the top document by design (a sandboxed Webamp window comes with
+// the app runtime). Its UMD wrapper takes the CommonJS branch here, so nothing else is consulted.
+const WEBAMP_URL = '/public/vendor/webamp/2.2.0/webamp.bundle.min.js';
+const WEBAMP_SRI = 'sha384-+AKhGEx9w4GEb4tXumyWRl7ZsS0PH+wBLRqhvmZBo5S5GrAHYMUzU67tD8EPcIj9';
+const loadWebamp = () => {
+  if (!win.__webampLoad) {
+    win.__webampLoad = fetch(WEBAMP_URL, { integrity: WEBAMP_SRI })
+      .then((res) => { if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.text(); })
+      .then((code) => {
+        const mod = { exports: {} };
+        new Function('module', 'exports', 'define', code)(mod, mod.exports, undefined);
+        const Webamp = mod.exports && typeof mod.exports.default === 'function' ? mod.exports.default : mod.exports;
+        if (typeof Webamp !== 'function') throw new Error('unexpected Webamp bundle');
+        return Webamp;
+      })
+      .catch((e) => { win.__webampLoad = null; throw e; });
+  }
+  return win.__webampLoad;
+};
+
 const { remove } = platform.host.registerCommand(
   "webamp",
   (...args) => {
     if (win.Webamp) {
       openPlayer();
     } else {
-      import('https://unpkg.com/webamp@2.2.0/built/webamp.bundle.min.js').then(mod => {
-        setTimeout(async () => {
-          win.Webamp = (await mod.default).exports;
-          openPlayer();
-        }, 0)
-      });
+      loadWebamp().then((Webamp) => {
+        win.Webamp = Webamp;
+        openPlayer();
+      }).catch((e) => console.error('[webamp] could not load the vendored Webamp bundle:', e));
     }
     // Webamp renders its own window chrome (with its own close/minimize)
     // directly onto the top-level document, not into this window's iframe -

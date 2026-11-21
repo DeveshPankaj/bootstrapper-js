@@ -67,16 +67,30 @@ for (const app of CORE_APPS) {
   }
 }
 
+// installed.json is writable by any app, so a record is loaded only when its id is a plain
+// app id and its main file lies inside that app's own /opt/apps/<id> folder; its `appDir`
+// is derived from the id, never taken from the record (audit BOOT-5/BOOT-10).
+const { isValidAppId, isInside, normalizePath } = platform.host.pathPolicy;
+const installedApp = (pkg) => {
+  if (!pkg || !isValidAppId(pkg.id) || typeof pkg.mainFile !== 'string') return null;
+  let mainFile;
+  try { mainFile = normalizePath(pkg.mainFile); } catch (_) { return null; }
+  const appDir = `/opt/apps/${pkg.id}`;
+  return mainFile !== appDir && isInside(appDir, mainFile) ? { appDir, mainFile } : null;
+};
+
 // Then load all installed apps (skip already-loaded and uninstalled)
 try {
   const raw = fs.readFileSync(INSTALLED_PATH, 'utf8');
   const installed = JSON.parse(raw || '[]');
   for (const pkg of installed) {
-    if (!pkg.mainFile.endsWith('.js')) continue;
-    if (loaded.has(pkg.mainFile)) continue;
+    if (!pkg || typeof pkg.mainFile !== 'string' || !pkg.mainFile.endsWith('.js')) continue;
+    const app = installedApp(pkg);
+    if (!app) { console.warn('[pkg-loader] skipping', pkg.id, '— main file outside /opt/apps/<id>:', pkg.mainFile); continue; }
+    if (loaded.has(app.mainFile)) continue;
     if (uninstalled.has(pkg.id)) continue;
-    loadApp(pkg.appDir, pkg.mainFile);
-    loaded.add(pkg.mainFile);
+    loadApp(app.appDir, app.mainFile);
+    loaded.add(app.mainFile);
   }
 } catch (_) {}
 

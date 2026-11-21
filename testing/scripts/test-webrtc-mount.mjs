@@ -31,6 +31,8 @@ const connectMesh = async (pA, pB, fA, fB) => {
 
 const browser = await chromium.launch();
 const pA = await (await browser.newContext()).newPage(), pB = await (await browser.newContext()).newPage();
+// Outside webrtc.api calls that change something now ask first in the WebRTC window (audit NET-6), as do group invitations (NET-11) — accept those.
+for (const p of [pA, pB]) p.on('dialog', (d) => { if (/asks WebRTC Chat to run|wants to add you to the group/.test(d.message())) d.accept().catch(() => {}); else d.dismiss().catch(() => {}); });
 const errs = []; pA.on('pageerror', e => errs.push('A ' + e.message)); pB.on('pageerror', e => errs.push('B ' + e.message));
 await boot(pA);
 await pA.evaluate(() => window.platform.host.execCommand("service('001-core.layout','open-window') (command('ui.webrtc'))", window.platform));

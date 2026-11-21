@@ -1,17 +1,56 @@
 <title>ReactJS</title>
-<script type="module" defer>
-  // const React = window.platform.getService('React')
-  const {React, ReactDOM, App} = window.platform.require('/home/user1/projects/temp.js')
-  const {createRoot} = ReactDOM
+<!--
+  User HTML opens in an opaque sandbox (ui.sandboxed-app): no window.platform,
+  no storage, no access to the OS window. The page gets the sandbox SDK
+  (window.ipc, /usr/lib/ipc.js), which may read files in this folder only.
+  React, ReactDOM and Babel come from pinned CDN builds with integrity hashes.
+-->
+<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.15/babel.min.js" integrity="sha384-Ss/vAy5WJ/pgOuQj8fpWo8I/lIbCYJW0kNY8PbhsygEsxmwpdsXz47HC5+sIUypz" crossorigin="anonymous"></script>
+<script type="module">
+  const SOURCE_PATH = '/home/user1/projects/temp.js'
 
   const el = document.createElement('div')
   el.setAttribute('id', 'react-root')
-  const root = createRoot(el)
   document.body.appendChild(el)
+  const root = ReactDOM.createRoot(el)
 
-  const props = platform.getService('props')
-  root.render(React.createElement(App, props || {}, []))
+  // temp.js is JSX + CommonJS (`exports.App = …`): compile it with Babel and
+  // run it in this sandbox. Its own top-level `React`/`ReactDOM` read the UMD globals.
+  const load = (source) => {
+    const { code } = Babel.transform(source, { presets: ['react'], filename: 'temp.js' })
+    const module = { exports: {} }
+    new Function('module', 'exports', code)(module, module.exports)
+    return module.exports
+  }
 
+  const showError = (err) => {
+    root.render(React.createElement('pre', {
+      style: { color: '#b91c1c', background: '#fef2f2', padding: '1rem', borderRadius: '12px', whiteSpace: 'pre-wrap', maxWidth: '640px' },
+    }, `Couldn't load temp.js:\n${err && err.message || err}`))
+  }
+
+  let lastSource = null
+  const refresh = async () => {
+    let source
+    try { source = await window.ipc.fs.readText(SOURCE_PATH) }
+    catch (err) { if (lastSource === null) showError(err); return }
+    if (source === lastSource) return
+    lastSource = source
+    try {
+      const { App } = load(source)
+      root.render(React.createElement(App, { sourcePath: SOURCE_PATH, source }))
+    } catch (err) { showError(err) }
+  }
+
+  if (!window.ipc) {
+    showError(new Error('the sandbox SDK (window.ipc) is missing — open this page from Files'))
+  } else {
+    await refresh()
+    // "Edit temp.js and save": re-read the file and re-render when it changes.
+    setInterval(refresh, 1500)
+  }
 </script>
 <style>
   :root {

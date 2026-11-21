@@ -123,18 +123,22 @@ const Spotlight = ({ onClose }) => {
           item.cmd.exec()
         } else if (item.type === 'installed-app') {
           const pkg = item.pkg
+          // installed.json is writable by any app: only open a main file inside the
+          // app's own /opt/apps/<id> folder (audit BOOT-10).
+          const openMain = () => {
+            const { isValidAppId, isInside, normalizePath } = platform.host.pathPolicy
+            if (!isValidAppId(pkg.id) || typeof pkg.mainFile !== 'string') return
+            const mainFile = normalizePath(pkg.mainFile)
+            if (mainFile !== `/opt/apps/${pkg.id}` && isInside(`/opt/apps/${pkg.id}`, mainFile)) platform.host.exec(platform, mainFile)
+          }
           if (pkg.commandName) {
-            try { platform.host.callCommand(pkg.commandName) } catch (_) {
-              platform.host.exec(platform, pkg.mainFile)
-            }
+            try { platform.host.callCommand(pkg.commandName) } catch (_) { openMain() }
           } else {
-            platform.host.exec(platform, pkg.mainFile)
+            openMain()
           }
         } else if (item.type === 'not-installed') {
-          platform.host.execCommand(
-            `service('001-core.layout','open-window')(command('ui.pkg-manager'),'${item.app.name}')`,
-            platform
-          )
+          // The registry's app name is a value (the App Manager's search), never DSL source (audit APP-1)
+          platform.host.openWindow('ui.pkg-manager', item.app.name)
         } else {
           platform.host.exec(platform, item.path)
         }

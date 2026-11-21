@@ -1,4 +1,7 @@
-<iframe width="100%" height="100%" frameborder="0" src="https://fast.com/"></iframe>
+<!-- Third-party embed (audit NET-2): fast.com keeps its own origin but can't navigate the OS,
+     open popups or see where it's embedded. -->
+<iframe width="100%" height="100%" frameborder="0" src="https://fast.com/"
+  sandbox="allow-scripts allow-same-origin allow-forms" referrerpolicy="no-referrer"></iframe>
 <style>
   body {
     margin: 0;

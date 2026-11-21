@@ -335,7 +335,7 @@ function renderProjList(){
   if(!projects.length){list.innerHTML='<div class="proj-empty">No projects yet.<br>Click + to create one.</div>';return}
   list.innerHTML=projects.map((p,i)=>`
     <div class="proj-item${i===curIdx?' active':''}" data-i="${i}">
-      <div class="proj-name">${p.name}</div>
+      <div class="proj-name">${escHtml(p.name)}</div>
       <div class="proj-meta">${p.rows.length} rows · ${p.rows.filter(r=>r.vector).length} embedded</div>
     </div>`).join('');
   list.querySelectorAll('.proj-item').forEach(el=>el.addEventListener('click',()=>openProject(+el.dataset.i)));
@@ -375,7 +375,7 @@ function renderRows(){
   const tbody=document.getElementById('rowsBody');
   document.getElementById('rowCount').textContent=`${p.rows.length} rows · ${p.rows.filter(r=>r.vector).length} embedded`;
   tbody.innerHTML=p.rows.map((r,i)=>`
-    <tr data-rid="${r.id}">
+    <tr data-rid="${escHtml(r.id)}">
       <td style="color:var(--mu);width:30px;font-variant-numeric:tabular-nums">${i+1}</td>
       <td class="txt-cell">${escHtml(r.text.length>200?r.text.slice(0,200)+'…':r.text)}${r.source&&r.source!=='paste'?`<div style="font-size:10px;color:var(--mu);margin-top:2px">${escHtml(r.source)}</div>`:''}</td>
       <td><span class="vec-badge ${r.vector?'ok':'pending'}">${r.vector?r.vector.length+'d':'pending'}</span></td>
@@ -383,7 +383,7 @@ function renderRows(){
     </tr>`).join('');
   tbody.querySelectorAll('.row-del').forEach(b=>b.addEventListener('click',()=>deleteRow(+b.dataset.i)));
 }
-function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 
 async function deleteRow(i){
   if(!confirm('Delete this row?')) return;
@@ -540,12 +540,15 @@ async function browseVfs(){
       }
     }
     if(!supported.length){list.innerHTML='<div style="color:var(--mu);font-size:11px;padding:8px">No supported files found (.txt, .md, .csv, .json).</div>';return}
-    list.innerHTML=supported.map(f=>`
-      <label class="vfs-file-item">
-        <input type="checkbox" value="${f}" class="vfs-cb">
-        <span class="fi-name">${f}</span>
-        <span class="fi-type">${f.split('.').pop().toUpperCase()}</span>
-      </label>`).join('');
+    // file names are data (audit APP-14): DOM nodes, not markup
+    list.textContent='';
+    supported.forEach(f=>{
+      const lab=document.createElement('label');lab.className='vfs-file-item';
+      const cb=document.createElement('input');cb.type='checkbox';cb.value=f;cb.className='vfs-cb';
+      const nm=document.createElement('span');nm.className='fi-name';nm.textContent=f;
+      const ty=document.createElement('span');ty.className='fi-type';ty.textContent=f.split('.').pop().toUpperCase();
+      lab.append(cb,nm,ty);list.appendChild(lab);
+    });
     list.querySelectorAll('.vfs-cb').forEach(cb=>{
       cb.addEventListener('change',()=>{
         vfsSelectedFiles=[];
@@ -555,7 +558,7 @@ async function browseVfs(){
     });
     document.getElementById('vfsSel').textContent='0 files selected';
   }catch(e){
-    list.innerHTML=`<div style="color:var(--rd);font-size:11px;padding:8px">Error: ${e.message}</div>`;
+    list.innerHTML=`<div style="color:var(--rd);font-size:11px;padding:8px">Error: ${escHtml(e.message)}</div>`;
   }
 }
 
@@ -588,12 +591,12 @@ async function handleFileInput(files){
       uploadParsedRows.push(...rows);
       const div=document.createElement('div');
       div.className='upload-file-item';
-      div.innerHTML=`<span class="ufi-name">${file.name}</span><span class="ufi-rows">+${rows.length} rows</span>`;
+      div.innerHTML=`<span class="ufi-name">${escHtml(file.name)}</span><span class="ufi-rows">+${rows.length} rows</span>`;
       listEl.appendChild(div);
     }catch(e){
       const div=document.createElement('div');
       div.className='upload-file-item';
-      div.innerHTML=`<span class="ufi-name" style="color:var(--rd)">${file.name} — error</span>`;
+      div.innerHTML=`<span class="ufi-name" style="color:var(--rd)">${escHtml(file.name)} — error</span>`;
       listEl.appendChild(div);
     }
   }

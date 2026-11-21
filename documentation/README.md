@@ -10,6 +10,16 @@ Browser-based web OS built with TypeScript + React + BrowserFS.
 | [core/layout.md](core/layout.md) | CSS Grid layout system — presets, areas, wallpaper, desktop icons |
 | [core/window-manager.md](core/window-manager.md) | Window appearance (CSS vars, themes) and behavior (/opt/window-manager.js) |
 
+## Security
+
+| Document | Topic |
+|---|---|
+| [security/README.md](security/README.md) | Security model — trust levels, attackers, invariants I1–I8, target sandbox architecture |
+| [security/audit.md](security/audit.md) | Audit findings (KRN / BOOT / WIN / NET / APP) with locations, exploits, fixes, test ideas |
+| [security/decisions.md](security/decisions.md) | Design decisions D1–D16 — opaque-origin sandboxes, capability broker, code delivery on GitHub Pages |
+
+The plan and progress live in the root [TODO.md](../TODO.md); regression tests in `testing/scripts/security/`.
+
 ## Apps
 
 | Document | Topic |

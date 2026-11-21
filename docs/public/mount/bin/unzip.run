@@ -16,6 +16,26 @@ for (let i = 0; i < rest.length; i++) {
 }
 
 function resolvePath(p) { return p.startsWith('/') ? p : `${pwd}/${p}`; }
+
+// Entry names are untrusted (audit BOOT-8, decisions.md D6): each output path is
+// pathPolicy.safeJoin(destDir, name) — no absolute names, '..', backslashes or
+// control characters — and never a kernel-owned path (/etc, /bin, /opt,
+// /.initd.run, …) unless you're extracting inside one. Refused entries are listed.
+const { normalizePath, safeJoin, isKernelOwned } = platform.host.pathPolicy;
+function entryTarget(destDir, name) {
+  const target = safeJoin(destDir, name);
+  if (isKernelOwned(target) && !isKernelOwned(destDir)) throw new Error(`protected path ${target}`);
+  return target;
+}
+// Names are printed to the terminal: show control characters (ESC, CR, …) as ^X
+// instead of letting an archive drive the terminal.
+function printable(s) {
+  return String(s).replace(/[\u0000-\u001f\u007f-\u009f]/g, (c) => {
+    const n = c.charCodeAt(0);
+    return n < 0x20 ? '^' + String.fromCharCode(n + 64) : n === 0x7f ? '^?' : '\\x' + n.toString(16);
+  });
+}
+
 function mkdirp(dir) {
   if (!dir) return;
   const parts = dir.split('/').filter(Boolean);
@@ -107,26 +127,32 @@ try { entries = parseCentralDirectory(buf); }
 catch (e) { write(`unzip: ${archiveArg}: ${e.message}\n`); return; }
 
 if (listOnly) {
-  const lines = entries.map(e => e.isDir ? e.name : `${e.name}  (${e.uncompSize} bytes)`);
+  const lines = entries.map(e => e.isDir ? printable(e.name) : `${printable(e.name)}  (${e.uncompSize} bytes)`);
   write(lines.join('\n') + '\n');
 } else {
-  const destDir = (dest ? resolvePath(dest) : pwd).replace(/\/+$/, '');
+  let destDir;
+  try { destDir = normalizePath(dest ? resolvePath(dest) : pwd); }
+  catch (e) { write(`unzip: invalid destination: ${printable(dest)}\n`); return; }
   let count = 0;
+  const skipped = [];
   for (const e of entries) {
-    const target = `${destDir}/${e.name}`.replace(/\/+/g, '/');
+    let target;
+    try { target = entryTarget(destDir, e.name); }
+    catch (_) { skipped.push(e.name); continue; }
     if (e.isDir) {
-      mkdirp(target.replace(/\/$/, ''));
+      mkdirp(target);
       continue;
     }
     mkdirp(target.split('/').slice(0, -1).join('/'));
     let data;
     try { data = await extractEntryData(buf, e); }
-    catch (err) { write(`unzip: ${e.name}: ${err.message}\n`); continue; }
+    catch (err) { write(`unzip: ${printable(e.name)}: ${err.message}\n`); continue; }
     if (crc32(data) >>> 0 !== e.crc >>> 0) {
-      write(`unzip: warning: CRC mismatch for ${e.name}\n`);
+      write(`unzip: warning: CRC mismatch for ${printable(e.name)}\n`);
     }
     fs.writeFileSync(target, data);
     count++;
   }
-  write(`unzip: extracted ${count} entries to ${destDir}\n`);
+  for (const name of skipped) write(`unzip: skipped "${printable(name)}": outside ${destDir} or a system path\n`);
+  write(`unzip: extracted ${count} entries to ${destDir}${skipped.length ? ` (${skipped.length} unsafe skipped)` : ''}\n`);
 }

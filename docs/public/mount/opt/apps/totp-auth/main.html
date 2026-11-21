@@ -74,8 +74,6 @@
 </head>
 <body>
 
-<script src="/(sw)/usr/lib/ipc.js"></script>
-
 <div class="header">
   <h1>🔐 TOTP Auth</h1>
 </div>
@@ -85,6 +83,8 @@
   <input type="text" id="secretInput" placeholder="Base32 secret" autocomplete="off">
   <button id="addBtn">Add</button>
 </div>
+
+<div class="empty" id="storageWarn" style="display:none;padding:.6rem 1rem;color:var(--danger)">Storage unavailable — open TOTP Auth from the App Manager. Accounts added now are not saved.</div>
 
 <div class="cards" id="cards">
   <div class="empty" id="emptyState">No accounts yet. Enter a name and base32 secret above.</div>
@@ -107,26 +107,71 @@
     return bytes;
   }
 
-  const VFS_PATH = '/home/user1/.totp-accounts.json';
-  const LS_KEY = 'totp_entries';
+  // Secrets live only in this app's own data dir (audit APP-8, decisions D5/D13), read and
+  // written with the platform fs this first-party page gets from ui.iframe. Never in
+  // origin-wide localStorage: older versions kept a copy there (and in a file in the
+  // home folder); both are merged in once and the localStorage copy is deleted.
+  const DATA_DIR = '/home/user1/.local/share/totp-auth';
+  const STORE_PATH = DATA_DIR + '/accounts.json';
+  const LEGACY_VFS_PATH = '/home/user1/.totp-accounts.json';
+  const LEGACY_LS_KEY = 'totp_entries';
   const STEP = 30;
   const CIRC = 2 * Math.PI * 19; // circumference for r=19
 
   let entries = [];
+  const fs = (() => { try { return window.platform.host.getFS(); } catch (_) { return null; } })();
 
-  async function load() {
-    try {
-      const text = await window.ipc.fs.readText(VFS_PATH);
-      entries = JSON.parse(text) || [];
-    } catch (_) {
-      try { entries = JSON.parse(localStorage.getItem(LS_KEY) || '[]'); } catch (_) { entries = []; }
+  const validEntries = (list) => (Array.isArray(list) ? list : [])
+    .filter(e => e && typeof e.name === 'string' && typeof e.secret === 'string')
+    .map(e => ({ name: e.name, secret: e.secret }));
+
+  function mergeInto(list, extra) {
+    const seen = new Set(list.map(e => e.name + '\u0000' + e.secret));
+    for (const e of validEntries(extra)) {
+      const k = e.name + '\u0000' + e.secret;
+      if (!seen.has(k)) { seen.add(k); list.push(e); }
+    }
+    return list;
+  }
+
+  function readJson(path) {
+    try { return fs.existsSync(path) ? JSON.parse(fs.readFileSync(path, 'utf8')) : null; } catch (_) { return null; }
+  }
+
+  function readLegacyLocalStorage() {
+    try { const raw = localStorage.getItem(LEGACY_LS_KEY); return raw ? JSON.parse(raw) : null; } catch (_) { return null; }
+  }
+
+  function dropLegacyLocalStorage() {
+    try { localStorage.removeItem(LEGACY_LS_KEY); } catch (_) {}
+  }
+
+  function writeStore() {
+    let cur = '';
+    for (const part of DATA_DIR.split('/').filter(Boolean)) {   // BrowserFS: mkdir one level at a time
+      cur += '/' + part;
+      if (!fs.existsSync(cur)) fs.mkdirSync(cur);
+    }
+    fs.writeFileSync(STORE_PATH, JSON.stringify(entries));
+  }
+
+  function load() {
+    if (!fs) { document.getElementById('storageWarn').style.display = ''; entries = []; return; }
+    const haveStore = fs.existsSync(STORE_PATH);
+    entries = validEntries(haveStore ? readJson(STORE_PATH) : []);
+    let migrated = false;
+    if (!haveStore) { mergeInto(entries, readJson(LEGACY_VFS_PATH)); migrated = true; }   // once
+    const lsEntries = readLegacyLocalStorage();
+    if (lsEntries) { mergeInto(entries, lsEntries); migrated = true; }
+    if (migrated) {
+      try { writeStore(); dropLegacyLocalStorage(); }
+      catch (e) { console.error('[totp-auth] could not write ' + STORE_PATH, e); }
     }
   }
 
-  async function save() {
-    const json = JSON.stringify(entries);
-    localStorage.setItem(LS_KEY, json);
-    try { await window.ipc.fs.write(VFS_PATH, json); } catch (_) {}
+  function save() {
+    if (!fs) return;
+    try { writeStore(); } catch (e) { console.error('[totp-auth] could not write ' + STORE_PATH, e); alert('Could not save accounts: ' + e.message); }
   }
 
   async function genTOTP(secret) {
@@ -168,9 +213,10 @@
       const offset = CIRC * (1 - frac);
       const urgent = tl <= 5;
 
+      // account names are data: set as text below, never as markup
       card.innerHTML = `
-        <div class="card-name" title="${e.name}">${e.name}</div>
-        <div class="card-code" title="Click to copy">${code}</div>
+        <div class="card-name"></div>
+        <div class="card-code" title="Click to copy"></div>
         <div class="ring-wrap">
           <svg class="ring-svg" viewBox="0 0 44 44" width="44" height="44">
             <circle class="ring-track" cx="22" cy="22" r="19"/>
@@ -185,6 +231,11 @@
           <button class="icon-btn del" title="Delete">✕</button>
         </div>
       `;
+
+      const nameEl = card.querySelector('.card-name');
+      nameEl.textContent = e.name;
+      nameEl.title = e.name;
+      card.querySelector('.card-code').textContent = code;
 
       card.querySelector('.card-code').addEventListener('click', () => copyCode(card.querySelector('.card-code'), code));
       card.querySelector('.copy-btn').addEventListener('click', () => copyCode(card.querySelector('.card-code'), code));
@@ -239,7 +290,7 @@
   });
 
   (async () => {
-    await load();
+    load();
     await renderCards();
     setInterval(updateCodes, 1000);
   })();

@@ -20,7 +20,7 @@ platform.host.registerWidget('public-ip', (container, api) => {
       value.textContent = ip || '-';
     } else {
       // Nothing logged yet (cron hasn't run this minute) - trigger a check now.
-      platform.host.exec(platform, '/opt/cron/check-public-ip.js');
+      platform.host.runFile(platform, '/opt/cron/check-public-ip.js', [], { confirm: false });
       value.textContent = 'checking...';
     }
   };

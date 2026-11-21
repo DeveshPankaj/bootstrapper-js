@@ -334,11 +334,13 @@ const PreviewImg = ({ src, style, className }) => {
 };
 
 // ── CDN loader helper ──
-const loadScript = (url) => {
+// Exact versions + SRI (audit APP-11).
+const loadScript = (url, integrity) => {
   const win = document.defaultView || window;
   if (win.__loadedScripts?.[url]) return Promise.resolve();
   return new Promise((ok, err) => {
     const s = document.createElement('script');
+    if (integrity) { s.integrity = integrity; s.crossOrigin = 'anonymous'; }
     s.src = url; s.onload = () => { (win.__loadedScripts = win.__loadedScripts || {})[url] = true; ok(); }; s.onerror = err;
     document.head.appendChild(s);
   });
@@ -481,7 +483,7 @@ const Img2PdfTool = () => {
     if (!files.length) return;
     setStatus('Loading jsPDF…');
     const doc = document.ownerDocument || document;
-    await loadScript.call(null, 'https://cdn.jsdelivr.net/npm/jspdf@2/dist/jspdf.umd.min.js');
+    await loadScript.call(null, 'https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js', 'sha384-en/ztfPSRkGfME4KIm05joYXynqzUgbsG5nMrj/xEFAHXkeZfO3yMK8QQ+mP7p1/');
     const jsPDF = (window.jspdf || window.top.jspdf || {}).jsPDF;
     if (!jsPDF) { setStatus('Failed to load jsPDF'); return; }
 
@@ -557,15 +559,18 @@ const JoinPdfTool = () => {
   const merge = async () => {
     if (files.length < 2) { setStatus('Need at least 2 PDFs'); return; }
     setStatus('Loading pdf-lib…');
-    await loadScript('https://cdn.jsdelivr.net/npm/pdf-lib@1/dist/pdf-lib.min.js');
-    const PDFDocument = (window.PDFLib || window.top.PDFLib || {}).PDFDocument;
+    await loadScript('https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js', 'sha384-weMABwrltA6jWR8DDe9Jp5blk+tZQh7ugpCsF3JwSA53WZM9/14PjS5LAJNHNjAI');
+    const libWin = window.PDFLib ? window : window.top;
+    const PDFDocument = (libWin.PDFLib || {}).PDFDocument;
     if (!PDFDocument) { setStatus('Failed to load pdf-lib'); return; }
 
     setStatus('Merging…');
     const merged = await PDFDocument.create();
     for (let i = 0; i < files.length; i++) {
       setStatus(`Processing ${i + 1}/${files.length}: ${files[i].name}`);
-      const buf = await files[i].arrayBuffer();
+      // the File (and so its ArrayBuffer) belongs to this window's realm, pdf-lib to the
+      // document it was loaded into: hand it bytes from pdf-lib's own realm (its instanceof check)
+      const buf = new libWin.Uint8Array(await files[i].arrayBuffer());
       try {
         const src = await PDFDocument.load(buf);
         const pages = await merged.copyPages(src, src.getPageIndices());

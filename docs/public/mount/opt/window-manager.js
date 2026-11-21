@@ -1,10 +1,9 @@
 // Window manager behavior module.
 //
-// This file lives in the virtual filesystem (/opt/window-manager.js) and is
-// re-read and re-executed by the core window manager every time a new window
-// is opened. Editing it (and saving through the file explorer's "Edit"
-// action) changes the behavior of windows opened afterwards without
-// rebuilding the app.
+// Ships with the build: the window manager runs the static copy
+// (/public/mount/opt/window-manager.js), loaded once at layout start — never
+// the vfs copy at /opt/window-manager.js, which is view-only (decisions.md D1).
+// Changing window behavior means changing this file in the repo.
 //
 // Appearance (colors, border radius, blur, shadow) is controlled separately
 // via CSS custom properties, configured from Settings -> Window Manager and
@@ -67,8 +66,8 @@ const SNAP_ZONES = [
 ];
 
 // ---------------------------------------------------------------------------
-// VFS hooks — override these exports to customise window creation.
-// Re-read on every createWindow(), so edits apply to the next window opened.
+// Hooks — these exports customise window creation (an /opt/wm/<id>.js style
+// can override them; see src/core/window-manager.ts).
 // ---------------------------------------------------------------------------
 
 // createContainer({ command, settings }) → HTMLElement | null

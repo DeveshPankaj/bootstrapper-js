@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>C++ IDE</title>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css" integrity="sha384-zaeBlB/vwYsDRSlFajnDd7OydJ0cWk+c2OWybl3eSUf6hW2EbhlCsQPqKr3gkznT" crossorigin="anonymous">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css" integrity="sha384-ccdJwIIg/K0Ab6aXF4MPACh7ckk61tvQFTrfkhXZEALgAETURNZIAuQLcS/aPbrM" crossorigin="anonymous">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{width:100%;height:100%;overflow:hidden;background:#0d1117;color:#e2e8f0;font-family:'JetBrains Mono',ui-monospace,monospace}
@@ -95,11 +95,11 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0d1117;color:#e2e8f
   </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/JSCPP@2.2.1/dist/JSCPP.es5.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js" integrity="sha384-ZYmwuq4n2gOcNxMSiJ6jyTj+BbIrilr7p6dlq6q5nmSWKmsH9UU4K1qqjycMkfmR" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js" integrity="sha384-o9m634t2Hy35pPNKd9Xe16ntbSw11jCOuKPDrzQGXI8k87L2JZthaA3rwmJjnF7Z" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js" integrity="sha384-LjCI3E8qhhxXZvu7+FCvqx9eZYSowFvuJ7z54KsgI/BDPGKEuysqCg/vYiKHvC4Y" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js" integrity="sha384-69mJoUoPPF/C7qPs6lLjvXvrt6w225+rmxWqGO3a1glVjITdnnwPQOtG9FRTd2Ni" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/JSCPP@2.0.6/dist/JSCPP.es5.min.js" integrity="sha384-8M1a/BQgxsmX+822qwMJnbHpSjkzzvw536c+1FARERz3vv762kwctazmIve8mRme" crossorigin="anonymous"></script>
 <script>
 // --- AppSDK ---
 function sdk(){ return window.AppSDK||{readText:()=>Promise.reject(new Error('SDK not ready')),writeText:()=>Promise.reject(new Error('SDK not ready')),mkdir:()=>Promise.resolve(),list:()=>Promise.resolve([]),exists:()=>Promise.resolve(false)}; }
@@ -111,7 +111,7 @@ var editor = CodeMirror.fromTextArea(document.getElementById('editor'), {
   matchBrackets: true, autoCloseBrackets: true, lineWrapping: false,
   extraKeys: {'Ctrl-Enter': runCode, 'Cmd-Enter': runCode, 'Ctrl-S': saveProject, 'Cmd-S': saveProject}
 });
-editor.setValue(EXAMPLES[0].code);
+// (the first example is loaded in the Init block below — EXAMPLES isn't assigned yet here)
 
 // --- Projects state ---
 var VFS_BASE = '/home/user1/projects/cpp';
@@ -289,22 +289,44 @@ async function openProject(){
   await loadProject(name.trim());
 }
 
+// Project names come from vfs folder names: DOM nodes + listeners, never markup
+// or inline handlers (audit APP-14).
+function sbItem(icon, name, active, onClick){
+  var it = document.createElement('div');
+  it.className = 'sb-item' + (active ? ' active' : '');
+  it.title = name;
+  var ic = document.createElement('span');
+  ic.className = 'ic';
+  ic.textContent = icon;
+  it.append(ic, String(name));
+  it.addEventListener('click', onClick);
+  return it;
+}
+
 async function refreshSidebar(){
   var sb = document.getElementById('sb-content');
-  var html = '<div class="sb-group">Examples</div>';
+  var frag = document.createDocumentFragment();
+  var g = document.createElement('div');
+  g.className = 'sb-group';
+  g.textContent = 'Examples';
+  frag.appendChild(g);
   EXAMPLES.forEach(function(ex, i){
-    html += '<div class="sb-item' + (currentProject===null && i===0?' active':'') + '" onclick="loadExample('+i+')" title="'+ex.name+'"><span class="ic">📄</span>' + ex.name + '</div>';
+    frag.appendChild(sbItem('📄', ex.name, currentProject===null && i===0, function(){ loadExample(i); }));
   });
 
   var projects = await listProjects();
   var names = projects.map(function(p){ return typeof p==='string'?p:(p.name||p); }).filter(Boolean);
   if(names.length){
-    html += '<div class="sb-group" style="margin-top:8px">Projects</div>';
+    var pg = document.createElement('div');
+    pg.className = 'sb-group';
+    pg.style.marginTop = '8px';
+    pg.textContent = 'Projects';
+    frag.appendChild(pg);
     names.forEach(function(n){
-      html += '<div class="sb-item' + (currentProject===n?' active':'') + '" onclick="loadProject(\''+n+'\')" title="'+n+'"><span class="ic">📁</span>' + n + '</div>';
+      frag.appendChild(sbItem('📁', n, currentProject===n, function(){ loadProject(n); }));
     });
   }
-  sb.innerHTML = html;
+  sb.replaceChildren(frag);
 }
 
 function loadExample(i){
@@ -618,6 +640,8 @@ int main(){
 ];
 
 // Init
+editor.setValue(EXAMPLES[0].code);
+isDirty = false; updateBadge();
 refreshSidebar();
 log('C++ IDE ready. Select an example or write your own code.', 'info');
 log('Press Ctrl+Enter or click Run to execute.', 'dim');

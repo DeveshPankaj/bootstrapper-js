@@ -281,7 +281,14 @@
       const name = path.split('/').pop();
       const li = document.createElement('div');
       li.className = 'pl-item' + (i === currentIndex ? ' active' : '');
-      li.innerHTML = `<span class="pl-dot"></span><span class="pl-item-name" title="${name}">${name}</span>`;
+      // file names are data (audit APP-14): text only
+      const dot = document.createElement('span');
+      dot.className = 'pl-dot';
+      const label = document.createElement('span');
+      label.className = 'pl-item-name';
+      label.title = name;
+      label.textContent = name;
+      li.append(dot, label);
       li.addEventListener('click', () => playIndex(i));
       playlistEl.appendChild(li);
     });

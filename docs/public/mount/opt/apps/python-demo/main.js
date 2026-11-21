@@ -25,11 +25,10 @@ const run = (body, props) => {
   iframe.addEventListener('load', () => {
     iframe.contentWindow.__pyBridge = {
       // Open any registered command in a new detached window.
+      // cmd/arg travel as values, never as DSL source (audit KRN-3).
       openWindow: function(cmd, arg) {
-        var str = arg
-          ? "service('001-core.layout','open-window')(command('" + cmd + "'),'" + arg + "')"
-          : "service('001-core.layout','open-window')(command('" + cmd + "'))";
-        platform.host.execCommand(str, platform);
+        if (arg) platform.host.openWindow(String(cmd), String(arg));
+        else platform.host.openWindow(String(cmd));
       },
       // Register a Python function (create_proxy'd) as a window command.
       // The callback receives (body: HTMLBodyElement, props: WindowProps) when the window opens.

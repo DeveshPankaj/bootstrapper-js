@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Remote Machines</title>
-<link rel="stylesheet" href="https://unpkg.com/xterm@5.3.0/css/xterm.css">
+<link rel="stylesheet" href="https://unpkg.com/xterm@5.3.0/css/xterm.css" integrity="sha384-LJcOxlx9IMbNXDqJ2axpfEQKkAYbFjJfhXexLfiRJhjDU81mzgkiQq8rkV0j6dVh" crossorigin="anonymous">
 <style>
   :root {
     --bg: #12141a; --panel: #1a1d26; --panel2: #212533; --panel3: #2a2f40; --line: #2e3346;
@@ -186,8 +186,8 @@
 </div>
 <div id="modals"></div>
 <div id="toasts"></div>
-<script src="https://unpkg.com/xterm@5.3.0/lib/xterm.js"></script>
-<script src="https://unpkg.com/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+<script src="https://unpkg.com/xterm@5.3.0/lib/xterm.js" integrity="sha384-/nfmYPUzWMS6v2atn8hbljz7NE0EI1iGx34lJaNzyVjWGDzMv+ciUZUeJpKA3Glc" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js" integrity="sha384-AQLWHRKAgdTxkolJcLOELg4E9rE89CPE2xMy3tIRFn08NcGKPTsELdvKomqji+DL" crossorigin="anonymous"></script>
 <script>
 // ════════════════════════════════════════════════════════════════════════════
 // Remote Machines: machines reached over SSH through the workspace-ssh bridge.
@@ -216,7 +216,9 @@ const q = (s) => `'${String(s).replace(/'/g, `'\\''`)}'`;
 const joinPath = (dir, name) => (dir === '/' ? '' : dir) + '/' + name;
 const parentOf = (p) => { const i = p.lastIndexOf('/'); return i <= 0 ? '/' : p.slice(0, i); };
 const baseName = (p) => p.split('/').filter(Boolean).pop() || '/';
-const cleanName = (s) => String(s || '').replace(/[\u0000-\u001f\u007f/]/g, '').trim().slice(0, 255);
+// A single file name typed by the user or listed by the bridge: no control characters or '/',
+// and never '.' / '..' (audit NET-4) — '' means "not usable".
+const cleanName = (s) => { const n = String(s || '').replace(/[\u0000-\u001f\u007f/]/g, '').trim().slice(0, 255); return n === '.' || n === '..' ? '' : n; };
 
 function h(tag, attrs, ...kids) {
   const el = document.createElement(tag);
@@ -286,6 +288,26 @@ const B = (() => { try { return window.top.Buffer || window.Buffer || null; } ca
 // state goes to localStorage), but without the VFS copies.
 let PLAT = null, FS = null;
 const DATA_DIR = '/home/user1/.local/share/remote-machines';
+// The kernel's path policy (src/kernel/path-policy.ts, decisions.md D6): every VFS path built
+// from a name the bridge listed goes through it. Fails closed when it isn't available.
+function PP() {
+  const p = PLAT && PLAT.host && PLAT.host.pathPolicy;
+  if (!p) throw new Error('path policy unavailable — open this app from the OS desktop');
+  return p;
+}
+/** Entries of a bridge fs.list reply that are safe to use as VFS names; the rest are logged and dropped. */
+function validEntries(list, where) {
+  const out = [], pp = PP();
+  for (const n of Array.isArray(list) ? list : []) {
+    if (!n || typeof n.name !== 'string' || !pp.isValidName(n.name)) {
+      console.warn('[remote-machines] skipped an invalid name from the bridge in', where, JSON.stringify(n && n.name).slice(0, 120));
+      continue;
+    }
+    const size = Number(n.size), mtime = Number(n.mtime);
+    out.push({ ...n, name: n.name, kind: n.kind === 'dir' ? 'dir' : 'file', size: Number.isFinite(size) && size >= 0 ? size : 0, mtime: Number.isFinite(mtime) ? mtime : 0 });
+  }
+  return out;
+}
 
 async function whenPlatform(ms = 1500) {
   const t0 = Date.now();
@@ -380,6 +402,45 @@ async function secretOf(key) {
 // ════════════════════════════════════════════════════════════════════════════
 let bridge = { state: 'checking', info: null, error: '' };
 const bridgeBase = () => { const u = (settings.bridgeUrl || DEFAULT_BRIDGE).trim().replace(/\/+$/, ''); return u + '/'; };
+const bridgeOrigin = () => { try { return new URL(bridgeBase()).origin; } catch (_) { return null; } };
+
+// ── The bridge sees every sign-in (audit NET-7) ──
+// settings.json is an ordinary VFS file: anything that can write files could point the bridge
+// address elsewhere. The bridge origin the person approved is kept sealed (AES-GCM, like the
+// sign-ins) in secrets.json; before a sign-in or the bridge token goes to any other origin, the
+// person is asked. Saving the address in Bridge settings approves it; the shipped default
+// (this computer) is approved on first use. (The full fix — a broker-held per-app secret
+// store — comes with the sandboxed app runtime.)
+const BRIDGE_APPROVAL = 'bridge-approved';
+let approvedBridge = null, approvalRun = null;
+async function approvedBridgeOrigin() {
+  if (approvedBridge) return approvedBridge;
+  const box = await secretOf(BRIDGE_APPROVAL);
+  approvedBridge = box && typeof box.origin === 'string' ? box.origin : null;
+  return approvedBridge;
+}
+async function approveBridge(origin) {
+  approvedBridge = origin;
+  await keepSecret(BRIDGE_APPROVAL, { origin }, true);
+}
+async function ensureBridgeApproved(c) {
+  const origin = bridgeOrigin();
+  if (!origin) return false;
+  const known = await approvedBridgeOrigin();
+  if (known === origin) return true;
+  if (!known && origin === new URL(DEFAULT_BRIDGE).origin) { await approveBridge(origin); return true; }
+  if (!approvalRun) {
+    approvalRun = (async () => {
+      const ok = window.confirm(`Remote Machines is about to sign in to ${addressOf(c)} through the SSH bridge at\n\n  ${origin}\n\n`
+        + (known ? `That isn't the bridge you approved before (${known}). ` : 'You haven\'t approved this bridge address yet. ')
+        + 'A bridge sees your SSH password or key and its access token. Only continue if you set this address yourself.\n\nUse this bridge?');
+      if (ok) await approveBridge(origin);
+      return ok;
+    })().finally(() => { approvalRun = null; });
+  }
+  await approvalRun;
+  return approvedBridge === origin;
+}
 async function checkBridge() {
   bridge = { state: 'checking', info: null, error: '' };
   renderBridge();
@@ -457,7 +518,12 @@ class Session {
     const secrets = c.auth === 'agent' ? { useAgent: true } : await secretOf(c.id);
     if (this.closed) return;
     if (!secrets) return this.set('needs-login', 'Sign in to connect.');
-    const token = (await secretOf('bridge'))?.token;
+    // Nothing (sign-in or token) goes to a bridge origin the person hasn't approved (audit NET-7).
+    if (!(await ensureBridgeApproved(c))) { if (!this.closed) this.set('error', `Not connected: the SSH bridge address ${bridgeOrigin() || settings.bridgeUrl} wasn't approved. Check it in Bridge settings.`); return; }
+    if (this.closed) return;
+    // The token is sealed together with the origin it was saved for; it never goes anywhere else.
+    const tokenBox = await secretOf('bridge');
+    const token = tokenBox && tokenBox.token && (!tokenBox.origin || tokenBox.origin === bridgeOrigin()) ? tokenBox.token : undefined;
     if (this.closed) return;
     let url;
     try { url = new URL('rpc', bridgeBase()); } catch (_) { return this.set('error', `The bridge address isn't valid: ${settings.bridgeUrl}`); }
@@ -908,16 +974,27 @@ async function saveToVfs(c, nodes) {
   if (!dir) return;
   const s = stateOf(c).session;
   const jobs = [];
-  const collect = async (n, dest) => {
+  let skipped = 0;
+  // `rel` is relative to the chosen folder and made only of validated names, and every
+  // destination is built with safeJoin onto that folder (audit NET-4).
+  const collect = async (n, rel) => {
+    const dest = PP().safeJoin(dir, rel);
     if (n.kind === 'dir') {
       jobs.push({ kind: 'dir', dest });
-      for (const child of await s.rpc('fs.list', { path: n.path })) await collect(child, joinPath(dest, child.name));
+      const listed = await s.rpc('fs.list', { path: n.path });
+      const children = validEntries(listed, n.path);
+      skipped += (Array.isArray(listed) ? listed.length : 0) - children.length;
+      for (const child of children) await collect(child, rel + '/' + child.name);
     } else jobs.push({ kind: 'file', src: n.path, dest, size: n.size });
     if (jobs.length > 5000) throw new Error('More than 5000 items: copy a smaller folder.');
   };
   try {
     setTransfer(c, { label: 'Listing', done: 0, total: 0 });
-    for (const n of nodes) await collect(n, joinPath(dir, cleanName(n.name)));
+    for (const n of nodes) {
+      const name = cleanName(n.name);
+      if (!name || !PP().isValidName(name)) { skipped++; continue; }
+      await collect(n, name);
+    }
     const files = jobs.filter((j) => j.kind === 'file');
     const clash = jobs.find((j) => FS.existsSync(j.dest) && j.kind === 'file');
     if (clash && !confirm(`${clash.dest} already exists${files.length > 1 ? ' (and maybe others)' : ''}. Overwrite?`)) return setTransfer(c, null);
@@ -930,7 +1007,7 @@ async function saveToVfs(c, nodes) {
       FS.writeFileSync(j.dest, typeof data === 'string' ? data : (B ? B.from(data) : data));
       done++;
     }
-    toast(`Saved ${files.length} file${files.length === 1 ? '' : 's'} to ${dir}`, 'ok');
+    toast(`Saved ${files.length} file${files.length === 1 ? '' : 's'} to ${dir}` + (skipped ? ` (${skipped} item${skipped === 1 ? '' : 's'} with an invalid name skipped)` : ''), skipped ? 'warn' : 'ok');
   } catch (e) { toast(errText(e), 'bad'); }
   setTransfer(c, null);
 }
@@ -1088,16 +1165,18 @@ class RemoteMount {
     this.timers = new Map();
     this.mounted = false;
   }
-  abs(rel) { return rel === '/' ? this.path : this.path + rel; }
+  /** The VFS path of a mount-relative path; safeJoin keeps it inside the mount (audit NET-4). */
+  abs(rel) { return rel === '/' ? this.path : PP().safeJoin(this.path, rel.replace(/^\/+/, '')); }
   inside(fn) { this.internal++; try { return fn(); } finally { this.internal--; } }
 
   async mount() {
     const mem = await FS.createBackend('InMemory', {});
     this.mem = mem;
     mkdirp(MOUNT_ROOT);
-    const label = (this.conn.name || this.conn.host).replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'machine';
-    let path = `${MOUNT_ROOT}/${label}`, n = 2;
-    while (FS.existsSync(path)) path = `${MOUNT_ROOT}/${label}-${n++}`;
+    let label = String(this.conn.name || this.conn.host || '').replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
+    if (!label || label.startsWith('.') || !PP().isValidName(label)) label = 'machine';
+    let path = PP().safeJoin(MOUNT_ROOT, label), n = 2;
+    while (FS.existsSync(path)) path = PP().safeJoin(MOUNT_ROOT, `${label}-${n++}`);
     this.path = path;
     FS.mount(path, this.wrap(mem));
     this.mounted = true;
@@ -1233,7 +1312,7 @@ class RemoteMount {
   list(p, expand = false) {
     if (this.listing.has(p)) return this.listing.get(p).then(() => { if (expand) this.touch(p); });
     const job = (async () => {
-      const nodes = await this.s.rpc('fs.list', { path: p }, 20000, { bg: !expand });
+      const nodes = validEntries(await this.s.rpc('fs.list', { path: p }, 20000, { bg: !expand }), `${this.path}${p}`);
       if (!this.mounted) return;
       this.inside(() => this.reconcile(p, nodes));
       vfsChanged(this.abs(p));
@@ -1765,7 +1844,10 @@ function openBridgeSettings() {
     h('div', { class: 'row end' }, h('button', { class: 'btn', onclick: test }, 'Test'), h('button', { class: 'btn primary', onclick: async () => {
       settings.bridgeUrl = (url.value.trim() || DEFAULT_BRIDGE).replace(/\/+$/, '');
       saveSettings();
-      await keepSecret('bridge', token.value.trim() ? { token: token.value.trim() } : null, true);
+      // Saving here is the person choosing this bridge: approve its origin and seal the token with it.
+      const origin = bridgeOrigin();
+      await keepSecret('bridge', token.value.trim() ? { token: token.value.trim(), origin } : null, true);
+      if (origin) await approveBridge(origin);
       m.close(true);
       checkBridge();
     } }, 'Save')),
@@ -1889,7 +1971,7 @@ async function init() {
   window.addEventListener('pagehide', cleanup);
   window.addEventListener('beforeunload', cleanup);
   // For tests and the console.
-  window.__remoteMachines = { RemoteMount, live, get conns() { return conns; }, get settings() { return settings; }, get bridge() { return bridge; }, select, openTerminal, loadDir, loadContainers, stateOf, uploadVfsPaths, saveToVfs };
+  window.__remoteMachines = { RemoteMount, live, ensureBridgeApproved, get conns() { return conns; }, get settings() { return settings; }, get bridge() { return bridge; }, select, openTerminal, loadDir, loadContainers, stateOf, uploadVfsPaths, saveToVfs };
 }
 init();
 </script>

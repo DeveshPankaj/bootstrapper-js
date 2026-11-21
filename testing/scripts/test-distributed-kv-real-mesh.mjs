@@ -52,6 +52,7 @@ async function connectPeer(fA, pX, name) {
   await pX.waitForTimeout(3000);
   const fX = await appFrame(pX, 'webrtc/main.html', 60000);
   await waitFor(() => fX.evaluate(() => window.__webrtcApp && window.__webrtcApp.joins.size === 1), 30000);
+  await fX.evaluate(() => { window.__webrtcApp.settings.autoMesh = true; });   // off by default since NET-11; this test covers the mesh
   const ans = await fX.evaluate(async (nm) => { const j = [...window.__webrtcApp.joins.values()][0]; await window.__webrtcApp.generateAnswer(j, nm); return j.link; }, name);
   await fA.evaluate((l) => window.__webrtcApp.handleIncomingCode(l), ans);
   await fX.evaluate(() => document.querySelectorAll('.modal-head button').forEach((b) => b.click()));
@@ -77,6 +78,8 @@ const browser = await chromium.launch();
 const pA = await (await browser.newContext()).newPage();
 const pB = await (await browser.newContext()).newPage();
 const pC = await (await browser.newContext()).newPage();
+// Group invitations now ask first (audit NET-11) — accept them.
+for (const p of [pA, pB, pC]) p.on('dialog', (d) => { if (/wants to add you to the group/.test(d.message())) d.accept().catch(() => {}); else d.dismiss().catch(() => {}); });
 const errs = [];
 for (const [n, p] of [['A', pA], ['B', pB], ['C', pC]]) p.on('pageerror', (e) => errs.push(`${n}: ${e.message}`));
 
@@ -84,6 +87,7 @@ await boot(pA);
 await openWindow(pA, 'ui.webrtc');
 const fA = await appFrame(pA, 'webrtc/main.html');
 await fA.locator('#me-name').waitFor({ timeout: 20000 }).catch(() => {});
+await waitFor(() => fA.evaluate(() => !!window.__webrtcApp)); await fA.evaluate(() => { window.__webrtcApp.settings.autoMesh = true; });
 
 const fB = await connectPeer(fA, pB, 'Bob');
 check('Alice and Bob connected over real WebRTC', await waitFor(() => fA.evaluate(() => window.__webrtcApp.peers.size === 1), 30000));
@@ -135,7 +139,7 @@ const fC = await connectPeer(fA, pC, 'Carol');
 check('Alice and Carol connected over real WebRTC', await waitFor(() => fA.evaluate(() => window.__webrtcApp.peers.size === 2), 30000));
 await fA.evaluate(() => document.querySelectorAll('.modal-head button').forEach((b) => b.click()));
 await fC.evaluate(() => document.querySelectorAll('.modal-head button').forEach((b) => b.click()));
-// "Connect me to everyone in the room" (default on) should auto-mesh Carol <-> Bob too.
+// "Connect me to everyone in the room" (turned on above — off by default since NET-11) should auto-mesh Carol <-> Bob too.
 check('mesh auto-connect converges Carol to Bob as well (full mesh, not just Carol-Alice)', await waitFor(() => fC.evaluate(() => window.__webrtcApp.peers.size === 2), 20000));
 
 // Add Carol to the existing "KV Test" group (Alice is the creator).

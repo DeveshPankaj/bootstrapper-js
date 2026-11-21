@@ -41,6 +41,29 @@ const getBreadcrumbs = (path) => {
   return crumbs;
 };
 
+// Context-menu entries (audit KRN-3/WIN-2/APP-1, decisions.md D9): what an entry
+// does is a function over values — the layout's ContextMenuItem `onSelect` —
+// so no file name is ever turned into DSL source. Mirrored in
+// src/apps/file-explorer/index.tsx; `children` makes an "Open with" group.
+const toContextMenuItems = (entries) => entries.map((entry) =>
+  entry.divider ? { id: entry.id, type: 'divider', title: '' }
+    : entry.children ? { id: entry.id, type: 'group', title: entry.title, children: toContextMenuItems(entry.children) }
+      : { id: entry.id, type: 'action', title: entry.title, onSelect: entry.run });
+
+// "Run" for scripts (decisions.md D10): opening a .js/.run file only views it;
+// running it is this explicit action. host.runFile asks for confirmation naming
+// the file when it lives outside the system folders (/bin, /usr/bin, /opt/apps).
+// A .run script gets its folder as `$args[0]`, like a command run from a shell.
+const SCRIPT_EXTS = new Set(['js', 'run']);
+const runScript = (path) => {
+  const report = (e) => platform.host.callCommand('notify', { title: 'Run failed', body: `${path.split('/').pop()}: ${(e && e.message) || e}`, duration: 4000 });
+  try {
+    const result = platform.host.runFile(platform, path, [path.split('/').slice(0, -1).join('/') || '/']);
+    if (result && typeof result.catch === 'function') result.catch(report);
+    return result;
+  } catch (e) { report(e); }
+};
+
 // ── ZIP support via fflate v0.8.2 ─────────────────────────────────────────
 // fflate source: https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js
 let _fflate = null;
@@ -57,21 +80,49 @@ const loadFflate = () => {
   return _fflate;
 };
 
+// Where an archive entry may be written (audit BOOT-8/APP-3, decisions.md D6):
+// pathPolicy.safeJoin keeps it inside destDir — it refuses absolute names, '..',
+// backslashes and control characters — and an entry may not land on a
+// kernel-owned path (/etc, /bin, /opt, /.initd.run, ~/initd.run, …) unless the
+// user is extracting inside one already. Throws otherwise.
+const archiveEntryPath = (destDir, name) => {
+  const { safeJoin, isKernelOwned, PathPolicyError } = platform.host.pathPolicy;
+  const target = safeJoin(destDir, name);
+  if (isKernelOwned(target) && !isKernelOwned(destDir)) throw new PathPolicyError(`protected path: ${target}`);
+  return target;
+};
+
+// Returns { count, skipped }: entries that would escape destDir are not written.
 const extractZip = (zipPath, destDir) => {
   const fflate = loadFflate();
   const data = fs.readFileSync(zipPath);
   const uint8 = new Uint8Array(data.buffer ?? data);
   const entries = fflate.unzipSync(uint8);
   let count = 0;
+  const skipped = [];
   for (const [name, content] of Object.entries(entries)) {
     if (name.endsWith('/')) continue;
-    const fullPath = normalizePath(`${destDir}/${name}`);
+    let fullPath;
+    try { fullPath = archiveEntryPath(destDir, name); }
+    catch (_) { skipped.push(name); continue; }
     const parentDir = fullPath.split('/').slice(0, -1).join('/');
     try { fs.mkdirSync(parentDir, { recursive: true }); } catch (_) {}
     fs.writeFileSync(fullPath, Buffer.from(content));
     count++;
   }
-  return count;
+  return { count, skipped };
+};
+
+// Notification for an extraction, naming (quoted, shortened) any refused entries.
+const extractNotice = ({ count, skipped }) => {
+  const body = `${count} file${count !== 1 ? 's' : ''} extracted`;
+  if (!skipped.length) return { title: 'Extracted', body, duration: 3000 };
+  const names = skipped.slice(0, 5).map((n) => JSON.stringify(n.length > 80 ? n.slice(0, 77) + '…' : n)).join(', ');
+  return {
+    title: 'Extracted — unsafe entries skipped',
+    body: `${body}. Skipped ${skipped.length} entr${skipped.length !== 1 ? 'ies' : 'y'} that would land outside the folder or on a system path: ${names}${skipped.length > 5 ? ', …' : ''}`,
+    duration: 10000,
+  };
 };
 
 const addToZip = (zipFiles, vfsPath, zipEntryName) => {
@@ -138,13 +189,29 @@ const fmtBytes = (n) => {
 };
 // ──────────────────────────────────────────────────────────────────────────
 
+// Settings > Apps > Default File Explorer. The 'explorer' command belongs to
+// this file — the command registry refuses a different owner (audit KRN-10) —
+// so the alternative explorer can't take the name over; instead this command
+// hands the call to it. Only first-party explorers qualify, never whatever
+// command a (writable) preferences file names.
+const ALT_EXPLORERS = new Set(['explorer-sifi']);
+const preferredExplorer = () => {
+  try {
+    const name = JSON.parse(fs.readFileSync('/user-preferences.json', 'utf8') || '{}').default_explorer;
+    return ALT_EXPLORERS.has(name) ? platform.host.getCommand(name) || null : null;
+  } catch (_) { return null; }
+};
+
 const run = (...args) => {
+  const alt = preferredExplorer();
+  if (alt) return alt.exec(...args);
+
   const [body, props, dir = DESKTOP_PATH] = args;
 
   // Called with no args (e.g. from a keybinding or Spotlight) — route through
   // open-window so the window manager provides body/props correctly.
   if (!body) {
-    platform.host.execCommand("service('001-core.layout', 'open-window') (command('explorer'))", platform)
+    platform.host.openWindow('explorer');
     return
   }
 
@@ -693,9 +760,8 @@ const App = (props) => {
     const regs = [
       platform.host.registerCommand(`${k}.zip-extract`, (zipPath) => {
         try {
-          const destDir = zipPath.split('/').slice(0, -1).join('/');
-          const n = extractZip(zipPath, destDir);
-          platform.host.callCommand('notify', { title: 'Extracted', body: `${n} file${n !== 1 ? 's' : ''} extracted`, duration: 3000 });
+          const destDir = zipPath.split('/').slice(0, -1).join('/') || '/';
+          platform.host.callCommand('notify', extractNotice(extractZip(zipPath, destDir)));
           refreshRef.current();
         } catch (e) {
           platform.host.callCommand('notify', { title: 'Extract failed', body: e.message || String(e), duration: 4000 });
@@ -873,14 +939,13 @@ const App = (props) => {
         if (cmd) { cmd.exec(null, null, selectedFilePath); return; }
       }
       if (AUDIO_EXTS.has(ext)) {
-        platform.host.execCommand(`service('001-core.layout', 'open-window') (command('ui.audioplayer'), '${selectedFilePath}')`, platform);
+        platform.host.openWindow('ui.audioplayer', selectedFilePath);
         return;
       }
       if (ext === 'zip') {
         if (confirm(`Extract "${selectedFilePath.split('/').pop()}" into current folder?`)) {
           try {
-            const n = extractZip(selectedFilePath, dirRef.current);
-            platform.host.callCommand('notify', { title: 'Extracted', body: `${n} file${n !== 1 ? 's' : ''} extracted`, duration: 3000 });
+            platform.host.callCommand('notify', extractNotice(extractZip(selectedFilePath, dirRef.current)));
             refresh();
           } catch (e) {
             platform.host.callCommand('notify', { title: 'Extract failed', body: e.message || String(e), duration: 4000 });
@@ -960,133 +1025,61 @@ const App = (props) => {
     if (!openContextMenu) return;
     const rect = props.getBoundingClientRect();
     const k = cmdPrefix.current;
+    const call = (name, ...values) => () => platform.host.callCommand(`${k}.${name}`, ...values);
+    const openIn = (commandName, ...values) => () => platform.host.openWindow(commandName, ...values);
+    const fsService = (op, path) => () => platform.host.getService('root', 'fs')(op, path);
 
     // Batch actions for a multi-selection - shown instead of the single-item
     // action list below when the right-clicked item is part of a selection
     // of more than one item.
     if (Array.isArray(selection) && selection.length > 1) {
-      const encoded = encodeURIComponent(JSON.stringify(selection));
-      const hasFolder = selection.some(p => { try { return fs.statSync(p).isDirectory(); } catch (_) { return false; } });
+      const paths = [...selection];
+      const hasFolder = paths.some(p => { try { return fs.statSync(p).isDirectory(); } catch (_) { return false; } });
       const actions = [
-        {
-          id: 'download_selected',
-          type: 'action',
-          title: hasFolder ? 'Download files (skips folders)' : 'Download',
-          cmd: `platform.host.callCommand('${k}.download-files', JSON.parse(decodeURIComponent('${encoded}')))`,
-        },
-        { id: 'div_batch', type: 'divider', title: '' },
-        {
-          id: 'delete_selected',
-          type: 'action',
-          title: `Delete ${selection.length} items`,
-          cmd: `platform.host.callCommand('${k}.delete-files', JSON.parse(decodeURIComponent('${encoded}')))`,
-        },
+        { id: 'download_selected', title: hasFolder ? 'Download files (skips folders)' : 'Download', run: call('download-files', paths) },
+        { id: 'div_batch', divider: true },
+        { id: 'delete_selected', title: `Delete ${paths.length} items`, run: call('delete-files', paths) },
       ];
-      openContextMenu(event.clientX + rect.x, event.clientY + rect.y, actions);
+      openContextMenu(event.clientX + rect.x, event.clientY + rect.y, toContextMenuItems(actions));
       return;
     }
 
     const actions = [];
-    file.path = file.path.replace(/\/\//g, '/')
-    const stats = fs.statSync(file.path);
+    const path = file.path = normalizePath(file.path);
+    const stats = fs.statSync(path);
     if (stats.isFile()) {
-      actions.push({
-        id: "edit_file",
-        type: "action",
-        title: "Edit",
-        cmd: `service('001-core.layout', 'open-window') (command('ui.notepad'), '${file.path}')`,
-      });
       const ctxExt = file.name.split('.').pop().toLowerCase();
-      if (ctxExt === 'py') {
-        actions.push({
-          id: "run_python",
-          type: "action",
-          title: "Run in Python",
-          cmd: `service('001-core.layout', 'open-window') (command('ui.python'), '${file.path}')`,
-        });
-      }
-      actions.push({
-        id: "open_file",
-        type: "action",
-        title: "Open",
-        cmd: `service('001-core.layout', 'open-window') (command('ui.iframe'), '${file.path}')`,
-      });
-      actions.push({
-        id: "download_file",
-        type: "action",
-        title: "Download",
-        cmd: `platform.host.callCommand('${k}.download-file', '${file.path}')`,
-      });
-      actions.push({
-        id: "delete_file",
-        type: "action",
-        title: "Delete",
-        cmd: `service('root', 'fs')('rm', '${file.path}')`,
-      });
-      actions.push({
-        id: 'rename_file',
-        type: 'action',
-        title: 'Rename',
-        cmd: `platform.host.callCommand('${k}.rename', '${file.path}')`,
-      });
-      actions.push({
-        id: "diff_file",
-        type: "action",
-        title: "Compare with…",
-        cmd: `service('001-core.layout', 'open-window') (command('ui.diff'), '${file.path}', '')`,
-      });
-      const fileExt = file.name.split('.').pop().toLowerCase();
-      if (fileExt === 'zip') {
-        actions.push({
-          id: "zip_extract",
-          type: "action",
-          title: "Extract here",
-          cmd: `platform.host.callCommand('${k}.zip-extract', '${file.path}')`,
-        });
-      }
-      actions.push({
-        id: "zip_compress_file",
-        type: "action",
-        title: "Compress to ZIP",
-        cmd: `platform.host.callCommand('${k}.zip-compress', '${file.path}')`,
-      });
-      actions.push({ id: 'div_clip', type: 'divider', title: '' });
-      actions.push({ id: 'copy_file', type: 'action', title: 'Copy', cmd: `platform.host.callCommand('${k}.copy-file', '${file.path}')` });
-      actions.push({ id: 'cut_file',  type: 'action', title: 'Cut',  cmd: `platform.host.callCommand('${k}.cut-file', '${file.path}')` });
-      actions.push({ id: 'props_file', type: 'action', title: 'Properties', cmd: `platform.host.callCommand('${k}.show-properties', '${file.path}')` });
-      actions.push({ id: 'divider_open_with', type: 'divider', title: '' });
-      const owExt = file.name.split('.').pop().toLowerCase();
-      const openWithApps = platform.host.getCommandsForExtension ? platform.host.getCommandsForExtension(owExt) : [];
-      const openWithChildren = openWithApps.map(app => ({
-        id: `ow_${app.name}`, type: 'action', title: app.title,
-        cmd: `service('001-core.layout','open-window')(command('${app.name}'),'${file.path}')`,
-      }));
-      openWithChildren.push(
-        { id: 'ow_browser', type: 'action', title: 'Browser', cmd: `service('001-core.layout','open-window')(command('ui.iframe'),'${file.path}')` }
-      );
-      actions.push({ id: 'open_with', type: 'group', title: 'Open with', children: openWithChildren });
+      actions.push({ id: 'edit_file', title: 'Edit', run: openIn('ui.notepad', path) });
+      if (SCRIPT_EXTS.has(ctxExt)) actions.push({ id: 'run_file', title: 'Run', run: () => runScript(path) });
+      if (ctxExt === 'py') actions.push({ id: 'run_python', title: 'Run in Python', run: openIn('ui.python', path) });
+      actions.push({ id: 'open_file', title: 'Open', run: openIn('ui.iframe', path) });
+      actions.push({ id: 'download_file', title: 'Download', run: call('download-file', path) });
+      actions.push({ id: 'delete_file', title: 'Delete', run: fsService('rm', path) });
+      actions.push({ id: 'rename_file', title: 'Rename', run: call('rename', path) });
+      actions.push({ id: 'diff_file', title: 'Compare with…', run: openIn('ui.diff', path, '') });
+      if (ctxExt === 'zip') actions.push({ id: 'zip_extract', title: 'Extract here', run: call('zip-extract', path) });
+      actions.push({ id: 'zip_compress_file', title: 'Compress to ZIP', run: call('zip-compress', path) });
+      actions.push({ id: 'div_clip', divider: true });
+      actions.push({ id: 'copy_file', title: 'Copy', run: call('copy-file', path) });
+      actions.push({ id: 'cut_file', title: 'Cut', run: call('cut-file', path) });
+      actions.push({ id: 'props_file', title: 'Properties', run: call('show-properties', path) });
+      actions.push({ id: 'divider_open_with', divider: true });
+      const openWithApps = platform.host.getCommandsForExtension ? platform.host.getCommandsForExtension(ctxExt) : [];
+      const openWithChildren = openWithApps.map(app => ({ id: `ow_${app.name}`, title: app.title, run: openIn(app.name, path) }));
+      openWithChildren.push({ id: 'ow_browser', title: 'Browser', run: openIn('ui.iframe', path) });
+      actions.push({ id: 'open_with', title: 'Open with', children: openWithChildren });
     } else {
-      actions.push({
-        id: "open_file",
-        type: "action",
-        title: "Open in explorer",
-        cmd: `service('001-core.layout', 'open-window') (command('explorer'), '${file.path}')`,
-      });
-      actions.push({ id: 'delete_file', type: 'action', title: 'Delete', cmd: `service('root', 'fs')('rmdir', '${file.path}')` });
-      actions.push({ id: 'rename_dir', type: 'action', title: 'Rename', cmd: `platform.host.callCommand('${k}.rename', '${file.path}')` });
-      actions.push({
-        id: "zip_compress_dir",
-        type: "action",
-        title: "Compress to ZIP",
-        cmd: `platform.host.callCommand('${k}.zip-compress', '${file.path}')`,
-      });
-      actions.push({ id: 'div_clip_dir', type: 'divider', title: '' });
-      actions.push({ id: 'copy_dir',  type: 'action', title: 'Copy',       cmd: `platform.host.callCommand('${k}.copy-file', '${file.path}')` });
-      actions.push({ id: 'cut_dir',   type: 'action', title: 'Cut',        cmd: `platform.host.callCommand('${k}.cut-file', '${file.path}')` });
-      actions.push({ id: 'props_dir', type: 'action', title: 'Properties', cmd: `platform.host.callCommand('${k}.show-properties', '${file.path}')` });
+      actions.push({ id: 'open_file', title: 'Open in explorer', run: openIn('explorer', path) });
+      actions.push({ id: 'delete_file', title: 'Delete', run: fsService('rmdir', path) });
+      actions.push({ id: 'rename_dir', title: 'Rename', run: call('rename', path) });
+      actions.push({ id: 'zip_compress_dir', title: 'Compress to ZIP', run: call('zip-compress', path) });
+      actions.push({ id: 'div_clip_dir', divider: true });
+      actions.push({ id: 'copy_dir', title: 'Copy', run: call('copy-file', path) });
+      actions.push({ id: 'cut_dir', title: 'Cut', run: call('cut-file', path) });
+      actions.push({ id: 'props_dir', title: 'Properties', run: call('show-properties', path) });
     }
 
-    openContextMenu(event.clientX + rect.x, event.clientY + rect.y, actions);
+    openContextMenu(event.clientX + rect.x, event.clientY + rect.y, toContextMenuItems(actions));
   };
 
   const showDirActionsHandler = (event) => {
@@ -1095,15 +1088,16 @@ const App = (props) => {
     const rect = props.getBoundingClientRect();
     const dir = dirRef.current;
     const k = cmdPrefix.current;
+    const call = (name, ...values) => () => platform.host.callCommand(`${k}.${name}`, ...values);
     const cb = window.top?.__vfsClipboard;
     const actions = [];
     if (cb && cb.paths.length) {
-      actions.push({ id: 'paste', type: 'action', title: `Paste "${cb.paths[0].split('/').pop()}"`, cmd: `platform.host.callCommand('${k}.paste-files', '${dir}')` });
-      actions.push({ id: 'div_paste', type: 'divider', title: '' });
+      actions.push({ id: 'paste', title: `Paste "${cb.paths[0].split('/').pop()}"`, run: call('paste-files', dir) });
+      actions.push({ id: 'div_paste', divider: true });
     }
-    actions.push({ id: 'mk_folder', type: 'action', title: 'New Folder', cmd: `platform.host.callCommand('${k}.make-dir', '${dir}')` });
-    actions.push({ id: 'mk_file_bg', type: 'action', title: 'New File',  cmd: `platform.host.callCommand('${k}.make-file', '${dir}')` });
-    openContextMenu(event.clientX + rect.x, event.clientY + rect.y, actions);
+    actions.push({ id: 'mk_folder', title: 'New Folder', run: call('make-dir', dir) });
+    actions.push({ id: 'mk_file_bg', title: 'New File', run: call('make-file', dir) });
+    openContextMenu(event.clientX + rect.x, event.clientY + rect.y, toContextMenuItems(actions));
   };
 
   // --- Drag & drop: move files between explorer windows, and import files from the OS ---

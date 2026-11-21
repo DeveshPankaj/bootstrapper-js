@@ -1,12 +1,6 @@
-const React = window.platform.getService('React')
-const ReactDOM = window.platform.getService('ReactDOM')
-
-exports.React = React
-exports.ReactDOM = ReactDOM
-
-// const el = document.createElement('div')
-// const root = ReactDOM.createRoot(el)
-// platform.window.document.body.appendChild(el)
+// Rendered by temp.html, which runs in an opaque sandbox: React comes from the
+// pinned UMD build that page loads (there is no window.platform in a sandbox).
+const React = window.React
 
 const Counter = () => {
    const [counter, setCounter] = React.useState(0)
@@ -53,23 +47,18 @@ const Footer = (props) => {
 }
 
 const App = (props) => {
-  // Owns the live header style itself (seeded from any `headerStyles` passed
-  // in via props) so the color pickers below actually do something when this
-  // file is opened on its own — previously Footer called
-  // props.setHeaderStyles(...) but nothing ever consumed it, so the controls
-  // silently did nothing. Still forwards every patch to props.setHeaderStyles
-  // when a caller supplies one, so an embedding window can also react to it.
+  // Owns the live header style itself, so the color pickers below work.
   const [headerStyles, setHeaderStylesState] = React.useState(() => ({
     backgroundColor: '#eef0ff', color: '#312e81', ...props.headerStyles,
   }))
-  const setHeaderStyles = (patch) => {
-    setHeaderStylesState(prev => ({ ...prev, ...patch }))
-    if (props.setHeaderStyles) props.setHeaderStyles(patch)
-  }
+  const setHeaderStyles = (patch) => setHeaderStylesState(prev => ({ ...prev, ...patch }))
 
+  // A sandboxed page can't open windows itself: it asks the OS (sandbox SDK
+  // `ipc.editor.open`) to open temp.js in Notepad. temp.html re-renders when
+  // the file is saved. If the request is refused, show the source instead.
+  const [showSource, setShowSource] = React.useState(false)
   const openThisFile = () => {
-    const cmd = `service('001-core.layout', 'open-window') (command('ui.notepad'), '/home/user1/projects/temp.js')`
-    window.platform.host.execCommand(cmd, window.platform)
+    window.ipc.editor.open(props.sourcePath).catch(() => setShowSource(true))
   }
 
   return (
@@ -99,6 +88,15 @@ const App = (props) => {
       <p style={{margin: 0, fontSize: '.85rem', lineHeight: 1.6, color: '#6b7280', textAlign: 'center'}}>
         Edit <span className="edit-link" onClick={openThisFile}>temp.js</span> and save to see the changes live.
       </p>
+
+      {showSource && (
+        <pre style={{
+          margin: '1rem 0 0', padding: '.85rem 1rem', maxHeight: '260px', overflow: 'auto',
+          background: '#1e1b2e', color: '#e7e5f3', borderRadius: '12px', fontSize: '.72rem', lineHeight: 1.5,
+        }}>
+          {props.sourcePath}{'\n\n'}{props.source}
+        </pre>
+      )}
 
       <Footer headerStyles={headerStyles} setHeaderStyles={setHeaderStyles} />
     </div>

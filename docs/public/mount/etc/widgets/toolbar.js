@@ -21,11 +21,12 @@ const readConfig = () => {
   return DEFAULT_CONFIG;
 };
 
+// `name` comes from the (app-writable) toolbar config, so it travels as a value —
+// never spliced into DSL source (audit KRN-3). Unknown commands are ignored.
 const openCommand = (name) => {
-  platform.host.execCommand(
-    `service('001-core.layout', 'open-window') (command('${name}'))`,
-    platform
-  );
+  if (typeof name !== 'string' || !platform.host.getCommand(name)) return;
+  try { platform.host.openWindow(name); }
+  catch (err) { console.warn('[toolbar] could not open', name, err); }
 };
 
 platform.host.registerWidget('toolbar', (container, api) => {

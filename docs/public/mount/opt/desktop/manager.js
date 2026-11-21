@@ -1,6 +1,6 @@
-// Desktop icon manager — VFS-configurable desktop icon renderer.
-// Loaded and mounted by the layout kernel on boot; exports { render }.
-// Edit this file in the file explorer to customise the desktop view.
+// Desktop icon manager — the default desktop icon renderer.
+// Loaded and mounted by the layout on boot, from the static copy that ships
+// with the build (the vfs copy is view-only); exports { render }.
 //
 // API: render(container, api) where api = { openFile, showFileActions }
 // Return a cleanup function (or nothing) from render.

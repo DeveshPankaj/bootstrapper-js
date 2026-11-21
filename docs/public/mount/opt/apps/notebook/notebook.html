@@ -3,10 +3,12 @@
 <head>
 <meta charset="utf-8">
 <title>Notebook</title>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/marked@13/marked.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css" integrity="sha384-zaeBlB/vwYsDRSlFajnDd7OydJ0cWk+c2OWybl3eSUf6hW2EbhlCsQPqKr3gkznT" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js" integrity="sha384-ZYmwuq4n2gOcNxMSiJ6jyTj+BbIrilr7p6dlq6q5nmSWKmsH9UU4K1qqjycMkfmR" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js" integrity="sha384-Xy+2exU6lBoT4OpUOtnQb+cUpn+nlJQEHvRobWVtwz6wIsw4oNoO7xyd/l8rYgMy" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@13.0.3/marked.min.js" integrity="sha384-YTBHtsL8yVTHcLakYNyrOfK3K+QQcXiECuaALJ+3j7Mo681Rtzadt8NR6WrZH+eQ" crossorigin="anonymous"></script>
+<!-- Markdown cells are sanitised (audit APP-5): marked passes raw HTML through. Vendored, pinned copy. -->
+<script src="/public/vendor/dompurify/3.4.18/purify.min.js" integrity="sha384-lkArbWjiZKuE+bzKbj1vOEF7DKYBDNvgwZMCt5OH8bdRB92zpzyNska9Q/XKPHQD" crossorigin="anonymous"></script>
 <style>
 /* ── Reset ─────────────────────────────────────────────────────────── */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -244,6 +246,28 @@ let dirty = false;
 let execCount = 0;
 let cellIdSeq = 0;
 
+// ── markdown cells ────────────────────────────────────────────────────────────
+// marked passes raw HTML through, and a notebook can come from anywhere (.ipynb is
+// a registered extension), so its output always goes through DOMPurify (audit
+// APP-5). Links open in a new tab without an opener instead of navigating this
+// same-origin frame. If the sanitiser didn't load, the source is shown as text.
+const MD_PURIFY_CFG = { FORBID_TAGS: ['form'] };
+if (window.DOMPurify && DOMPurify.isSupported) {
+  DOMPurify.addHook('afterSanitizeAttributes', node => {
+    if (node.tagName === 'A' && node.hasAttribute('href') && !node.getAttribute('href').startsWith('#')) {
+      node.setAttribute('target', '_blank');
+      node.setAttribute('rel', 'noopener noreferrer');
+    }
+  });
+}
+function renderMarkdownInto(el, src) {
+  if (window.DOMPurify && DOMPurify.isSupported && typeof marked !== 'undefined') {
+    el.innerHTML = DOMPurify.sanitize(marked.parse(src), MD_PURIFY_CFG);
+  } else {
+    el.textContent = src;
+  }
+}
+
 // ── kernel UI ─────────────────────────────────────────────────────────────────
 const kDot       = document.getElementById('k-dot');
 const kLabel     = document.getElementById('k-label');
@@ -267,7 +291,9 @@ async function ensurePy() {
   try {
     await new Promise((res, rej) => {
       const s = document.createElement('script');
-      s.src = 'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js';
+      s.src = 'https://cdn.jsdelivr.net/npm/pyodide@0.26.4/pyodide.js';
+      s.integrity = 'sha384-i3R37b3tF+HWudsUf1VSEOY2YxwSNMqY8DQa9Z0O3xh+NkJ9o+yjcGyIi5huj+nB';
+      s.crossOrigin = 'anonymous';
       s.onload = res; s.onerror = rej;
       document.head.appendChild(s);
     });
@@ -534,7 +560,7 @@ function selectCell(cell, focus) {
 async function runCell(cell, stayInPlace) {
   if (cell.type === 'markdown') {
     const src = cell.cm.getValue();
-    cell.mdView.innerHTML = marked.parse(src);
+    renderMarkdownInto(cell.mdView, src);
     cell.el.classList.add('md-rendered');
     markDirty(); return;
   }
@@ -560,9 +586,17 @@ async function runCell(cell, stayInPlace) {
         cell.outputEl.prepend(_progEl);
       }
       const pct = total > 0 ? Math.min(100, value / total * 100) : 0;
-      _progEl.innerHTML =
-        `<div class="nb-prog-label">${label ? label + '  ' : ''}${value} / ${total}  (${pct.toFixed(0)}%)</div>` +
-        `<div class="nb-prog-bar"><div class="nb-prog-fill" style="width:${pct}%"></div></div>`;
+      // label/value/total come from cell code: text only
+      const lbl = document.createElement('div');
+      lbl.className = 'nb-prog-label';
+      lbl.textContent = `${label ? label + '  ' : ''}${value} / ${total}  (${pct.toFixed(0)}%)`;
+      const bar = document.createElement('div');
+      bar.className = 'nb-prog-bar';
+      const fill = document.createElement('div');
+      fill.className = 'nb-prog-fill';
+      fill.style.width = pct + '%';
+      bar.appendChild(fill);
+      _progEl.replaceChildren(lbl, bar);
     }
   };
 
@@ -681,7 +715,7 @@ function loadNotebook(json) {
     const src  = fromLines(nc.source);
     const cell = addCell(type, src, type === 'code' ? nbOutputsToParts(nc.outputs) : [], true);
     if (type === 'markdown' && src.trim()) {
-      cell.mdView.innerHTML = marked.parse(src);
+      renderMarkdownInto(cell.mdView, src);
       cell.el.classList.add('md-rendered');
     }
   }

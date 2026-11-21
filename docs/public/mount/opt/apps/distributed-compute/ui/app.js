@@ -6,7 +6,7 @@
 import { MeshClient } from '../lib/mesh-client.js';
 import { Scheduler } from '../lib/scheduler.js';
 import { runTask } from '../lib/task-runtime.js';
-import { runTaskInWorker } from '../lib/worker-task-runtime.js';
+import { createSandboxRunner } from '../lib/worker-task-runtime.js';
 import * as TinyNN from '../lib/tiny-nn.js';
 import { MAP_REDUCE_EXAMPLE } from '../examples/map-reduce-demo.js';
 import { NEURAL_NET_EXAMPLE, NN_COMBINE_SOURCE } from '../examples/neural-net-training.js';
@@ -29,26 +29,83 @@ const progressList = el('progress-list');
 const resultValue = el('result-value');
 const lossCanvas = el('loss-canvas');
 const logEl = el('log');
+const acceptList = el('accept-list');
 
 const platformHost = window.platform ? window.platform.host : null;
 const mesh = new MeshClient(platformHost);
 
-// Worker-task execution reads tiny-nn.js's own source text so
-// worker-task-runtime.js can inline it into a real dedicated Worker (see that
-// file's header comment for why: it's what makes a genuinely killable
-// in-flight task possible, unlike the default synchronous `runTask`).
+// Other peers' tasks run in worker-task-runtime.js's sandbox: a hidden opaque-origin
+// frame with no network or storage, one killable Worker per task. It inlines
+// tiny-nn.js's source text into that Worker (the sandbox can't reach the vfs).
+const fs = (() => { try { return platformHost && platformHost.getFS ? platformHost.getFS() : null; } catch (_) { return null; } })();
 let nnSource = '';
 try {
-  const fs = platformHost && platformHost.getFS ? platformHost.getFS() : null;
   if (fs) nnSource = fs.readFileSync('/opt/apps/distributed-compute/lib/tiny-nn.js', 'utf8');
 } catch (_) { /* falls back to no nn helpers available inside the worker */ }
+const sandbox = createSandboxRunner({ nnSource });
+
+// ---- "Run tasks for others": per-group opt-in (audit NET-1) -------------------
+// Off by default. A task is code written by another peer; it only runs here for a
+// group the user ticked, and then only inside the sandbox. Persisted in this app's
+// own data dir, bound to the group's id + creator + name (a new group that reuses
+// an old id isn't trusted automatically).
+const DATA_DIR = '/home/user1/.local/share/distributed-compute';
+const SETTINGS_FILE = DATA_DIR + '/settings.json';
+const MAX_ACCEPT_ENTRIES = 50;
+let acceptEntries = [];   // [{ gid, creator, name, at }]
+function loadAcceptSettings() {
+  try {
+    const raw = fs ? (fs.existsSync(SETTINGS_FILE) ? fs.readFileSync(SETTINGS_FILE, 'utf8') : null) : localStorage.getItem('distributed-compute.settings');
+    const parsed = raw ? JSON.parse(raw) : null;
+    const list = parsed && Array.isArray(parsed.acceptTasks) ? parsed.acceptTasks : [];
+    acceptEntries = list.filter((e) => e && typeof e.gid === 'string' && /^[0-9a-f]{12}$/.test(e.gid))
+      .map((e) => ({ gid: e.gid, creator: typeof e.creator === 'string' ? e.creator : '', name: typeof e.name === 'string' ? e.name : '', at: Number(e.at) || 0 }))
+      .slice(0, MAX_ACCEPT_ENTRIES);
+  } catch (_) { acceptEntries = []; }
+}
+function saveAcceptSettings() {
+  const text = JSON.stringify({ acceptTasks: acceptEntries }, null, 2);
+  try {
+    if (fs) {
+      let cur = '';
+      for (const part of DATA_DIR.split('/').filter(Boolean)) { cur += '/' + part; try { fs.mkdirSync(cur); } catch (e) { if (e && e.code !== 'EEXIST') throw e; } }
+      fs.writeFileSync(SETTINGS_FILE, text);
+    } else localStorage.setItem('distributed-compute.settings', text);
+  } catch (e) { log('could not save the task settings: ' + (e && e.message ? e.message : String(e)), true); }
+}
+const groupById = (gid) => (mesh.isAvailable() ? mesh.groups() : []).find((g) => g.gid === gid) || null;
+function acceptsTasksFrom(gid) {
+  const g = groupById(gid);
+  if (!g) return false;
+  return acceptEntries.some((e) => e.gid === g.gid && e.creator === (g.creator || '') && e.name === (g.name || ''));
+}
+function setAcceptTasks(gid, on) {
+  const g = groupById(gid);
+  acceptEntries = acceptEntries.filter((e) => e.gid !== gid);
+  if (on && g) acceptEntries.unshift({ gid: g.gid, creator: g.creator || '', name: g.name || '', at: Date.now() });
+  acceptEntries = acceptEntries.slice(0, MAX_ACCEPT_ENTRIES);
+  saveAcceptSettings();
+  renderAcceptList(true);
+  return acceptsTasksFrom(gid);
+}
+const refusedNoted = new Map();   // "gid|peer" -> last time a refusal was logged
+function noteRefused(gid, fromPeerId, fromName, reason) {
+  const key = gid + '|' + fromPeerId, now = Date.now();
+  if (now - (refusedNoted.get(key) || 0) < 60000) return;
+  refusedNoted.set(key, now);
+  const g = groupById(gid);
+  log(`refused a task from ${fromName || fromPeerId} in "${g ? g.name : gid}" (${reason}) — tick the group under "Run tasks for others" to help with its jobs`);
+}
+loadAcceptSettings();
 
 const scheduler = new Scheduler(mesh, {
   myId: (mesh.myIdentity() || {}).id || 'self',
   host: platformHost,
-  runInWorker: (source, args) => runTaskInWorker(source, args, nnSource),
+  runInWorker: (source, args, opts) => sandbox.run(source, args, opts),
+  acceptTask: (gid) => acceptsTasksFrom(gid),
+  onRefused: noteRefused,
 });
-scheduler.startResponder(); // this window is always a potential worker for other peers' jobs
+scheduler.startResponder(); // receives results for our own jobs; other peers' tasks only for opted-in groups
 
 let editor = null;
 let running = false;
@@ -68,12 +125,19 @@ function workerLabel(workers, id) {
   return w ? (w.isSelf ? `${w.name || 'You'} (you)` : (w.name || id)) : id;
 }
 
+// Peer display names are chosen by the peers themselves — text only, never markup (audit NET-5).
 function renderRoster(workers) {
-  rosterList.innerHTML = '';
+  rosterList.replaceChildren();
   for (const w of workers) {
     const row = document.createElement('div');
     row.className = 'worker-row';
-    row.innerHTML = `<span class="worker-dot${w.isSelf ? ' self' : ''}"></span><span class="worker-name">${w.isSelf ? (w.name || 'You') + ' (you)' : (w.name || w.id)}</span>`;
+    const dot = document.createElement('span');
+    dot.className = 'worker-dot' + (w.isSelf ? ' self' : '');
+    const name = document.createElement('span');
+    name.className = 'worker-name';
+    name.textContent = w.isSelf ? (w.name || 'You') + ' (you)' : String(w.name || w.id);
+    name.title = name.textContent;
+    row.append(dot, name);
     rosterList.appendChild(row);
   }
 }
@@ -186,6 +250,42 @@ function refreshMeshUi() {
   groupSelect.value = groups.some((g) => g.gid === prevGid) ? prevGid : '';
   renderMeshBanner(available, groups);
   renderRoster(currentWorkers());
+  renderAcceptList(false);
+}
+
+let lastAcceptSig = '';
+function renderAcceptList(force) {
+  const groups = mesh.isAvailable() ? mesh.groups() : [];
+  const sig = JSON.stringify(groups.map((g) => [g.gid, g.name, g.creator, (g.members || []).length, acceptsTasksFrom(g.gid)]));
+  if (!force && sig === lastAcceptSig) return;   // don't rebuild (and steal clicks from) an unchanged list
+  lastAcceptSig = sig;
+  acceptList.replaceChildren();
+  if (!groups.length) {
+    const empty = document.createElement('div');
+    empty.className = 'activity-empty';
+    empty.textContent = 'Join a WebRTC Chat group to help with other people\'s jobs.';
+    acceptList.appendChild(empty);
+    return;
+  }
+  for (const g of groups) {
+    const row = document.createElement('label');
+    row.className = 'accept-row';
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.checked = acceptsTasksFrom(g.gid);
+    box.dataset.gid = g.gid;
+    box.addEventListener('change', () => { box.checked = setAcceptTasks(g.gid, box.checked); });
+    const name = document.createElement('span');
+    name.className = 'accept-name';
+    name.textContent = g.name || g.gid;
+    name.title = `${(g.members || []).length} member(s)`;
+    row.append(box, name);
+    acceptList.appendChild(row);
+  }
+  const hint = document.createElement('div');
+  hint.className = 'accept-hint';
+  hint.textContent = 'Off by default. Ticked groups can run their code on this computer — in an isolated sandbox without network or storage access, stopped after a timeout.';
+  acceptList.appendChild(hint);
 }
 
 function resetProgress(chunkCount, labelPrefix) {
@@ -339,6 +439,9 @@ function init() {
   window.__distComputeMesh = mesh;
   window.__distComputeScheduler = scheduler;
   window.__distComputeActivities = () => scheduler.getLocalActivities();
+  window.__distComputeSetAccept = (gid, on) => setAcceptTasks(gid, on !== false);
+  window.__distComputeAccepts = (gid) => acceptsTasksFrom(gid);
+  window.__distComputeSandbox = sandbox;
 }
 
 init();

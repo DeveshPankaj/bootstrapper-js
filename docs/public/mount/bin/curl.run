@@ -4,6 +4,14 @@ const fs = platform.host.getFS();
 const [pwd, ...args] = $args;
 const write = terminal ? terminal.write.bind(terminal) : console.log;
 
+// Response bodies, status texts and error messages are untrusted terminal output (audit
+// BOOT-12): ESC and the other C0/C1 control characters except \t \n \r are shown as ^X /
+// \xNN instead of being interpreted by the terminal. (`-o file` saves the raw bytes.)
+const neutralize = (s) => String(s).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/g, (c) => {
+  const n = c.charCodeAt(0);
+  return n < 0x20 ? '^' + String.fromCharCode(n + 64) : n === 0x7f ? '^?' : '\\x' + n.toString(16);
+});
+
 let method = 'GET';
 let outFile = null;
 const headers = {};
@@ -29,12 +37,12 @@ let res;
 try {
   res = await fetch(url, { method, headers });
 } catch (e) {
-  write(`curl: could not fetch '${url}': ${e && e.message ? e.message : 'network error (or blocked by CORS)'}\n`);
+  write(`curl: could not fetch '${neutralize(url)}': ${neutralize(e && e.message ? e.message : 'network error (or blocked by CORS)')}\n`);
   return;
 }
 
 if (!res.ok) {
-  write(`curl: ${url} responded with ${res.status} ${res.statusText}\n`);
+  write(`curl: ${neutralize(url)} responded with ${res.status} ${neutralize(res.statusText)}\n`);
 }
 
 if (outFile) {
@@ -44,13 +52,13 @@ if (outFile) {
     fs.writeFileSync(dest, buf);
     write(`curl: saved ${buf.length} bytes to ${outFile}\n`);
   } catch (e) {
-    write(`curl: error saving to '${outFile}': ${e.message}\n`);
+    write(`curl: error saving to '${outFile}': ${neutralize(e.message)}\n`);
   }
 } else {
   try {
     const text = await res.text();
-    write(text + '\n');
+    write(neutralize(text) + '\n');
   } catch (e) {
-    write(`curl: error reading response body: ${e.message}\n`);
+    write(`curl: error reading response body: ${neutralize(e.message)}\n`);
   }
 }

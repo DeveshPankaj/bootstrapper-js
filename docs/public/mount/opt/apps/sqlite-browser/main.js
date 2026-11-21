@@ -6,6 +6,7 @@ const { useState, useEffect, useRef, useCallback } = React;
 
 const SQL_JS_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js';
 const SQL_WASM_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.wasm';
+const SQL_JS_SRI = 'sha384-8D3Rsfo535FqoC1pHCCQMrNf75UgzyoG/HQm9zOzITRrz3QKzecc2E7JXKGCXoWu'; // the .wasm is fetched by sql.js itself (no SRI possible)
 const FONT_URL = 'https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0';
 
 const CSS = `
@@ -119,6 +120,8 @@ const loadSqlJs = () => {
     const iframeWin = iframe.contentWindow;
     const script = iframeWin.document.createElement('script');
     script.src = SQL_JS_CDN;
+    script.integrity = SQL_JS_SRI;
+    script.crossOrigin = 'anonymous';
     script.onload = () => {
       const initFn = iframeWin.initSqlJs;
       if (!initFn) { reject(new Error('initSqlJs not found')); return; }

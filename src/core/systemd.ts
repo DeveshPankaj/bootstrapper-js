@@ -233,8 +233,11 @@ const activate = (name: string) => {
   rt.lastError = null;
   appendJournal(name, `Starting ${unit.description || name}...`);
 
-  const svcPlatform = new Platform(new Subject(), `systemd:${name}:${rt.mainPid}`, "/");
-  svcPlatform.setHost(rootPlatform.host);
+  // A stable name per unit: it is the owner of any command the unit registers
+  // (audit KRN-10), so a restarted unit can re-register its own commands but
+  // can't replace root's or another unit's. The pid lives in rt.mainPid.
+  const svcPlatform = new Platform(new Subject(), `systemd:${name}`, "/");
+  svcPlatform.setHost(rootPlatform.host.forPlatform(svcPlatform));
   svcPlatform.register("systemd", {
     unit: name,
     onStop: (cb: () => void) => { rt.stopCallbacks.push(cb); },

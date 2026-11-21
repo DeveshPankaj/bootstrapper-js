@@ -268,7 +268,8 @@ let PLAT = null, FS = null;
 const SETTINGS_DIR = '/home/user1/.local/share/webrtc';
 const SETTINGS_FILE = SETTINGS_DIR + '/settings.json';
 const DEFAULT_ICE = [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun.cloudflare.com:3478' }];
-const DEFAULT_SETTINGS = { name: '', ice: DEFAULT_ICE, relayOnly: false, autoMesh: true, shares: [] };
+// autoMesh is off by default (audit NET-11): connecting to people a peer introduces is opt-in.
+const DEFAULT_SETTINGS = { name: '', ice: DEFAULT_ICE, relayOnly: false, autoMesh: false, shares: [] };
 // STUN finds your public address; TURN relays the traffic when a direct path is impossible
 // (symmetric NAT, carrier-grade NAT, UDP blocked). Accepts strings or {urls, username, credential}.
 function normIce(list) {
@@ -287,6 +288,13 @@ function normIce(list) {
 }
 const iceIsTurn = (e) => [].concat(e.urls).some(u => /^turns?:/i.test(u));
 let settings = { ...DEFAULT_SETTINGS };
+// The kernel's path policy (src/kernel/path-policy.ts, decisions.md D6) — used for every
+// path built from peer-supplied names. Fails closed when it isn't available.
+function PP() {
+  const p = PLAT && PLAT.host && PLAT.host.pathPolicy;
+  if (!p) throw new Error('path policy unavailable — open this app from the OS desktop');
+  return p;
+}
 
 async function whenPlatform(ms = 1500) {
   const t0 = Date.now();
@@ -313,7 +321,7 @@ function loadSettings() {
     // Saved list is the previous single-server default → pick up the new defaults.
     settings.ice = old === JSON.stringify([{ urls: 'stun:stun.l.google.com:19302' }]) ? DEFAULT_ICE : normIce(settings.ice);
     settings.relayOnly = settings.relayOnly === true;
-    settings.autoMesh = settings.autoMesh !== false;
+    settings.autoMesh = s.autoMesh === true;   // a saved choice is kept; no saved value → the (off) default
     settings.shares = (Array.isArray(s.shares) ? s.shares : []).filter(x => x && /^[0-9a-f]{8}$/.test(x.id) && typeof x.path === 'string' && (x.mode === 'ro' || x.mode === 'rw')).map(x => ({ id: x.id, name: cleanText(x.name, 40) || 'share', path: x.path, mode: x.mode }));
   } catch (_) {}
 }
@@ -331,6 +339,23 @@ const HAS_STREAMS = typeof CompressionStream === 'function' && typeof Decompress
 function toB64u(bytes) { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
 function fromB64u(str) { str = str.replace(/-/g, '+').replace(/_/g, '/'); while (str.length % 4) str += '='; const bin = atob(str); const out = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i); return out; }
 async function pipeBytes(bytes, transform) { return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(transform)).arrayBuffer()); }
+// Inflates while counting, and stops as soon as the output passes `max` (audit NET-13): a tiny,
+// highly compressed link can't make this page allocate more than ~max bytes.
+const MAX_SIGNAL_BYTES = 100000, MAX_SIGNAL_CHARS = 200000;
+async function inflateCapped(bytes, max) {
+  const reader = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw')).getReader();
+  const parts = []; let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > max) { reader.cancel().catch(() => {}); throw Object.assign(new Error('too large'), { tooLarge: true }); }
+    parts.push(value);
+  }
+  const out = new Uint8Array(total); let off = 0;
+  for (const p of parts) { out.set(p, off); off += p.byteLength; }
+  return out;
+}
 async function encodeSignal(obj) {
   const raw = enc.encode(JSON.stringify(obj));
   if (HAS_STREAMS) { try { return 'wrtc1.' + toB64u(await pipeBytes(raw, new CompressionStream('deflate-raw'))); } catch (_) {} }
@@ -339,9 +364,10 @@ async function encodeSignal(obj) {
 async function decodeSignal(code) {
   const m = /^wrtc([01])\.([A-Za-z0-9_-]+)$/.exec(String(code).trim());
   if (!m) throw new Error('That is not a valid invite/answer code');
+  if (m[2].length > MAX_SIGNAL_CHARS) throw new Error('Code is too large');
   let bytes; try { bytes = fromB64u(m[2]); } catch (_) { throw new Error('The code is corrupted or incomplete — copy the whole link'); }
-  if (m[1] === '1') { if (!HAS_STREAMS) throw new Error('This browser cannot decompress the code'); try { bytes = await pipeBytes(bytes, new DecompressionStream('deflate-raw')); } catch (_) { throw new Error('The code is corrupted or incomplete — copy the whole link'); } }
-  if (bytes.length > 100000) throw new Error('Code is too large');
+  if (m[1] === '1') { if (!HAS_STREAMS) throw new Error('This browser cannot decompress the code'); try { bytes = await inflateCapped(bytes, MAX_SIGNAL_BYTES); } catch (e) { throw new Error(e && e.tooLarge ? 'Code is too large' : 'The code is corrupted or incomplete — copy the whole link'); } }
+  if (bytes.length > MAX_SIGNAL_BYTES) throw new Error('Code is too large');
   let o; try { o = JSON.parse(dec.decode(bytes)); } catch (_) { throw new Error('The code is corrupted'); }
   // Everything below is untrusted input from a link — validate strictly.
   if (!o || o.v !== 1 || (o.k !== 'o' && o.k !== 'a') || !/^[0-9a-f]{16}$/.test(o.i || '') || !o.f || !ID_RE.test(o.f.id || '') || typeof o.s !== 'string' || !o.s.startsWith('v=0') || o.s.length > 30000)
@@ -715,25 +741,60 @@ function createGroup(name, memberIds) {
   return g;
 }
 function groupUpdate(g) { for (const id of g.members) if (id !== myId && peers.has(id)) sendPeer(peers.get(id), { t: 'group', op: 'update', gid: g.gid, name: g.name, members: [...g.members], by: myId }); }
+// ── Group invitations (audit NET-11): being added to a group by a peer needs the user's
+// acceptance. Until then the group doesn't exist here, so none of its traffic (messages,
+// files, whiteboard, music, voice, app-relay — e.g. Distributed Compute tasks) is delivered.
+// One prompt at a time; at most a few queued per peer; after a decline, that peer's
+// invitations are ignored for a minute (no dialog spam).
+const groupInvites = new Map();      // gid -> { gid, name, creator, members:Set, ts }
+const inviteDeclinedAt = new Map();  // peer id -> time of the last decline
+const INVITE_DECLINE_COOLDOWN_MS = 60000, MAX_PENDING_INVITES_PER_PEER = 3;
+let inviteQueue = Promise.resolve();
+function offerGroupInvite(peer, gid, name, ids) {
+  if (groups.has(gid)) return;
+  const pending = groupInvites.get(gid);
+  if (pending) { if (pending.creator === peer.id) { pending.name = name; pending.members = new Set(ids); } return; }
+  if (Date.now() - (inviteDeclinedAt.get(peer.id) || 0) < INVITE_DECLINE_COOLDOWN_MS) return;
+  if ([...groupInvites.values()].filter(i => i.creator === peer.id).length >= MAX_PENDING_INVITES_PER_PEER) return;
+  const inv = { gid, name, creator: peer.id, members: new Set(ids), ts: Date.now() };
+  groupInvites.set(gid, inv);
+  inviteQueue = inviteQueue.then(() => askGroupInvite(inv)).catch((e) => console.warn('[webrtc] group invitation', e));
+}
+async function askGroupInvite(inv) {
+  await sleep(0);
+  const peer = peers.get(inv.creator);
+  if (!peer || groups.has(inv.gid) || groupInvites.get(inv.gid) !== inv) { if (groupInvites.get(inv.gid) === inv) groupInvites.delete(inv.gid); return; }
+  const others = [...inv.members].filter(id => id !== myId && id !== inv.creator).map(id => (peers.get(id) || {}).name || shortId(id));
+  const ok = window.confirm(`${peer.name} wants to add you to the group "${inv.name}"` + (others.length ? ` (with ${others.slice(0, 8).join(', ')}${others.length > 8 ? ', …' : ''})` : '') + '.\n\n'
+    + 'Group members can message you there and use the group in apps that ride on WebRTC Chat (Distributed Compute, Distributed KV) — each of those asks separately before running anything.\n\nJoin the group?');
+  if (groupInvites.get(inv.gid) === inv) groupInvites.delete(inv.gid);
+  if (!ok) {
+    inviteDeclinedAt.set(inv.creator, Date.now());
+    for (const id of inv.members) if (id !== myId && peers.has(id)) sendPeer(peers.get(id), { t: 'group', op: 'leave', gid: inv.gid });
+    sysNote('all', `You declined ${peer.name}'s invitation to "${inv.name}"`);
+    return;
+  }
+  if (!peers.has(inv.creator) || groups.has(inv.gid)) return;   // the creator left meanwhile
+  const g = { gid: inv.gid, name: inv.name, creator: inv.creator, members: inv.members };
+  groups.set(g.gid, g); const c = ensureConv('g:' + g.gid, g.name, 'group'); c.gid = g.gid;
+  sysNote(c.key, `${peer.name} added you to "${g.name}"`); toast(`Joined the group "${g.name}"`, 'ok'); renderAll();
+}
 function onGroup(peer, m) {
   if (!/^[0-9a-f]{12}$/.test(m.gid || '')) return;
   const ids = Array.isArray(m.members) ? m.members.filter(id => ID_RE.test(id)).slice(0, 60) : [];
   if (m.op === 'create') {
     if (groups.has(m.gid) || m.by !== peer.id || !ids.includes(myId) || !ids.includes(peer.id)) return;
-    const g = { gid: m.gid, name: cleanText(m.name, 40) || 'Group', creator: peer.id, members: new Set(ids) };
-    groups.set(g.gid, g); const c = ensureConv('g:' + g.gid, g.name, 'group'); c.gid = g.gid;
-    sysNote(c.key, `${peer.name} added you to "${g.name}"`); toast(`Added to group "${g.name}"`, 'ok'); renderAll();
+    offerGroupInvite(peer, m.gid, cleanText(m.name, 40) || 'Group', ids);
   } else if (m.op === 'update') {
     let g = groups.get(m.gid);
     if (!g) {
       // We don't know this group yet — most likely we were just added to it after it was
-      // created, so the "create" broadcast never reached us. Bootstrap it here with the
-      // same trust check 'create' uses (the sender claims to be, and is listed as, the
-      // creator), instead of silently dropping the member add.
+      // created, so the "create" broadcast never reached us. Treat it like 'create' (same
+      // trust check: the sender claims to be, and is listed as, the creator) — an invitation.
+      const pending = groupInvites.get(m.gid);
+      if (pending && pending.creator === peer.id && !ids.includes(myId)) { groupInvites.delete(m.gid); return; }   // withdrawn before we answered
       if (m.by !== peer.id || !ids.includes(myId) || !ids.includes(peer.id)) return;
-      g = { gid: m.gid, name: cleanText(m.name, 40) || 'Group', creator: peer.id, members: new Set(ids) };
-      groups.set(g.gid, g); const c = ensureConv('g:' + g.gid, g.name, 'group'); c.gid = g.gid;
-      sysNote(c.key, `${peer.name} added you to "${g.name}"`); toast(`Added to group "${g.name}"`, 'ok'); renderAll();
+      offerGroupInvite(peer, m.gid, cleanText(m.name, 40) || 'Group', ids);
       return;
     }
     if (g.creator !== peer.id) return;   // only the creator may change a group
@@ -756,6 +817,29 @@ function leaveGroup(g) {
 // Frames: JSON {t:'file',tn,...} → binary chunks [uint32 tn][payload] → JSON {t:'file-end',tn}.
 const cleanFileName = (n) => cleanText(String(n || 'file').replace(/[\\/]/g, '_'), 120) || 'file';
 const safeMime = (m) => IMAGE_TYPES.includes(m) ? m : 'application/octet-stream';
+// A file from (or for) a peer never becomes a same-origin document (audit NET-9): its
+// download link points at an application/octet-stream copy (opening it in a tab downloads
+// it), raster previews are typed image blobs, and an SVG preview is a data: URL (opaque
+// origin if anyone opens it) that is only ever shown in an <img>.
+const SVG_PREVIEW_MAX = 2 * 1024 * 1024;
+const downloadUrlFor = (blob) => URL.createObjectURL(new Blob([blob], { type: 'application/octet-stream' }));
+function svgDataUrl(blob) {
+  if (blob.size > SVG_PREVIEW_MAX) return Promise.resolve(null);
+  return new Promise((resolve) => { const fr = new FileReader(); fr.onload = () => resolve(String(fr.result)); fr.onerror = () => resolve(null); fr.readAsDataURL(new Blob([blob], { type: 'image/svg+xml' })); });
+}
+function previewUrlFor(blob, mime) {
+  if (!IMAGE_TYPES.includes(mime)) return Promise.resolve(null);
+  if (mime === 'image/svg+xml') return svgDataUrl(blob);
+  return Promise.resolve(URL.createObjectURL(new Blob([blob], { type: mime })));
+}
+function setFileUrls(msg) {
+  const f = msg.file;
+  f.url = downloadUrlFor(f.blob);
+  f.previewUrl = null;
+  if (!f.image) return;
+  if (f.mime !== 'image/svg+xml') { f.previewUrl = URL.createObjectURL(new Blob([f.blob], { type: f.mime })); return; }
+  svgDataUrl(f.blob).then((u) => { if (u) { f.previewUrl = u; refreshMsg(msg); } });
+}
 async function sendBlob(conn, blob, meta, onProgress) {
   const dc = conn.dc, tn = nextTn++;
   if (!sendJSON(conn, { t: 'file', tn, size: blob.size, ...meta })) throw new Error('connection closed');
@@ -786,7 +870,8 @@ async function sendFilesTo(key, files) {
   for (const file of files) {
     if (file.size > MAX_FILE) { toast(`${file.name} is larger than ${fmtBytes(MAX_FILE)}`, 'bad'); continue; }
     const mime = safeMime(file.type);
-    const msg = { mid: randHex(6), from: myId, fromName: settings.name, ts: Date.now(), file: { name: cleanFileName(file.name), size: file.size, mime, image: IMAGE_TYPES.includes(mime), url: URL.createObjectURL(file), blob: file, state: 'sending', progress: 0 } };
+    const msg = { mid: randHex(6), from: myId, fromName: settings.name, ts: Date.now(), file: { name: cleanFileName(file.name), size: file.size, mime, image: IMAGE_TYPES.includes(mime), url: null, previewUrl: null, blob: file, state: 'sending', progress: 0 } };
+    setFileUrls(msg);
     addMessage(key, msg);
     const prog = new Map();
     await Promise.all(rcpts.map(async (p) => {
@@ -854,8 +939,8 @@ function finishRx(conn, tn) {
   conn.rx.delete(tn); rxBytes -= st.size;
   if (st.kind === 'vfs') { vfsFileWaiters.delete(st.key); st.waiter.resolve({ name: st.name, blob: new Blob(st.chunks, { type: st.mime }) }); }
   else if (st.kind === 'vfs-up') completeUpload(conn.peer, st);
-  else if (st.kind === 'listen') onListenTrackReceived(st.gid, new Blob(st.chunks, { type: st.mime }));
-  else { const f = st.msg.file; f.blob = new Blob(st.chunks, { type: st.mime }); f.url = URL.createObjectURL(f.blob); f.state = 'done'; f.progress = 1; refreshMsg(st.msg); }
+  else if (st.kind === 'listen') onListenTrackReceived(st.gid, new Blob(st.chunks, { type: 'application/octet-stream' }));   // played by an <audio>, never a document (NET-9)
+  else { const f = st.msg.file; f.blob = new Blob(st.chunks, { type: st.mime }); setFileUrls(st.msg); f.state = 'done'; f.progress = 1; refreshMsg(st.msg); }
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1509,7 +1594,7 @@ setInterval(() => { if ((activeCall && activeCall.status === 'active') || active
 const meshSubscribers = new Map();   // channel -> Set<handler>
 function meshGroupsSnapshot() {
   return [...groups.values()].map((g) => ({
-    gid: g.gid, name: g.name,
+    gid: g.gid, name: g.name, creator: g.creator,
     members: [...g.members].map((id) => ({ id, name: id === myId ? (settings.name || ('Guest-' + shortId(myId))) : (peers.get(id)?.name || shortId(id)), online: id === myId || peers.has(id) })),
   }));
 }
@@ -1551,6 +1636,34 @@ function sendMyPerms(peer) { sendPeer(peer, { t: 'myperms', chat: peer.perms.cha
 function logActivity(peer, text, ok = true) { activity.unshift({ ts: Date.now(), who: peer.name, text, ok }); activity.length = Math.min(activity.length, 100); refreshModals(); }
 const normPath = (p) => { const segs = []; for (const s of String(p).split('/')) { if (!s || s === '.') continue; if (s === '..') segs.pop(); else segs.push(s); } return '/' + segs.join('/'); };
 
+// What may be shared (audit NET-10). System trees hold code the OS runs (widgets, cron,
+// systemd units, the window manager, apps) and remote mounts are other people's / machines'
+// files, so they — and their ancestors, / and /mnt — can only be shared read-only. Apps keep
+// their settings and secrets in ~/.local/share: never shared, and hidden inside any shared
+// folder. Kernel-owned files (e.g. ~/initd.run) are never writable through a share.
+const NO_RW_SHARE = ['/etc', '/opt', '/usr', '/bin', '/boot', '/proc', '/mnt/ssh', '/mnt/webrtc'];
+const APP_DATA_DIR = '/home/user1/.local/share';
+function shareRefusal(path, mode) {
+  const pp = PP();
+  if (path === '/') return 'The root folder cannot be shared';
+  if (pp.isInside(APP_DATA_DIR, path)) return "~/.local/share holds other apps' settings and secrets — it can't be shared";
+  if (mode === 'rw') {
+    const sys = NO_RW_SHARE.find((d) => pp.isInside(d, path) || pp.isInside(path, d));
+    if (sys) return `${path} ${pp.isInside(sys, path) ? 'is in' : 'contains'} a system folder (${sys}) — it can only be shared read-only`;
+  }
+  return null;
+}
+// Per-request guard on the owner side: `abs` is the resolved local path of a request.
+function guardSharePath(abs, writing, deleting) {
+  const pp = PP();
+  let p; try { p = pp.normalizePath(abs); } catch (_) { throw new Error('invalid path'); }
+  if (pp.isInside(APP_DATA_DIR, p)) throw new Error('access denied');
+  if (writing && pp.isKernelOwned(p)) throw new Error('that file is protected');
+  if (deleting && (pp.isInside(p, APP_DATA_DIR) || pp.KERNEL_OWNED_PATHS.some((k) => pp.isInside(p, k)))) throw new Error('that folder holds protected files');
+  return p;
+}
+const hiddenInShare = (abs) => { try { return PP().isInside(APP_DATA_DIR, abs); } catch (_) { return true; } };
+
 function segmentsOf(rel) {
   if (typeof rel !== 'string' || rel.length > 1024 || rel.includes('\0')) throw new Error('invalid path');
   const segs = [];
@@ -1587,11 +1700,12 @@ function handleVfsRequest(peer, m) {
     const writing = m.op === 'write' || m.op === 'mkdir' || m.op === 'delete';
     if (writing && mode !== 'rw') return fail('read-only');
     const { abs, segs } = resolveIn(share, m.path || '');
+    guardSharePath(abs, writing, m.op === 'delete');
     const where = share.name + '/' + segs.join('/');
     if (m.op === 'list') {
       if (!FS.existsSync(abs) || !FS.statSync(abs).isDirectory()) return fail('not a folder');
       const entries = [];
-      for (const n of FS.readdirSync(abs).slice(0, 2000)) { try { const l = FS.lstatSync(abs + '/' + n); if (l.isSymbolicLink()) continue; entries.push({ n, d: l.isDirectory(), s: l.size, m: +l.mtime }); } catch (_) {} }
+      for (const n of FS.readdirSync(abs).slice(0, 2000)) { try { if (hiddenInShare(abs + '/' + n)) continue; const l = FS.lstatSync(abs + '/' + n); if (l.isSymbolicLink()) continue; entries.push({ n, d: l.isDirectory(), s: l.size, m: +l.mtime }); } catch (_) {} }
       logActivity(peer, `listed ${where}`);
       return sendPeer(peer, { t: 'vfs-res', rid, ok: true, op: 'list', entries });
     }
@@ -1625,8 +1739,9 @@ function completeUpload(peer, st) {
   try {
     const share = shares.get(up.shareId), mode = share && effectiveMode(share, peer);   // grants may have changed since approval
     if (mode !== 'rw') throw new Error('access revoked');
-    mkdirIn(share, up.segs.slice(0, -1));
     const { abs } = resolveIn(share, up.segs.join('/'));
+    guardSharePath(abs, true, false);
+    mkdirIn(share, up.segs.slice(0, -1));
     const bytes = new Uint8Array(st.size); let off = 0; for (const c of st.chunks) { bytes.set(new Uint8Array(c), off); off += c.byteLength; }
     FS.writeFileSync(abs, B ? B.from(bytes) : bytes);
     logActivity(peer, `uploaded ${share.name}/${up.segs.join('/')} (${fmtBytes(st.size)})`);
@@ -1637,15 +1752,21 @@ function completeUpload(peer, st) {
 // share management (used by both the UI and the CLI)
 function addShare(path, name, mode) {
   if (!FS) throw new Error('Shared folders need the OS (open this app from the desktop)');
-  const p = normPath(path);
-  if (p === '/') throw new Error('The root folder cannot be shared');
+  let p; try { p = PP().normalizePath(String(path || '')); } catch (_) { throw new Error('That is not a valid folder path'); }
+  const refusal = shareRefusal(p, mode === 'rw' ? 'rw' : 'ro');
+  if (refusal) throw new Error(refusal);
   if (!FS.existsSync(p) || !FS.statSync(p).isDirectory()) throw new Error(p + ' is not a folder');
   if ([...shares.values()].some(s => s.path === p)) throw new Error('That folder is already shared');
   const s = { id: randHex(4), name: cleanText(name, 40) || p.split('/').pop(), path: p, mode: mode === 'rw' ? 'rw' : 'ro' };
   shares.set(s.id, s); saveSettings(); refreshModals(); return s;
 }
 function removeShare(s) { shares.delete(s.id); for (const p of peers.values()) { delete p.grants[s.id]; sendShares(p); } saveSettings(); refreshModals(); }
-function setShareMode(s, mode) { s.mode = mode; for (const p of peers.values()) sendShares(p); saveSettings(); refreshModals(); }
+// Returns an error message when the change isn't allowed (system folders stay read-only).
+function setShareMode(s, mode) {
+  const refusal = mode === 'rw' ? shareRefusal(s.path, 'rw') : null;
+  if (refusal) { refreshModals(); return refusal; }
+  s.mode = mode === 'rw' ? 'rw' : 'ro'; for (const p of peers.values()) sendShares(p); saveSettings(); refreshModals(); return null;
+}
 function setGrant(peer, share, mode) { if (mode) peer.grants[share.id] = mode; else delete peer.grants[share.id]; sendShares(peer); refreshModals(); }
 
 // requester side
@@ -1723,8 +1844,13 @@ function readOnlyView(real) {
   view.isReadOnly = () => true;
   return view;
 }
-const mountLabel = (peer, share) => cleanText(`${peer.name}-${share.name}`, 60).replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'share';
-const localAbs = (mount, rel) => mount.path + (rel ? '/' + rel : '');
+const mountLabel = (peer, share) => {
+  const label = cleanText(`${peer.name}-${share.name}`, 60).replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
+  return label && !label.startsWith('.') && PP().isValidName(label) ? label : 'share';
+};
+// Every local path of a mount is built with safeJoin onto the mount root (audit NET-3): a
+// relative path made of peer-supplied names can never resolve outside the mount.
+const localAbs = (mount, rel) => (rel ? PP().safeJoin(mount.path, rel) : mount.path);
 const changed = (a, b) => !a || a.dir !== b.dir || (!b.dir && (a.size !== b.size || a.mtime !== b.mtime));
 function activeMount(peerId, shareId) { return [...mounts.values()].find(m => m.peerId === peerId && m.share.id === shareId); }
 function findMount(q) {
@@ -1739,17 +1865,25 @@ function warnOnce(mount, rel, phase, e) {
   mount.warned.add(key);
   toast(`${mount.share.name} (${mount.peerName}): ${mount.lastError}`, 'warn');
 }
-async function walkRemote(peer, share, budget) {
+// Lists the peer's share recursively. Entry names come from the peer, so each one must be a
+// single valid path segment (no '/', '\\', '.', '..', control characters, over-long) — anything
+// else is skipped (and reported through onSkip), never joined into a path (audit NET-3).
+async function walkRemote(peer, share, budget, onSkip) {
   const out = new Map();   // relPath ('' = root, not included itself) -> { dir, size, mtime }
   const queue = [''];
+  const pp = PP();
   while (queue.length) {
     const rel = queue.shift();
     const { res } = await vfsCall(peer, share, 'list', rel);
-    for (const e of res.entries) {
+    for (const e of Array.isArray(res.entries) ? res.entries : []) {
       if (--budget.n < 0) throw new Error(`remote tree is too large to mount (over ${MOUNT_MAX_ENTRIES} entries)`);
-      const r = rel ? rel + '/' + e.n : e.n;
-      out.set(r, { dir: !!e.d, size: e.s || 0, mtime: e.m || 0 });
-      if (e.d) queue.push(r);
+      const name = e && e.n;
+      if (typeof name !== 'string' || !pp.isValidName(name)) { if (onSkip) onSkip(rel, name); continue; }
+      const r = rel ? rel + '/' + name : name;
+      if (r.length > 1024 || out.has(r)) { if (onSkip) onSkip(rel, name); continue; }
+      const size = Number(e.s), mtime = Number(e.m);
+      out.set(r, { dir: e.d === true, size: Number.isFinite(size) && size >= 0 ? size : 0, mtime: Number.isFinite(mtime) ? mtime : 0 });
+      if (e.d === true) queue.push(r);
     }
   }
   return out;
@@ -1758,6 +1892,7 @@ function walkLocal(mount) {
   const out = new Map();
   const walk = (rel) => {
     for (const n of FS.readdirSync(localAbs(mount, rel))) {
+      if (!PP().isValidName(n)) continue;   // can't be expressed as a share path — not synced
       const r = rel ? rel + '/' + n : n;
       let st; try { st = FS.lstatSync(localAbs(mount, r)); } catch (_) { continue; }
       out.set(r, { dir: st.isDirectory(), size: st.size, mtime: +st.mtime || 0 });
@@ -1767,9 +1902,12 @@ function walkLocal(mount) {
   walk('');
   return out;
 }
-function mkdirp(mount, rel) {
-  if (!rel) return; let cur = mount.path;
-  for (const seg of rel.split('/')) { cur += '/' + seg; if (!FS.existsSync(cur)) FS.mkdirSync(cur); }
+// (Named apart from the settings mkdirp(dir) above: two function declarations with one name
+// in this script meant the settings one was silently replaced by this one.)
+function mountMkdirp(mount, rel) {
+  if (!rel) return;
+  const segs = rel.split('/');
+  for (let i = 1; i <= segs.length; i++) { const abs = localAbs(mount, segs.slice(0, i).join('/')); if (!FS.existsSync(abs)) FS.mkdirSync(abs); }
 }
 function rmLocal(mount, rel) {
   const abs = localAbs(mount, rel), st = FS.lstatSync(abs);
@@ -1781,8 +1919,8 @@ async function mountShare(peer, share) {
   if (!FS) throw new Error('Mounting needs the OS (open this app from the desktop)');
   if (mounts.size >= 12) throw new Error('Too many mounts open — unmount one first');
   if (!FS.existsSync(MOUNT_ROOT)) FS.mkdirSync(MOUNT_ROOT);
-  const label = mountLabel(peer, share); let path = MOUNT_ROOT + '/' + label, n = 2;
-  while (FS.existsSync(path)) path = MOUNT_ROOT + '/' + label + '-' + (n++);
+  const label = mountLabel(peer, share); let path = PP().safeJoin(MOUNT_ROOT, label), n = 2;
+  while (FS.existsSync(path)) path = PP().safeJoin(MOUNT_ROOT, label + '-' + (n++));
   const ro = share.mode !== 'rw';
   const backend = await FS.createBackend('InMemory', {});
   FS.mount(path, ro ? readOnlyView(backend) : backend);
@@ -1805,7 +1943,11 @@ async function syncMount(mount, initial) {
   try {
     const peer = peers.get(mount.peerId);
     if (!peer) throw new Error(mount.peerName + ' is offline');
-    const remote = await walkRemote(peer, mount.share, { n: MOUNT_MAX_ENTRIES });
+    const remote = await walkRemote(peer, mount.share, { n: MOUNT_MAX_ENTRIES }, (rel, name) => {
+      const where = (rel ? rel + '/' : '') + String(name).slice(0, 80);
+      console.warn('[webrtc] mount', mount.path, ': skipped an invalid name from', mount.peerName, JSON.stringify(where));
+      warnOnce(mount, where, 'pull', new Error('invalid file name — skipped'));
+    });
     const local = initial ? new Map() : walkLocal(mount);
     // Pull: apply remote changes, unless we have an unsynced local edit at that
     // path (in which case pushLocal below sends ours — local wins on conflict).
@@ -1815,8 +1957,8 @@ async function syncMount(mount, initial) {
       if (!initial && !here && base) continue;                 // no local copy, but we've seen this path before → we deleted it on purpose, not "never fetched"; let pushLocal tell the remote instead of re-downloading it
       if (here && !changed(base, r)) continue;
       try {
-        if (r.dir) mkdirp(mount, rel);
-        else { const f = await vfsDownload(peer, mount.share, rel); mkdirp(mount, rel.includes('/') ? rel.slice(0, rel.lastIndexOf('/')) : ''); const bytes = new Uint8Array(await f.blob.arrayBuffer()); FS.writeFileSync(localAbs(mount, rel), B ? B.from(bytes) : bytes); }
+        if (r.dir) mountMkdirp(mount, rel);
+        else { const dest = localAbs(mount, rel); const f = await vfsDownload(peer, mount.share, rel); mountMkdirp(mount, rel.includes('/') ? rel.slice(0, rel.lastIndexOf('/')) : ''); const bytes = new Uint8Array(await f.blob.arrayBuffer()); FS.writeFileSync(dest, B ? B.from(bytes) : bytes); }
         mount.tree.set(rel, r); mount.pulled++;
       } catch (e) { warnOnce(mount, rel, 'pull', e); }
     }
@@ -1956,8 +2098,36 @@ const HELP = `usage: webrtc <command>
 
 <user> is a name or the start of a user id; <share> a share name or id.`;
 
-async function runCli(args) {
+// ── Calls from outside this window (audit NET-6) ──
+// `webrtc.api` is reachable by any app and by the terminal (/bin/webrtc.run). Read-only
+// subcommands answer as before; every subcommand that changes something — sharing folders,
+// granting access, mounting, sending files or messages, calls, connecting, settings — first
+// asks the person, in this window, naming the exact action the caller asked for.
+const CLI_MUTATING = {
+  kick: 'disconnects someone', access: 'changes what someone may send you', grant: 'gives someone access to your shared folder',
+  revoke: 'removes someone\'s folder access', share: 'changes which of your folders are shared', mount: 'mounts someone\'s folder into Files',
+  unmount: 'unmounts a folder', sync: 'syncs a mounted folder', unblock: 'lets a blocked person reconnect', ice: 'changes your connection servers',
+  say: 'sends a message as you', sendfile: 'sends a file from your Files to other people', listen: 'sends a track from your Files to a group',
+  'listen-stop': 'stops Listen Together for everyone', call: 'starts a voice call (turns on your microphone)', 'answer-call': 'answers a call (turns on your microphone)',
+  decline: 'declines the incoming call', hangup: 'ends your call', voice: 'joins a group voice chat (turns on your microphone)',
+  name: 'changes your display name', invite: 'creates an invite link to connect with you', join: 'answers an invitation and connects you',
+  answer: 'accepts an answer and connects you',
+};
+function cliMutates(args) {
   const [cmd, ...a] = args;
+  if (!Object.prototype.hasOwnProperty.call(CLI_MUTATING, cmd)) return false;   // read-only or unknown (unknown ones just error)
+  if (cmd === 'access' && a.length <= 1) return false;                          // shows permissions
+  if (cmd === 'ice' && (!a[0] || a[0] === 'test')) return false;                // lists / tests servers
+  return true;
+}
+function confirmExternalCli(args) {
+  const shown = cleanText(args.map(x => String(x)).join(' '), 300) + (args.join(' ').length > 300 ? '…' : '');
+  return window.confirm(`Another app or the terminal asks WebRTC Chat to run:\n\n  webrtc ${shown}\n\nThis ${CLI_MUTATING[args[0]]}. Allow it?`);
+}
+
+async function runCli(args, opts = {}) {
+  const [cmd, ...a] = args;
+  if (opts.external && cliMutates(args) && !confirmExternalCli(args)) return { ok: false, out: `webrtc: "${cleanText(cmd, 40)}" was not allowed (declined in the WebRTC Chat window)` };
   try {
     switch (cmd) {
       case undefined: case 'help': case '-h': case '--help': return { ok: true, out: HELP };
@@ -2004,7 +2174,7 @@ async function runCli(args) {
         const sub = a[0];
         if (sub === 'add') { const s = addShare(a[1], a[2] && a[2] !== 'ro' && a[2] !== 'rw' ? a[2] : '', a.find((x, i) => i >= 2 && (x === 'ro' || x === 'rw')) || 'ro'); return { ok: true, out: `sharing ${s.path} as "${s.name}" (${s.mode}) — id ${s.id}\nnobody has access yet: webrtc grant <user> ${s.name}` }; }
         if (sub === 'rm' || sub === 'remove') { const s = findShare(a[1]); removeShare(s); return { ok: true, out: 'stopped sharing ' + s.name }; }
-        if (sub === 'mode') { const s = findShare(a[1]); if (a[2] !== 'ro' && a[2] !== 'rw') throw new Error('mode must be ro or rw'); setShareMode(s, a[2]); return { ok: true, out: `${s.name}: ${s.mode}` }; }
+        if (sub === 'mode') { const s = findShare(a[1]); if (a[2] !== 'ro' && a[2] !== 'rw') throw new Error('mode must be ro or rw'); const err = setShareMode(s, a[2]); if (err) throw new Error(err); return { ok: true, out: `${s.name}: ${s.mode}` }; }
         throw new Error('usage: share add <path> [name] [ro|rw] | share rm <share> | share mode <share> ro|rw');
       }
       case 'groups': return { ok: true, out: groups.size ? table(['ID', 'NAME', 'MEMBERS'], [...groups.values()].map(g => [g.gid, g.name, [...g.members].map(id => id === myId ? 'you' : (peers.get(id) || { name: shortId(id) + '?' }).name).join(', ')])) : 'no groups' };
@@ -2247,7 +2417,7 @@ const linkify = (text) => {
 };
 function fileBody(msg) {
   const f = msg.file;
-  if (f.image && f.url && f.state !== 'failed') return h('div', {}, h('img', { class: 'preview', src: f.url, alt: f.name, title: f.name, onclick: () => openLightbox(f.url, f.name) }),
+  if (f.image && f.previewUrl && f.state !== 'failed') return h('div', {}, h('img', { class: 'preview', src: f.previewUrl, alt: f.name, title: f.name, onclick: () => openLightbox(f.previewUrl, f.name) }),
     h('div', { class: 'row', style: { marginTop: '2px' } }, h('span', { class: 'small muted grow' }, `${f.name} · ${fmtBytes(f.size)}`),
       f.state === 'done' && f.blob ? [h('a', { class: 'btn sm ghost', href: f.url, download: f.name, title: 'Download to this device' }, ic('download', 13)), FS ? h('button', { class: 'btn sm ghost', title: 'Save to Files', onclick: () => saveFileToVfs(msg) }, ic('folder', 13)) : null] : null),
     f.state === 'sending' ? h('div', { class: 'bar' }, h('i', { style: { width: (f.progress * 100) + '%' } })) : null);
@@ -2400,10 +2570,10 @@ function openShares() {
     const mine = h('div', { class: 'card' }, h('div', { class: 'card-head' }, h('b', { class: 'grow' }, 'Shared by you'), h('button', { class: 'btn sm primary', onclick: async () => { const p = await pickFolder(); if (!p) return; const nm = prompt('Name for this share:', p.split('/').pop() || 'share'); if (nm === null) return; try { addShare(p, nm, 'ro'); toast('Shared read-only. Nobody has access until you grant it.', 'ok'); } catch (e) { toast(e.message, 'bad'); } } }, ic('plus', 14), 'Share a folder')),
       shares.size ? h('table', { class: 't' }, h('thead', {}, h('tr', {}, h('th', {}, 'Folder'), h('th', {}, 'Ceiling'), h('th', {}, 'Who has access'), h('th', {}))), h('tbody', {}, [...shares.values()].map(s => h('tr', {},
         h('td', {}, h('b', {}, s.name), h('div', { class: 'hint' }, s.path)),
-        h('td', {}, h('select', { onchange: (e) => setShareMode(s, e.target.value) }, [['ro', 'Read only'], ['rw', 'Read & write']].map(([v, l]) => h('option', { value: v, selected: s.mode === v }, l)))),
+        h('td', {}, h('select', { onchange: (e) => { const err = setShareMode(s, e.target.value); if (err) toast(err, 'bad'); } }, [['ro', 'Read only'], ['rw', 'Read & write']].map(([v, l]) => h('option', { value: v, selected: s.mode === v }, l)))),
         h('td', {}, [...peers.values()].filter(p => effectiveMode(s, p)).map(p => h('span', { class: 'chip ' + effectiveMode(s, p), style: { marginRight: '4px' } }, `${p.name}: ${effectiveMode(s, p)}`)), ![...peers.values()].some(p => effectiveMode(s, p)) ? h('span', { class: 'hint' }, 'nobody') : null),
         h('td', {}, h('button', { class: 'btn sm danger', onclick: () => { if (confirm(`Stop sharing "${s.name}"?`)) removeShare(s); } }, ic('trash', 14))))))) : h('div', { class: 'hint' }, FS ? 'Nothing shared. Shared folders are read-only until you say otherwise, and nobody can see them until you grant access to a specific person (Permissions on their name).' : 'Open this app from the OS desktop to share VFS folders.'),
-      h('div', { class: 'warnbox' }, 'People you grant access to can read (and, for read & write, change or delete) everything inside that folder, on this device’s virtual filesystem, until you revoke it.'));
+      h('div', { class: 'warnbox' }, 'People you grant access to can read (and, for read & write, change or delete) everything inside that folder, on this device’s virtual filesystem, until you revoke it. System folders (/etc, /opt, /usr, /bin, /boot, /proc) and remote mounts can only be shared read-only, and ~/.local/share (other apps’ settings and secrets) is never shared.'));
     const theirs = h('div', { class: 'card' }, h('b', {}, 'Shared with you'), [...peers.values()].some(p => p.remoteShares.length) ? [...peers.values()].filter(p => p.remoteShares.length).map(p => p.remoteShares.map(s => h('div', { class: 'row' }, avatar(p.id, p.name, 22), h('span', { class: 'grow' }, `${p.name} / ${s.name} `, h('span', { class: 'chip ' + s.mode }, s.mode)), h('button', { class: 'btn sm', onclick: () => openBrowse(p.id, s.id) }, ic('folder', 14), 'Browse'), mountControls(p.id, s)))) : h('div', { class: 'hint' }, 'Nobody is sharing a folder with you right now.'));
     const mountsCard = mounts.size ? h('div', { class: 'card' }, h('b', {}, 'Mounted folders'), h('div', { class: 'hint' }, 'A mount is a live, editable copy under /mnt/webrtc — open it with the file explorer, notepad or the terminal like any other folder; edits sync to the owner in the background.'),
       [...mounts.values()].map(m => h('div', { class: 'row' }, h('span', { class: 'grow' }, h('div', {}, m.path), h('div', { class: 'small muted' }, `${m.peerName} / ${m.share.name} · ${m.ro ? 'read-only' : 'read & write'} · ${m.lastError ? '⚠ ' + m.lastError : (m.lastSyncAt ? 'synced ' + fmtAgo(m.lastSyncAt) + ' ago' : 'syncing…')}`)),
@@ -2431,7 +2601,7 @@ function openBrowse(peerId, shareId) {
       entries === null && !error ? h('div', { class: 'hint' }, 'Loading…') : null,
       entries ? h('div', { class: 'list' }, parts.length ? h('div', { class: 'li click', onclick: () => load(parts.slice(0, -1).join('/')) }, ic('up', 14), h('span', { class: 'grow' }, '..')) : null,
         entries.map(e => h('div', { class: 'li' + (e.d ? ' click' : ''), onclick: e.d ? () => load(join(e.n)) : null }, ic(e.d ? 'folder' : 'file', 15), h('span', { class: 'grow', title: e.n }, e.n), e.d ? null : h('span', { class: 'hint' }, fmtBytes(e.s)),
-          e.d ? null : h('button', { class: 'btn sm', title: 'Download', disabled: busy, onclick: (ev) => { ev.stopPropagation(); act(async () => { const f = await vfsDownload(peer, share, join(e.n)); const url = URL.createObjectURL(f.blob); if (IMAGE_TYPES.includes(f.blob.type)) openLightbox(url, f.name); else { const a = h('a', { href: url, download: f.name }); document.body.append(a); a.click(); a.remove(); } }, 'Downloaded ' + e.n); } }, ic('download', 14)),
+          e.d ? null : h('button', { class: 'btn sm', title: 'Download', disabled: busy, onclick: (ev) => { ev.stopPropagation(); act(async () => { const f = await vfsDownload(peer, share, join(e.n)); const preview = await previewUrlFor(f.blob, f.blob.type); if (preview) openLightbox(preview, f.name); else { const url = downloadUrlFor(f.blob); const a = h('a', { href: url, download: f.name }); document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 30000); } }, 'Downloaded ' + e.n); } }, ic('download', 14)),
           canWrite ? h('button', { class: 'btn sm danger', title: 'Delete', disabled: busy, onclick: (ev) => { ev.stopPropagation(); if (confirm(`Delete "${e.n}"${e.d ? ' and everything in it' : ''}?`)) act(() => vfsCall(peer, share, 'delete', join(e.n)), 'Deleted'); } }, ic('trash', 14)) : null)),
         !entries.length ? h('div', { class: 'hint', style: { padding: '8px' } }, 'This folder is empty.') : null) : null]; } });
   load('');
@@ -2466,7 +2636,7 @@ function openSettings() {
   };
   const m = openModal({ title: 'Settings', width: 600, live: false, render: () => [
     h('div', { class: 'field' }, h('label', {}, 'Display name'), name),
-    h('label', { class: 'row' }, mesh, h('div', {}, h('div', {}, 'Connect me to everyone in the room'), h('div', { class: 'hint' }, 'When on, members introduced by someone you are connected to are connected automatically, so group and direct chats work between everyone. When off, only people you exchanged links with can reach you.'))),
+    h('label', { class: 'row' }, mesh, h('div', {}, h('div', {}, 'Connect me to everyone in the room'), h('div', { class: 'hint' }, 'When on, people introduced by someone you are connected to are connected automatically, so group and direct chats work between everyone. Off by default: only people you exchanged links with can reach you.'))),
     h('div', { class: 'card' },
       h('div', { class: 'card-head' }, h('b', { class: 'grow' }, 'Connection servers'), h('button', { class: 'btn sm', onclick: () => { servers.push({ url: '', username: '', credential: '' }); m.refresh(); } }, ic('plus', 14), 'Add server')),
       h('div', { class: 'hint' }, 'STUN finds your public address. Behind mobile data, carrier-grade or symmetric NAT (or a network that blocks UDP) that is not enough — add a TURN server, which relays the traffic. Every person needs to be able to reach the TURN server; the credentials are saved on this device only and never put in invite links.'),
@@ -2499,7 +2669,15 @@ async function init() {
   try { FS = PLAT && PLAT.host.getFS(); } catch (_) { FS = null; }
   try { const props = PLAT && PLAT.getServiceSync && PLAT.getServiceSync('props'); MY_PID = props && typeof props.pid === 'number' ? props.pid : null; } catch (_) { MY_PID = null; }
   loadSettings();
-  for (const s of settings.shares) shares.set(s.id, s);
+  for (const s of settings.shares) {
+    try {
+      const path = PP().normalizePath(s.path);
+      if (shareRefusal(path, 'ro')) { console.warn('[webrtc] dropped a saved share that is not allowed:', path); continue; }
+      const mode = s.mode === 'rw' && !shareRefusal(path, 'rw') ? 'rw' : 'ro';
+      if (mode !== s.mode) console.warn('[webrtc] a saved read & write share of a system folder is read-only now:', path);
+      shares.set(s.id, { ...s, path, mode });
+    } catch (_) { /* no path policy (standalone) or an invalid saved path: not shared */ }
+  }
   $('#logo').append(ic('chat', 18));
   const nameEl = $('#me-name');
   nameEl.addEventListener('change', () => setMyName(nameEl.value));
@@ -2508,7 +2686,7 @@ async function init() {
 
   if (PLAT) {
     // CLI bridge (/bin/webrtc.run) and deep-link delivery (opt/apps/webrtc/main.js).
-    cleanupFns.push(PLAT.host.registerCommand('webrtc.api', (...args) => runCli(args.map(String)), { callable: false, title: 'WebRTC control API' }).remove);
+    cleanupFns.push(PLAT.host.registerCommand('webrtc.api', (...args) => runCli(args.map(String), { external: true }), { callable: false, title: 'WebRTC control API' }).remove);
     cleanupFns.push(PLAT.host.registerCommand('webrtc.deliver', (arg) => deliverSignal(String(arg)), { callable: false, title: 'WebRTC signal delivery', alive: () => !!window.frameElement && window.frameElement.isConnected }).remove);
     // Mesh bridge — lets other apps piggyback messages on these same peer connections (see section 6e above).
     cleanupFns.push(PLAT.host.registerCommand('webrtc.mesh.available', () => true, { callable: false, title: 'WebRTC mesh bridge available' }).remove);
@@ -2525,7 +2703,7 @@ async function init() {
   const hs = new URLSearchParams(location.hash.slice(1)).get('arg');
   if (qs || hs) deliverSignal(qs || hs);
 
-  window.__webrtcApp = { myId, peers, groups, convs, shares, invites, joins, settings, banned, activity, mounts, listenSessions, boards, runCli, handleIncomingCode, deliverSignal, createInvite, generateAnswer, sendText, createGroup, sendFilesTo, sendVfsFile, pickVfsFile, addShare, setGrant, vfsCall, vfsDownload, vfsUpload, findPeer, mountShare, unmountOne, syncMount, findMount, startListenTogether, listenTogglePlay, listenSeek, listenToggleMute, listenStopForEveryone, openWhiteboard, ensureBoard, wbUndoMine, wbClearBoard, groupUpdate, wbSaveToVfs, pickFolderDialog, startCall, acceptCall, declineCall, hangUp, toggleCallMute, joinGroupCall, leaveGroupCall, toggleGroupCallMute, meshSend, meshSubscribe, get activeCall() { return activeCall; }, get activeGroupCall() { return activeGroupCall; }, get active() { return active; }, get myPid() { return MY_PID; } };
+  window.__webrtcApp = { myId, peers, groups, groupInvites, convs, shares, invites, joins, settings, banned, activity, mounts, listenSessions, boards, runCli, handleIncomingCode, deliverSignal, createInvite, generateAnswer, sendText, createGroup, sendFilesTo, sendVfsFile, pickVfsFile, addShare, setGrant, vfsCall, vfsDownload, vfsUpload, findPeer, mountShare, unmountOne, syncMount, findMount, startListenTogether, listenTogglePlay, listenSeek, listenToggleMute, listenStopForEveryone, openWhiteboard, ensureBoard, wbUndoMine, wbClearBoard, groupUpdate, wbSaveToVfs, pickFolderDialog, startCall, acceptCall, declineCall, hangUp, toggleCallMute, joinGroupCall, leaveGroupCall, toggleGroupCallMute, meshSend, meshSubscribe, get activeCall() { return activeCall; }, get activeGroupCall() { return activeGroupCall; }, get active() { return active; }, get myPid() { return MY_PID; } };
 }
 init();
 </script>

@@ -48,6 +48,13 @@ class FakeNetwork {
   }
 }
 
+// Peers only run other peers' tasks for opted-in groups, through an explicit runner
+// (audit NET-1). The app passes its opaque-origin sandbox; this pure-Node logic test
+// opts in and passes an in-process runner instead.
+const acceptAll = () => true;
+const inProcessRunner = (source, args) => ({ promise: Promise.resolve(runTask(source, args)), kill: () => false });
+const responderOpts = (myId) => ({ myId, acceptTask: acceptAll, runInWorker: inProcessRunner });
+
 function makeFakeHost(network, id) {
   const commands = new Map();
   commands.set('webrtc.mesh.available', { exec: () => true });
@@ -94,8 +101,8 @@ async function testSchedulerDispatchCombineAndReassign() {
   const meshB = new MeshClient(makeFakeHost(network, 'B'));
   // C intentionally gets no MeshClient/responder -> simulates "never responds"
 
-  const schedulerA = new Scheduler(meshA, { myId: 'A' });
-  const schedulerB = new Scheduler(meshB, { myId: 'B' });
+  const schedulerA = new Scheduler(meshA, responderOpts('A'));
+  const schedulerB = new Scheduler(meshB, responderOpts('B'));
   schedulerA.startResponder();
   schedulerB.startResponder();
 
@@ -158,9 +165,9 @@ async function testDistributedNeuralNetTraining() {
   const meshB = new MeshClient(makeFakeHost(network, 'B'));
   const meshC = new MeshClient(makeFakeHost(network, 'C'));
 
-  const schedulerA = new Scheduler(meshA, { myId: 'A' });
-  const schedulerB = new Scheduler(meshB, { myId: 'B' });
-  const schedulerC = new Scheduler(meshC, { myId: 'C' });
+  const schedulerA = new Scheduler(meshA, responderOpts('A'));
+  const schedulerB = new Scheduler(meshB, responderOpts('B'));
+  const schedulerC = new Scheduler(meshC, responderOpts('C'));
   schedulerA.startResponder();
   schedulerB.startResponder();
   schedulerC.startResponder();

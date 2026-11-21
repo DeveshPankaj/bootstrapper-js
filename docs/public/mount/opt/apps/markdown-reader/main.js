@@ -5,7 +5,8 @@ const run = (...args) => {
   console.log('Opening...')
   console.log(args)
   const htmlPath = `${_APP_DIR || '/opt/apps/markdown-reader'}/md-renderer.html`;
-  platform.host.exec(platform, htmlPath, args.slice(2))
+  // extra args are spread: Host.exec passes values, so an array would reach md-renderer as one object
+  platform.host.exec(platform, htmlPath, ...args.slice(2))
   // This window is just a redirector to md-renderer.html (which opens its own
   // window/taskbar entry) - close it immediately so it doesn't linger as a
   // second, never-closed taskbar entry.

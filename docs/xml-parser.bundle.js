@@ -35104,10 +35104,16 @@ const parse = (data) => {
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   broadcastIpcEvent: () => (/* binding */ broadcastIpcEvent),
+/* harmony export */   checkIpcFsAccess: () => (/* binding */ checkIpcFsAccess),
+/* harmony export */   getIpcFramePolicy: () => (/* binding */ getIpcFramePolicy),
+/* harmony export */   hardenWindow: () => (/* binding */ hardenWindow),
 /* harmony export */   initIpcBus: () => (/* binding */ initIpcBus),
+/* harmony export */   isIpcEventAllowed: () => (/* binding */ isIpcEventAllowed),
+/* harmony export */   registerIpcFrame: () => (/* binding */ registerIpcFrame),
 /* harmony export */   registerIpcHandler: () => (/* binding */ registerIpcHandler),
 /* harmony export */   registerWmBridge: () => (/* binding */ registerWmBridge)
 /* harmony export */ });
+/* harmony import */ var _path_policy__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./path-policy */ "./src/kernel/path-policy.ts");
 // Ring 0 — IPC bus kernel module
 // Raw postMessage router. All inter-process messaging goes through here.
 // Platform (Ring 1) builds higher-level MessageBus on top of this.
@@ -35120,15 +35126,249 @@ var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _argume
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
+
+/**
+ * Wraps `win.open` so that cross-origin URLs always open with
+ * `noopener,noreferrer`: the opened page gets no `window.opener` reference
+ * back into the OS (audit KRN-11, APP-9). Same-origin opens, and about:blank
+ * (which takes our origin), are unchanged. Idempotent per document: a
+ * WindowProxy survives navigation, so "already hardened" is read from the
+ * current document's own `open` property (our wrapper is locked), and a frame
+ * that navigated to a new document is wrapped again. Ignores windows it can't
+ * touch.
+ */
+function hardenWindow(win) {
+    if (!win)
+        return;
+    let nativeOpen;
+    try {
+        const current = Object.getOwnPropertyDescriptor(win, 'open');
+        if (current && current.configurable === false)
+            return;
+        nativeOpen = win.open.bind(win);
+    }
+    catch (_) {
+        return;
+    }
+    const wrapped = function (url, target, features) {
+        let resolved = null;
+        try {
+            resolved = new URL(String(url !== null && url !== void 0 ? url : ''), win.location.href);
+        }
+        catch (_) { /* let the browser reject it */ }
+        if (resolved && resolved.protocol !== 'about:' && resolved.origin !== win.location.origin) {
+            const list = String(features !== null && features !== void 0 ? features : '').split(',').map(s => s.trim()).filter(Boolean);
+            for (const f of ['noopener', 'noreferrer'])
+                if (!list.includes(f))
+                    list.push(f);
+            return nativeOpen(resolved.href, target !== null && target !== void 0 ? target : '_blank', list.join(','));
+        }
+        return nativeOpen(url, target, features);
+    };
+    try {
+        Object.defineProperty(win, 'open', { value: wrapped, writable: false, configurable: false });
+    }
+    catch (_) { /* already locked or cross-origin */ }
+}
+const ipcFrames = new WeakMap();
+// The same windows, iterable, for broadcasts. Discarded frames (closed) are
+// pruned on the next broadcast.
+const ipcFrameWindows = new Set();
+// True only in the bundle copy that installed the listener (see initIpcBus).
+let isKernelCopy = false;
+// The hook installed by the kernel copy, looked up from this realm upwards
+// (a module iframe's own window has none; its parent — the OS window — does).
+function findKernelHook() {
+    let w = window;
+    for (let depth = 0; depth < 16; depth++) {
+        try {
+            if (w.__wosKernel)
+                return w.__wosKernel;
+        }
+        catch (_) {
+            return undefined;
+        }
+        if (w.parent === w)
+            return undefined;
+        w = w.parent;
+    }
+    return undefined;
+}
+const toStringList = (list) => Array.isArray(list) ? list.filter((s) => typeof s === 'string' && s !== '') : [];
+// fs scopes must be absolute, normalisable paths; anything else is dropped.
+const toScopeList = (list) => toStringList(list).filter(p => {
+    try {
+        return p.startsWith('/') && (0,_path_policy__WEBPACK_IMPORTED_MODULE_0__.normalizePath)(p) !== undefined;
+    }
+    catch (_) {
+        return false;
+    }
+});
+/** Registers a kernel-created frame's window with a policy. Returns an unregister function. */
+function registerIpcFrame(win, policy) {
+    var _a, _b, _c;
+    if (!win)
+        return () => { };
+    // Another bundle's copy of this module: register in the kernel's registry,
+    // the only one the listener reads.
+    if (!isKernelCopy) {
+        const hook = findKernelHook();
+        if (hook && hook.registerIpcFrame !== registerIpcFrame)
+            return hook.registerIpcFrame(win, policy);
+    }
+    const frozen = Object.freeze({
+        id: String((_a = policy === null || policy === void 0 ? void 0 : policy.id) !== null && _a !== void 0 ? _a : ''),
+        events: Object.freeze(toStringList(policy === null || policy === void 0 ? void 0 : policy.events)),
+        fs: Object.freeze({
+            read: Object.freeze(toScopeList((_b = policy === null || policy === void 0 ? void 0 : policy.fs) === null || _b === void 0 ? void 0 : _b.read)),
+            write: Object.freeze(toScopeList((_c = policy === null || policy === void 0 ? void 0 : policy.fs) === null || _c === void 0 ? void 0 : _c.write)),
+        }),
+    });
+    const entry = { policy: frozen };
+    ipcFrames.set(win, entry);
+    ipcFrameWindows.add(win);
+    return () => {
+        if (ipcFrames.get(win) !== entry)
+            return;
+        ipcFrames.delete(win);
+        ipcFrameWindows.delete(win);
+    };
+}
+/** The policy registered for a message source, or undefined for anything the kernel didn't register. */
+function getIpcFramePolicy(source) {
+    var _a;
+    return source ? (_a = ipcFrames.get(source)) === null || _a === void 0 ? void 0 : _a.policy : undefined;
+}
+/** True when `event` is in the policy's list — exactly, or under a trailing-'*' prefix entry ('dock.*'). */
+function isIpcEventAllowed(policy, event) {
+    return policy.events.some(p => p === event || (p.endsWith('*') && event.startsWith(p.slice(0, -1))));
+}
+// fs.* events by the scope they need. An fs.* event in neither set is refused.
+const FS_READ_EVENTS = ['fs.read', 'fs.readText', 'fs.list', 'fs.exists', 'fs.stat'];
+const FS_WRITE_EVENTS = ['fs.write', 'fs.mkdir', 'fs.rm'];
+/**
+ * Checks an fs.* request against the frame's policy and returns the
+ * normalised path the handler must use. Throws when it isn't allowed:
+ * read events need policy.fs.read, write events policy.fs.write, and system
+ * paths (path-policy isKernelOwned, invariant I4) are never writable over IPC.
+ */
+function checkIpcFsAccess(policy, event, data) {
+    var _a, _b, _c;
+    const isWrite = FS_WRITE_EVENTS.includes(event);
+    if (!isWrite && !FS_READ_EVENTS.includes(event))
+        throw new Error(`${event}: not available over IPC`);
+    const raw = data && typeof data === 'object' ? data.path : undefined;
+    if (typeof raw !== 'string' || !raw.startsWith('/'))
+        throw new Error(`${event}: an absolute path is required`);
+    const path = (0,_path_policy__WEBPACK_IMPORTED_MODULE_0__.normalizePath)(raw);
+    if (isWrite && (0,_path_policy__WEBPACK_IMPORTED_MODULE_0__.isKernelOwned)(path))
+        throw new Error(`${event}: permission denied: ${path} is a system path`);
+    const scopes = (_c = (isWrite ? (_a = policy.fs) === null || _a === void 0 ? void 0 : _a.write : (_b = policy.fs) === null || _b === void 0 ? void 0 : _b.read)) !== null && _c !== void 0 ? _c : [];
+    if (!scopes.some(base => (0,_path_policy__WEBPACK_IMPORTED_MODULE_0__.isInside)(base, path)))
+        throw new Error(`${event}: permission denied: ${path}`);
+    return path;
+}
+// Non-fs events that act on one file: the path is checked exactly like a read
+// (the frame may only name files inside its fs.read scope).
+const PATH_READ_EVENTS = ['editor.open'];
+// postMessage can't target an opaque origin by name, so sandboxed frames get
+// '*' — the message still goes only to that one window.
+const replyTargetOrigin = (origin) => (origin && origin !== 'null' ? origin : '*');
+function handleIpcMessage(e) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const msg = e.data;
+        if (!msg || typeof msg !== 'object' || msg.type !== 'wos-ipc')
+            return;
+        const source = e.source;
+        const entry = source ? ipcFrames.get(source) : undefined;
+        // Unregistered or foreign sender (other sites via opener/popup/embed, frames
+        // the kernel didn't create): no reply at all.
+        if (!source || !entry)
+            return;
+        if (entry.origin === undefined)
+            entry.origin = e.origin;
+        else if (entry.origin !== e.origin)
+            return;
+        const { id, event, data } = msg;
+        const reply = (body) => {
+            // Only to that registered window, and only while it still holds the
+            // registration it had when it asked.
+            if (ipcFrames.get(source) !== entry)
+                return;
+            try {
+                source.postMessage(Object.assign({ type: 'wos-ipc-response', id }, body), replyTargetOrigin(e.origin));
+            }
+            catch (_) { }
+        };
+        if (typeof event !== 'string' || !isIpcEventAllowed(entry.policy, event)) {
+            reply({ error: `IPC event not permitted: ${String(event)}` });
+            return;
+        }
+        const handler = handlers.get(event);
+        if (!handler) {
+            reply({ error: `Unknown IPC event: ${event}` });
+            return;
+        }
+        try {
+            const arg = event.startsWith('fs.')
+                ? Object.assign(Object.assign({}, data), { path: checkIpcFsAccess(entry.policy, event, data) }) : PATH_READ_EVENTS.includes(event)
+                ? Object.assign(Object.assign({}, data), { path: checkIpcFsAccess(entry.policy, 'fs.readText', data) }) : data;
+            const result = yield handler(arg, source);
+            reply({ result: result !== null && result !== void 0 ? result : null });
+        }
+        catch (err) {
+            reply({ error: String(err) });
+        }
+    });
+}
 const handlers = new Map();
 function registerIpcHandler(event, handler) {
     handlers.set(event, handler);
 }
-function broadcastIpcEvent(event, data, targetDoc = document) {
-    targetDoc.querySelectorAll('iframe').forEach(f => {
+// A broadcast `ns.name` reaches a registered frame whose policy allows that
+// event (isIpcEventAllowed) or any other event in the same namespace — a dock
+// allowed 'wm.getWindows' also gets 'wm.windowsChanged'; a frame with only
+// fs.* gets no window titles (audit KRN-13).
+function isIpcBroadcastFor(policy, event) {
+    if (isIpcEventAllowed(policy, event))
+        return true;
+    const dot = event.indexOf('.');
+    if (dot <= 0)
+        return false;
+    const ns = event.slice(0, dot + 1);
+    return policy.events.some(p => p.startsWith(ns));
+}
+/**
+ * Posts a `wos-ipc-event` to the frames registered with registerIpcFrame whose
+ * policy covers `event`, and to nothing else (audit KRN-13). `targetDoc` is
+ * kept for compatibility and no longer used: registered frames are reached
+ * wherever they are. Other bundles' copies delegate to the kernel's registry.
+ */
+function broadcastIpcEvent(event, data, _targetDoc) {
+    if (!isKernelCopy) {
+        const hook = findKernelHook();
+        if ((hook === null || hook === void 0 ? void 0 : hook.broadcastIpcEvent) && hook.broadcastIpcEvent !== broadcastIpcEvent)
+            hook.broadcastIpcEvent(event, data);
+        return;
+    }
+    ipcFrameWindows.forEach(win => {
         var _a;
+        const entry = ipcFrames.get(win);
+        let closed = true;
         try {
-            (_a = f.contentWindow) === null || _a === void 0 ? void 0 : _a.postMessage({ type: 'wos-ipc-event', event, data }, '*');
+            closed = win.closed;
+        }
+        catch (_) { }
+        if (!entry || closed) {
+            ipcFrameWindows.delete(win);
+            if (entry && closed)
+                ipcFrames.delete(win);
+            return;
+        }
+        if (!isIpcBroadcastFor(entry.policy, event))
+            return;
+        try {
+            win.postMessage({ type: 'wos-ipc-event', event, data }, replyTargetOrigin((_a = entry.origin) !== null && _a !== void 0 ? _a : ''));
         }
         catch (_) { }
     });
@@ -35141,43 +35381,67 @@ function registerWmBridge(getWindows, toggleWindow, mainWindow = window, getLaun
     };
 }
 function initIpcBus(fs) {
-    if (!window.__wosIpcInit) {
+    if (!window.__wosIpcInit && !Object.getOwnPropertyDescriptor(window, '__wosKernel')) {
         window.__wosIpcInit = true;
-        window.addEventListener('message', (e) => __awaiter(this, void 0, void 0, function* () {
-            if (!e.data || e.data.type !== 'wos-ipc')
-                return;
-            const { id, event, data } = e.data;
-            const source = e.source;
-            if (!source)
-                return;
-            const handler = handlers.get(event);
-            if (!handler) {
-                source.postMessage({ type: 'wos-ipc-response', id, error: `Unknown IPC event: ${event}` }, '*');
-                return;
-            }
-            try {
-                const result = yield handler(data, source);
-                source.postMessage({ type: 'wos-ipc-response', id, result: result !== null && result !== void 0 ? result : null }, '*');
-            }
-            catch (err) {
-                source.postMessage({ type: 'wos-ipc-response', id, error: String(err) }, '*');
-            }
-        }));
+        isKernelCopy = true;
+        // Cross-bundle entry point to the registry above (see the comment there).
+        Object.defineProperty(window, '__wosKernel', {
+            value: Object.freeze({ registerIpcFrame, hardenWindow, broadcastIpcEvent }),
+            writable: false,
+            configurable: false,
+            enumerable: false,
+        });
+        // The only wos-ipc listener (audit KRN-1): it answers frames registered
+        // through registerIpcFrame, within their policy, and nobody else.
+        window.addEventListener('message', (e) => { void handleIpcMessage(e); });
     }
     // Window manager bridge handlers
     registerIpcHandler('wm.getWindows', () => { var _a, _b; return (_b = (_a = window.__wosWmBridge) === null || _a === void 0 ? void 0 : _a.getWindows()) !== null && _b !== void 0 ? _b : []; });
     registerIpcHandler('wm.toggleWindow', (d) => { var _a; (_a = window.__wosWmBridge) === null || _a === void 0 ? void 0 : _a.toggleWindow(Number(d.pid)); return true; });
     registerIpcHandler('wm.getLaunchItems', () => { var _a, _b; return (_b = (_a = window.__wosWmBridge) === null || _a === void 0 ? void 0 : _a.getLaunchItems()) !== null && _b !== void 0 ? _b : []; });
-    registerIpcHandler('wm.launch', (d) => { var _a, _b; (_b = (_a = window.__wosWmBridge) === null || _a === void 0 ? void 0 : _a.launch) === null || _b === void 0 ? void 0 : _b.call(_a, String(d.name)); return true; });
+    // Launches only what the dock was offered (wm.getLaunchItems), not any
+    // command by name (audit WIN-7).
+    registerIpcHandler('wm.launch', (d) => {
+        var _a, _b, _c, _d, _e;
+        const name = String((_a = d === null || d === void 0 ? void 0 : d.name) !== null && _a !== void 0 ? _a : '');
+        const offered = ((_c = (_b = window.__wosWmBridge) === null || _b === void 0 ? void 0 : _b.getLaunchItems()) !== null && _c !== void 0 ? _c : []).some(item => item.name === name);
+        if (!offered)
+            throw new Error(`wm.launch: ${name} is not a launch item`);
+        (_e = (_d = window.__wosWmBridge) === null || _d === void 0 ? void 0 : _d.launch) === null || _e === void 0 ? void 0 : _e.call(_d, name);
+        return true;
+    });
+    // Opens a file the frame may read in the system editor (Notepad). The path
+    // was already checked against the frame's fs.read scope; the editor is the
+    // user's tool, so saving needs the user. Throttled so a page can't flood
+    // the desktop with windows.
+    const lastEditorOpen = new WeakMap();
+    registerIpcHandler('editor.open', (d, source) => {
+        var _a, _b;
+        const now = Date.now();
+        if (now - ((_a = lastEditorOpen.get(source)) !== null && _a !== void 0 ? _a : 0) < 1000)
+            throw new Error('editor.open: too many requests');
+        lastEditorOpen.set(source, now);
+        if (!fs.existsSync(d.path) || fs.statSync(d.path).isDirectory())
+            throw new Error(`editor.open: not a file: ${d.path}`);
+        const host = (_b = window.platform) === null || _b === void 0 ? void 0 : _b.host;
+        if (typeof (host === null || host === void 0 ? void 0 : host.openWindow) !== 'function')
+            throw new Error('editor.open: the desktop is not ready');
+        host.openWindow('ui.notepad', d.path);
+        return true;
+    });
     // Dock bridge handlers
-    registerIpcHandler('dock.registerSettings', (d) => {
-        var _a, _b, _c, _d;
+    registerIpcHandler('dock.registerSettings', (d, source) => {
+        var _a, _b, _c, _d, _e;
+        // A dock frame the layout registered as `dock:<id>` is that dock,
+        // whatever dockId it reports about itself.
+        const pinned = /^dock:([a-z0-9-]{1,64})$/.exec((_b = (_a = ipcFrames.get(source)) === null || _a === void 0 ? void 0 : _a.policy.id) !== null && _b !== void 0 ? _b : '');
+        const dockId = pinned ? pinned[1] : String((_c = d === null || d === void 0 ? void 0 : d.dockId) !== null && _c !== void 0 ? _c : '');
         if (window.__wosDockBridge) {
-            window.__wosDockBridge.schema = (_a = d.schema) !== null && _a !== void 0 ? _a : [];
-            window.__wosDockBridge.dockId = (_b = d.dockId) !== null && _b !== void 0 ? _b : '';
+            window.__wosDockBridge.schema = (_d = d === null || d === void 0 ? void 0 : d.schema) !== null && _d !== void 0 ? _d : [];
+            window.__wosDockBridge.dockId = dockId;
         }
         else {
-            window.__wosDockBridge = { schema: (_c = d.schema) !== null && _c !== void 0 ? _c : [], dockId: (_d = d.dockId) !== null && _d !== void 0 ? _d : '', set: () => { } };
+            window.__wosDockBridge = { schema: (_e = d === null || d === void 0 ? void 0 : d.schema) !== null && _e !== void 0 ? _e : [], dockId, set: () => { } };
         }
         broadcastIpcEvent('dock.schemaChanged', { schema: window.__wosDockBridge.schema, dockId: window.__wosDockBridge.dockId });
         return true;
@@ -35197,8 +35461,9 @@ function initIpcBus(fs) {
     registerIpcHandler('dock.getSettings', () => window.__wosDockBridge
         ? window.__wosDockBridge.schema.reduce((acc, e) => { acc[e.key] = e.value; return acc; }, {})
         : {});
-    // FS handlers — accessed through platform's ProxyFS in Ring 1;
-    // these raw handlers remain for trusted system callers (SW bridge, dock, etc.)
+    // FS handlers. handleIpcMessage has already checked the event and the
+    // path against the calling frame's policy (checkIpcFsAccess) and passes
+    // the normalised path in `d.path`.
     registerIpcHandler('fs.read', (d) => Array.from(fs.readFileSync(d.path)));
     registerIpcHandler('fs.readText', (d) => fs.readFileSync(d.path, 'utf8'));
     registerIpcHandler('fs.write', (d) => {
@@ -35223,6 +35488,143 @@ function initIpcBus(fs) {
 
 /***/ },
 
+/***/ "./src/kernel/path-policy.ts"
+/*!***********************************!*\
+  !*** ./src/kernel/path-policy.ts ***!
+  \***********************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   APP_ID_RE: () => (/* binding */ APP_ID_RE),
+/* harmony export */   KERNEL_OWNED_PATHS: () => (/* binding */ KERNEL_OWNED_PATHS),
+/* harmony export */   PathPolicyError: () => (/* binding */ PathPolicyError),
+/* harmony export */   isInside: () => (/* binding */ isInside),
+/* harmony export */   isKernelOwned: () => (/* binding */ isKernelOwned),
+/* harmony export */   isValidAppId: () => (/* binding */ isValidAppId),
+/* harmony export */   isValidName: () => (/* binding */ isValidName),
+/* harmony export */   normalizePath: () => (/* binding */ normalizePath),
+/* harmony export */   pathPolicy: () => (/* binding */ pathPolicy),
+/* harmony export */   safeJoin: () => (/* binding */ safeJoin)
+/* harmony export */ });
+// Ring 0 — path policy (documentation/security/decisions.md, D6).
+//
+// The one implementation of path normalisation and containment checks. Every
+// caller that turns untrusted input into a vfs path uses it: namespace ACLs,
+// package installs, archive extraction, WebRTC / SSH mounts, shell commands.
+// vfs scripts reach it as `platform.host.pathPolicy` (compiled, so a vfs
+// write can't weaken it). path-policy.test.ts is the spec.
+//
+// No imports on purpose — this module must stay dependency-free so anything
+// (kernel, platform, host, SW-side code, tests) can import it without cycles.
+class PathPolicyError extends Error {
+    constructor(message) {
+        super(message);
+        this.name = 'PathPolicyError';
+    }
+}
+// C0 controls, DEL and C1 controls: never valid in a vfs path or name.
+const CONTROL_CHARS = /[\u0000-\u001f\u007f-\u009f]/;
+/**
+ * Resolves `.`, `..` and repeated slashes in a vfs path. Relative paths resolve
+ * against `cwd`. `..` above the root stays at the root (POSIX semantics).
+ * Rejects non-strings, control characters (incl. NUL) and backslashes.
+ * Returns an absolute path with no trailing slash ('/' for the root).
+ */
+function normalizePath(path, cwd = '/') {
+    if (typeof path !== 'string')
+        throw new PathPolicyError('path must be a string');
+    if (CONTROL_CHARS.test(path))
+        throw new PathPolicyError('control character in path');
+    if (path.includes('\\'))
+        throw new PathPolicyError('backslash in path');
+    const full = path.startsWith('/') ? path : `${cwd}/${path}`;
+    const out = [];
+    for (const segment of full.split('/')) {
+        if (segment === '' || segment === '.')
+            continue;
+        if (segment === '..') {
+            out.pop();
+            continue;
+        }
+        out.push(segment);
+    }
+    return '/' + out.join('/');
+}
+/**
+ * True when `path` is `base` or lies under it, compared segment by segment
+ * ('/a/bc' is not inside '/a/b'). Both sides are normalised first.
+ */
+function isInside(base, path) {
+    const b = normalizePath(base);
+    const p = normalizePath(path);
+    if (b === '/')
+        return true;
+    return p === b || p.startsWith(b + '/');
+}
+/**
+ * True for a single, safe path segment coming from an untrusted source: a
+ * peer's file listing, an SSH host, an archive entry segment, a package file.
+ */
+function isValidName(name, maxLength = 255) {
+    return typeof name === 'string'
+        && name.length > 0
+        && name.length <= maxLength
+        && name !== '.'
+        && name !== '..'
+        && !name.includes('/')
+        && !name.includes('\\')
+        && !CONTROL_CHARS.test(name);
+}
+/**
+ * Joins an untrusted relative path (it may contain '/'-separated segments, like
+ * an archive entry 'dir/file.txt') onto `base`. Throws on absolute paths, '..'
+ * or otherwise invalid segments, and on any result outside `base`.
+ */
+function safeJoin(base, relative) {
+    if (typeof relative !== 'string' || relative === '')
+        throw new PathPolicyError('empty path');
+    if (relative.startsWith('/'))
+        throw new PathPolicyError(`absolute path not allowed: ${relative}`);
+    const segments = relative.split('/').filter(s => s !== '' && s !== '.');
+    if (segments.length === 0)
+        throw new PathPolicyError(`empty path: ${relative}`);
+    for (const segment of segments) {
+        if (!isValidName(segment))
+            throw new PathPolicyError(`invalid path segment: ${JSON.stringify(segment)}`);
+    }
+    const b = normalizePath(base);
+    const full = normalizePath(`${b}/${segments.join('/')}`);
+    if (!isInside(b, full) || full === b)
+        throw new PathPolicyError(`path escapes ${b}: ${relative}`);
+    return full;
+}
+/**
+ * System paths only the kernel may write (invariant I4). Enforced for every
+ * caller that goes through a namespace (ProxyFS, the IPC bus, the broker).
+ */
+const KERNEL_OWNED_PATHS = Object.freeze([
+    '/bin', '/boot', '/etc', '/opt', '/usr', '/meta.json', '/.initd.run', '/home/user1/initd.run',
+]);
+function isKernelOwned(path) {
+    const p = normalizePath(path);
+    return KERNEL_OWNED_PATHS.some(k => isInside(k, p));
+}
+/** App ids double as directory names under /opt/apps and ~/.local/share. */
+const APP_ID_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
+function isValidAppId(id) {
+    return typeof id === 'string' && APP_ID_RE.test(id) && !id.includes('..');
+}
+/** Frozen bundle of the helpers, exposed to vfs code as `platform.host.pathPolicy`. */
+const pathPolicy = Object.freeze({
+    normalizePath, isInside, isValidName, safeJoin, isKernelOwned, isValidAppId,
+    KERNEL_OWNED_PATHS, APP_ID_RE, PathPolicyError,
+});
+
+
+/***/ },
+
 /***/ "./src/kernel/vfs.ts"
 /*!***************************!*\
   !*** ./src/kernel/vfs.ts ***!
@@ -35239,6 +35641,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   resolveFsBackend: () => (/* binding */ resolveFsBackend)
 /* harmony export */ });
 /* harmony import */ var _ipc_bus__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./ipc-bus */ "./src/kernel/ipc-bus.ts");
+/* harmony import */ var _path_policy__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./path-policy */ "./src/kernel/path-policy.ts");
 // Ring 0 — VFS kernel module
 // Owns BrowserFS mount, path bootstrap from meta.json, and segment-safe mkdir.
 // No business logic. Called once at boot from src/index.ts.
@@ -35252,15 +35655,55 @@ var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _argume
     });
 };
 
+
 const FS_BACKEND_STORAGE_KEY = '__app_fs_backend__';
 const FS_BACKEND_QUERY_PARAM = 'fsBackend';
-function resolveFsBackend() {
-    const fromQuery = new URLSearchParams(window.location.search).get(FS_BACKEND_QUERY_PARAM);
-    if (fromQuery === 'indexeddb' || fromQuery === 'localstorage') {
-        localStorage.setItem(FS_BACKEND_STORAGE_KEY, fromQuery);
-        return fromQuery;
+// Removes one query parameter from the address bar, keeping the rest of the
+// URL (other params, the deep-link hash) as it was.
+function stripQueryParam(name) {
+    try {
+        const url = new URL(window.location.href);
+        if (!url.searchParams.has(name))
+            return;
+        url.searchParams.delete(name);
+        window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
     }
-    return localStorage.getItem(FS_BACKEND_STORAGE_KEY) === 'localstorage' ? 'localstorage' : 'indexeddb';
+    catch (_) { /* best effort */ }
+}
+function resolveFsBackend() {
+    let stored = 'indexeddb';
+    try {
+        if (localStorage.getItem(FS_BACKEND_STORAGE_KEY) === 'localstorage')
+            stored = 'localstorage';
+    }
+    catch (_) { }
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has(FS_BACKEND_QUERY_PARAM))
+        return stored;
+    const fromQuery = params.get(FS_BACKEND_QUERY_PARAM);
+    // Consumed either way, so a reload or a copied link doesn't apply it again.
+    stripQueryParam(FS_BACKEND_QUERY_PARAM);
+    if ((fromQuery !== 'indexeddb' && fromQuery !== 'localstorage') || fromQuery === stored)
+        return stored;
+    // The two backends are separate filesystems: a link must not switch this
+    // browser to another one without the user agreeing (audit KRN-9). Settings
+    // > Storage stores the choice before reloading, so it never gets here.
+    let ok = false;
+    try {
+        ok = window.confirm(`This link asks to switch this browser's file system storage from "${stored}" to "${fromQuery}".\n\n` +
+            'The two are separate file systems — your files stay where they are, but you will see ' +
+            'the other one until you switch back in Settings > Storage.\n\nSwitch now?');
+    }
+    catch (_) {
+        ok = false;
+    }
+    if (!ok)
+        return stored;
+    try {
+        localStorage.setItem(FS_BACKEND_STORAGE_KEY, fromQuery);
+    }
+    catch (_) { }
+    return fromQuery;
 }
 // BrowserFS ignores { recursive: true } — create each segment individually.
 function mkdirRecursive(fs, path) {
@@ -35329,33 +35772,92 @@ function initVFS(bootLog) {
         return fs;
     });
 }
+const META_SERVER_PATH = '/public/mount/meta.json';
+const STATIC_ROOT = '/public/mount';
+// Where a meta.json entry may be written: an absolute, already-normalised vfs path.
+function metaTargetPath(path) {
+    if (typeof path !== 'string' || !path.startsWith('/'))
+        return null;
+    try {
+        return (0,_path_policy__WEBPACK_IMPORTED_MODULE_1__.normalizePath)(path) === path && path !== '/' ? path : null;
+    }
+    catch (_) {
+        return null;
+    }
+}
+// The static copy a meta.json entry may come from: a path under /public/mount on
+// this origin. Absolute or protocol-relative URLs, '..', query/fragment
+// characters, backslashes and control characters are refused.
+function metaSourceUrl(file) {
+    if (typeof file !== 'string' || file === '')
+        return null;
+    if (/^[a-z][a-z0-9+.-]*:/i.test(file) || file.startsWith('//') || /[?#%\\]/.test(file))
+        return null;
+    if (file.split('/').includes('..'))
+        return null;
+    let rel;
+    try {
+        rel = (0,_path_policy__WEBPACK_IMPORTED_MODULE_1__.normalizePath)(file.startsWith('/') ? file : `/${file}`);
+    }
+    catch (_) {
+        return null;
+    }
+    const url = STATIC_ROOT + rel;
+    return url !== STATIC_ROOT && (0,_path_policy__WEBPACK_IMPORTED_MODULE_1__.isInside)(STATIC_ROOT, url) ? url : null;
+}
 function bootstrapMetaFiles(fs, bootLog) {
     return __awaiter(this, void 0, void 0, function* () {
         const t1 = Date.now();
-        const metaFilePath = '/meta.json';
-        const metaFileServerPath = '/public/mount/meta.json';
-        let defaultFiles = [];
-        if (fs.existsSync(metaFilePath)) {
-            defaultFiles = JSON.parse(fs.readFileSync(metaFilePath).toString());
+        // The server's meta.json decides what is restored and from where (audit
+        // BOOT-6, decisions.md D12). The vfs copy at /meta.json is plain data —
+        // any app can write it — so it can no longer switch refreshing off or name
+        // other sources; it is just overwritten with the server copy.
+        let entries;
+        try {
+            const res = yield fetch(META_SERVER_PATH);
+            if (!res.ok)
+                throw new Error(`HTTP ${res.status}`);
+            const list = yield res.json();
+            if (!Array.isArray(list))
+                throw new Error('not a list');
+            entries = list;
         }
-        const ignoreMetaReload = defaultFiles.find(item => item.path === metaFilePath && item.force_reload === false);
-        if (!ignoreMetaReload)
-            defaultFiles = yield (yield fetch(metaFileServerPath)).json();
+        catch (err) {
+            bootLog('meta.json bootstrap', t1, `server meta.json unavailable: ${err}`);
+            return;
+        }
         let fileCount = 0;
-        yield Promise.all(defaultFiles.map((item) => __awaiter(this, void 0, void 0, function* () {
-            if (fs.existsSync(item.path) && !item.force_reload)
+        const rejected = [];
+        const failed = [];
+        yield Promise.all(entries.map((item) => __awaiter(this, void 0, void 0, function* () {
+            const target = metaTargetPath(item === null || item === void 0 ? void 0 : item.path);
+            const source = metaSourceUrl(item === null || item === void 0 ? void 0 : item.file);
+            if (!target || !source) {
+                rejected.push(String(item === null || item === void 0 ? void 0 : item.path));
                 return;
-            const serverPath = item.file.startsWith('http')
-                ? item.file
-                : `/public/mount${item.file.startsWith('/') ? '' : '/'}${item.file}`;
-            const fileData = yield (yield fetch(serverPath)).arrayBuffer();
-            const dir = item.path.slice(0, item.path.lastIndexOf('/')) || '/';
-            if (!fs.existsSync(dir))
-                mkdirRecursive(fs, dir);
-            fs.writeFileSync(item.path, Buffer.from(fileData));
-            fileCount++;
+            }
+            if (fs.existsSync(target) && !item.force_reload)
+                return;
+            try {
+                const res = yield fetch(source);
+                if (!res.ok)
+                    throw new Error(`HTTP ${res.status}`);
+                const fileData = yield res.arrayBuffer();
+                const dir = target.slice(0, target.lastIndexOf('/')) || '/';
+                if (!fs.existsSync(dir))
+                    mkdirRecursive(fs, dir);
+                fs.writeFileSync(target, Buffer.from(fileData));
+                fileCount++;
+            }
+            catch (err) {
+                failed.push(target);
+                console.warn('[vfs] meta.json entry not restored:', target, err);
+            }
         })));
-        bootLog(`meta.json bootstrap (${fileCount} files written)`, t1);
+        if (rejected.length)
+            console.warn('[vfs] meta.json entries rejected (not a /public/mount source or bad path):', rejected);
+        const problems = [rejected.length && `${rejected.length} rejected`, failed.length && `${failed.length} failed`].filter(Boolean).join(', ');
+        bootLog(`meta.json bootstrap (${fileCount} files written)`, t1, problems || undefined);
     });
 }
 
@@ -35398,7 +35900,14 @@ class CommandRegistry {
         return CommandRegistry._instance;
     }
     register(name, exec, meta = {}, platformName = 'unknown') {
+        var _a;
         const existing = this._commands.getValue().find(x => x.name === name);
+        // Same rule as Host.registerCommand (audit KRN-10): another owner may
+        // replace a name only when the registration it replaces is a fallback.
+        if (existing && existing.servicePlatformName !== platformName && ((_a = existing.meta) === null || _a === void 0 ? void 0 : _a.fallback) !== true) {
+            console.error(`[command-registry] '${name}' belongs to ${existing.servicePlatformName}; ${platformName} can't replace it`);
+            return { remove: () => { } };
+        }
         if (existing) {
             console.warn(`[command-registry] '${name}' already registered — new registration takes precedence`);
         }
@@ -35461,59 +35970,129 @@ CommandRegistry._instance = null;
 "use strict";
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   Namespace: () => (/* binding */ Namespace)
+/* harmony export */   APP_DATA_ROOT: () => (/* binding */ APP_DATA_ROOT),
+/* harmony export */   APP_TMP_ROOT: () => (/* binding */ APP_TMP_ROOT),
+/* harmony export */   Namespace: () => (/* binding */ Namespace),
+/* harmony export */   SHARED_APP_DATA: () => (/* binding */ SHARED_APP_DATA),
+/* harmony export */   ownIdsOf: () => (/* binding */ ownIdsOf)
 /* harmony export */ });
+/* harmony import */ var _kernel_path_policy__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ../kernel/path-policy */ "./src/kernel/path-policy.ts");
 // Ring 1 — Namespace
 // Per-app context. Each spawned process gets one Namespace that defines its
 // identity (pid, id) and its access control list for VFS paths.
+//
+// Path rules (audit KRN-5, decisions.md D5/D6) — every target and every ACL
+// entry goes through the kernel path policy (src/kernel/path-policy.ts):
+//   - targets and entries are normalised ('.', '..', '//'; NUL, control
+//     characters and '\' are rejected), entries match segment by segment;
+//   - the id must be a valid app id (APP_ID_RE); an invalid id gets no write
+//     scope at all;
+//   - kernel-owned paths (/bin, /boot, /etc, /opt, /usr, /meta.json, init
+//     scripts) are never writable through a namespace, whatever the ACL says;
+//   - an app writes only its own data dir (~/.local/share/<id>), its own
+//     /tmp/<id>, and TrainBoard's shared log (see below);
+//   - other apps' data dirs under ~/.local/share are not readable either;
+//     everything else stays readable in phase 1 (apps open user files).
+// The ACL is still advisory until phase 2 (apps also reach host.getFS()), but
+// it is the rule set the broker will enforce.
+
+const APP_DATA_ROOT = '/home/user1/.local/share';
+const APP_TMP_ROOT = '/tmp';
+// TrainBoard's shared cross-app metrics log: any app writes {run,step,metric,value}
+// rows to log.jsonl there so TrainBoard can chart them (nn-ide, model-builder,
+// snake-cnn3d, snake-qlearning, snake-lstm, robot-sim). Every app may read and
+// write it — the one deliberate exception to "own data dir only".
+const SHARED_APP_DATA = Object.freeze([`${APP_DATA_ROOT}/trainboard`]);
+// Deliberate cross-app reads, keyed by app id: AI DOM Lens offers Vector Store's
+// projects as knowledge bases (it lists and reads ~/.local/share/ui.vector-store).
+const CROSS_APP_READS = Object.freeze({
+    'ai-dom-lens': Object.freeze(['ui.vector-store', 'vector-store']),
+});
+// A window's namespace id is its command name. First-party apps install to
+// /opt/apps/<app-id> and register `ui.<app-id>`, and both names appear in their
+// data paths (snake-game keeps ~/.local/share/snake-game, ts-ide keeps
+// ~/.local/share/ui.ts-ide), so `ui.<app-id>` owns the dirs of both names.
+const ownIdsOf = (id) => {
+    if (!(0,_kernel_path_policy__WEBPACK_IMPORTED_MODULE_0__.isValidAppId)(id))
+        return [];
+    const ids = [id];
+    if (id.startsWith('ui.') && (0,_kernel_path_policy__WEBPACK_IMPORTED_MODULE_0__.isValidAppId)(id.slice(3)))
+        ids.push(id.slice(3));
+    return ids;
+};
+const tryNormalize = (path) => {
+    try {
+        return typeof path === 'string' && path.startsWith('/') ? (0,_kernel_path_policy__WEBPACK_IMPORTED_MODULE_0__.normalizePath)(path) : null;
+    }
+    catch (_) {
+        return null;
+    }
+};
 class Namespace {
     constructor(opts) {
-        var _a, _b;
+        var _a, _b, _c;
         this.pid = opts.pid;
-        this.id = opts.id;
-        this.appDir = (_a = opts.appDir) !== null && _a !== void 0 ? _a : `/opt/apps/${opts.id}`;
-        // Default ACL: read+write own app dir and user data dir.
-        // System paths (/tmp, /var/log) are readable + writable.
-        // Everything else is read-only by default.
-        //
-        // /home/user1/.local/share/trainboard is a deliberate exception:
-        // it's TrainBoard's shared cross-app metrics log (any app writes
-        // {run,step,metric,value} rows to log.jsonl there so TrainBoard
-        // can chart them), so every sandboxed app needs write access to
-        // it specifically, not just its own id's data dir. Without this,
-        // every app following that convention (nn-ide, model-builder,
-        // snake-cnn3d, snake-qlearning, snake-lstm, and now robot-sim)
-        // fails silently — each wraps the write in its own try/catch,
-        // so the ACL denial never surfaced as a visible error anywhere.
-        this.acl = [
-            { path: this.appDir, read: true, write: true },
-            { path: `/home/user1/.local/share/${opts.id}`, read: true, write: true },
-            { path: '/home/user1/.local/share/trainboard', read: true, write: true },
-            { path: '/tmp', read: true, write: true },
-            { path: '/var/log', read: true, write: true },
-            { path: '/', read: true, write: false }, // catch-all read
-            ...((_b = opts.extraAcl) !== null && _b !== void 0 ? _b : []),
-        ];
-    }
-    bestMatch(path) {
-        // Find the most-specific ACL entry whose path is a prefix of the target path.
-        // Special-case e.path === '/' so the catch-all works: any '/foo' starts with '/'
-        // without adding an extra slash (which would require '//').
-        return this.acl
-            .filter(e => path === e.path || e.path === '/' || path.startsWith(e.path + '/'))
-            .sort((a, b) => b.path.length - a.path.length)[0];
-    }
-    checkRead(path) {
-        const match = this.bestMatch(path);
-        if (!match || !match.read) {
-            throw new Error(`[acl] read denied: pid=${this.pid} id=${this.id} path=${path}`);
+        this.id = String(opts.id);
+        const ownIds = ownIdsOf(this.id);
+        const appId = ownIds[ownIds.length - 1];
+        // appDir is informational (task manager) and readable; /opt is kernel-owned.
+        this.appDir = (_a = tryNormalize(opts.appDir)) !== null && _a !== void 0 ? _a : (appId ? `/opt/apps/${appId}` : '');
+        const entries = [];
+        for (const own of ownIds) {
+            entries.push({ path: `${APP_DATA_ROOT}/${own}`, read: true, write: true });
+            entries.push({ path: `${APP_TMP_ROOT}/${own}`, read: true, write: true });
         }
+        if (ownIds.length) {
+            for (const shared of SHARED_APP_DATA)
+                entries.push({ path: shared, read: true, write: true });
+            for (const other of (_b = CROSS_APP_READS[appId]) !== null && _b !== void 0 ? _b : [])
+                entries.push({ path: `${APP_DATA_ROOT}/${other}`, read: true, write: false });
+        }
+        if (this.appDir)
+            entries.push({ path: this.appDir, read: true, write: false });
+        entries.push({ path: APP_DATA_ROOT, read: false, write: false }); // other apps' private data
+        entries.push({ path: '/', read: true, write: false }); // catch-all read (phase 1)
+        for (const e of (_c = opts.extraAcl) !== null && _c !== void 0 ? _c : [])
+            entries.push(e);
+        // Normalise every entry; drop the ones that don't name an absolute path.
+        const acl = [];
+        for (const e of entries) {
+            const path = tryNormalize(e === null || e === void 0 ? void 0 : e.path);
+            if (path)
+                acl.push(Object.freeze({ path, read: e.read === true, write: e.write === true }));
+        }
+        this.acl = Object.freeze(acl);
+        Object.freeze(this);
+    }
+    // The most specific entry containing the (already normalised) path; later
+    // entries win ties, so an extraAcl entry can override a default one.
+    bestMatch(path) {
+        let best;
+        for (const e of this.acl) {
+            if (!(0,_kernel_path_policy__WEBPACK_IMPORTED_MODULE_0__.isInside)(e.path, path))
+                continue;
+            if (!best || e.path.length >= best.path.length)
+                best = e;
+        }
+        return best;
+    }
+    // Both checks return the normalised path — callers must use it for the
+    // actual fs operation, so what was checked is what gets touched.
+    checkRead(path) {
+        const p = tryNormalize(path);
+        const match = p ? this.bestMatch(p) : undefined;
+        if (!p || !match || !match.read) {
+            throw new Error(`[acl] read denied: pid=${this.pid} id=${this.id} path=${String(path)}`);
+        }
+        return p;
     }
     checkWrite(path) {
-        const match = this.bestMatch(path);
-        if (!match || !match.write) {
-            throw new Error(`[acl] write denied: pid=${this.pid} id=${this.id} path=${path}`);
+        const p = tryNormalize(path);
+        const match = p ? this.bestMatch(p) : undefined;
+        if (!p || !match || !match.write || (0,_kernel_path_policy__WEBPACK_IMPORTED_MODULE_0__.isKernelOwned)(p)) {
+            throw new Error(`[acl] write denied: pid=${this.pid} id=${this.id} path=${String(path)}`);
         }
+        return p;
     }
     canRead(path) {
         try {
@@ -35634,6 +36213,10 @@ __webpack_require__.r(__webpack_exports__);
 // Ring 1 — ProxyFS
 // Wraps the raw kernel VFS with per-namespace ACL enforcement.
 // Apps receive a ProxyFS instance — they never touch the raw fs directly.
+//
+// Every operation checks its path with the namespace (which normalises it,
+// src/platform/namespace.ts) and then uses the normalised path it got back, so
+// '/tmp/<id>/../../etc/crontab' is checked — and refused — as '/etc/crontab'.
 
 class ProxyFS {
     constructor(fs, ns) {
@@ -35642,13 +36225,13 @@ class ProxyFS {
     }
     // --- Read operations ---
     readFileSync(path, encoding) {
-        this.ns.checkRead(path);
-        return encoding ? this.fs.readFileSync(path, encoding) : this.fs.readFileSync(path);
+        const p = this.ns.checkRead(path);
+        return encoding ? this.fs.readFileSync(p, encoding) : this.fs.readFileSync(p);
     }
     readText(path) {
         try {
-            this.ns.checkRead(path);
-            return Promise.resolve(this.fs.readFileSync(path, 'utf8'));
+            const p = this.ns.checkRead(path);
+            return Promise.resolve(this.fs.readFileSync(p, 'utf8'));
         }
         catch (e) {
             return Promise.reject(e);
@@ -35656,47 +36239,47 @@ class ProxyFS {
     }
     readBinary(path) {
         try {
-            this.ns.checkRead(path);
-            return Promise.resolve(this.fs.readFileSync(path));
+            const p = this.ns.checkRead(path);
+            return Promise.resolve(this.fs.readFileSync(p));
         }
         catch (e) {
             return Promise.reject(e);
         }
     }
     existsSync(path) {
-        this.ns.checkRead(path);
-        return this.fs.existsSync(path);
+        const p = this.ns.checkRead(path);
+        return this.fs.existsSync(p);
     }
     exists(path) {
         try {
-            this.ns.checkRead(path);
-            return Promise.resolve(this.fs.existsSync(path));
+            const p = this.ns.checkRead(path);
+            return Promise.resolve(this.fs.existsSync(p));
         }
         catch (e) {
             return Promise.reject(e);
         }
     }
     readdirSync(path) {
-        this.ns.checkRead(path);
-        return this.fs.readdirSync(path);
+        const p = this.ns.checkRead(path);
+        return this.fs.readdirSync(p);
     }
     list(path) {
         try {
-            this.ns.checkRead(path);
-            return Promise.resolve(this.fs.readdirSync(path));
+            const p = this.ns.checkRead(path);
+            return Promise.resolve(this.fs.readdirSync(p));
         }
         catch (e) {
             return Promise.reject(e);
         }
     }
     statSync(path) {
-        this.ns.checkRead(path);
-        return this.fs.statSync(path);
+        const p = this.ns.checkRead(path);
+        return this.fs.statSync(p);
     }
     stat(path) {
         try {
-            this.ns.checkRead(path);
-            const s = this.fs.statSync(path);
+            const p = this.ns.checkRead(path);
+            const s = this.fs.statSync(p);
             return Promise.resolve({ isDirectory: s.isDirectory(), isFile: s.isFile(), size: s.size });
         }
         catch (e) {
@@ -35705,17 +36288,17 @@ class ProxyFS {
     }
     // --- Write operations ---
     writeFileSync(path, data) {
-        this.ns.checkWrite(path);
-        this.fs.writeFileSync(path, data);
+        const p = this.ns.checkWrite(path);
+        this.fs.writeFileSync(p, data);
     }
     writeText(path, content) {
         try {
-            this.ns.checkWrite(path);
+            const p = this.ns.checkWrite(path);
             // Auto-create parent dirs (BrowserFS doesn't support recursive)
-            const dir = path.slice(0, path.lastIndexOf('/')) || '/';
+            const dir = p.slice(0, p.lastIndexOf('/')) || '/';
             if (dir && !this.fs.existsSync(dir))
                 (0,_kernel_vfs__WEBPACK_IMPORTED_MODULE_0__.mkdirRecursive)(this.fs, dir);
-            this.fs.writeFileSync(path, content);
+            this.fs.writeFileSync(p, content);
             return Promise.resolve(true);
         }
         catch (e) {
@@ -35723,32 +36306,32 @@ class ProxyFS {
         }
     }
     mkdirSync(path) {
-        this.ns.checkWrite(path);
-        this.fs.mkdirSync(path);
+        const p = this.ns.checkWrite(path);
+        this.fs.mkdirSync(p);
     }
     mkdir(path) {
         try {
-            this.ns.checkWrite(path);
-            (0,_kernel_vfs__WEBPACK_IMPORTED_MODULE_0__.mkdirRecursive)(this.fs, path);
+            const p = this.ns.checkWrite(path);
+            (0,_kernel_vfs__WEBPACK_IMPORTED_MODULE_0__.mkdirRecursive)(this.fs, p);
             return Promise.resolve(true);
         }
         catch (e) {
             return Promise.reject(e);
         }
     }
-    // mkdirRecursive exposed for convenience — checks write on each segment
+    // mkdirRecursive exposed for convenience — the target must be writable
     mkdirRecursive(path) {
-        this.ns.checkWrite(path);
-        (0,_kernel_vfs__WEBPACK_IMPORTED_MODULE_0__.mkdirRecursive)(this.fs, path);
+        const p = this.ns.checkWrite(path);
+        (0,_kernel_vfs__WEBPACK_IMPORTED_MODULE_0__.mkdirRecursive)(this.fs, p);
     }
     unlinkSync(path) {
-        this.ns.checkWrite(path);
-        this.fs.unlinkSync(path);
+        const p = this.ns.checkWrite(path);
+        this.fs.unlinkSync(p);
     }
     remove(path) {
         try {
-            this.ns.checkWrite(path);
-            this.fs.unlinkSync(path);
+            const p = this.ns.checkWrite(path);
+            this.fs.unlinkSync(p);
             return Promise.resolve(true);
         }
         catch (e) {
@@ -35756,15 +36339,15 @@ class ProxyFS {
         }
     }
     renameSync(from, to) {
-        this.ns.checkWrite(from);
-        this.ns.checkWrite(to);
-        this.fs.renameSync(from, to);
+        const f = this.ns.checkWrite(from);
+        const t = this.ns.checkWrite(to);
+        this.fs.renameSync(f, t);
     }
     rename(from, to) {
         try {
-            this.ns.checkWrite(from);
-            this.ns.checkWrite(to);
-            this.fs.renameSync(from, to);
+            const f = this.ns.checkWrite(from);
+            const t = this.ns.checkWrite(to);
+            this.fs.renameSync(f, t);
             return Promise.resolve(true);
         }
         catch (e) {
@@ -35803,13 +36386,16 @@ class ProxyFS {
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   Host: () => (/* binding */ Host),
-/* harmony export */   Platform: () => (/* binding */ Platform)
+/* harmony export */   Platform: () => (/* binding */ Platform),
+/* harmony export */   isSystemExecutablePath: () => (/* binding */ isSystemExecutablePath)
 /* harmony export */ });
 /* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.2/node_modules/rxjs/dist/esm5/internal/Subject.js");
 /* harmony import */ var rxjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! rxjs */ "./node_modules/.pnpm/rxjs@7.8.2/node_modules/rxjs/dist/esm5/internal/BehaviorSubject.js");
 /* harmony import */ var _platform_command_registry__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../platform/command-registry */ "./src/platform/command-registry.ts");
 /* harmony import */ var _platform_process_manager__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../platform/process-manager */ "./src/platform/process-manager.ts");
 /* harmony import */ var _platform_proxy_fs__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ../platform/proxy-fs */ "./src/platform/proxy-fs.ts");
+/* harmony import */ var _kernel_path_policy__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ../kernel/path-policy */ "./src/kernel/path-policy.ts");
+
 
 
 
@@ -35821,6 +36407,75 @@ const babelOpts = (filename, cwd) => ({
     filename,
     cwd,
 });
+// ── Open policy (decisions.md D10: opening is not running; audit WIN-3, BOOT-3,
+// APP-2, NET-8) ──────────────────────────────────────────────────────────────
+// `.js`/`.run` files in these system folders are executables: opening one runs
+// it. Anywhere else (home, /tmp, /mnt, downloads, received files) opening a
+// script shows it in the editor, and running it is an explicit `Host.runFile`
+// that asks for confirmation naming the file.
+const SYSTEM_EXEC_DIRS = ['/bin', '/usr/bin', '/opt/apps'];
+// Transitional compatibility net: the shipped callers now use `host.runFile`
+// (/opt/systemd/lib/shell-init.js for /home/user1/initd.run; src/core/cron.ts
+// and /etc/widgets/public-ip.js for /opt/cron/*.js), but older vfs copies of
+// those scripts — and a new bundle meeting a cached old meta.json during
+// GitHub Pages' 10-minute cache window — still reach them through `host.exec`.
+// Both are kernel-owned system paths (path-policy), not user or peer content.
+// Remove in phase 4 (legacy removal, TODO.md).
+const LEGACY_AUTORUN_PATHS = ['/home/user1/initd.run', '/opt/cron'];
+const SCRIPT_EXTS = new Set(['js', 'run']);
+const EDITOR_COMMAND = 'ui.notepad';
+// Pages under /opt/apps are first-party and open same-origin (they get
+// window.platform); any other .html opens in an opaque sandbox.
+const FIRST_PARTY_PAGES_DIR = '/opt/apps';
+// System default handler per extension. Apps add handlers for other extensions
+// (meta.fileExtensions) and appear under "Open with", but can't take over these
+// (audit KRN-10). '' is the fallback for anything without a handler.
+const SYSTEM_FILE_HANDLERS = Object.freeze({
+    '': EDITOR_COMMAND, txt: EDITOR_COMMAND, ts: EDITOR_COMMAND,
+    png: 'ui.imageviewer', jpg: 'ui.imageviewer', jpeg: 'ui.imageviewer', gif: 'ui.imageviewer',
+    webp: 'ui.imageviewer', bmp: 'ui.imageviewer', avif: 'ui.imageviewer',
+    svg: 'ui.imageviewer', ico: 'ui.imageviewer',
+    md: 'ui.markdown', csv: 'ui.csv-viewer',
+    db: 'ui.sqlite', sqlite: 'ui.sqlite', sqlite3: 'ui.sqlite',
+    mmd: 'ui.mermaid', mermaid: 'ui.mermaid',
+});
+/** Lower-case extension of a path's last segment, without the dot ('' for none or a dotfile). */
+const fileExtOf = (path) => {
+    const name = path.slice(path.lastIndexOf('/') + 1);
+    const dot = name.lastIndexOf('.');
+    return dot > 0 ? name.slice(dot + 1).toLowerCase() : '';
+};
+/** True for `.js`/`.run` files that are system executables (D10): they run on open and Run without asking. */
+const isSystemExecutablePath = (path) => {
+    try {
+        return SYSTEM_EXEC_DIRS.some(dir => _kernel_path_policy__WEBPACK_IMPORTED_MODULE_5__.pathPolicy.isInside(dir, path));
+    }
+    catch (_) {
+        return false;
+    }
+};
+// The kernel's cross-bundle hook (src/kernel/ipc-bus.ts) lives on the OS
+// window — the one the bootstrapper booted in. Look there first: the OS may
+// itself run inside a same-origin frame (allowed since KRN-11), where `top`
+// is someone else's page. Fall back to `top` only when this Host was built
+// for a window without the hook; a cross-origin `top` yields undefined.
+const kernelHookOf = (win) => {
+    var _a;
+    if (win.__wosKernel)
+        return win.__wosKernel;
+    try {
+        return (_a = win.top) === null || _a === void 0 ? void 0 : _a.__wosKernel;
+    }
+    catch (_) {
+        return undefined;
+    }
+};
+// The layout module (src/modules/modules.json), the only owner of the top document (D2).
+const LAYOUT_MODULE = '001-core.layout';
+// Platforms of scripts (execString) and first-party pages (ui.iframe) by name,
+// so getModulePlatform/process.list can find them like module platforms. Every
+// Host instance is created by the remote bundle, so this map is shared.
+const scriptPlatforms = new Map();
 class Host {
     constructor(window, platform, commands, widgets = new rxjs__WEBPACK_IMPORTED_MODULE_1__.BehaviorSubject([]), modulesMap = new Map(), settingsSections = new rxjs__WEBPACK_IMPORTED_MODULE_1__.BehaviorSubject([]), widgetTypes = new Map(), activities = new rxjs__WEBPACK_IMPORTED_MODULE_1__.BehaviorSubject([])) {
         this.window = window;
@@ -35842,10 +36497,24 @@ class Host {
     // is the same `Map` instance passed to every `Host` across bundles. Used
     // by the task manager to inspect which services a process has requested.
     getModulePlatform(name) {
-        var _a;
-        return (_a = this.modulesMap.get(name)) === null || _a === void 0 ? void 0 : _a.platform;
+        var _a, _b;
+        return (_b = (_a = this.modulesMap.get(name)) === null || _a === void 0 ? void 0 : _a.platform) !== null && _b !== void 0 ? _b : scriptPlatforms.get(name);
     }
+    // A view of this Host for another platform: the same registries and state
+    // (everything is inherited from this instance), but what it registers is
+    // owned by — and its getFS() is accounted to — that platform. Scripts run by
+    // execString and first-party pages framed by ui.iframe get one, so a command
+    // registration records the script or page that made it (audit KRN-10).
+    forPlatform(platform) {
+        scriptPlatforms.set(platform.name, platform);
+        return Object.create(this, { platform: { value: platform } });
+    }
+    // Appends to the top document's body — the layout's job alone (decisions.md
+    // D2, audit WIN-5): apps render into their own window, never the top document.
     appendDomElement(el) {
+        if (this.platform.name !== LAYOUT_MODULE) {
+            throw new Error(`appendDomElement is reserved for the layout (called by ${this.platform.name})`);
+        }
         this.window.document.body.appendChild(el);
     }
     createCSSStyleSheet() {
@@ -35861,11 +36530,21 @@ class Host {
             this.window.document.adoptedStyleSheets.filter((x) => x !== style);
     }
     registerCommand(command_name, callback, meta = {}) {
+        var _a;
         // New registrations are prepended and `getCommand`/`callCommand` use `.find()`,
         // so the most-recently-registered command with a given name wins and any earlier
-        // one is shadowed (used intentionally for the 'explorer' fallback in remote.ts).
-        // Warn so accidental shadowing elsewhere doesn't go unnoticed.
-        if (this.commands.getValue().find((x) => x.name === command_name)) {
+        // one is shadowed. A name belongs to whoever registered it (the registering
+        // platform: a module, or the script/page for code run by execString/ui.iframe):
+        // another owner can replace it only when that registration is marked
+        // `meta.fallback === true` — the 'explorer' fallback in remote.ts, the
+        // compiled Markdown viewer (audit KRN-10, decisions.md D9).
+        const owner = this.platform.name;
+        const active = this.getCommand(command_name);
+        if (active && active.servicePlatformName !== owner && ((_a = active.meta) === null || _a === void 0 ? void 0 : _a.fallback) !== true) {
+            console.error(`registerCommand: '${command_name}' belongs to ${active.servicePlatformName}; ${owner} can't replace it.`);
+            return { remove: () => { } };
+        }
+        if (active) {
             console.warn(`registerCommand: '${command_name}' is already registered — the new registration will take precedence.`);
         }
         const newCommandObject = Object.freeze({
@@ -36042,7 +36721,8 @@ class Host {
             const pwd = lastSlash > -1 ? filenameAlias.slice(0, lastSlash) || "/" : "/";
             let newPlatform = _platform ? _platform : new Platform(platformEventEmitter, filenameAlias, pwd);
             if (!_platform) {
-                newPlatform.setHost(this);
+                // The script's own view of this Host: what it registers is owned by it.
+                newPlatform.setHost(this.forPlatform(newPlatform));
                 newPlatform.register('props', {});
                 newPlatform.register('$args', []);
                 newPlatform.register('React', this.platform.getService('React'));
@@ -36064,56 +36744,132 @@ class Host {
         };
         return runJS(source);
     }
+    // "Open" a file or folder — double-click, Open, `files <path>`. Opening views
+    // (decisions.md D10): folders open in the explorer; `.js`/`.run` files run
+    // only when they are system executables (/bin, /usr/bin, /opt/apps) and open
+    // in the editor anywhere else; `.html` opens same-origin only under /opt/apps
+    // and in the opaque `ui.sandboxed-app` anywhere else; every other file opens
+    // with its system default handler. To run a script on purpose use runFile().
     exec(callerPlatform, filepath, ...args) {
+        const path = _kernel_path_policy__WEBPACK_IMPORTED_MODULE_5__.pathPolicy.normalizePath(filepath);
+        console.log(`$${path}`);
+        const stat = this.getFS().statSync(path);
+        // Opens a window with values, never DSL source (audit KRN-3). Returns a
+        // promise like the execCommand call this replaced, so callers that await
+        // exec() or ignore its result behave as before.
+        const openWith = (commandName) => {
+            try {
+                return Promise.resolve(this.openWindow(commandName, path, ...args));
+            }
+            catch (err) {
+                return Promise.reject(err);
+            }
+        };
+        if (stat.isDirectory())
+            return openWith('explorer');
+        if (!stat.isFile())
+            return Promise.resolve(undefined);
+        const autorun = SCRIPT_EXTS.has(fileExtOf(path))
+            && (isSystemExecutablePath(path) || LEGACY_AUTORUN_PATHS.some(p => _kernel_path_policy__WEBPACK_IMPORTED_MODULE_5__.pathPolicy.isInside(p, path)));
+        if (autorun)
+            return this.runFile(callerPlatform, path, args, { confirm: false });
+        return openWith(this.getViewerCommand(path));
+    }
+    // The command that shows a file without running anything (the open policy
+    // above minus system executables): the explorer for folders, the editor for
+    // scripts, the first-party Browser for .html under /opt/apps and the opaque
+    // `ui.sandboxed-app` for any other .html, else the extension's default.
+    getViewerCommand(filepath) {
+        const path = _kernel_path_policy__WEBPACK_IMPORTED_MODULE_5__.pathPolicy.normalizePath(filepath);
+        try {
+            if (this.getFS().statSync(path).isDirectory())
+                return 'explorer';
+        }
+        catch (_) { /* missing: by extension */ }
+        const ext = fileExtOf(path);
+        if (SCRIPT_EXTS.has(ext))
+            return EDITOR_COMMAND;
+        if (ext === 'html')
+            return _kernel_path_policy__WEBPACK_IMPORTED_MODULE_5__.pathPolicy.isInside(FIRST_PARTY_PAGES_DIR, path) ? 'ui.iframe' : 'ui.sandboxed-app';
+        return this.getDefaultCommandForExtension(ext);
+    }
+    // Explicit-intent "Run" of a `.js` (execString) or `.run` (execCommand) file
+    // — a Run button, the terminal, an init script. Outside the system folders
+    // (/bin, /usr/bin, /opt/apps) it first asks the user, naming the file
+    // (decisions.md D10); pass `{ confirm: false }` only when the caller already
+    // is the user's explicit intent (e.g. a command typed in the terminal).
+    // Returns what execString/execCommand return, or undefined if declined.
+    runFile(callerPlatform, filepath, args = [], opts = {}) {
+        const path = _kernel_path_policy__WEBPACK_IMPORTED_MODULE_5__.pathPolicy.normalizePath(filepath);
+        const ext = fileExtOf(path);
+        if (!SCRIPT_EXTS.has(ext))
+            throw new Error(`runFile: ${path} is not a .js or .run file`);
+        if (opts.confirm !== false && !this.confirmRun(path))
+            return undefined;
+        const source = this.getFS().readFileSync(path).toString();
+        if (ext === 'js') {
+            const appDir = callerPlatform === null || callerPlatform === void 0 ? void 0 : callerPlatform._appDir;
+            return this.execString(source, '/(sw)' + path, undefined, appDir ? { _appDir: appDir } : undefined);
+        }
+        return this.execCommand(source, callerPlatform, ...(Array.isArray(args) ? args : []));
+    }
+    // The confirmation runFile() asks before running a script outside the
+    // system folders. True when the script may run. Also used by editors whose
+    // Run button runs the unsaved buffer of a file.
+    confirmRun(filepath) {
+        let path;
+        try {
+            path = _kernel_path_policy__WEBPACK_IMPORTED_MODULE_5__.pathPolicy.normalizePath(filepath);
+        }
+        catch (_) {
+            return false;
+        }
+        if (isSystemExecutablePath(path))
+            return true;
+        return this.window.confirm(`Run "${path}"?\n\nScripts run with full access to your files and apps. Only run files you trust.`);
+    }
+    // The command that opens files with this extension by default: the system
+    // default if that app is installed, otherwise the first app (in load order)
+    // that declared the extension, otherwise the editor. Never decided by title,
+    // so an app can't take over an extension by naming itself "AAA" (KRN-10).
+    getDefaultCommandForExtension(ext) {
+        const systemDefault = SYSTEM_FILE_HANDLERS[ext];
+        if (systemDefault && this.getCommand(systemDefault))
+            return systemDefault;
+        const dotExt = `.${ext}`;
+        const oldestFirst = [...this.commands.getValue()].reverse();
+        const claimant = ext && oldestFirst.find(cmd => {
+            var _a;
+            const exts = (_a = cmd.meta) === null || _a === void 0 ? void 0 : _a.fileExtensions;
+            return Array.isArray(exts) && exts.some((e) => typeof e === 'string' && (e.startsWith('.') ? e : `.${e}`).toLowerCase() === dotExt);
+        });
+        return claimant ? claimant.name : SYSTEM_FILE_HANDLERS[''];
+    }
+    // Structured replacement for the DSL string
+    // `service('001-core.layout','open-window')(command(name), ...args)`.
+    // Arguments travel as values, never as source code (audit KRN-2/KRN-3,
+    // decisions.md D9) — use this wherever a file path, URL or other data is
+    // passed to a window.
+    openWindow(commandName, ...args) {
+        const command = this.getCommand(commandName);
+        if (!command)
+            throw new Error(`Command: [${commandName}] not found`);
+        const open = this.getService('001-core.layout', 'open-window');
+        if (typeof open !== 'function')
+            throw new Error('open-window service is not available yet');
+        return open(command, ...args);
+    }
+    // Installs the kernel's window hardening (cross-origin `window.open` gets
+    // `noopener,noreferrer`, audit KRN-11/APP-9) on a same-origin window this
+    // module created, e.g. a window or module iframe. No-op until the kernel
+    // hook provides it.
+    hardenWindow(win) {
         var _a;
-        console.log(`$${filepath}`);
-        const fs = this.getFS();
-        const stat = fs.statSync(filepath);
-        let script = "";
-        if (stat.isDirectory()) {
-            script = `service('001-core.layout', 'open-window') (command('explorer'), '${filepath}' ${args.length ? "," : ""} ${args.map((x) => `"${x}"`).join(", ")})`;
+        const kernel = kernelHookOf(this.window);
+        try {
+            (_a = kernel === null || kernel === void 0 ? void 0 : kernel.hardenWindow) === null || _a === void 0 ? void 0 : _a.call(kernel, win);
         }
-        if (stat.isFile()) {
-            const fileExt = filepath.split(".").at(-1);
-            const appExtMap = {
-                "": "ui.notepad",
-                html: "ui.iframe",
-                ts: "ui.notepad",
-                png: "ui.imageviewer",
-                jpg: "ui.imageviewer",
-                jpeg: "ui.imageviewer",
-                gif: "ui.imageviewer",
-                webp: "ui.imageviewer",
-                svg: "ui.iframe",
-                bmp: "ui.imageviewer",
-                ico: "ui.iframe",
-                avif: "ui.imageviewer",
-                txt: "ui.notepad",
-                md: "ui.markdown",
-                csv: "ui.csv-viewer",
-                db: "ui.sqlite",
-                mmd: "ui.mermaid",
-                mermaid: "ui.mermaid",
-            };
-            if (fileExt === 'js') {
-                const fs = this.getFS();
-                const source = fs.readFileSync(filepath);
-                const appDir = callerPlatform === null || callerPlatform === void 0 ? void 0 : callerPlatform._appDir;
-                return this.execString(source.toString(), '/(sw)' + filepath, undefined, appDir ? { _appDir: appDir } : undefined);
-            }
-            else if (fileExt === 'run') {
-                const fs = this.getFS();
-                const source = fs.readFileSync(filepath);
-                return this.execCommand(source.toString(), callerPlatform, ...args);
-            }
-            else {
-                const registered = this.getCommandsForExtension(fileExt);
-                const bestMatch = registered.find(r => !r.wildcard) || registered[0];
-                const cmdName = bestMatch ? bestMatch.name : ((_a = appExtMap[fileExt]) !== null && _a !== void 0 ? _a : appExtMap[""]);
-                script = `service('001-core.layout', 'open-window') (command('${cmdName}'), '${filepath}'${args.length ? ", " : ""}${args.map((x) => `"${x}"`).join(", ")})`;
-            }
-        }
-        return this.execCommand(script, callerPlatform, ...args);
+        catch (_) { /* cross-origin or closed frame */ }
     }
     getService(moduleName, serviceName) {
         if (!moduleName)
@@ -36136,6 +36892,25 @@ class Host {
         this.platform.requestedServices.add('fs');
         // @ts-ignore
         return this.window.fs;
+    }
+    // Path normalisation / containment helpers (src/kernel/path-policy.ts,
+    // decisions.md D6). vfs code must use these instead of hand-rolled joins —
+    // this copy is compiled into the bundle, so a vfs write can't weaken it.
+    get pathPolicy() {
+        return _kernel_path_policy__WEBPACK_IMPORTED_MODULE_5__.pathPolicy;
+    }
+    // Registers a frame this module created (dock, wallpaper, sandboxed app)
+    // with the kernel IPC bus, so it may use the events/paths in `policy` and
+    // nothing else (audit KRN-1). Returns an unregister function. The registry
+    // lives in the bootstrapper bundle and is reached through the frozen
+    // `__wosKernel` hook it installs on the top window (src/kernel/ipc-bus.ts).
+    registerIpcFrame(win, policy) {
+        const kernel = kernelHookOf(this.window);
+        if (!kernel) {
+            console.warn('[ipc] kernel hook missing — frame not registered:', policy === null || policy === void 0 ? void 0 : policy.id);
+            return () => { };
+        }
+        return kernel.registerIpcFrame(win, policy);
     }
     getServiceWorker() {
         return navigator.serviceWorker.controller;

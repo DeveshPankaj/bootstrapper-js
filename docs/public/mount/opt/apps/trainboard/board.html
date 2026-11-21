@@ -102,7 +102,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   </div>
   <div id="charts-area"></div>
 </div>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.js" integrity="sha384-zYPBGXwO4633CABX/5Spf6emCKUJCfoOkhOMYyxMsatqQZPnDblmmOewfjsIVWCM" crossorigin="anonymous"></script>
 <script>
 let bridge     = null;
 let logDir     = '/home/user1/trainboard';
@@ -110,7 +110,7 @@ let autoTimer  = null;
 let alpha      = 0.60;
 let runs       = [];
 let selectedRuns = new Set();
-let charts     = {};
+let charts     = Object.create(null);
 
 const COLORS = ['#8b5cf6','#22d3ee','#f59e0b','#10b981','#f43f5e','#3b82f6','#e879f9','#fb923c'];
 const DASHES = [[],[6,3],[2,2],[8,3,2,3]];
@@ -130,16 +130,20 @@ function parseLog(txt) {
   }).filter(Boolean);
 }
 
+// Log files are written by any notebook/app (audit APP-10): only plain run/metric
+// names (file names / JSON keys) are shown, always as text.
+const NAME_RE = /^[\w.-]{1,64}$/;
+
 function loadRuns() {
   return bridge.listDir(logDir)
-    .filter(f => f.endsWith('.jsonl'))
+    .filter(f => f.endsWith('.jsonl') && NAME_RE.test(f.slice(0, -6)))
     .sort()
     .map(f => ({ name: f.slice(0, -6), rows: parseLog(bridge.readFile(`${logDir}/${f}`)) }));
 }
 
 function metricKeys(sel) {
   const s = new Set();
-  sel.forEach(r => r.rows.forEach(row => Object.keys(row).filter(k => k !== 'step').forEach(k => s.add(k))));
+  sel.forEach(r => r.rows.forEach(row => Object.keys(row).filter(k => k !== 'step' && NAME_RE.test(k)).forEach(k => s.add(k))));
   return [...s].sort();
 }
 
@@ -166,14 +170,27 @@ function renderSidebar() {
     list.innerHTML = '<div class="no-runs">No runs yet.<br>Log metrics from a Notebook cell to see charts here.</div>';
     return;
   }
-  list.innerHTML = runs.map((r, i) => `
-    <label class="run-item${selectedRuns.has(r.name) ? ' sel' : ''}">
-      <input type="checkbox" ${selectedRuns.has(r.name) ? 'checked' : ''}
-        onchange="toggleRun('${r.name.replace(/'/g,"\\'")}',this.checked)">
-      <span class="run-dot" style="background:${COLORS[i % COLORS.length]}"></span>
-      <span class="run-name" title="${r.name}">${r.name}</span>
-      <span class="run-count">${r.rows.length}</span>
-    </label>`).join('');
+  list.textContent = '';
+  runs.forEach((r, i) => {
+    const item = document.createElement('label');
+    item.className = 'run-item' + (selectedRuns.has(r.name) ? ' sel' : '');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = selectedRuns.has(r.name);
+    cb.addEventListener('change', () => toggleRun(r.name, cb.checked));
+    const dot = document.createElement('span');
+    dot.className = 'run-dot';
+    dot.style.background = COLORS[i % COLORS.length];
+    const name = document.createElement('span');
+    name.className = 'run-name';
+    name.title = r.name;
+    name.textContent = r.name;
+    const count = document.createElement('span');
+    count.className = 'run-count';
+    count.textContent = String(r.rows.length);
+    item.append(cb, dot, name, count);
+    list.appendChild(item);
+  });
 }
 
 function toggleRun(name, checked) {
@@ -221,7 +238,15 @@ function renderCharts() {
       card = document.createElement('div');
       card.id = 'card-' + metric;
       card.className = 'chart-card';
-      card.innerHTML = `<div class="chart-title">${metric}</div><div class="chart-wrap"><canvas id="cvs-${metric}"></canvas></div>`;
+      const t = document.createElement('div');
+      t.className = 'chart-title';
+      t.textContent = metric;
+      const wrap = document.createElement('div');
+      wrap.className = 'chart-wrap';
+      const cvs = document.createElement('canvas');
+      cvs.id = 'cvs-' + metric;
+      wrap.appendChild(cvs);
+      card.append(t, wrap);
     }
 
     const datasets = sel.map((run) => {
@@ -246,7 +271,7 @@ function renderCharts() {
       charts[metric].data.datasets = datasets;
       charts[metric].update('none');
     } else {
-      const ctx = card.querySelector('#cvs-' + metric).getContext('2d');
+      const ctx = card.querySelector('canvas').getContext('2d');
       charts[metric] = new Chart(ctx, { type: 'line', data: { datasets }, options: CHART_OPTS });
     }
     return card;

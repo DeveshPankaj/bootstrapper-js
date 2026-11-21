@@ -14,6 +14,24 @@ const MAGIC = 'BOOTAR1\n';
 
 function resolvePath(p) { return p.startsWith('/') ? p : `${pwd}/${p}`; }
 
+// Entry paths are untrusted (audit BOOT-8, decisions.md D6): each output path is
+// pathPolicy.safeJoin(destDir, path) — no absolute paths, '..', backslashes or
+// control characters — and never a kernel-owned path (/etc, /bin, /opt,
+// /.initd.run, …) unless you're extracting inside one. Refused entries are listed.
+const { normalizePath, safeJoin, isKernelOwned } = platform.host.pathPolicy;
+function entryTarget(destDir, path) {
+  const target = safeJoin(destDir, path);
+  if (isKernelOwned(target) && !isKernelOwned(destDir)) throw new Error(`protected path ${target}`);
+  return target;
+}
+// Names are printed to the terminal: show control characters (ESC, CR, …) as ^X.
+function printable(s) {
+  return String(s).replace(/[\u0000-\u001f\u007f-\u009f]/g, (c) => {
+    const n = c.charCodeAt(0);
+    return n < 0x20 ? '^' + String.fromCharCode(n + 64) : n === 0x7f ? '^?' : '\\x' + n.toString(16);
+  });
+}
+
 function mkdirp(dir) {
   if (!dir) return;
   const parts = dir.split('/').filter(Boolean);
@@ -105,24 +123,32 @@ function readArchive(archivePath) {
 function list(archivePath) {
   const archive = readArchive(archivePath);
   if (!archive) return;
-  const lines = archive.files.map(e => e.type === 'dir' ? e.path : `${e.path}  (${e.size} bytes)`);
+  const lines = archive.files.map(e => e.type === 'dir' ? printable(e.path) : `${printable(e.path)}  (${e.size} bytes)`);
   write(lines.join('\n') + '\n');
 }
 
 function extract(archivePath, dest) {
   const archive = readArchive(archivePath);
   if (!archive) return;
-  const destDir = (dest ? resolvePath(dest) : pwd).replace(/\/+$/, '');
+  let destDir;
+  try { destDir = normalizePath(dest ? resolvePath(dest) : pwd); }
+  catch (e) { write(`tar: invalid destination: ${printable(dest)}\n`); return; }
+  let count = 0;
+  const skipped = [];
   for (const e of archive.files) {
-    const target = `${destDir}/${e.path}`.replace(/\/+/g, '/');
+    let target;
+    try { target = entryTarget(destDir, e.path); }
+    catch (_) { skipped.push(e.path); continue; }
     if (e.type === 'dir') {
-      mkdirp(target.replace(/\/$/, ''));
+      mkdirp(target);
     } else {
       mkdirp(target.split('/').slice(0, -1).join('/'));
       fs.writeFileSync(target, e.data);
     }
+    count++;
   }
-  write(`tar: extracted ${archive.files.length} entries to ${destDir}\n`);
+  for (const p of skipped) write(`tar: skipped "${printable(p)}": outside ${destDir} or a system path\n`);
+  write(`tar: extracted ${count} entries to ${destDir}${skipped.length ? ` (${skipped.length} unsafe skipped)` : ''}\n`);
 }
 
 if (mode === '-c') {

@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <title>Neural Network IDE</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/litegraph.js@0.7.18/css/litegraph.css">
-<script src="https://cdn.jsdelivr.net/npm/litegraph.js@0.7.18/build/litegraph.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/litegraph.js@0.7.18/css/litegraph.css" integrity="sha384-ARYiVAOBpxtGcCrhM11G/uIFH+5NFY0+/uPTFEEtBReBMHd7R3PVxHrgTrNUeONU" crossorigin="anonymous">
+<script src="https://cdn.jsdelivr.net/npm/litegraph.js@0.7.18/build/litegraph.min.js" integrity="sha384-Pg2SV/pFdj8oD8RacpuHpjyUp+ka17XvUpNzP0L6PE8LooPBTQIjV9lTmQ6GIRGA" crossorigin="anonymous"></script>
 <style>
 :root {
   --bg:#0d0e11; --surface:#141518; --s2:#1c1d22; --s3:#24252c;
@@ -565,7 +565,8 @@ async function ensureTf() {
   log('Loading TensorFlow.js…','inf');
   await new Promise((ok,err) => {
     const s=document.createElement('script');
-    s.src='https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4/dist/tf.min.js';
+    s.src='https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js';
+    s.integrity='sha384-vE8hbVJ4lezako5rlvE7bY0BVzWlFhZncPlckrqNwcUQpVtgbENTgZ8TBbnPjZre'; s.crossOrigin='anonymous';
     s.onload=ok; s.onerror=()=>err(new Error('Failed to load TF.js'));
     document.head.appendChild(s);
   });
@@ -1273,7 +1274,8 @@ function runInference() {
     t.dispose(); pred.dispose();
     showPredictions(resEl, probs);
   } catch(e) {
-    resEl.innerHTML=`<div style="color:var(--red);font-size:11px;">${e.message}</div>`;
+    const errEl=document.createElement('div'); errEl.style.cssText='color:var(--red);font-size:11px;'; errEl.textContent=String(e.message);
+    resEl.replaceChildren(errEl);
   }
 }
 
@@ -1449,7 +1451,12 @@ const DF = (() => {
       if (!samples.length) { status('No samples found'); return; }
       dataset = { images: samples.map(s=>renderSample(s,sz)), prompts: samples.map(s=>s.prompt), sz, meta };
       status('Loaded '+samples.length+' samples ('+sz+'×'+sz+')');
-      $('df-info').innerHTML = '<strong>'+(meta.name||'Dataset')+'</strong>: '+samples.length+' images, '+sz+'×'+sz+'px<br><span style="color:var(--dim)">'+(meta.description||'')+'</span>';
+      // name/description come from the dataset file: text only (audit APP-14)
+      const info = $('df-info'), strong = document.createElement('strong'), desc = document.createElement('span');
+      strong.textContent = String(meta.name||'Dataset');
+      desc.style.color = 'var(--dim)';
+      desc.textContent = String(meta.description||'');
+      info.replaceChildren(strong, ': '+samples.length+' images, '+sz+'×'+sz+'px', document.createElement('br'), desc);
       log('Diffusion: loaded '+samples.length+' samples from '+folder, 'ok');
     } catch(e) { status('Error: '+e.message); log('Dataset error: '+e.message,'err'); }
   }

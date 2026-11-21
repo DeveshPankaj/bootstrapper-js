@@ -4,6 +4,8 @@ import type fs from 'fs'
 import { CommandRegistry } from '../platform/command-registry'
 import { ProcessManager } from '../platform/process-manager'
 import { ProxyFS } from '../platform/proxy-fs'
+import { pathPolicy, type PathPolicy } from '../kernel/path-policy'
+import type { IpcFramePolicy } from '../kernel/ipc-bus'
 const Babel = require('./babel.js');
 
 const babelOpts = (filename: string, cwd: string) => ({
@@ -106,6 +108,70 @@ export type ActivityDef = {
 };
 
 
+// ── Open policy (decisions.md D10: opening is not running; audit WIN-3, BOOT-3,
+// APP-2, NET-8) ──────────────────────────────────────────────────────────────
+// `.js`/`.run` files in these system folders are executables: opening one runs
+// it. Anywhere else (home, /tmp, /mnt, downloads, received files) opening a
+// script shows it in the editor, and running it is an explicit `Host.runFile`
+// that asks for confirmation naming the file.
+const SYSTEM_EXEC_DIRS: readonly string[] = ['/bin', '/usr/bin', '/opt/apps'];
+// Transitional compatibility net: the shipped callers now use `host.runFile`
+// (/opt/systemd/lib/shell-init.js for /home/user1/initd.run; src/core/cron.ts
+// and /etc/widgets/public-ip.js for /opt/cron/*.js), but older vfs copies of
+// those scripts — and a new bundle meeting a cached old meta.json during
+// GitHub Pages' 10-minute cache window — still reach them through `host.exec`.
+// Both are kernel-owned system paths (path-policy), not user or peer content.
+// Remove in phase 4 (legacy removal, TODO.md).
+const LEGACY_AUTORUN_PATHS: readonly string[] = ['/home/user1/initd.run', '/opt/cron'];
+const SCRIPT_EXTS: ReadonlySet<string> = new Set(['js', 'run']);
+const EDITOR_COMMAND = 'ui.notepad';
+// Pages under /opt/apps are first-party and open same-origin (they get
+// window.platform); any other .html opens in an opaque sandbox.
+const FIRST_PARTY_PAGES_DIR = '/opt/apps';
+// System default handler per extension. Apps add handlers for other extensions
+// (meta.fileExtensions) and appear under "Open with", but can't take over these
+// (audit KRN-10). '' is the fallback for anything without a handler.
+const SYSTEM_FILE_HANDLERS: Readonly<Record<string, string>> = Object.freeze({
+  '': EDITOR_COMMAND, txt: EDITOR_COMMAND, ts: EDITOR_COMMAND,
+  png: 'ui.imageviewer', jpg: 'ui.imageviewer', jpeg: 'ui.imageviewer', gif: 'ui.imageviewer',
+  webp: 'ui.imageviewer', bmp: 'ui.imageviewer', avif: 'ui.imageviewer',
+  svg: 'ui.imageviewer', ico: 'ui.imageviewer',
+  md: 'ui.markdown', csv: 'ui.csv-viewer',
+  db: 'ui.sqlite', sqlite: 'ui.sqlite', sqlite3: 'ui.sqlite',
+  mmd: 'ui.mermaid', mermaid: 'ui.mermaid',
+});
+
+/** Lower-case extension of a path's last segment, without the dot ('' for none or a dotfile). */
+const fileExtOf = (path: string): string => {
+  const name = path.slice(path.lastIndexOf('/') + 1);
+  const dot = name.lastIndexOf('.');
+  return dot > 0 ? name.slice(dot + 1).toLowerCase() : '';
+};
+
+/** True for `.js`/`.run` files that are system executables (D10): they run on open and Run without asking. */
+export const isSystemExecutablePath = (path: string): boolean => {
+  try { return SYSTEM_EXEC_DIRS.some(dir => pathPolicy.isInside(dir, path)); }
+  catch (_) { return false; }
+};
+
+// The kernel's cross-bundle hook (src/kernel/ipc-bus.ts) lives on the OS
+// window — the one the bootstrapper booted in. Look there first: the OS may
+// itself run inside a same-origin frame (allowed since KRN-11), where `top`
+// is someone else's page. Fall back to `top` only when this Host was built
+// for a window without the hook; a cross-origin `top` yields undefined.
+const kernelHookOf = (win: Window): Window['__wosKernel'] => {
+  if (win.__wosKernel) return win.__wosKernel;
+  try { return (win.top as Window | null)?.__wosKernel; } catch (_) { return undefined; }
+};
+
+// The layout module (src/modules/modules.json), the only owner of the top document (D2).
+const LAYOUT_MODULE = '001-core.layout';
+
+// Platforms of scripts (execString) and first-party pages (ui.iframe) by name,
+// so getModulePlatform/process.list can find them like module platforms. Every
+// Host instance is created by the remote bundle, so this map is shared.
+const scriptPlatforms = new Map<string, Platform>();
+
 export type UICallbackProps = {
     pid: number
     setWindowView: (show: boolean) => void
@@ -155,10 +221,25 @@ export class Host {
   // is the same `Map` instance passed to every `Host` across bundles. Used
   // by the task manager to inspect which services a process has requested.
   public getModulePlatform(name: string): Platform | undefined {
-    return this.modulesMap.get(name)?.platform;
+    return this.modulesMap.get(name)?.platform ?? scriptPlatforms.get(name);
   }
 
+  // A view of this Host for another platform: the same registries and state
+  // (everything is inherited from this instance), but what it registers is
+  // owned by — and its getFS() is accounted to — that platform. Scripts run by
+  // execString and first-party pages framed by ui.iframe get one, so a command
+  // registration records the script or page that made it (audit KRN-10).
+  public forPlatform(platform: Platform): Host {
+    scriptPlatforms.set(platform.name, platform);
+    return Object.create(this, { platform: { value: platform } }) as Host;
+  }
+
+  // Appends to the top document's body — the layout's job alone (decisions.md
+  // D2, audit WIN-5): apps render into their own window, never the top document.
   public appendDomElement(el: HTMLElement) {
+    if (this.platform.name !== LAYOUT_MODULE) {
+      throw new Error(`appendDomElement is reserved for the layout (called by ${this.platform.name})`);
+    }
     this.window.document.body.appendChild(el);
   }
 
@@ -185,9 +266,18 @@ export class Host {
   ): { remove: () => void } {
     // New registrations are prepended and `getCommand`/`callCommand` use `.find()`,
     // so the most-recently-registered command with a given name wins and any earlier
-    // one is shadowed (used intentionally for the 'explorer' fallback in remote.ts).
-    // Warn so accidental shadowing elsewhere doesn't go unnoticed.
-    if (this.commands.getValue().find((x) => x.name === command_name)) {
+    // one is shadowed. A name belongs to whoever registered it (the registering
+    // platform: a module, or the script/page for code run by execString/ui.iframe):
+    // another owner can replace it only when that registration is marked
+    // `meta.fallback === true` — the 'explorer' fallback in remote.ts, the
+    // compiled Markdown viewer (audit KRN-10, decisions.md D9).
+    const owner = this.platform.name;
+    const active = this.getCommand(command_name);
+    if (active && active.servicePlatformName !== owner && (active.meta as any)?.fallback !== true) {
+      console.error(`registerCommand: '${command_name}' belongs to ${active.servicePlatformName}; ${owner} can't replace it.`);
+      return { remove: () => {} };
+    }
+    if (active) {
       console.warn(`registerCommand: '${command_name}' is already registered — the new registration will take precedence.`);
     }
 
@@ -402,7 +492,8 @@ export class Host {
         const pwd = lastSlash > -1 ? filenameAlias.slice(0, lastSlash) || "/" : "/"
         let newPlatform = _platform ? _platform : new Platform(platformEventEmitter, filenameAlias, pwd);
         if(!_platform) {
-          newPlatform.setHost(this);
+          // The script's own view of this Host: what it registers is owned by it.
+          newPlatform.setHost(this.forPlatform(newPlatform));
           newPlatform.register('props', {});
           newPlatform.register('$args', []);
           newPlatform.register('React', this.platform.getService('React'));
@@ -427,66 +518,118 @@ export class Host {
     return runJS(source);
   }
 
+  // "Open" a file or folder — double-click, Open, `files <path>`. Opening views
+  // (decisions.md D10): folders open in the explorer; `.js`/`.run` files run
+  // only when they are system executables (/bin, /usr/bin, /opt/apps) and open
+  // in the editor anywhere else; `.html` opens same-origin only under /opt/apps
+  // and in the opaque `ui.sandboxed-app` anywhere else; every other file opens
+  // with its system default handler. To run a script on purpose use runFile().
   public exec(callerPlatform: Platform, filepath: string, ...args: string[]) {
-    console.log(`$${filepath}`);
-    const fs = this.getFS();
-    const stat = fs.statSync(filepath);
+    const path = pathPolicy.normalizePath(filepath);
+    console.log(`$${path}`);
+    const stat = this.getFS().statSync(path);
 
-    let script: string = "";
-    if (stat.isDirectory()) {
-      script = `service('001-core.layout', 'open-window') (command('explorer'), '${filepath}' ${
-        args.length ? "," : ""
-      } ${args.map((x) => `"${x}"`).join(", ")})`;
+    // Opens a window with values, never DSL source (audit KRN-3). Returns a
+    // promise like the execCommand call this replaced, so callers that await
+    // exec() or ignore its result behave as before.
+    const openWith = (commandName: string) => {
+      try { return Promise.resolve(this.openWindow(commandName, path, ...args)); }
+      catch (err) { return Promise.reject(err); }
+    };
+
+    if (stat.isDirectory()) return openWith('explorer');
+    if (!stat.isFile()) return Promise.resolve(undefined);
+
+    const autorun = SCRIPT_EXTS.has(fileExtOf(path))
+      && (isSystemExecutablePath(path) || LEGACY_AUTORUN_PATHS.some(p => pathPolicy.isInside(p, path)));
+    if (autorun) return this.runFile(callerPlatform, path, args, { confirm: false });
+    return openWith(this.getViewerCommand(path));
+  }
+
+  // The command that shows a file without running anything (the open policy
+  // above minus system executables): the explorer for folders, the editor for
+  // scripts, the first-party Browser for .html under /opt/apps and the opaque
+  // `ui.sandboxed-app` for any other .html, else the extension's default.
+  public getViewerCommand(filepath: string): string {
+    const path = pathPolicy.normalizePath(filepath);
+    try { if (this.getFS().statSync(path).isDirectory()) return 'explorer'; } catch (_) { /* missing: by extension */ }
+    const ext = fileExtOf(path);
+    if (SCRIPT_EXTS.has(ext)) return EDITOR_COMMAND;
+    if (ext === 'html') return pathPolicy.isInside(FIRST_PARTY_PAGES_DIR, path) ? 'ui.iframe' : 'ui.sandboxed-app';
+    return this.getDefaultCommandForExtension(ext);
+  }
+
+  // Explicit-intent "Run" of a `.js` (execString) or `.run` (execCommand) file
+  // — a Run button, the terminal, an init script. Outside the system folders
+  // (/bin, /usr/bin, /opt/apps) it first asks the user, naming the file
+  // (decisions.md D10); pass `{ confirm: false }` only when the caller already
+  // is the user's explicit intent (e.g. a command typed in the terminal).
+  // Returns what execString/execCommand return, or undefined if declined.
+  public runFile(callerPlatform: Platform, filepath: string, args: string[] = [], opts: { confirm?: boolean } = {}): unknown {
+    const path = pathPolicy.normalizePath(filepath);
+    const ext = fileExtOf(path);
+    if (!SCRIPT_EXTS.has(ext)) throw new Error(`runFile: ${path} is not a .js or .run file`);
+    if (opts.confirm !== false && !this.confirmRun(path)) return undefined;
+
+    const source = this.getFS().readFileSync(path).toString();
+    if (ext === 'js') {
+      const appDir = (callerPlatform as any)?._appDir;
+      return this.execString(source, '/(sw)' + path, undefined, appDir ? { _appDir: appDir } : undefined);
     }
+    return this.execCommand(source, callerPlatform, ...(Array.isArray(args) ? args : []));
+  }
 
-    if (stat.isFile()) {
-      const fileExt = filepath.split(".").at(-1);
+  // The confirmation runFile() asks before running a script outside the
+  // system folders. True when the script may run. Also used by editors whose
+  // Run button runs the unsaved buffer of a file.
+  public confirmRun(filepath: string): boolean {
+    let path: string;
+    try { path = pathPolicy.normalizePath(filepath); } catch (_) { return false; }
+    if (isSystemExecutablePath(path)) return true;
+    return this.window.confirm(
+      `Run "${path}"?\n\nScripts run with full access to your files and apps. Only run files you trust.`
+    );
+  }
 
-      const appExtMap: Record<string, string> = {
-        "": "ui.notepad",
-        html: "ui.iframe",
-        ts: "ui.notepad",
-        png: "ui.imageviewer",
-        jpg: "ui.imageviewer",
-        jpeg: "ui.imageviewer",
-        gif: "ui.imageviewer",
-        webp: "ui.imageviewer",
-        svg: "ui.iframe",
-        bmp: "ui.imageviewer",
-        ico: "ui.iframe",
-        avif: "ui.imageviewer",
-        txt: "ui.notepad",
-        md: "ui.markdown",
-        csv: "ui.csv-viewer",
-        db: "ui.sqlite",
-        mmd: "ui.mermaid",
-        mermaid: "ui.mermaid",
-      };
+  // The command that opens files with this extension by default: the system
+  // default if that app is installed, otherwise the first app (in load order)
+  // that declared the extension, otherwise the editor. Never decided by title,
+  // so an app can't take over an extension by naming itself "AAA" (KRN-10).
+  private getDefaultCommandForExtension(ext: string): string {
+    const systemDefault = SYSTEM_FILE_HANDLERS[ext];
+    if (systemDefault && this.getCommand(systemDefault)) return systemDefault;
+    const dotExt = `.${ext}`;
+    const oldestFirst = [...this.commands.getValue()].reverse();
+    const claimant = ext && oldestFirst.find(cmd => {
+      const exts = (cmd.meta as any)?.fileExtensions;
+      return Array.isArray(exts) && exts.some((e: unknown) =>
+        typeof e === 'string' && (e.startsWith('.') ? e : `.${e}`).toLowerCase() === dotExt);
+    });
+    return claimant ? claimant.name : (SYSTEM_FILE_HANDLERS[''] as string);
+  }
 
-      if (fileExt === 'js') {
-        const fs = this.getFS()
-        const source = fs.readFileSync(filepath)
-        const appDir = (callerPlatform as any)?._appDir;
-        return this.execString(source.toString(), '/(sw)' + filepath, undefined, appDir ? { _appDir: appDir } : undefined)
-      }
+  // Structured replacement for the DSL string
+  // `service('001-core.layout','open-window')(command(name), ...args)`.
+  // Arguments travel as values, never as source code (audit KRN-2/KRN-3,
+  // decisions.md D9) — use this wherever a file path, URL or other data is
+  // passed to a window.
+  public openWindow(commandName: string, ...args: unknown[]): unknown {
+    const command = this.getCommand(commandName);
+    if (!command) throw new Error(`Command: [${commandName}] not found`);
+    const open = this.getService('001-core.layout', 'open-window') as
+      | ((command: Command, ...args: unknown[]) => unknown)
+      | undefined;
+    if (typeof open !== 'function') throw new Error('open-window service is not available yet');
+    return open(command, ...args);
+  }
 
-      else if (fileExt === 'run') {
-        const fs = this.getFS()
-        const source = fs.readFileSync(filepath)
-        return this.execCommand(source.toString(), callerPlatform, ...args)
-      }
-
-      else {
-        const registered = this.getCommandsForExtension(fileExt as string);
-        const bestMatch = registered.find(r => !r.wildcard) || registered[0];
-        const cmdName = bestMatch ? bestMatch.name : (appExtMap[fileExt as string] ?? appExtMap[""]);
-        script = `service('001-core.layout', 'open-window') (command('${cmdName}'), '${filepath}'${args.length ? ", " : ""}${args.map((x) => `"${x}"`).join(", ")})`;
-      }
-
-
-    }
-
-    return this.execCommand(script, callerPlatform, ...args);
+  // Installs the kernel's window hardening (cross-origin `window.open` gets
+  // `noopener,noreferrer`, audit KRN-11/APP-9) on a same-origin window this
+  // module created, e.g. a window or module iframe. No-op until the kernel
+  // hook provides it.
+  public hardenWindow(win: Window | null | undefined): void {
+    const kernel = kernelHookOf(this.window);
+    try { kernel?.hardenWindow?.(win); } catch (_) { /* cross-origin or closed frame */ }
   }
 
   public getService(moduleName: string, serviceName: string): unknown {
@@ -515,6 +658,27 @@ export class Host {
     this.platform.requestedServices.add('fs')
     // @ts-ignore
     return this.window.fs as typeof fs;
+  }
+
+  // Path normalisation / containment helpers (src/kernel/path-policy.ts,
+  // decisions.md D6). vfs code must use these instead of hand-rolled joins —
+  // this copy is compiled into the bundle, so a vfs write can't weaken it.
+  public get pathPolicy(): PathPolicy {
+    return pathPolicy;
+  }
+
+  // Registers a frame this module created (dock, wallpaper, sandboxed app)
+  // with the kernel IPC bus, so it may use the events/paths in `policy` and
+  // nothing else (audit KRN-1). Returns an unregister function. The registry
+  // lives in the bootstrapper bundle and is reached through the frozen
+  // `__wosKernel` hook it installs on the top window (src/kernel/ipc-bus.ts).
+  public registerIpcFrame(win: Window | null | undefined, policy: IpcFramePolicy): () => void {
+    const kernel = kernelHookOf(this.window);
+    if (!kernel) {
+      console.warn('[ipc] kernel hook missing — frame not registered:', policy?.id);
+      return () => {};
+    }
+    return kernel.registerIpcFrame(win, policy);
   }
 
   public getServiceWorker() {

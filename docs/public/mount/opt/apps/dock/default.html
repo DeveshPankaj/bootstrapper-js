@@ -137,8 +137,15 @@ html, body {
       ipc.call('dock.registerSettings', { dockId: DOCK_ID, schema: SCHEMA }).catch(function(){});
     });
 
+  // Icon names come over IPC: text only (audit APP-14).
+  function setIcon(el, icon, tail) {
+    var s = document.createElement('span'); s.className = 'icon'; s.textContent = String(icon);
+    var t = document.createElement('span'); t.className = tail;
+    el.append(s, t);
+  }
+
   function render() {
-    dock.innerHTML = '';
+    dock.textContent = '';
 
     // Pinned launchers
     launchItems.forEach(function(item) {
@@ -146,7 +153,7 @@ html, body {
       var el = document.createElement('div');
       el.className = 'item' + (win ? ' running' : '') + (win && win.active ? ' active' : '') + (win && win.minimized ? ' minimized' : '');
       el.title = item.label;
-      el.innerHTML = '<span class="icon">' + item.icon + '</span><span class="dot"></span>';
+      setIcon(el, item.icon, 'dot');
       el.onclick = function() {
         if (win) { ipc.call('wm.toggleWindow', { pid: win.pid }); return; }
         var now = Date.now();
@@ -167,7 +174,7 @@ html, body {
       var el = document.createElement('div');
       el.className = 'item running' + (w.active ? ' active' : '') + (w.minimized ? ' minimized' : '');
       el.title = w.title || w.name;
-      el.innerHTML = '<span class="icon">' + (w.icon || 'apps') + '</span><span class="dot"></span>';
+      setIcon(el, w.icon || 'apps', 'dot');
       el.onclick = function() { ipc.call('wm.toggleWindow', { pid: w.pid }); };
       dock.appendChild(el);
     });
