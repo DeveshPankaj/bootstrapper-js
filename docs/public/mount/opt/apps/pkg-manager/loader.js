@@ -1,31 +1,111 @@
-// Package loader — boot hook for installed apps.
-// Add this to /.initd.run to auto-load installed packages on startup:
-//   service('root', 'exec')('/opt/pkg/loader.js');
+// Package loader — boot hook for installed apps (run from /home/user1/initd.run).
 //
-// pkg-manager.js handles the UI; this file handles boot loading.
-// registerCommand calls from each app are idempotent — re-registering
-// is safe if this runs after pkg-manager.js for any reason.
+// The installed apps ARE the folders in /opt/apps: an app is installed when
+// /opt/apps/<id>/ holds a main file, so deleting the folder uninstalls it. Each
+// folder carries its own manifest, /opt/apps/<id>/app.json
+// ({ id, name, version, description, icon, category, author, main, commandName,
+// registryUrl, installedAt }), written by App Manager on install and shipped with
+// the preinstalled apps.
+//
+// At boot this scans the folder, loads every app whose main file is a .js, and
+// publishes the list as the `pkg.installed-apps` command (App Manager, Spotlight and
+// deep links read it). /etc/pkg/installed.json is only a snapshot of that list, kept
+// for compatibility; it decides nothing. /etc/pkg/uninstalled.json still hides an app
+// the user removed in App Manager whose files the system restores (system apps).
+//
+// registerCommand calls from each app are idempotent — re-registering is safe.
 
 const platform = window.platform;
 const fs = platform.host.getFS();
+const { isValidAppId, isInside, normalizePath } = platform.host.pathPolicy;
 
-const INSTALLED_PATH = '/etc/pkg/installed.json';
+const APPS_DIR = '/opt/apps';
+const SNAPSHOT_PATH = '/etc/pkg/installed.json';
 const UNINSTALLED_PATH = '/etc/pkg/uninstalled.json';
+const MANIFEST = 'app.json';
+// Loaded first, in this order (the explorer command, the launcher, App Manager).
+const LOAD_FIRST = ['file-explorer', 'app-drawer', 'spotlight', 'pkg-manager', 'image-viewer', 'audio-player'];
+const META_KEYS = ['name', 'version', 'description', 'icon', 'category', 'author', 'commandName', 'registryUrl'];
 
-let uninstalled = new Set();
-try { uninstalled = new Set(JSON.parse(fs.readFileSync(UNINSTALLED_PATH, 'utf8') || '[]')); } catch (_) {}
+const readJson = (path, fallback) => {
+  try { return JSON.parse(fs.readFileSync(path, 'utf8')); } catch (_) { return fallback; }
+};
+const readList = (path) => { const v = readJson(path, []); return Array.isArray(v) ? v : []; };
+const isFile = (path) => { try { return fs.statSync(path).isFile(); } catch (_) { return false; } };
+const isDir = (path) => { try { return fs.statSync(path).isDirectory(); } catch (_) { return false; } };
 
-// Core apps: the default set, always loaded unless the user explicitly uninstalled
-// them. Terminal and Settings are pages (main.html) registered by the shell. Every
-// other app is installed from App Manager and loaded through installed.json below.
-const CORE_APPS = [
-  { id: 'file-explorer', appDir: '/opt/apps/file-explorer', mainFile: '/opt/apps/file-explorer/main.js' },
-  { id: 'app-drawer',    appDir: '/opt/apps/app-drawer',    mainFile: '/opt/apps/app-drawer/main.js' },
-  { id: 'spotlight',     appDir: '/opt/apps/spotlight',     mainFile: '/opt/apps/spotlight/main.js' },
-  { id: 'audio-player',  appDir: '/opt/apps/audio-player',  mainFile: '/opt/apps/audio-player/main.js' },
-  { id: 'pkg-manager',   appDir: '/opt/apps/pkg-manager',   mainFile: '/opt/apps/pkg-manager/main.js' },  // App Manager: installs everything else
-  { id: 'image-viewer',  appDir: '/opt/apps/image-viewer',  mainFile: '/opt/apps/image-viewer/main.js' }, // File Explorer opens images with it
-];
+// The app's main file: the manifest's `main` (relative, or an absolute path from an
+// old record), else main.js, else main.html — always inside the app's own folder
+// (manifests and old records are writable by any app, audit BOOT-5/BOOT-10).
+const resolveMain = (appDir, main) => {
+  const candidates = [];
+  if (typeof main === 'string' && main) candidates.push(main.startsWith('/') ? main : `${appDir}/${main}`);
+  candidates.push(`${appDir}/main.js`, `${appDir}/main.html`);
+  for (const c of candidates) {
+    let p;
+    try { p = normalizePath(c); } catch (_) { continue; }
+    if (p !== appDir && isInside(appDir, p) && isFile(p)) return p;
+  }
+  return null;
+};
+
+// The installed apps, from the folders. Old installed.json records (before app
+// folders carried app.json) fill in metadata for folders that have no manifest yet.
+const scanInstalledApps = () => {
+  const uninstalled = new Set(readList(UNINSTALLED_PATH));
+  const legacy = new Map(readList(SNAPSHOT_PATH).filter((p) => p && isValidAppId(p.id)).map((p) => [p.id, p]));
+  let names = [];
+  try { names = fs.readdirSync(APPS_DIR); } catch (_) {}
+  const apps = [];
+  for (const id of names.sort()) {
+    if (!isValidAppId(id) || uninstalled.has(id)) continue;
+    const appDir = `${APPS_DIR}/${id}`;
+    if (!isDir(appDir)) continue;
+    const manifest = readJson(`${appDir}/${MANIFEST}`, null);
+    const hasManifest = !!(manifest && typeof manifest === 'object' && !Array.isArray(manifest));
+    const meta = hasManifest ? manifest : (legacy.get(id) || {});
+    const mainFile = resolveMain(appDir, meta.main ?? meta.mainFile);
+    if (!mainFile) continue;
+    const app = { id, appDir, mainFile, hasManifest };
+    for (const key of META_KEYS) if (typeof meta[key] === 'string' && meta[key]) app[key] = meta[key];
+    if (!app.name) app.name = id;
+    if (Number.isFinite(meta.installedAt)) app.installedAt = meta.installedAt;
+    apps.push(app);
+  }
+  return apps;
+};
+
+const manifestOf = (app) => {
+  const m = { id: app.id, main: app.mainFile.slice(app.appDir.length + 1) };
+  for (const key of META_KEYS) if (app[key]) m[key] = app[key];
+  if (app.installedAt) m.installedAt = app.installedAt;
+  return m;
+};
+
+// Snapshot for compatibility (same record shape installed.json always had).
+const writeSnapshot = (apps) => {
+  const list = apps.map(({ hasManifest, ...app }) => app);
+  const text = JSON.stringify(list, null, 2);
+  try {
+    if (fs.existsSync(SNAPSHOT_PATH) && fs.readFileSync(SNAPSHOT_PATH, 'utf8') === text) return list;
+    if (!fs.existsSync('/etc/pkg')) fs.mkdirSync('/etc/pkg');
+    fs.writeFileSync(SNAPSHOT_PATH, text);
+  } catch (err) { console.warn('[pkg-loader] could not write the installed-apps snapshot:', err); }
+  return list;
+};
+
+const listInstalledApps = () => {
+  const apps = scanInstalledApps();
+  // One-time migration: give folders without a manifest one, from what we know.
+  for (const app of apps) {
+    if (app.hasManifest) continue;
+    try { fs.writeFileSync(`${app.appDir}/${MANIFEST}`, JSON.stringify(manifestOf(app), null, 2)); app.hasManifest = true; }
+    catch (_) { /* read-only mount or similar: keep listing it */ }
+  }
+  return writeSnapshot(apps);
+};
+
+platform.host.registerCommand('pkg.installed-apps', () => listInstalledApps(), { callable: false });
 
 const loadApp = (appDir, mainFile) => {
   try {
@@ -40,56 +120,22 @@ const loadApp = (appDir, mainFile) => {
 
 const loaded = new Set();
 
-// Load core apps first (skip uninstalled, already loaded, and ones whose files
-// haven't arrived yet — see the end of this file)
-const loadCoreApps = () => {
-  for (const app of CORE_APPS) {
-    if (uninstalled.has(app.id) || loaded.has(app.mainFile)) continue;
-    if (fs.existsSync(app.mainFile)) {
-      loadApp(app.appDir, app.mainFile);
-      loaded.add(app.mainFile);
-    }
-  }
-};
-
-// installed.json is writable by any app, so a record is loaded only when its id is a plain
-// app id and its main file lies inside that app's own /opt/apps/<id> folder; its `appDir`
-// is derived from the id, never taken from the record (audit BOOT-5/BOOT-10).
-const { isValidAppId, isInside, normalizePath } = platform.host.pathPolicy;
-const installedApp = (pkg) => {
-  if (!pkg || !isValidAppId(pkg.id) || typeof pkg.mainFile !== 'string') return null;
-  let mainFile;
-  try { mainFile = normalizePath(pkg.mainFile); } catch (_) { return null; }
-  const appDir = `/opt/apps/${pkg.id}`;
-  return mainFile !== appDir && isInside(appDir, mainFile) ? { appDir, mainFile } : null;
-};
-
-// Then load all installed apps (skip already-loaded, uninstalled, and not yet arrived)
-const loadInstalledApps = () => {
-  try {
-    const raw = fs.readFileSync(INSTALLED_PATH, 'utf8');
-    const installed = JSON.parse(raw || '[]');
-    for (const pkg of installed) {
-      if (!pkg || typeof pkg.mainFile !== 'string' || !pkg.mainFile.endsWith('.js')) continue;
-      const app = installedApp(pkg);
-      if (!app) { console.warn('[pkg-loader] skipping', pkg.id, '— main file outside /opt/apps/<id>:', pkg.mainFile); continue; }
-      if (loaded.has(app.mainFile) || uninstalled.has(pkg.id) || !fs.existsSync(app.mainFile)) continue;
-      loadApp(app.appDir, app.mainFile);
-      loaded.add(app.mainFile);
-    }
-  } catch (_) {}
-};
-
 const loadAvailableApps = (always = false) => {
   const before = loaded.size;
-  loadCoreApps();
-  loadInstalledApps();
+  const apps = listInstalledApps();
+  const rank = (id) => { const i = LOAD_FIRST.indexOf(id); return i < 0 ? LOAD_FIRST.length : i; };
+  for (const app of [...apps].sort((a, b) => rank(a.id) - rank(b.id))) {
+    if (!app.mainFile.endsWith('.js') || loaded.has(app.mainFile)) continue;
+    loadApp(app.appDir, app.mainFile);
+    loaded.add(app.mainFile);
+  }
   // Apps loaded — hydrate persisted widgets now that their renderers are registered
   if (always || loaded.size !== before) { try { platform.host.callCommand('hydrate-widgets'); } catch (_) {} }
 };
 
 loadAvailableApps(true);
 
-// On a first visit the kernel installs preinstalled apps' files in the background,
-// after the landing page (src/kernel/vfs.ts); register each app as its files arrive.
+// On a first visit the kernel delivers preinstalled apps' files in the background,
+// after the landing page (src/kernel/vfs.ts); App Manager installs announce
+// themselves the same way. Register each app as its files arrive.
 platform.window.addEventListener('wos:apps-installed', () => loadAvailableApps());

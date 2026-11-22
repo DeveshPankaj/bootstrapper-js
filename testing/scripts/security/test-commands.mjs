@@ -47,9 +47,17 @@ try {
   });
 
   // ── deep links: a fresh tab opened from a link ────────────────────────────
+  // sec-dl-evil: its files are in /opt/apps, but the user uninstalled it (installed apps
+  // are the /opt/apps folders, so a folder alone would be an installed app).
   await vfsWrite(page, {
     '/opt/main.js': 'window.top.__sec_dl_dotdot = 1;',
     '/opt/apps/sec-dl-evil/main.js': 'window.top.__sec_dl_evil = 1;',
+  });
+  await page.evaluate(() => {
+    const fs = window.fs;
+    let un = [];
+    try { un = JSON.parse(fs.readFileSync('/etc/pkg/uninstalled.json', 'utf8')) || []; } catch (_) {}
+    if (!un.includes('sec-dl-evil')) fs.writeFileSync('/etc/pkg/uninstalled.json', JSON.stringify([...un, 'sec-dl-evil']));
   });
   await sleep(2000); // let the IndexedDB mirror flush before another tab boots
   const viaLink = async (hash) => {

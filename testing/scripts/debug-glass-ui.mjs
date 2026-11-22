@@ -1,4 +1,4 @@
-// Screenshots of the glass UI (Settings, Files) in dark and light mode, to
+// Screenshots of the glass UI (Settings, Files, App Manager, Terminal) in dark and light mode, to
 // testing/screenshots/glass-ui/. Usage:
 //   BASE_URL=http://localhost:8090 node testing/scripts/debug-glass-ui.mjs
 import { chromium } from 'playwright';
@@ -49,6 +49,18 @@ for (const mode of ['dark', 'light']) {
     await f?.locator('[aria-label="details"]').click({ force: true }).catch(() => {});
     await sleep(800);
     await page.screenshot({ path: `${OUT}/files-${mode}.png` });
+    await closeAll();
+    await page.evaluate(() => window.platform.host.openWindow('ui.pkg-manager'));
+    await frameWith('.pkg-card');
+    await sleep(1200);
+    await page.screenshot({ path: `${OUT}/app-manager-${mode}.png` });
+    await closeAll();
+    await page.evaluate(() => window.platform.host.openWindow('ui.terminal'));
+    const t = await frameWith('.xterm-rows');
+    await sleep(2500);
+    await t?.evaluate(() => { const s = window.__terminalApp.sessions[0]; s.terminal.write('\x1b[31mred\x1b[0m \x1b[32mgreen\x1b[0m \x1b[33myellow\x1b[0m \x1b[34mblue\x1b[0m \x1b[35mmagenta\x1b[0m \x1b[36mcyan\x1b[0m\r\n'); });
+    await sleep(500);
+    await page.screenshot({ path: `${OUT}/terminal-${mode}.png` });
     console.log(mode, 'done; appearance =', await page.evaluate(() => document.documentElement.getAttribute('data-appearance')));
 }
 await browser.close();

@@ -125,14 +125,20 @@ try {
   await page.waitForTimeout(300);
 
   // ── Real apps: header styles + geometry they set still apply
-  await page.evaluate(() => window.platform.host.openWindow('ui.pkg-manager'));
+  // (App Manager now uses the glass window material instead of its own header colours;
+  // SQLite Browser still sets them.)
+  await page.evaluate(() => window.platform.host.openWindow('ui.sqlite'));
   await page.waitForTimeout(2500);
   const pkgHead = await page.evaluate(() => {
-    const w = [...document.querySelectorAll('.window')].find((x) => x.dataset.name === 'ui.pkg-manager');
+    const w = [...document.querySelectorAll('.window')].find((x) => x.dataset.name === 'ui.sqlite');
     const h = w?.querySelector('.window-header');
     return h ? { bg: h.style.background || h.style.backgroundColor, color: h.style.color, border: h.style.borderBottom } : null;
   });
-  check('pkg-manager header styles still apply', !!pkgHead && pkgHead.bg.includes('255, 255, 255') && pkgHead.color === 'rgb(85, 85, 85)' && pkgHead.border.includes('1px solid'), JSON.stringify(pkgHead));
+  check('app header styles (setHeaderStyles) still apply', !!pkgHead && pkgHead.bg.includes('255, 255, 255') && pkgHead.color === 'rgb(85, 85, 85)' && pkgHead.border.includes('1px solid'), JSON.stringify(pkgHead));
+  await page.evaluate(() => window.platform.host.openWindow('ui.pkg-manager'));
+  await page.waitForTimeout(2000);
+  const pkgGlass = await page.evaluate(() => !!document.querySelector('.window[data-name="ui.pkg-manager"].material-glass'));
+  check('App Manager uses the glass window material (setWindowMaterial)', pkgGlass);
   await page.evaluate(() => window.platform.host.callCommand('process.list').forEach((p) => window.platform.host.callCommand('process.kill', p.pid)));
   await page.waitForTimeout(300);
 

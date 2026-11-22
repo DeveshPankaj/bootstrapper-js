@@ -371,7 +371,7 @@
     "path": "/usr/bin/deeplink.js",
     "file": "/usr/bin/deeplink.js",
     "force_reload": true,
-    "sha256": "ef775af9fe8533184cae52b06413bbe21acbb71e564071c4b0fe62e5979bf7d9",
+    "sha256": "bd8c8d0a3e351d4e0cb7929fb4e117bd180b25d074fd8212cae5e5edd4fa088a",
     "when": "boot"
   },
   {
@@ -685,7 +685,14 @@
     "path": "/opt/apps/spotlight/main.js",
     "file": "/opt/apps/spotlight/main.js",
     "force_reload": true,
-    "sha256": "83b882b400bb5a5fed94911d5fb872bee0daf7ca201316a46bc7f971f000f0ed",
+    "sha256": "67634dbfac286619a0430a2f23519cb253dd1e7934ddf52187dc7e0a007d005d",
+    "when": "boot"
+  },
+  {
+    "path": "/opt/apps/spotlight/app.json",
+    "file": "/opt/apps/spotlight/app.json",
+    "force_reload": true,
+    "sha256": "72dde96b92091802a18ba8a5310db066e5b8a2268d1ba2e862b8cf097493ab09",
     "when": "boot"
   },
   {
@@ -874,7 +881,14 @@
     "path": "/opt/apps/pkg-manager/main.js",
     "file": "/opt/apps/pkg-manager/main.js",
     "force_reload": true,
-    "sha256": "b106fcc85d9c5f6f30b990114374fb41bb30481b9b1240df36a54c159bf247d7",
+    "sha256": "0140d130e4b89abbfcdaaa95cb6f6ffaf8684e59f75cc8d7003bb18958cca960",
+    "when": "boot"
+  },
+  {
+    "path": "/opt/apps/pkg-manager/app.json",
+    "file": "/opt/apps/pkg-manager/app.json",
+    "force_reload": true,
+    "sha256": "fae380dacfbc2ebc699e3c0536df1208fd1f9ab9b3deeeb3136f210b0685ee05",
     "when": "boot"
   },
   {
@@ -885,17 +899,31 @@
     "when": "boot"
   },
   {
+    "path": "/opt/apps/app-drawer/app.json",
+    "file": "/opt/apps/app-drawer/app.json",
+    "force_reload": true,
+    "sha256": "78473a74172b90a19623a50b121f100ddbc6b8366a34588b380ad723c518e872",
+    "when": "boot"
+  },
+  {
     "path": "/opt/apps/pkg-manager/loader.js",
     "file": "/opt/apps/pkg-manager/loader.js",
     "force_reload": true,
-    "sha256": "363b72a550364652177118e36889f3696d40a2bd6cce26bee0a9d8566caaf838",
+    "sha256": "c2330eaf07a93ea8342bf65d545927398281e19e83e27407c32a93c41e1d6ecc",
     "when": "boot"
   },
   {
     "path": "/opt/apps/terminal/main.html",
     "file": "/opt/apps/terminal/main.html",
     "force_reload": true,
-    "sha256": "f189b3e9dd1e9684286c0d7aee2560508efd0fe48662d0a8c038a8f523617cfc",
+    "sha256": "22bf7bccdf040874ba40b6cf1bf9036c5c8ec328a44ebccf974826586912720d",
+    "when": "boot"
+  },
+  {
+    "path": "/opt/apps/terminal/app.json",
+    "file": "/opt/apps/terminal/app.json",
+    "force_reload": true,
+    "sha256": "21b11ca8151ba8d65be70a080af9b6f989ba9c5cf1938f7e5399ba6c5186ae9e",
     "when": "boot"
   },
   {
@@ -906,10 +934,10 @@
     "when": "boot"
   },
   {
-    "path": "/etc/pkg/installed.json",
-    "file": "/etc/pkg/installed.json",
-    "force_reload": false,
-    "sha256": "81b5583f80e69252478d1b83c52e0ba704c9f0ca51a6a44c8f90ac9e0232d8a3",
+    "path": "/opt/apps/settings/app.json",
+    "file": "/opt/apps/settings/app.json",
+    "force_reload": true,
+    "sha256": "f25ecfe408a25603d2bd19f78321f6d12ee45bc6573cd70cf20fdc8a0b228f75",
     "when": "boot"
   },
   {
@@ -920,10 +948,24 @@
     "when": "boot"
   },
   {
+    "path": "/opt/apps/file-explorer/app.json",
+    "file": "/opt/apps/file-explorer/app.json",
+    "force_reload": true,
+    "sha256": "b56823ecae6fbec3eba9e6fd872d6fd2e0618e15ade69d3c1f7fcef29a85fe97",
+    "when": "boot"
+  },
+  {
     "path": "/opt/apps/image-viewer/main.js",
     "file": "/opt/apps/image-viewer/main.js",
     "force_reload": true,
     "sha256": "2ba84f52cb569ccf6df6e2c4331c9fc2eb78d7afdfa32780a6d20f223bdf8238",
+    "when": "boot"
+  },
+  {
+    "path": "/opt/apps/image-viewer/app.json",
+    "file": "/opt/apps/image-viewer/app.json",
+    "force_reload": true,
+    "sha256": "423ac1a83927c9c7011d53267792ecffafee34a28076ef3c1a33e8f0d310fb5a",
     "when": "boot"
   },
   {
@@ -966,6 +1008,14 @@
     "file": "/opt/apps/audio-player/main.js",
     "force_reload": true,
     "sha256": "7755e84fce80f8571d6f073c356918f14ca8bb41a60503839f496e36ac880eb4",
+    "when": "background",
+    "app": "audio-player"
+  },
+  {
+    "path": "/opt/apps/audio-player/app.json",
+    "file": "/opt/apps/audio-player/app.json",
+    "force_reload": true,
+    "sha256": "13038fdbe2bb0bcfb3250ee6080a27b7c0e84c6f920fd798555e7f2c6a889801",
     "when": "background",
     "app": "audio-player"
   },

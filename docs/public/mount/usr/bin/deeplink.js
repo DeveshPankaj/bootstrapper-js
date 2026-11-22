@@ -46,10 +46,17 @@ const readList = (fs, path) => {
   catch (_) { return [] }
 }
 // Only an installed, not uninstalled, app may be loaded for a link (audit
-// BOOT-9). Core apps are already loaded by pkg-manager/loader.js before this
-// runs, so the fallback below only ever concerns /etc/pkg/installed.json.
-const isInstalledApp = (fs, id) => !readList(fs, UNINSTALLED_PATH).includes(id)
-  && readList(fs, INSTALLED_PATH).some((pkg) => pkg && pkg.id === id)
+// BOOT-9). The installed apps are the /opt/apps folders, as listed by
+// pkg-manager/loader.js (`pkg.installed-apps`); its installed.json snapshot is
+// only a fallback.
+const isInstalledApp = (fs, id) => {
+  try {
+    const list = platform.host.callCommand('pkg.installed-apps')
+    if (Array.isArray(list)) return list.some((pkg) => pkg && pkg.id === id)
+  } catch (_) {}
+  return !readList(fs, UNINSTALLED_PATH).includes(id)
+    && readList(fs, INSTALLED_PATH).some((pkg) => pkg && pkg.id === id)
+}
 
 const isOptedIn = (cmd) => !!(cmd && cmd.meta && cmd.meta.deepLink === true)
 const hasTarget = (cmd) => {

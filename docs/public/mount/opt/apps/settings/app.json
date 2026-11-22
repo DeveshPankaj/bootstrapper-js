@@ -1,0 +1,12 @@
+{
+  "id": "settings",
+  "name": "Settings",
+  "version": "1.0.0",
+  "description": "System settings and preferences — wallpaper, layout, window manager, widgets, keybindings, and storage.",
+  "icon": "settings",
+  "category": "System",
+  "author": "bootstrapper-js",
+  "main": "main.html",
+  "commandName": "ui.settings",
+  "registryUrl": "/registry.json"
+}

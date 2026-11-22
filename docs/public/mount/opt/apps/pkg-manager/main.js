@@ -1,6 +1,8 @@
 // App Package Manager — install, manage, and discover apps from registries.
 // Registered as command('ui.pkg-manager').
-// Boot loading of installed apps is handled by /opt/pkg/loader.js.
+// Boot loading of installed apps is handled by /opt/apps/pkg-manager/loader.js.
+// The installed apps are the folders in /opt/apps, each with its own app.json
+// manifest; deleting a folder uninstalls that app. installed.json is a snapshot.
 
 const platform = window.platform;
 const fs = platform.host.getFS();
@@ -98,14 +100,23 @@ const ensureDirs = () => {
   }
 };
 
+// The installed apps: loader.js scans /opt/apps and answers `pkg.installed-apps`
+// (it also rewrites the installed.json snapshot, read here only as a fallback).
 const readInstalled = () => {
+  try { const list = platform.host.callCommand('pkg.installed-apps'); if (Array.isArray(list)) return list; } catch (_) {}
   try { return JSON.parse(fs.readFileSync(INSTALLED_PATH, 'utf8') || '[]'); }
   catch (_) { return []; }
 };
 
-const writeInstalled = (list) => {
-  ensureDirs();
-  fs.writeFileSync(INSTALLED_PATH, JSON.stringify(list, null, 2));
+// Each app folder carries its own manifest, so the folder alone says what is
+// installed: /opt/apps/<id>/app.json. The id comes from the validated app id.
+const MANIFEST_FILE = 'app.json';
+const readManifest = (id) => {
+  try { const m = JSON.parse(fs.readFileSync(`${appDirFor(id)}/${MANIFEST_FILE}`, 'utf8')); return m && typeof m === 'object' && !Array.isArray(m) ? m : {}; }
+  catch (_) { return {}; }
+};
+const writeManifest = (id, manifest) => {
+  fs.writeFileSync(`${appDirFor(id)}/${MANIFEST_FILE}`, JSON.stringify({ ...manifest, id }, null, 2));
 };
 
 const UNINSTALLED_PATH = '/etc/pkg/uninstalled.json';
@@ -305,12 +316,8 @@ const rollbackApp = (pkg) => {
   const backupDir = `${BACKUPS_DIR}/${pkg.id}/${version}`;
   restoreFilesInto(backupDir, appDir);
 
-  const installed = readInstalled();
-  const idx = installed.findIndex(p => p.id === pkg.id);
-  if (idx >= 0) {
-    installed[idx] = { ...installed[idx], version: latest.version };
-    writeInstalled(installed);
-  }
+  writeManifest(pkg.id, { ...readManifest(pkg.id), version: latest.version });
+  readInstalled(); // refresh the snapshot
 };
 
 // ── Install / Uninstall ──────────────────────────────────────────────────────
@@ -378,22 +385,14 @@ const installApp = async (appMeta, registryUrl, { beforeWrite } = {}) => {
     writeUninstalled(blocked.filter(id => id !== appMeta.id));
   }
 
-  const installed = readInstalled();
-  const existing = installed.findIndex(p => p.id === appMeta.id);
-  const record = {
-    ...pick(appMeta, ['id', 'name', 'version', 'description', 'icon', 'category', 'author']),
-    appDir,
-    mainFile,
-    commandName,
+  writeManifest(appMeta.id, {
+    ...pick(appMeta, ['name', 'version', 'description', 'icon', 'category', 'author']),
+    main: mainFile.slice(appDir.length + 1),
+    ...(commandName ? { commandName } : {}),
     registryUrl,
     installedAt: Date.now(),
-  };
-  if (existing >= 0) {
-    installed[existing] = record;
-  } else {
-    installed.push(record);
-  }
-  writeInstalled(installed);
+  });
+  readInstalled(); // refresh the snapshot
   return true;
 };
 
@@ -406,37 +405,86 @@ const uninstallApp = async (pkg) => {
   if (validId) deleteDirRecursive(appDirFor(pkg.id));
   else console.warn('[pkg-manager] invalid app id, removing its record only:', pkg && pkg.id);
 
-  const installed = readInstalled().filter(p => p.id !== pkg.id);
-  writeInstalled(installed);
-
   const blocked = readUninstalled();
   if (validId && !blocked.includes(pkg.id)) {
     blocked.push(pkg.id);
     writeUninstalled(blocked);
   }
+  readInstalled(); // refresh the snapshot
 };
 
 // ── CSS ───────────────────────────────────────────────────────────────────────
 
 const CSS = `
-* { box-sizing: border-box; }
+/* Spatial glass look (same --vs-* tokens as Settings and Files). The window paints
+   the frosted material (props.setWindowMaterial('glass')); this page is transparent.
+   data-appearance comes from platform.host.appearance$ (light / dark). */
+:root {
+  --vs-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", Inter, "Segoe UI", Helvetica, Arial, sans-serif;
+  --vs-text: rgba(255, 255, 255, 0.96);
+  --vs-text-2: rgba(255, 255, 255, 0.66);
+  --vs-text-3: rgba(255, 255, 255, 0.44);
+  --vs-fill: rgba(255, 255, 255, 0.075);
+  --vs-fill-2: rgba(255, 255, 255, 0.13);
+  --vs-fill-3: rgba(255, 255, 255, 0.21);
+  --vs-recessed: rgba(0, 0, 0, 0.20);
+  --vs-stroke: rgba(255, 255, 255, 0.13);
+  --vs-separator: rgba(255, 255, 255, 0.09);
+  --vs-sidebar: rgba(255, 255, 255, 0.045);
+  --vs-selected-rim: rgba(255, 255, 255, 0.6);
+  --vs-strong: rgba(255, 255, 255, 0.94);
+  --vs-on-strong: #1c1c1e;
+  --vs-scroll: rgba(255, 255, 255, 0.22);
+  --vs-dialog-bg: rgba(54, 54, 60, 0.88);
+  --vs-danger: #ff7a70;
+  --vs-success: #5ee28a;
+  --vs-warning: #ffcc66;
+  --vs-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+:root[data-appearance="light"] {
+  --vs-text: rgba(0, 0, 0, 0.86);
+  --vs-text-2: rgba(0, 0, 0, 0.56);
+  --vs-text-3: rgba(0, 0, 0, 0.38);
+  --vs-fill: rgba(255, 255, 255, 0.50);
+  --vs-fill-2: rgba(0, 0, 0, 0.06);
+  --vs-fill-3: rgba(255, 255, 255, 0.88);
+  --vs-recessed: rgba(0, 0, 0, 0.06);
+  --vs-stroke: rgba(0, 0, 0, 0.07);
+  --vs-separator: rgba(0, 0, 0, 0.08);
+  --vs-sidebar: rgba(255, 255, 255, 0.28);
+  --vs-selected-rim: rgba(0, 0, 0, 0.22);
+  --vs-strong: #1c1c1e;
+  --vs-on-strong: #ffffff;
+  --vs-scroll: rgba(0, 0, 0, 0.22);
+  --vs-dialog-bg: rgba(246, 246, 249, 0.92);
+  --vs-danger: #d70015;
+  --vs-success: #1f8a3b;
+  --vs-warning: #a35200;
+}
+
+html, body { background: transparent; }
+* { box-sizing: border-box; scrollbar-width: thin; scrollbar-color: var(--vs-scroll) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--vs-scroll); border-radius: 999px; border: 3px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-track { background: transparent; }
 
 .pkg-root {
   display: flex;
   height: 100%;
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: var(--vs-font);
   font-size: 13.5px;
-  color: #1c1c1e;
-  background: #fff;
+  color: var(--vs-text);
+  background: transparent;
   overflow: hidden;
   position: relative;
+  -webkit-font-smoothing: antialiased;
 }
 
 /* Confirm modal */
 .pkg-modal-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(20, 18, 14, 0.35);
+  background: rgba(0, 0, 0, 0.25);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -444,12 +492,14 @@ const CSS = `
 }
 
 .pkg-modal {
-  background: #fff;
-  border-radius: 10px;
-  box-shadow: 0 10px 40px rgba(0,0,0,0.25);
-  width: 340px;
+  background: var(--vs-dialog-bg);
+  backdrop-filter: blur(36px) saturate(170%);
+  -webkit-backdrop-filter: blur(36px) saturate(170%);
+  border-radius: 22px;
+  box-shadow: inset 0 0 0 1px var(--vs-stroke), 0 24px 60px rgba(0, 0, 0, 0.35);
+  width: 360px;
   max-width: calc(100% - 32px);
-  padding: 18px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -461,11 +511,11 @@ const CSS = `
   gap: 8px;
   font-size: 15px;
   font-weight: 600;
-  color: #1c1c1e;
+  color: var(--vs-text);
 }
 
-.pkg-modal-body { font-size: 13px; color: #555; line-height: 1.5; }
-.pkg-modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.pkg-modal-body { font-size: 13px; color: var(--vs-text-2); line-height: 1.5; }
+.pkg-modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
 
 /* Update awareness */
 .pkg-update-badge {
@@ -473,70 +523,73 @@ const CSS = `
   align-items: center;
   margin-left: 8px;
   padding: 2px 8px;
-  border-radius: 10px;
+  border-radius: 999px;
   font-size: 10px;
   font-weight: 700;
-  background: #fff4de;
-  color: #a8710a;
+  background: var(--vs-fill-2);
+  color: var(--vs-warning);
   vertical-align: middle;
 }
-.pkg-update-version { color: #a8710a; font-weight: 600; }
-.pkg-btn.update { background: #fff4de; border-color: #f0d9a8; color: #a8710a; }
-.pkg-btn.update:hover { background: #fbe8c4; }
+.pkg-update-version { color: var(--vs-warning); font-weight: 600; }
+.pkg-btn.update { color: var(--vs-warning); }
 
 /* Sidebar */
 .pkg-sidebar {
-  width: 180px;
+  width: 190px;
   flex-shrink: 0;
-  padding: 12px 8px;
-  border-right: 1px solid #e0dbd4;
+  padding: 14px 10px;
+  border-right: 1px solid var(--vs-separator);
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  background: #faf9f7;
+  gap: 3px;
+  background: var(--vs-sidebar);
 }
 
 .pkg-sidebar-label {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
-  color: #999;
+  color: var(--vs-text-3);
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  padding: 6px 10px 4px;
+  padding: 6px 12px 4px;
   margin-top: 4px;
 }
 
 .pkg-nav-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 7px 10px;
-  border-radius: 6px;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 12px;
   cursor: pointer;
-  color: #3a3a3c;
+  color: var(--vs-text);
   font-size: 13px;
   font-weight: 500;
   user-select: none;
-  transition: background 0.12s;
+  transition: background 0.18s var(--vs-ease);
 }
-.pkg-nav-item:hover { background: #f0ede9; }
-.pkg-nav-item.active { background: #c4a478; color: #fff; }
-.pkg-nav-item .material-symbols-outlined { font-size: 18px; }
+.pkg-nav-item:hover { background: var(--vs-fill); }
+.pkg-nav-item.active {
+  background: var(--vs-fill-3);
+  box-shadow: inset 0 0 0 1px var(--vs-stroke), 0 1px 3px rgba(0, 0, 0, 0.06);
+  font-weight: 600;
+}
+.pkg-nav-item .material-symbols-outlined { font-size: 19px; color: var(--vs-text-2); }
+.pkg-nav-item.active .material-symbols-outlined { color: var(--vs-text); }
 
 .pkg-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  background: rgba(0,0,0,0.12);
-  border-radius: 9px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  background: var(--vs-fill-2);
+  border-radius: 999px;
   font-size: 10px;
   font-weight: 700;
   margin-left: auto;
 }
-.pkg-nav-item.active .pkg-badge { background: rgba(255,255,255,0.28); }
 
 /* Main area */
 .pkg-main {
@@ -549,108 +602,117 @@ const CSS = `
 .pkg-toolbar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  border-bottom: 1px solid #e0dbd4;
+  gap: 10px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--vs-separator);
   flex-shrink: 0;
 }
 
 .pkg-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: #1c1c1e;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--vs-text);
   flex: 1;
 }
 
 .pkg-search {
   flex: 1;
   max-width: 320px;
-  padding: 6px 10px;
-  border: 1px solid #e0dbd4;
-  border-radius: 6px;
+  height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
   font-size: 13px;
-  color: #1c1c1e;
-  background: #faf9f7;
+  font-family: inherit;
+  color: var(--vs-text);
+  background: var(--vs-recessed);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12);
   outline: none;
 }
-.pkg-search:focus { border-color: #c4a478; box-shadow: 0 0 0 2px rgba(196,164,120,0.18); }
+.pkg-search::placeholder { color: var(--vs-text-3); }
+.pkg-search:focus { box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12), 0 0 0 2px var(--vs-selected-rim); }
 
+/* Capsule buttons */
 .pkg-btn {
-  padding: 6px 14px;
-  border-radius: 6px;
-  border: 1px solid #e0dbd4;
-  background: #faf9f7;
-  color: #1c1c1e;
+  padding: 7px 16px;
+  border-radius: 999px;
+  border: 0;
+  background: var(--vs-fill-2);
+  box-shadow: inset 0 0 0 1px var(--vs-stroke);
+  color: var(--vs-text);
   font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
   font-family: inherit;
-  transition: background 0.12s;
+  transition: background 0.18s var(--vs-ease), transform 0.18s var(--vs-ease);
   white-space: nowrap;
 }
-.pkg-btn:hover { background: #f0ede9; }
-.pkg-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.pkg-btn:hover { background: var(--vs-fill-3); }
+.pkg-btn:active { transform: scale(0.97); }
+.pkg-btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
 .pkg-btn.primary {
-  background: #c4a478;
-  border-color: #c4a478;
-  color: #fff;
-  font-weight: 500;
+  background: var(--vs-strong);
+  box-shadow: none;
+  color: var(--vs-on-strong);
+  font-weight: 600;
 }
-.pkg-btn.primary:hover { background: #b5945f; border-color: #b5945f; }
-.pkg-btn.danger { background: #fff; border-color: #e0dbd4; color: #d63b3b; }
-.pkg-btn.danger:hover { background: #fdf0f0; }
+.pkg-btn.primary:hover { filter: brightness(1.08); }
+.pkg-btn.danger { color: var(--vs-danger); }
 
 /* Scroll content area */
 .pkg-scroll {
   flex: 1;
   overflow-y: auto;
-  padding: 16px;
+  padding: 18px;
 }
 
 /* App cards grid (Discover) */
 .pkg-cards {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 12px;
+  gap: 14px;
 }
 
 .pkg-card {
-  border: 1px solid #e0dbd4;
-  border-radius: 8px;
-  padding: 14px;
+  border-radius: 20px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  background: #fff;
-  transition: box-shadow 0.15s;
+  gap: 9px;
+  background: var(--vs-fill);
+  box-shadow: inset 0 0 0 1px var(--vs-stroke);
+  transition: background 0.18s var(--vs-ease), transform 0.18s var(--vs-ease);
 }
-.pkg-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.07); }
+.pkg-card:hover { background: var(--vs-fill-2); transform: translateY(-2px); }
 
 .pkg-card-header {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 12px;
 }
 
 .pkg-card-icon {
-  width: 38px;
-  height: 38px;
-  border-radius: 8px;
-  background: #f0ede9;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--vs-fill-2);
+  box-shadow: inset 0 0 0 1px var(--vs-stroke);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  color: #7a6950;
+  color: var(--vs-text);
 }
 .pkg-card-icon .material-symbols-outlined { font-size: 22px; }
 
 .pkg-card-info { flex: 1; min-width: 0; }
 .pkg-card-name { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.pkg-card-author { font-size: 11px; color: #888; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pkg-card-author { font-size: 11px; color: var(--vs-text-3); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .pkg-card-desc {
   font-size: 12.5px;
-  color: #555;
+  color: var(--vs-text-2);
   line-height: 1.45;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -670,30 +732,30 @@ const CSS = `
 .pkg-tag {
   display: inline-flex;
   align-items: center;
-  padding: 2px 8px;
-  border-radius: 12px;
+  padding: 3px 9px;
+  border-radius: 999px;
   font-size: 11px;
   font-weight: 500;
-  background: #f0ede9;
-  color: #7a6950;
+  background: var(--vs-fill-2);
+  color: var(--vs-text-2);
 }
 
-.pkg-version { font-size: 11px; color: #aaa; margin-left: 2px; }
+.pkg-version { font-size: 11px; color: var(--vs-text-3); margin-left: 2px; }
 .pkg-registry-badge {
-  font-size: 10px; color: #8a7a6a; background: rgba(0,0,0,.05); padding: 1px 6px;
-  border-radius: 4px; margin-left: 2px; cursor: default;
+  font-size: 10px; color: var(--vs-text-2); background: var(--vs-fill-2); padding: 2px 7px;
+  border-radius: 999px; margin-left: 2px; cursor: default;
 }
 
 .pkg-installed-badge {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 5px 10px;
-  border-radius: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
   font-size: 12px;
-  font-weight: 500;
-  background: #e8f5e9;
-  color: #388e3c;
+  font-weight: 600;
+  background: var(--vs-fill-2);
+  color: var(--vs-success);
   margin-left: auto;
 }
 .pkg-installed-badge .material-symbols-outlined { font-size: 14px; }
@@ -705,64 +767,67 @@ const CSS = `
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 12px;
-  border: 1px solid #e0dbd4;
-  border-radius: 8px;
-  background: #fff;
-  transition: background 0.12s;
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: var(--vs-fill);
+  box-shadow: inset 0 0 0 1px var(--vs-stroke);
+  transition: background 0.18s var(--vs-ease);
 }
-.pkg-list-row:hover { background: #faf9f7; }
+.pkg-list-row:hover { background: var(--vs-fill-2); }
 
 .pkg-list-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: 7px;
-  background: #f0ede9;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--vs-fill-2);
+  box-shadow: inset 0 0 0 1px var(--vs-stroke);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  color: #7a6950;
+  color: var(--vs-text);
 }
 .pkg-list-icon .material-symbols-outlined { font-size: 18px; }
 
 .pkg-list-info { flex: 1; min-width: 0; }
 .pkg-list-name { font-weight: 600; font-size: 13.5px; }
-.pkg-list-meta { font-size: 11px; color: #888; margin-top: 2px; }
+.pkg-list-meta { font-size: 11px; color: var(--vs-text-3); margin-top: 2px; }
 
 /* Registries */
 .pkg-reg-row {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 10px;
-  border: 1px solid #e0dbd4;
-  border-radius: 6px;
-  background: #fff;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--vs-fill);
+  box-shadow: inset 0 0 0 1px var(--vs-stroke);
   margin-bottom: 6px;
 }
 .pkg-reg-url {
   flex: 1;
   font-size: 12px;
-  font-family: monospace;
-  color: #444;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--vs-text-2);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .pkg-input {
-  padding: 7px 10px;
-  border: 1px solid #e0dbd4;
-  border-radius: 6px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 12px;
   font-size: 13px;
-  color: #1c1c1e;
-  background: #faf9f7;
+  color: var(--vs-text);
+  background: var(--vs-recessed);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12);
   outline: none;
-  font-family: monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   width: 100%;
 }
-.pkg-input:focus { border-color: #c4a478; box-shadow: 0 0 0 2px rgba(196,164,120,0.18); }
+.pkg-input::placeholder { color: var(--vs-text-3); }
+.pkg-input:focus { box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12), 0 0 0 2px var(--vs-selected-rim); }
 
 /* States */
 .pkg-empty {
@@ -772,18 +837,18 @@ const CSS = `
   justify-content: center;
   gap: 10px;
   padding: 60px 20px;
-  color: #aaa;
+  color: var(--vs-text-3);
   text-align: center;
 }
-.pkg-empty .material-symbols-outlined { font-size: 48px; opacity: 0.4; }
+.pkg-empty .material-symbols-outlined { font-size: 48px; opacity: 0.6; }
 .pkg-empty p { margin: 0; font-size: 13px; }
 
 .pkg-error {
-  background: #fff5f5;
-  border: 1px solid #fcc;
-  border-radius: 6px;
+  background: var(--vs-fill);
+  box-shadow: inset 0 0 0 1px var(--vs-stroke);
+  border-radius: 14px;
   padding: 10px 14px;
-  color: #c0392b;
+  color: var(--vs-danger);
   font-size: 12.5px;
   margin-bottom: 12px;
 }
@@ -792,7 +857,7 @@ const CSS = `
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #888;
+  color: var(--vs-text-2);
   font-size: 13px;
   padding: 20px 0;
 }
@@ -801,8 +866,8 @@ const CSS = `
 .pkg-spinner {
   width: 14px;
   height: 14px;
-  border: 2px solid #e0dbd4;
-  border-top-color: #c4a478;
+  border: 2px solid var(--vs-fill-3);
+  border-top-color: var(--vs-text);
   border-radius: 50%;
   animation: pkg-spin 0.7s linear infinite;
   flex-shrink: 0;
@@ -810,14 +875,27 @@ const CSS = `
 
 .pkg-note {
   font-size: 12px;
-  color: #888;
-  background: #faf9f7;
-  border: 1px solid #e0dbd4;
-  border-radius: 6px;
-  padding: 10px 12px;
+  color: var(--vs-text-2);
+  background: var(--vs-fill);
+  box-shadow: inset 0 0 0 1px var(--vs-stroke);
+  border-radius: 14px;
+  padding: 10px 14px;
   line-height: 1.5;
   margin-top: 4px;
 }
+
+.pkg-chip {
+  font-size: 11px;
+  padding: 3px 10px;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--vs-text-2);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--vs-stroke);
+}
+.pkg-chip.active { color: var(--vs-text); font-weight: 600; background: var(--vs-fill-3); box-shadow: inset 0 0 0 1px var(--vs-selected-rim); }
 
 @font-face {
   font-family: 'Material Symbols Outlined';
@@ -838,6 +916,7 @@ const CSS = `
   word-wrap: normal;
   direction: ltr;
   -webkit-font-smoothing: antialiased;
+  font-variation-settings: 'FILL' 0, 'wght' 300;
 }
 `;
 
@@ -855,7 +934,7 @@ const ConfirmModal = ({ icon, title, message, confirmLabel = 'Confirm', danger, 
   <div className="pkg-modal-overlay" onClick={onCancel}>
     <div className="pkg-modal" onClick={e => e.stopPropagation()}>
       <div className="pkg-modal-title">
-        {icon && <Icon name={icon} style={{ fontSize: 18, color: danger ? '#d63b3b' : '#c4a478' }} />}
+        {icon && <Icon name={icon} style={{ fontSize: 18, color: danger ? 'var(--vs-danger)' : 'var(--vs-text-2)' }} />}
         {title}
       </div>
       <div className="pkg-modal-body">{message}</div>
@@ -912,21 +991,15 @@ const DiscoverView = ({ registryApps, installed, loading, fetchError, onInstall,
         />
       </div>
       {registryUrls.length > 1 && (
-        <div style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 14px', borderBottom:'1px solid #2d3148', flexWrap:'wrap' }}>
-          <span style={{ fontSize:11, color:'#7880a0', flexShrink:0 }}>Registry:</span>
+        <div style={{ display:'flex', alignItems:'center', gap:6, padding:'8px 18px', borderBottom:'1px solid var(--vs-separator)', flexWrap:'wrap' }}>
+          <span style={{ fontSize:11, color:'var(--vs-text-3)', flexShrink:0 }}>Registry:</span>
           <button
-            style={{ padding:'2px 9px', borderRadius:5, border:'1px solid', fontSize:11, cursor:'pointer',
-              background: regFilter==='' ? 'rgba(99,102,241,.15)' : 'none',
-              borderColor: regFilter==='' ? '#6366f1' : '#2d3148',
-              color: regFilter==='' ? '#6366f1' : '#7880a0', fontWeight: regFilter==='' ? 600 : 400 }}
+            className={`pkg-chip ${regFilter==='' ? 'active' : ''}`}
             onClick={() => setRegFilter('')}
           >All</button>
           {registryUrls.map(url => (
             <button key={url}
-              style={{ padding:'2px 9px', borderRadius:5, border:'1px solid', fontSize:11, cursor:'pointer',
-                background: regFilter===url ? 'rgba(99,102,241,.15)' : 'none',
-                borderColor: regFilter===url ? '#6366f1' : '#2d3148',
-                color: regFilter===url ? '#6366f1' : '#7880a0', fontWeight: regFilter===url ? 600 : 400 }}
+              className={`pkg-chip ${regFilter===url ? 'active' : ''}`}
               onClick={() => setRegFilter(regFilter===url ? '' : url)}
               title={url}
             >{registryLabel(url)}</button>
@@ -1041,7 +1114,7 @@ const InstalledView = ({ installed, registryApps, onRequestUninstall, onUpdate, 
     <>
       <div className="pkg-toolbar">
         <span className="pkg-title">Installed</span>
-        <span style={{ fontSize: 12, color: '#888' }}>{filtered.length} of {installed.length} app{installed.length !== 1 ? 's' : ''}</span>
+        <span style={{ fontSize: 12, color: 'var(--vs-text-2)' }}>{filtered.length} of {installed.length} app{installed.length !== 1 ? 's' : ''}</span>
         <input className="pkg-search" placeholder="Search installed…" value={search} onChange={e => setSearch(e.target.value)} />
       </div>
       <div className="pkg-scroll">
@@ -1171,23 +1244,23 @@ const RegistriesView = ({ registries, onAdd, onRemove, onRefresh, loading }) => 
         <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>
           Built-in Registry
         </div>
-        <div className="pkg-reg-row" style={{ background: '#fafaf8', borderRadius: 6 }}>
-          <Icon name="verified" style={{ fontSize: 16, color: '#c4a478', flexShrink: 0 }} />
+        <div className="pkg-reg-row">
+          <Icon name="verified" style={{ fontSize: 16, color: 'var(--vs-text-2)', flexShrink: 0 }} />
           <span className="pkg-reg-url" title={BUILTIN_REGISTRY_URL}>{BUILTIN_REGISTRY_URL}</span>
-          <span style={{ fontSize: 11, color: '#bbb', flexShrink: 0 }}>built-in</span>
+          <span style={{ fontSize: 11, color: 'var(--vs-text-3)', flexShrink: 0 }}>built-in</span>
         </div>
 
         <div style={{ fontWeight: 600, fontSize: 13, margin: '16px 0 8px' }}>
           Additional Registries
-          <span style={{ fontWeight: 400, color: '#888', marginLeft: 6 }}>({registries.length})</span>
+          <span style={{ fontWeight: 400, color: 'var(--vs-text-2)', marginLeft: 6 }}>({registries.length})</span>
         </div>
 
         {registries.length === 0 ? (
-          <div style={{ fontSize: 12, color: '#bbb', padding: '8px 0' }}>No additional registries. Add one above.</div>
+          <div style={{ fontSize: 12, color: 'var(--vs-text-3)', padding: '8px 0' }}>No additional registries. Add one above.</div>
         ) : (
           registries.map((url, i) => (
             <div className="pkg-reg-row" key={i}>
-              <Icon name="public" style={{ fontSize: 16, color: '#aaa', flexShrink: 0 }} />
+              <Icon name="public" style={{ fontSize: 16, color: 'var(--vs-text-3)', flexShrink: 0 }} />
               <span className="pkg-reg-url" title={url}>{url}</span>
               <button
                 className="pkg-btn danger"
@@ -1450,7 +1523,11 @@ const run = (...args) => {
   styles.replace(CSS);
   body.ownerDocument.adoptedStyleSheets = [...(body.ownerDocument.adoptedStyleSheets || []), styles];
   root.render(<App initialSearch={typeof initialSearch === 'string' ? initialSearch : ''} />);
-  props.setHeaderStyles({ background: '#ffffff', color: '#555555', boxShadow: 'none', borderBottom: '1px solid #f0ede9' });
+  // Spatial glass look, light or dark (Settings › Window Manager › Themes › Mode).
+  if (typeof props.setWindowMaterial === 'function') props.setWindowMaterial('glass');
+  const docEl = body.ownerDocument.documentElement;
+  const appearanceSub = platform.host.appearance$?.subscribe(a => docEl.setAttribute('data-appearance', a));
+  win.addEventListener('pagehide', () => appearanceSub?.unsubscribe());
   props.setWindowView(true);
   props.onDestroy(() => setTimeout(() => root.unmount(), 0));
 };

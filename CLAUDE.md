@@ -41,19 +41,33 @@ The landing page (desktop) comes first, and everything else loads in the backgro
   copy (a repeat visit downloads nothing but meta.json). `when: "boot"` entries are awaited,
   and `when: "background"` ones are synced after landing. A downloaded file whose hash doesn't
   match is refetched with `cache: 'reload'` (GitHub Pages caches for 10 minutes).
+- **Installed apps are the `/opt/apps` folders.** An app is installed when
+  `/opt/apps/<id>/` holds a main file, so deleting the folder uninstalls it.
+  - **Manifest:** each folder carries its own `app.json` (`id, name, version, description, icon,
+    category, author, main, commandName, registryUrl, installedAt`). App Manager writes it on
+    install, update and rollback; the default apps ship one.
+  - **Scanner:** `opt/apps/pkg-manager/loader.js` scans the folder at boot and on
+    `wos:apps-installed`. It loads every `.js` main file (some apps first: `LOAD_FIRST`) and
+    answers the `pkg.installed-apps` command, which App Manager, Spotlight and deep links read.
+    Main files are always resolved inside the app's folder (BOOT-5/BOOT-10).
+  - **Snapshot:** `/etc/pkg/installed.json` is only a compatibility snapshot of that list, and
+    nothing decides from it. Once, a folder without `app.json` gets one from its old record.
+  - **Hidden apps:** `/etc/pkg/uninstalled.json` hides apps removed in App Manager whose files
+    the system restores.
+  - **Test:** `testing/scripts/test-installed-from-folders.mjs`.
 - **Default apps.** A fresh profile gets only the essential apps: File Explorer, Settings,
   Terminal, Spotlight, Audio Player and App Drawer, plus App Manager (installs everything else)
   and Image Viewer (the explorer opens images with it). Notepad and the dock are part of the
-  shell. The default set is kept in three places: `installed.json`, `CORE_APPS` in
-  `opt/apps/pkg-manager/loader.js` (loaded whenever their files exist, unless uninstalled) and
-  meta.json's `/opt/apps/<id>/` entries. Every other registry app installs from App Manager.
-  `testing/scripts/test-default-apps.mjs` checks this.
-- **Apps install once.** Only *preinstalled* apps (in `docs/public/mount/etc/pkg/installed.json`)
-  are in meta.json, marked `app: "<id>"`. Such a file is written only if it is missing and
-  the app isn't in `uninstalled.json`; a meta.json change never overwrites it. Other registry
-  apps are downloaded only when the user installs them in App Manager. To ship an app update,
-  bump its `version` in `docs/registry.json` (App Manager offers "Update"). The generator's
-  `SYSTEM_APPS` list is the exception: system apps are `force_reload`, refreshed on hash change.
+  shell. The default set is whichever apps have `/opt/apps/<id>/` entries (with `app.json`) in
+  meta.json. `testing/scripts/test-default-apps.mjs` checks this.
+- **Apps install once.** Preinstalled apps' meta.json entries are marked `app: "<id>"` by the
+  generator. The kernel delivers an app once and records it in `/etc/pkg/seeded.json`. It never
+  delivers it again: not after a meta.json change, and not after the user deletes its folder.
+  It also skips apps in `uninstalled.json`. Other registry apps are downloaded only when the user
+  installs them in App Manager. To ship an app update, bump its `version` in
+  `docs/registry.json` (App Manager offers "Update"). The generator's `SYSTEM_APPS` (the shell's
+  own apps) are the exception: they are `force_reload`, refreshed on hash change and restored if
+  deleted.
 - **Bundles.** In `src/modules/modules.json`, `preload: true` bundles (layout, iframe,
   file-explorer) load before the desktop, and the rest load after landing. `host.openWindow` on a
   command that a pending bundle will register waits for it (`setModulesPending`), not "not found".
@@ -353,7 +367,9 @@ override `--glass-window-bg`, `--glass-blur`, `--glass-shadow` and `--glass-radi
   window has its own Host (all built in `remote.ts`), and an instance field wouldn't be shared.
 - A glass app subscribes to `appearance$` and sets `data-appearance` on its own document. Its
   `--vs-*` tokens have a `:root[data-appearance="light"]` set (Settings `main.html`, both
-  explorer copies). `testing/scripts/test-appearance.mjs` covers all of this.
+  explorer copies, App Manager `pkg-manager/main.js`, Terminal `terminal/main.html`). Terminal
+  also swaps xterm's theme (`XTERM_THEMES`: transparent background, a light and a dark ANSI
+  palette) on every change. `testing/scripts/test-appearance.mjs` covers all of this.
 
 Settings → "Window Manager" page (`/etc/settings/06-window-manager.js`) is the one place for
 window looks. It shows clickable theme cards (swatch preview from each theme's
@@ -475,7 +491,7 @@ WebRTC invite/answer links). Two halves:
 - **Post-boot** (`/usr/bin/deeplink.js`, run from `initd.run` after the pkg loader): receives handoffs and
   handles this tab's own hash (consumed via `history.replaceState`). Waits for `.content-area` before
   `open-window` (it silently no-ops until the desktop is mounted).
-- **App not installed** (`app=<id>` names an app missing from `installed.json`, e.g. a WebRTC invite
+- **App not installed** (`app=<id>` names an app with no `/opt/apps/<id>` folder, e.g. a WebRTC invite
   sent to a new user): App Manager opens filtered to that app, with a toast. Nothing installs because of
   a link. If the user clicks Install, the link carries on as soon as the command registers (it waits up
   to 15 minutes).

@@ -1,0 +1,150 @@
+{
+  "label": "deeplink-recheck",
+  "baseUrl": "http://localhost:8090",
+  "root": null,
+  "finishedAt": "2026-11-22T18:19:28.565Z",
+  "totals": {
+    "phase1": {
+      "findings": 2,
+      "pass": 2,
+      "fail": 0,
+      "error": 0,
+      "checks": 5,
+      "checksPassed": 5
+    },
+    "phase2": {
+      "findings": 1,
+      "pass": 0,
+      "fail": 1,
+      "error": 0,
+      "checks": 1,
+      "checksPassed": 0
+    },
+    "info": {
+      "findings": 1,
+      "pass": 1,
+      "fail": 0,
+      "error": 0,
+      "checks": 1,
+      "checksPassed": 1
+    }
+  },
+  "scripts": [
+    {
+      "script": "test-commands.mjs",
+      "exit": 0,
+      "timedOut": false,
+      "seconds": 56,
+      "checks": 7,
+      "stderrTail": ""
+    }
+  ],
+  "table": {
+    "phase1": [
+      {
+        "id": "BOOT-9",
+        "status": "PASS",
+        "pass": 2,
+        "total": 2,
+        "failing": [],
+        "scripts": [
+          "test-commands.mjs"
+        ]
+      },
+      {
+        "id": "KRN-10",
+        "status": "PASS",
+        "pass": 3,
+        "total": 3,
+        "failing": [],
+        "scripts": [
+          "test-commands.mjs"
+        ]
+      }
+    ],
+    "phase2": [
+      {
+        "id": "KRN-12",
+        "status": "FAIL",
+        "pass": 0,
+        "total": 1,
+        "failing": [
+          "FAIL deeplink-handoff-not-swallowable"
+        ],
+        "scripts": [
+          "test-commands.mjs"
+        ]
+      }
+    ],
+    "info": [
+      {
+        "id": "KRN-10",
+        "status": "PASS",
+        "pass": 1,
+        "total": 1,
+        "failing": [],
+        "scripts": [
+          "test-commands.mjs"
+        ]
+      }
+    ]
+  },
+  "checks": [
+    {
+      "id": "KRN-10",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "app-cannot-replace-ui.notepad",
+      "detail": "owner before=005-ui.notepad; script ran; replaced=false; sentinels=[]",
+      "script": "test-commands.mjs"
+    },
+    {
+      "id": "KRN-10",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "app-cannot-replace-ui.remote-machines",
+      "detail": "owner before=/(sw)/opt/apps/remote-machines/main.js; script ran; replaced=false; sentinels=[]",
+      "script": "test-commands.mjs"
+    },
+    {
+      "id": "KRN-10",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "extension-claim-not-default",
+      "detail": "opened={\"readme.txt\":[\"ui.notepad\"],\"pic.svg\":[\"ui.imageviewer\"]}; sentinels=[]",
+      "script": "test-commands.mjs"
+    },
+    {
+      "id": "BOOT-9",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "deeplink-app-dotdot",
+      "detail": "booted=true; sentinels=[]",
+      "script": "test-commands.mjs"
+    },
+    {
+      "id": "BOOT-9",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "deeplink-uninstalled-app",
+      "detail": "booted=true; sentinels=[]",
+      "script": "test-commands.mjs"
+    },
+    {
+      "id": "KRN-12",
+      "status": "FAIL",
+      "phase": "phase2",
+      "check": "deeplink-handoff-not-swallowable",
+      "detail": "newTabBooted=false; rogueAcks=1; newTabText=\"Opened in your other tab\\n\\nThis link was handed to the tab where the app is alrea\"",
+      "script": "test-commands.mjs"
+    },
+    {
+      "id": "KRN-10",
+      "status": "PASS",
+      "phase": "info",
+      "check": "explorer-owned-by-files-app",
+      "detail": "{\"owner\":\"/(sw)/opt/apps/file-explorer/main.js\",\"fallback\":false}",
+      "script": "test-commands.mjs"
+    }
+  ]
+}

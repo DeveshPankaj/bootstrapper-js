@@ -220,3 +220,23 @@ Each decision: the context that forced it, what we do, and what it costs. Findin
     after.
   - Static checks cover code-string generation, templated `innerHTML`, `allow-same-origin` on app
     sandboxes, and unpinned CDN URLs.
+
+## D17 — Installed apps are the `/opt/apps` folders (2026-11-22)
+- **Decision**:
+  - An app is installed when `/opt/apps/<id>/` holds a main file, so deleting the folder uninstalls it.
+  - Each folder carries its own `app.json`.
+  - `pkg-manager/loader.js` builds the list at boot and loads the apps; `/etc/pkg/installed.json`
+    is only a snapshot.
+  - Main files are always resolved inside their own folder (BOOT-5/BOOT-10).
+  - An app in `/etc/pkg/uninstalled.json` is never loaded, at boot or for a deep link (BOOT-9).
+  - The kernel delivers a preinstalled app once (`/etc/pkg/seeded.json`), so a deleted one stays deleted.
+- **Consequence**: a folder placed in `/opt/apps` runs at the next boot without an install
+  record, so placing it there is the install. That doesn't widen who can do it:
+  - `/opt` is kernel-owned, so sandboxed frames can't write it through the IPC bus or a namespace.
+  - Peers can't get a writable share of a system folder (NET-10).
+  - Archives extract only into the folder the user picks, without zip-slip.
+  - What remains is the user's own action (copying, extracting or dropping into `/opt/apps`, or a
+    confirmed Force Reload from another source), plus code already running in the top realm,
+    which could always write `installed.json` too.
+- **Tests**: `testing/scripts/test-installed-from-folders.mjs`; BOOT-9 in `test-commands.mjs`;
+  `verify-kernel-deeplink.mjs`.

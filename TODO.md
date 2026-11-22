@@ -161,6 +161,11 @@ Spec: [documentation/security/runtime-spec.md](documentation/security/runtime-sp
   - Fixed window materials (`props.setWindowMaterial('glass')`) with design tokens (`--vs-*`).
   - Appearance mode System / Dark / Light / Time (`src/system/appearance.ts`, `host.appearance$`), chosen in Settings › Window Manager › Themes; System is the default.
   - Settings got a section search, and dragging a slider or selecting text no longer moves its window.
+- **2026-11-22** — Installed apps are the `/opt/apps` folders.
+  - Each folder has its own `app.json`; deleting a folder uninstalls the app.
+  - `loader.js` scans the folder and answers `pkg.installed-apps`; `installed.json` is now a snapshot.
+  - The kernel records delivered preinstalled apps (`/etc/pkg/seeded.json`), so a deleted one stays deleted.
+  - App Manager and Terminal use the glass UI in light and dark.
 
 ---
 

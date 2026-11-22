@@ -1,0 +1,12 @@
+{
+  "id": "terminal",
+  "name": "Terminal",
+  "version": "1.0.0",
+  "description": "xterm.js-powered terminal with tabbed sessions, shell commands, and VFS access.",
+  "icon": "terminal",
+  "category": "System",
+  "author": "bootstrapper-js",
+  "main": "main.html",
+  "commandName": "ui.terminal",
+  "registryUrl": "/registry.json"
+}

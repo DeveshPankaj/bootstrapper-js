@@ -70,7 +70,7 @@
         {
           "dest": "main.html",
           "src": "/public/mount/opt/apps/terminal/main.html",
-          "sha256": "f189b3e9dd1e9684286c0d7aee2560508efd0fe48662d0a8c038a8f523617cfc"
+          "sha256": "22bf7bccdf040874ba40b6cf1bf9036c5c8ec328a44ebccf974826586912720d"
         }
       ],
       "main": "main.html"
@@ -142,12 +142,12 @@
         {
           "dest": "main.js",
           "src": "/public/mount/opt/apps/pkg-manager/main.js",
-          "sha256": "b106fcc85d9c5f6f30b990114374fb41bb30481b9b1240df36a54c159bf247d7"
+          "sha256": "0140d130e4b89abbfcdaaa95cb6f6ffaf8684e59f75cc8d7003bb18958cca960"
         },
         {
           "dest": "loader.js",
           "src": "/public/mount/opt/apps/pkg-manager/loader.js",
-          "sha256": "363b72a550364652177118e36889f3696d40a2bd6cce26bee0a9d8566caaf838"
+          "sha256": "c2330eaf07a93ea8342bf65d545927398281e19e83e27407c32a93c41e1d6ecc"
         }
       ],
       "main": "main.js"
@@ -165,7 +165,7 @@
         {
           "dest": "main.js",
           "src": "/public/mount/opt/apps/spotlight/main.js",
-          "sha256": "83b882b400bb5a5fed94911d5fb872bee0daf7ca201316a46bc7f971f000f0ed"
+          "sha256": "67634dbfac286619a0430a2f23519cb253dd1e7934ddf52187dc7e0a007d005d"
         }
       ],
       "main": "main.js"

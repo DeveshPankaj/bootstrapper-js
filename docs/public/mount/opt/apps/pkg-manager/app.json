@@ -1,0 +1,12 @@
+{
+  "id": "pkg-manager",
+  "name": "App Manager",
+  "version": "1.0.0",
+  "description": "Install and manage apps from registries. Supports custom registry URLs with per-app install/uninstall.",
+  "icon": "package_2",
+  "category": "System",
+  "author": "bootstrapper-js",
+  "main": "main.js",
+  "commandName": "ui.pkg-manager",
+  "registryUrl": "/registry.json"
+}

@@ -1,0 +1,12 @@
+{
+  "id": "audio-player",
+  "name": "Audio Player",
+  "version": "1.0.0",
+  "description": "Music player for audio files stored in the VFS. Supports MP3, WAV, OGG, FLAC, M4A, AAC, and Opus. Playlist, shuffle, repeat, and seek controls.",
+  "icon": "music_note",
+  "category": "Media",
+  "author": "bootstrapper-js",
+  "main": "main.js",
+  "commandName": "ui.audioplayer",
+  "registryUrl": "/registry.json"
+}

@@ -2,8 +2,8 @@
 
 - BASE_URL: `http://localhost:8090`
 - static checks scanned: `this repo`
-- finished: 2026-11-22T16:59:59.835Z
-- **phase1**: 47/47 findings pass (0 fail, 0 error); 121/121 checks
+- finished: 2026-11-22T18:07:57.050Z
+- **phase1**: 46/47 findings pass (1 fail, 0 error); 119/121 checks
 - **phase2**: 0/8 findings pass (8 fail, 0 error); 0/9 checks
 - **info**: 4/5 findings pass (1 fail, 0 error); 5/6 checks
 
@@ -27,7 +27,7 @@
 | BOOT-5 | PASS | 2/2 |  | test-autorun.mjs |
 | BOOT-6 | PASS | 1/1 |  | test-boot-integrity.mjs |
 | BOOT-8 | PASS | 3/3 |  | test-traversal.mjs |
-| BOOT-9 | PASS | 2/2 |  | test-commands.mjs |
+| BOOT-9 | FAIL | 0/2 | FAIL deeplink-app-dotdot; FAIL deeplink-uninstalled-app | test-commands.mjs |
 | BOOT-10 | PASS | 1/1 |  | test-traversal.mjs |
 | BOOT-11 | PASS | 1/1 |  | test-autorun.mjs |
 | D15 | PASS | 1/1 |  | test-static.mjs |
@@ -86,21 +86,21 @@
 
 | Script | Exit | Seconds | Checks |
 |---|---|---|---|
-| test-acl.mjs | 0 | 9 | 8 |
-| test-autorun.mjs | 0 | 29 | 8 |
-| test-boot-integrity.mjs | 0 | 30 | 4 |
-| test-commands.mjs | 0 | 59 | 7 |
-| test-dsl-injection.mjs | 0 | 122 | 18 |
-| test-framing.mjs | 0 | 42 | 5 |
-| test-ipc.mjs | 0 | 45 | 8 |
+| test-acl.mjs | 0 | 6 | 8 |
+| test-autorun.mjs | 0 | 26 | 8 |
+| test-boot-integrity.mjs | 0 | 26 | 4 |
+| test-commands.mjs | 0 | 56 | 7 |
+| test-dsl-injection.mjs | 0 | 120 | 18 |
+| test-framing.mjs | 0 | 41 | 5 |
+| test-ipc.mjs | 0 | 44 | 8 |
 | test-open-policy.mjs | 0 | 53 | 10 |
 | test-peer.mjs | 0 | 51 | 8 |
 | test-sandbox-phase2.mjs | 0 | 6 | 5 |
 | test-static.mjs | 0 | 0 | 23 |
 | test-sw.mjs | 0 | 18 | 9 |
 | test-traversal.mjs | 0 | 30 | 7 |
-| test-url-launcher.mjs | 0 | 48 | 4 |
-| test-xss.mjs | 0 | 70 | 12 |
+| test-url-launcher.mjs | 0 | 46 | 4 |
+| test-xss.mjs | 0 | 69 | 12 |
 
 ## All checks
 
@@ -142,8 +142,8 @@
 | BOOT-8 | phase1 | PASS | files-extract-zip-slip | via menu:Extract here; outside=[]; inside=1; prompts=[] |
 | BOOT-8 | phase1 | PASS | unzip-run-zip-slip | ran; outside=[]; inside=1 |
 | BOOT-8 | phase1 | PASS | tar-run-path-slip | ran; outside=[]; inside=1 |
-| BOOT-9 | phase1 | PASS | deeplink-app-dotdot | booted=true; sentinels=[] |
-| BOOT-9 | phase1 | PASS | deeplink-uninstalled-app | booted=true; sentinels=[] |
+| BOOT-9 | phase1 | FAIL | deeplink-app-dotdot | booted=true; sentinels=["__sec_dl_evil"] |
+| BOOT-9 | phase1 | FAIL | deeplink-uninstalled-app | booted=true; sentinels=["__sec_dl_evil"] |
 | BOOT-10 | phase1 | PASS | uninstall-uses-validated-app-dir | ~/sec-b10 survived=true; pre-uninstall ran=[]; /opt/apps/sec-victim-pkg removed=true |
 | BOOT-11 | phase1 | PASS | tampered-menu-item-js | menuShown=true; sentinels=[] |
 | D15 | phase1 | PASS | static-dead-exec-engine-removed | removed |
@@ -183,8 +183,8 @@
 | KRN-7 | phase1 | PASS | top-level-opt-apps-is-opaque | {"origin":"null","localStorage":"BLOCKED SecurityError","indexedDB":"BLOCKED SecurityError","parentPlatform":false} |
 | KRN-7 | phase1 | PASS | iframe-home-html-is-opaque | {"origin":"null","localStorage":"BLOCKED SecurityError","indexedDB":"BLOCKED SecurityError","parentPlatform":"BLOCKED SecurityError"} |
 | KRN-7 | phase1 | PASS | vfs-response-headers | {"/(sw)/tmp/sec-sw/x.html":{"status":200,"type":"text/html; charset=utf-8","csp":"sandbox allow-scripts allow-forms allow-modals","nosniff":"nosniff","corp":"same-origin"},"/(sw)/tmp/sec-sw/a.unknownext":{"status":200,"type":"application/oc |
-| KRN-8 | phase1 | PASS | request-ids-unpredictable | ids=["3e4a9a4d-c6ce-487b-9d75-22f6e6b54170","3d14d49c-7ef2-4b2c-8b83-4188165ccfe9","fcf657d4-08aa-486e-b775-678a41a46f10","22755b84-d6cc-464e-8676-edf644e7c261"] consecutiveIntegers=false |
-| KRN-8 | phase1 | PASS | forged-reply-from-nested-frame | {"status":404,"body":"Not found","ms":10013}; nestedFrameGotRequestsDirectly=0 |
+| KRN-8 | phase1 | PASS | request-ids-unpredictable | ids=["e1b71900-0e15-4aaf-9655-d2d04ea19bbe","ef38ec7f-5017-4b87-bf11-78a83f7751d1","a10d936c-d64f-434c-89ec-c92f5a0e6687","b004e571-3747-480f-9906-262879f88fda"] consecutiveIntegers=false |
+| KRN-8 | phase1 | PASS | forged-reply-from-nested-frame | {"status":404,"body":"Not found","ms":10016}; nestedFrameGotRequestsDirectly=0 |
 | KRN-8 | info | FAIL | forged-reply-from-second-tab | {"status":200,"body":"FORGED-BY-TAB","ms":2}; secondTabGotRequestsDirectly=1 (residual: one registered kernel client per request) |
 | KRN-8 | info | PASS | os-tab-still-serves | {"status":200,"body":"REAL-CONTENT","ms":1} |
 | KRN-9 | phase1 | PASS | bootstrap-override-cross-site | osBooted=true; evilFetched=0; sentinels=[]; scripts=["bootstrapper.bundle.js","/remote.bundle.js"] |

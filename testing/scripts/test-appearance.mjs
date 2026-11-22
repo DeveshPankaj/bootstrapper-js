@@ -86,6 +86,22 @@ try {
     check('choosing Dark switches everything back', (await topAppearance(page)) === 'dark' && (await frameAppearance(s)) === 'dark' && (await frameAppearance(f)) === 'dark');
     check('dark mode: Files text is light', (await textLuminance(f, '.file-name')) > 0.8);
 
+    // ── App Manager and Terminal follow too ──
+    await page.evaluate(() => window.platform.host.openWindow('ui.pkg-manager'));
+    await page.evaluate(() => window.platform.host.openWindow('ui.terminal'));
+    const pm = await frameWith(page, '.pkg-root');
+    const term = await frameWith(page, '.xterm-rows', 30000);
+    const glassAll = await page.evaluate(() => [...document.querySelectorAll('.window')].every(w => w.classList.contains('material-glass')));
+    check('App Manager and Terminal windows use the glass material', glassAll && !!pm && !!term);
+    await pick(s, 'Light');
+    await sleep(400);
+    const termTheme = await term.evaluate(() => window.__terminalApp.sessions[0].terminal.options.theme.foreground);
+    check('light mode reaches App Manager and Terminal', (await frameAppearance(pm)) === 'light' && (await frameAppearance(term)) === 'light' && termTheme === '#1c1c1e', termTheme);
+    check('light mode: App Manager text is dark', (await textLuminance(pm, '.pkg-title')) < 0.3);
+    await pick(s, 'Dark');
+    await sleep(400);
+    check('dark mode reaches Terminal', (await term.evaluate(() => window.__terminalApp.sessions[0].terminal.options.theme.foreground)) !== '#1c1c1e');
+
     // ── Light persists across a reload, even with a dark browser ──
     await pick(s, 'Light');
     await sleep(1500);

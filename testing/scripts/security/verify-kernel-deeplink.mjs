@@ -1,8 +1,10 @@
 // Verifies TODO 1A.8 (audit KRN-12, BOOT-9): deep links (#open=<command>&app=<id>&arg=…) —
 //  - command names can't start with '.' or contain '..'; app ids must match the kernel's app-id
 //    rule (path-policy isValidAppId), so `app=..` can't load /opt/apps/../main.js;
-//  - the fallback "load the app for this link" only loads an app that is installed
-//    (/etc/pkg/installed.json) and not uninstalled (/etc/pkg/uninstalled.json);
+//  - a link only reaches an installed app: installed apps are the /opt/apps/<id> folders
+//    (loaded at boot by pkg-manager/loader.js); an app the user uninstalled
+//    (/etc/pkg/uninstalled.json) is never loaded, and a link to an app with no folder
+//    loads nothing (App Manager is offered instead);
 //  - the pre-boot handoff (src/kernel/deeplink.ts) never broadcasts an invalid name.
 // Run: node testing/scripts/security/verify-kernel-deeplink.mjs   (OS dev server on :8080)
 import { launch, bootOS, check, finish, sleep, pollFor, OS_URL } from './verify-kernel-lib.mjs';
@@ -27,19 +29,14 @@ try {
     fs.writeFileSync('/opt/main.js', "window.top.__dl = (window.top.__dl || []).concat(['DOTDOT-/opt/main.js'])");
     mk('/etc/pkg');
     const read = (p) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')) || []; } catch (_) { return []; } };
-    const installed = read('/etc/pkg/installed.json').filter((p) => !['kdl-good', 'kdl-gone'].includes(p.id));
-    // kdl-good: installed, but its entry's mainFile isn't a .js, so the boot loader skips it and
-    // only the deep-link fallback loads /opt/apps/kdl-good/main.js.
-    installed.push({ id: 'kdl-good', appDir: '/opt/apps/kdl-good', mainFile: '/opt/apps/kdl-good/index.html' });
-    installed.push({ id: 'kdl-gone', appDir: '/opt/apps/kdl-gone', mainFile: '/opt/apps/kdl-gone/index.html' });
-    fs.writeFileSync('/etc/pkg/installed.json', JSON.stringify(installed));
+    // kdl-good: an installed app (its folder). kdl-gone: its files are there, but the user
+    // uninstalled it. kdl-missing: no folder at all.
     const un = read('/etc/pkg/uninstalled.json').filter((id) => id !== 'kdl-gone');
     un.push('kdl-gone');
     fs.writeFileSync('/etc/pkg/uninstalled.json', JSON.stringify(un));
   }, { apps: [
     ['/opt/apps/kdl-good', APP_MAIN('kdl-good', 'kdl.good')],
     ['/opt/apps/kdl-gone', APP_MAIN('kdl-gone', 'kdl.gone')],
-    ['/opt/apps/kdl-notinst', APP_MAIN('kdl-notinst', 'kdl.notinst')],
   ] });
 
   // The vfs mirrors writes to IndexedDB asynchronously: give it time, then prove the
@@ -49,12 +46,11 @@ try {
     const read = (p) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')) || []; } catch (_) { return []; } };
     return {
       good: fs.existsSync('/opt/apps/kdl-good/main.js'), gone: fs.existsSync('/opt/apps/kdl-gone/main.js'),
-      notinst: fs.existsSync('/opt/apps/kdl-notinst/main.js'), dotdot: fs.existsSync('/opt/main.js'),
-      installedGood: read('/etc/pkg/installed.json').some((p) => p && p.id === 'kdl-good'),
+      noMissing: !fs.existsSync('/opt/apps/kdl-missing'), dotdot: fs.existsSync('/opt/main.js'),
       uninstalledGone: read('/etc/pkg/uninstalled.json').includes('kdl-gone'),
     };
   };
-  const allFixtures = (f) => !!f && f.good && f.gone && f.notinst && f.dotdot && f.installedGood && f.uninstalledGone;
+  const allFixtures = (f) => !!f && f.good && f.gone && f.noMissing && f.dotdot && f.uninstalledGone;
   await sleep(3000);
   await page.reload({ waitUntil: 'load' });
   const persisted = await pollFor(async () => { const f = await page.evaluate(FIXTURES).catch(() => null); return allFixtures(f) ? f : null; }, 30000, 500);
@@ -79,22 +75,25 @@ try {
     return r;
   };
 
+  // The installed app (kdl-good) is loaded at boot by the loader, link or not; what a
+  // link must never do is load anything else.
+  const onlyBootLoads = (r) => !r.loaded.includes('DOTDOT-/opt/main.js') && r.loaded.every((id) => id === 'kdl-good');
   const cases = [
-    ['#open=kdl.good&app=..&arg=x', 'app=.. rejected (no /opt/apps/../main.js)', (r) => !r.loaded.includes('DOTDOT-/opt/main.js') && r.loaded.length === 0],
-    ['#open=..&app=kdl-good&arg=x', 'command ".." rejected', (r) => r.loaded.length === 0 && r.opened.length === 0],
-    ['#open=.kdl.good&app=kdl-good&arg=x', 'command with a leading dot rejected', (r) => r.loaded.length === 0 && r.opened.length === 0],
-    ['#open=kdl..good&app=kdl-good&arg=x', 'command containing ".." rejected', (r) => r.loaded.length === 0 && r.opened.length === 0],
-    ['#open=kdl.good&app=KDL-Good&arg=x', 'app id not matching the app-id rule (uppercase) rejected', (r) => r.loaded.length === 0],
-    ['#open=kdl.gone&app=kdl-gone&arg=x', 'uninstalled app not loaded', (r) => !r.loaded.includes('kdl-gone') && r.opened.length === 0],
-    ['#open=kdl.notinst&app=kdl-notinst&arg=x', 'app that is not installed not loaded', (r) => !r.loaded.includes('kdl-notinst') && r.opened.length === 0],
-    ['#open=kdl.good&app=kdl-good&arg=hello', 'installed app loaded for its link and opened with the arg', (r) => r.loaded.includes('kdl-good') && r.opened.includes('kdl.good:hello')],
+    ['#open=kdl.good&app=..&arg=x', 'app=.. rejected (no /opt/apps/../main.js)', (r) => onlyBootLoads(r)],
+    ['#open=..&app=kdl-good&arg=x', 'command ".." rejected', (r) => onlyBootLoads(r) && r.opened.length === 0],
+    ['#open=.kdl.good&app=kdl-good&arg=x', 'command with a leading dot rejected', (r) => onlyBootLoads(r) && r.opened.length === 0],
+    ['#open=kdl..good&app=kdl-good&arg=x', 'command containing ".." rejected', (r) => onlyBootLoads(r) && r.opened.length === 0],
+    ['#open=kdl.gone&app=KDL-Gone&arg=x', 'app id not matching the app-id rule (uppercase) rejected', (r) => onlyBootLoads(r) && r.opened.length === 0],
+    ['#open=kdl.gone&app=kdl-gone&arg=x', 'uninstalled app not loaded', (r) => onlyBootLoads(r) && r.opened.length === 0],
+    ['#open=kdl.missing&app=kdl-missing&arg=x', 'app with no folder: nothing loaded or opened', (r) => onlyBootLoads(r) && r.opened.length === 0],
+    ['#open=kdl.good&app=kdl-good&arg=hello', 'installed app opened with the arg (loaded once)', (r) => r.loaded.filter((id) => id === 'kdl-good').length === 1 && r.opened.includes('kdl.good:hello')],
   ];
   for (const [hash, label, ok] of cases) {
     const r = await openLink(hash);
     check(`${label}  [${hash}]`, r.fixtures && ok(r), r);
   }
   const heard = await listener.evaluate(() => window.__heard);
-  check('pre-boot handoff broadcast only the valid command names', heard.every((c) => ['kdl.good', 'kdl.gone', 'kdl.notinst'].includes(c)) && heard.includes('kdl.good'), heard);
+  check('pre-boot handoff broadcast only the valid command names', heard.every((c) => ['kdl.good', 'kdl.gone', 'kdl.missing'].includes(c)) && heard.includes('kdl.good'), heard);
 } finally {
   await browser.close();
 }

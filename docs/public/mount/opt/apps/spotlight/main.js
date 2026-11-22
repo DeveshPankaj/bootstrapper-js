@@ -4,6 +4,13 @@ const React = platform.getService('React')
 const { createRoot } = platform.getService('ReactDOM')
 const fs = platform.host.getFS()
 
+// Installed apps: the /opt/apps folders as listed by pkg-manager/loader.js
+// (`pkg.installed-apps`); the installed.json snapshot is only a fallback.
+const readInstalledApps = () => {
+  try { const list = platform.host.callCommand('pkg.installed-apps'); if (Array.isArray(list)) return list } catch (_) {}
+  try { return JSON.parse(fs.readFileSync('/etc/pkg/installed.json', 'utf8') || '[]') } catch (_) { return [] }
+}
+
 const HOME = '/home/user1'
 const SEARCH_DIRS = [HOME, '/bin', '/usr/bin', '/etc/settings']
 
@@ -38,7 +45,7 @@ const buildIndex = () => {
   } catch (_) {}
   // Installed apps (covers HTML apps whose commands aren't registered at boot)
   try {
-    const installed = JSON.parse(fs.readFileSync('/etc/pkg/installed.json', 'utf8') || '[]')
+    const installed = readInstalledApps()
     for (const pkg of installed) {
       if (pkg.commandName && seen.has(pkg.commandName)) continue
       if (seen.has(pkg.id)) continue
@@ -56,7 +63,7 @@ const buildIndex = () => {
   if (_registryCache) {
     const installedIds = new Set(items.filter(i => i.type === 'command' || i.type === 'installed-app').map(i => i.type === 'installed-app' ? i.pkg?.id : null).filter(Boolean))
     try {
-      const pkgInstalled = JSON.parse(fs.readFileSync('/etc/pkg/installed.json', 'utf8') || '[]')
+      const pkgInstalled = readInstalledApps()
       pkgInstalled.forEach(p => installedIds.add(p.id))
     } catch (_) {}
     for (const app of _registryCache) {

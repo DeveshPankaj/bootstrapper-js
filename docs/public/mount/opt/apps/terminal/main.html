@@ -6,6 +6,33 @@
   <title>Xterm</title>
   <link rel="stylesheet" href="https://unpkg.com/xterm/css/xterm.css">
   <style>
+    /* Spatial glass look (same --vs-* tokens as Settings and Files). The window paints
+       the frosted material (props.setWindowMaterial('glass')); this page and xterm are
+       transparent. data-appearance comes from platform.host.appearance$. */
+    :root {
+      --vs-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, "Segoe UI", Helvetica, Arial, sans-serif;
+      --vs-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Courier New", monospace;
+      --vs-text: rgba(255, 255, 255, 0.96);
+      --vs-text-2: rgba(255, 255, 255, 0.66);
+      --vs-fill: rgba(255, 255, 255, 0.075);
+      --vs-fill-2: rgba(255, 255, 255, 0.13);
+      --vs-fill-3: rgba(255, 255, 255, 0.21);
+      --vs-stroke: rgba(255, 255, 255, 0.13);
+      --vs-separator: rgba(255, 255, 255, 0.09);
+      --vs-scroll: rgba(255, 255, 255, 0.22);
+      --vs-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    :root[data-appearance="light"] {
+      --vs-text: rgba(0, 0, 0, 0.86);
+      --vs-text-2: rgba(0, 0, 0, 0.56);
+      --vs-fill: rgba(255, 255, 255, 0.50);
+      --vs-fill-2: rgba(0, 0, 0, 0.06);
+      --vs-fill-3: rgba(255, 255, 255, 0.88);
+      --vs-stroke: rgba(0, 0, 0, 0.07);
+      --vs-separator: rgba(0, 0, 0, 0.08);
+      --vs-scroll: rgba(0, 0, 0, 0.22);
+    }
+
     * {
       margin: 0;
       padding: 0;
@@ -17,16 +44,20 @@
       display: flex;
       flex-direction: column;
       overflow: hidden;
-      background: #000;
+      background: transparent;
+      color: var(--vs-text);
+      -webkit-font-smoothing: antialiased;
     }
 
     #tab-bar {
       flex: 0 0 auto;
       display: flex;
-      align-items: stretch;
-      background: #1e1e1e;
-      border-bottom: 1px solid #000;
-      font-family: 'Courier New', Courier, monospace;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 10px 7px;
+      background: transparent;
+      border-bottom: 1px solid var(--vs-separator);
+      font-family: var(--vs-font);
       font-size: 12px;
       overflow-x: auto;
       -ms-overflow-style: none;
@@ -36,6 +67,7 @@
 
     #tabs {
       display: flex;
+      gap: 6px;
       flex: 1 1 auto;
       min-width: 0;
     }
@@ -44,14 +76,17 @@
       display: flex;
       align-items: center;
       gap: 0.4rem;
-      padding: 0.35rem 0.6rem;
-      color: #9aa0a6;
-      background: #1e1e1e;
-      border-right: 1px solid #000;
+      height: 28px;
+      padding: 0 0.35rem 0 0.8rem;
+      color: var(--vs-text-2);
+      background: var(--vs-fill);
+      box-shadow: inset 0 0 0 1px var(--vs-stroke);
+      border-radius: 999px;
       cursor: pointer;
       white-space: nowrap;
       max-width: 12rem;
       min-width: 6rem;
+      transition: background 0.18s var(--vs-ease);
     }
 
     .tab .tab-label {
@@ -61,42 +96,48 @@
     }
 
     .tab.active {
-      background: #000;
-      color: #00ff00;
+      background: var(--vs-fill-3);
+      color: var(--vs-text);
+      font-weight: 600;
+      box-shadow: inset 0 0 0 1px var(--vs-stroke), 0 1px 3px rgba(0, 0, 0, 0.08);
     }
 
-    .tab:hover {
-      background: #2a2a2a;
+    .tab:hover:not(.active) {
+      background: var(--vs-fill-2);
     }
 
     .tab-close {
       margin-left: auto;
-      width: 1.1rem;
-      height: 1.1rem;
-      line-height: 1.1rem;
-      text-align: center;
-      border-radius: 3px;
+      width: 20px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
       flex-shrink: 0;
     }
 
     .tab-close:hover {
-      background: rgba(255, 255, 255, 0.15);
+      background: var(--vs-fill-2);
     }
 
     #new-tab {
       flex: 0 0 auto;
-      width: 2rem;
+      width: 28px;
+      height: 28px;
       border: none;
-      border-right: 1px solid #000;
-      background: #1e1e1e;
-      color: #9aa0a6;
+      border-radius: 50%;
+      background: var(--vs-fill-2);
+      box-shadow: inset 0 0 0 1px var(--vs-stroke);
+      color: var(--vs-text);
       font-size: 16px;
+      line-height: 1;
       cursor: pointer;
+      transition: background 0.18s var(--vs-ease);
     }
 
     #new-tab:hover {
-      background: #2a2a2a;
-      color: #00ff00;
+      background: var(--vs-fill-3);
     }
 
     #terminals {
@@ -109,7 +150,7 @@
     .terminal-pane {
       position: absolute;
       inset: 0;
-      padding: 4px;
+      padding: 8px 10px;
     }
 
     .terminal-pane .terminal-inner {
@@ -120,11 +161,14 @@
     .xterm {
       width: 100%;
       height: 100%;
-      font-family: 'Courier New', Courier, monospace;
+      font-family: var(--vs-mono);
       font-size: 14px;
       line-height: 1;
-      background-color: black;
+      background-color: transparent;
     }
+    .xterm .xterm-viewport { background-color: transparent !important; scrollbar-width: thin; scrollbar-color: var(--vs-scroll) transparent; }
+    .xterm .xterm-viewport::-webkit-scrollbar { width: 10px; }
+    .xterm .xterm-viewport::-webkit-scrollbar-thumb { background: var(--vs-scroll); border-radius: 999px; border: 3px solid transparent; background-clip: padding-box; }
   </style>
 </head>
 <body>
@@ -139,6 +183,40 @@
 
     const CHAR_WIDTH = 9;
     const CHAR_HEIGHT = 18;
+
+    // Light / dark, following Settings › Window Manager › Themes › Mode. The window
+    // paints the glass material; xterm draws on a transparent background with a
+    // palette that stays readable on it.
+    const XTERM_THEMES = {
+      dark: {
+        background: 'rgba(0, 0, 0, 0)', foreground: 'rgba(255, 255, 255, 0.92)',
+        cursor: '#ffffff', cursorAccent: '#1c1c1e', selectionBackground: 'rgba(255, 255, 255, 0.28)',
+        black: '#1c1c1e', red: '#ff6b6b', green: '#5ee28a', yellow: '#ffd866',
+        blue: '#7cc7ff', magenta: '#d7a6ff', cyan: '#6fe3e1', white: '#e5e5ea',
+        brightBlack: '#8e8e93', brightRed: '#ff8a80', brightGreen: '#8af0a8', brightYellow: '#ffe599',
+        brightBlue: '#a6d8ff', brightMagenta: '#e4c1ff', brightCyan: '#9ff0ee', brightWhite: '#ffffff',
+      },
+      light: {
+        background: 'rgba(0, 0, 0, 0)', foreground: '#1c1c1e',
+        cursor: '#1c1c1e', cursorAccent: '#ffffff', selectionBackground: 'rgba(0, 0, 0, 0.16)',
+        black: '#1c1c1e', red: '#c4242b', green: '#1d7f3a', yellow: '#8a6100',
+        blue: '#0a5cc2', magenta: '#8f3fb8', cyan: '#0b7f86', white: '#6e6e73',
+        brightBlack: '#48484a', brightRed: '#d70015', brightGreen: '#248a3d', brightYellow: '#a35200',
+        brightBlue: '#0a64d6', brightMagenta: '#a550c9', brightCyan: '#0f8f99', brightWhite: '#3a3a3c',
+      },
+    };
+    let appearance = (platform.host.getAppearance && platform.host.getAppearance()) || 'dark';
+    const xtermTheme = () => XTERM_THEMES[appearance] || XTERM_THEMES.dark;
+    try {
+      const props = platform.getService('props');
+      if (props && typeof props.setWindowMaterial === 'function') props.setWindowMaterial('glass');
+    } catch (_) {}
+    const appearanceSub = platform.host.appearance$ && platform.host.appearance$.subscribe((a) => {
+      appearance = a;
+      document.documentElement.setAttribute('data-appearance', a);
+      for (const s of (window.__terminalApp && window.__terminalApp.sessions) || []) s.terminal.options.theme = xtermTheme();
+    });
+    window.addEventListener('pagehide', () => appearanceSub && appearanceSub.unsubscribe());
     const HISTORY_FILE = '/home/user1/.bash_history';
 
     class TerminalSession {
@@ -149,11 +227,9 @@
           cursorBlink: true,
           convertEol: true,
           fontSize: 14,
-          fontFamily: 'Courier New',
-          theme: {
-            background: '#000000',
-            foreground: '#00FF00',
-          }
+          fontFamily: '"SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Courier New", monospace',
+          allowTransparency: true,
+          theme: xtermTheme(),
         });
         this.context = {
           pwd: '/home/user1',

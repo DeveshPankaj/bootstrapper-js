@@ -2,15 +2,15 @@
   "label": "prod-build",
   "baseUrl": "http://localhost:8090",
   "root": null,
-  "finishedAt": "2026-11-22T16:59:59.835Z",
+  "finishedAt": "2026-11-22T18:07:57.050Z",
   "totals": {
     "phase1": {
       "findings": 47,
-      "pass": 47,
-      "fail": 0,
+      "pass": 46,
+      "fail": 1,
       "error": 0,
       "checks": 121,
-      "checksPassed": 121
+      "checksPassed": 119
     },
     "phase2": {
       "findings": 8,
@@ -34,7 +34,7 @@
       "script": "test-acl.mjs",
       "exit": 0,
       "timedOut": false,
-      "seconds": 9,
+      "seconds": 6,
       "checks": 8,
       "stderrTail": ""
     },
@@ -42,7 +42,7 @@
       "script": "test-autorun.mjs",
       "exit": 0,
       "timedOut": false,
-      "seconds": 29,
+      "seconds": 26,
       "checks": 8,
       "stderrTail": ""
     },
@@ -50,7 +50,7 @@
       "script": "test-boot-integrity.mjs",
       "exit": 0,
       "timedOut": false,
-      "seconds": 30,
+      "seconds": 26,
       "checks": 4,
       "stderrTail": ""
     },
@@ -58,7 +58,7 @@
       "script": "test-commands.mjs",
       "exit": 0,
       "timedOut": false,
-      "seconds": 59,
+      "seconds": 56,
       "checks": 7,
       "stderrTail": ""
     },
@@ -66,7 +66,7 @@
       "script": "test-dsl-injection.mjs",
       "exit": 0,
       "timedOut": false,
-      "seconds": 122,
+      "seconds": 120,
       "checks": 18,
       "stderrTail": ""
     },
@@ -74,7 +74,7 @@
       "script": "test-framing.mjs",
       "exit": 0,
       "timedOut": false,
-      "seconds": 42,
+      "seconds": 41,
       "checks": 5,
       "stderrTail": ""
     },
@@ -82,7 +82,7 @@
       "script": "test-ipc.mjs",
       "exit": 0,
       "timedOut": false,
-      "seconds": 45,
+      "seconds": 44,
       "checks": 8,
       "stderrTail": ""
     },
@@ -138,7 +138,7 @@
       "script": "test-url-launcher.mjs",
       "exit": 0,
       "timedOut": false,
-      "seconds": 48,
+      "seconds": 46,
       "checks": 4,
       "stderrTail": ""
     },
@@ -146,7 +146,7 @@
       "script": "test-xss.mjs",
       "exit": 0,
       "timedOut": false,
-      "seconds": 70,
+      "seconds": 69,
       "checks": 12,
       "stderrTail": ""
     }
@@ -320,10 +320,13 @@
       },
       {
         "id": "BOOT-9",
-        "status": "PASS",
-        "pass": 2,
+        "status": "FAIL",
+        "pass": 0,
         "total": 2,
-        "failing": [],
+        "failing": [
+          "FAIL deeplink-app-dotdot",
+          "FAIL deeplink-uninstalled-app"
+        ],
         "scripts": [
           "test-commands.mjs"
         ]
@@ -974,18 +977,18 @@
     },
     {
       "id": "BOOT-9",
-      "status": "PASS",
+      "status": "FAIL",
       "phase": "phase1",
       "check": "deeplink-app-dotdot",
-      "detail": "booted=true; sentinels=[]",
+      "detail": "booted=true; sentinels=[\"__sec_dl_evil\"]",
       "script": "test-commands.mjs"
     },
     {
       "id": "BOOT-9",
-      "status": "PASS",
+      "status": "FAIL",
       "phase": "phase1",
       "check": "deeplink-uninstalled-app",
-      "detail": "booted=true; sentinels=[]",
+      "detail": "booted=true; sentinels=[\"__sec_dl_evil\"]",
       "script": "test-commands.mjs"
     },
     {
@@ -1665,7 +1668,7 @@
       "status": "PASS",
       "phase": "phase1",
       "check": "request-ids-unpredictable",
-      "detail": "ids=[\"3e4a9a4d-c6ce-487b-9d75-22f6e6b54170\",\"3d14d49c-7ef2-4b2c-8b83-4188165ccfe9\",\"fcf657d4-08aa-486e-b775-678a41a46f10\",\"22755b84-d6cc-464e-8676-edf644e7c261\"] consecutiveIntegers=false",
+      "detail": "ids=[\"e1b71900-0e15-4aaf-9655-d2d04ea19bbe\",\"ef38ec7f-5017-4b87-bf11-78a83f7751d1\",\"a10d936c-d64f-434c-89ec-c92f5a0e6687\",\"b004e571-3747-480f-9906-262879f88fda\"] consecutiveIntegers=false",
       "script": "test-sw.mjs"
     },
     {
@@ -1673,7 +1676,7 @@
       "status": "PASS",
       "phase": "phase1",
       "check": "forged-reply-from-nested-frame",
-      "detail": "{\"status\":404,\"body\":\"Not found\",\"ms\":10013}; nestedFrameGotRequestsDirectly=0",
+      "detail": "{\"status\":404,\"body\":\"Not found\",\"ms\":10016}; nestedFrameGotRequestsDirectly=0",
       "script": "test-sw.mjs"
     },
     {

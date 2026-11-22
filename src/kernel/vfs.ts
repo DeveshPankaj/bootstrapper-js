@@ -174,6 +174,10 @@ function metaSourceUrl(file: unknown): string | null {
 type SyncJob = { target: string; source: string; force: boolean; sha256: string | null; app: string | null }
 
 const UNINSTALLED_PATH = '/etc/pkg/uninstalled.json'
+// Preinstalled apps already delivered once. The app folders are the installed list
+// (pkg-manager/loader.js scans /opt/apps), so a user deletes an app by deleting its
+// folder; recording the delivery keeps a deleted preinstalled app from coming back.
+const SEEDED_PATH = '/etc/pkg/seeded.json'
 const HEX64 = /^[0-9a-f]{64}$/
 
 const sha256Hex = async (data: ArrayBuffer | Uint8Array): Promise<string> =>
@@ -220,8 +224,26 @@ async function bootstrapMetaFiles(fs: typeof _fs, bootLog: (label: string, t0: n
     try { fs.writeFileSync('/meta.json', metaText) } catch (_) { /* view-only copy */ }
     recordMetaHashes(entries)
 
-    let uninstalled = new Set<string>()
-    try { uninstalled = new Set(JSON.parse(fs.readFileSync(UNINSTALLED_PATH, 'utf8') as string || '[]')) } catch (_) {}
+    const readIdSet = (path: string): Set<string> => {
+        try {
+            const v = JSON.parse(fs.readFileSync(path, 'utf8') as string || '[]')
+            return new Set(Array.isArray(v) ? v.filter((id): id is string => typeof id === 'string') : [])
+        } catch (_) { return new Set() }
+    }
+    const uninstalled = readIdSet(UNINSTALLED_PATH)
+    const seeded = readIdSet(SEEDED_PATH)
+    // An app counts as delivered once every one of its files is in place.
+    const recordSeeded = (jobs: SyncJob[]) => {
+        const before = seeded.size
+        for (const id of new Set(jobs.map(j => j.app).filter((id): id is string => !!id))) {
+            if (!seeded.has(id) && jobs.every(j => j.app !== id || fs.existsSync(j.target))) seeded.add(id)
+        }
+        if (seeded.size === before) return
+        try {
+            if (!fs.existsSync('/etc/pkg')) mkdirRecursive(fs, '/etc/pkg')
+            fs.writeFileSync(SEEDED_PATH, JSON.stringify([...seeded].sort(), null, 2))
+        } catch (err) { console.warn('[vfs] could not record delivered apps:', err) }
+    }
 
     const rejected: string[] = []
     const boot: SyncJob[] = []
@@ -243,7 +265,7 @@ async function bootstrapMetaFiles(fs: typeof _fs, bootLog: (label: string, t0: n
 
     const needsFetch = async (job: SyncJob): Promise<boolean> => {
         const exists = fs.existsSync(job.target)
-        if (job.app) return !exists && !uninstalled.has(job.app)
+        if (job.app) return !exists && !uninstalled.has(job.app) && !seeded.has(job.app)
         if (!exists) return true
         if (!job.force) return false
         if (!job.sha256) return true // not annotated: refresh, as before
@@ -286,6 +308,7 @@ async function bootstrapMetaFiles(fs: typeof _fs, bootLog: (label: string, t0: n
 
     if (rejected.length) console.warn('[vfs] meta.json entries rejected (not a /public/mount source or bad path):', rejected)
     const bootWritten = await sync(boot, 16)
+    recordSeeded(boot)
     const problems = () => [rejected.length && `${rejected.length} rejected`, failed.length && `${failed.length} failed`].filter(Boolean).join(', ')
     bootLog(`meta.json bootstrap: boot sync (${bootWritten.length} of ${boot.length} files fetched)`, t1, problems() || undefined)
 
@@ -293,6 +316,7 @@ async function bootstrapMetaFiles(fs: typeof _fs, bootLog: (label: string, t0: n
     afterLanding(async () => {
         const t2 = Date.now()
         const written = await sync(background, 6)
+        recordSeeded(background)
         bootLog(`meta.json bootstrap: background sync (${written.length} of ${background.length} files fetched)`, t2, problems() || undefined)
         // Preinstalled apps whose files just arrived (a first visit): the boot loader
         // registers them now (docs/public/mount/opt/apps/pkg-manager/loader.js).

@@ -1,0 +1,12 @@
+{
+  "id": "spotlight",
+  "name": "Spotlight Search",
+  "version": "1.0.0",
+  "description": "Global search overlay triggered by Ctrl+K / Cmd+K. Searches apps, commands, and VFS files.",
+  "icon": "search",
+  "category": "System",
+  "author": "bootstrapper-js",
+  "main": "main.js",
+  "commandName": "ui.spotlight",
+  "registryUrl": "/registry.json"
+}

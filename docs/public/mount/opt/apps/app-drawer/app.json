@@ -1,0 +1,12 @@
+{
+  "id": "app-drawer",
+  "name": "App Drawer",
+  "version": "1.0.0",
+  "description": "Full-screen app launcher with pinned apps, recent history, and category browsing.",
+  "icon": "apps",
+  "category": "System",
+  "author": "bootstrapper-js",
+  "main": "main.js",
+  "commandName": "ui.app-drawer",
+  "registryUrl": "/registry.json"
+}

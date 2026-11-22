@@ -1,0 +1,12 @@
+{
+  "id": "file-explorer",
+  "name": "File Explorer",
+  "version": "1.0.0",
+  "description": "Full-featured file explorer with context menus, drag-and-drop, and file operations.",
+  "icon": "folder",
+  "category": "Files",
+  "author": "bootstrapper-js",
+  "main": "main.js",
+  "commandName": "explorer",
+  "registryUrl": "/registry.json"
+}
