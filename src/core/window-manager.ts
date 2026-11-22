@@ -280,10 +280,18 @@ const WM_STYLE_IDS: readonly string[] = ['canvas', 'classic', 'glass', 'minimal'
 const SYSTEM_ID_RE = /^[a-z0-9-]+$/;
 const wmStylePath = (id: string) => `/opt/wm/${id}.js`;
 
+// The base module and the selected style load now. The other styles load once the
+// landing page is up, so a style picked in Settings applies to the very next window.
+// (On a repeat visit they come from the hash-verified vfs copies: no requests.)
 export const preloadWindowManagerCode = () => {
   if (!platform?.host) return;
   preloadSystemModule(WINDOW_MANAGER_MODULE_PATH);
-  WM_STYLE_IDS.forEach(id => preloadSystemModule(wmStylePath(id)));
+  const wmId = readWmStyleId();
+  if (wmId !== 'default') preloadSystemModule(wmStylePath(wmId));
+  const host = platform.host as { whenLandingReady?: () => Promise<void> };
+  const preloadRest = () => WM_STYLE_IDS.forEach(id => preloadSystemModule(wmStylePath(id)));
+  if (typeof host.whenLandingReady === 'function') host.whenLandingReady().then(preloadRest, preloadRest);
+  else preloadRest();
 };
 
 const warnedWmIds = new Set<string>();

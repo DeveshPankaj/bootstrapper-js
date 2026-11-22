@@ -28,9 +28,32 @@ type Entry = {
 }
 const entries = new Map<string, Entry>()
 
+const sha256Hex = async (bytes: Uint8Array): Promise<string> =>
+    [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes as unknown as BufferSource))].map(b => b.toString(16).padStart(2, '0')).join('')
+
+// The vfs copy, but only when the exact bytes read hash to the server's value from
+// meta.json (kept by the kernel, src/kernel/meta-hashes.ts) — then it is the
+// deployed file, and no download is needed. Anything else: null (use the network).
+const verifiedVfsSource = async (path: string): Promise<string | null> => {
+    try {
+        const host = Platform.getInstance().host
+        const expected = host.metaSha256?.(path)
+        if (!expected) return null
+        const fs = host.getFS()
+        if (!fs.existsSync(path)) return null
+        const bytes = fs.readFileSync(path) as unknown as Uint8Array
+        if ((await sha256Hex(bytes)) !== expected) return null
+        return new TextDecoder().decode(bytes)
+    } catch (_) {
+        return null
+    }
+}
+
 const fetchSource = async (path: string): Promise<string | null> => {
     try {
         if (!SYSTEM_MODULE_PATH_RE.test(path) || path.includes('..')) throw new Error('not a system module path')
+        const local = await verifiedVfsSource(path)
+        if (local !== null) return local
         const origin = Platform.getInstance().window.location.origin
         const res = await fetch(new URL(STATIC_MOUNT_ROOT + path, origin).href, { credentials: 'same-origin' })
         if (!res.ok) throw new Error(`HTTP ${res.status}`)

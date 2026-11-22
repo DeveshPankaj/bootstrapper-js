@@ -1,0 +1,68 @@
+{
+  "label": "local-step1-babel-prod",
+  "base": "http://localhost:8090",
+  "at": "2026-11-21T15:46:35.916Z",
+  "first": {
+    "desktopReadyMs": 2389,
+    "megabytes": 12.74,
+    "requestsBeforeReady": 609,
+    "beforeReadyByKind": {
+      "other same-origin": 6,
+      "cdn/external": 5,
+      "bundles": 22,
+      "vfs files": 572,
+      "vfs via SW": 4
+    },
+    "requestsTotal": 610,
+    "settledMs": 2641,
+    "byKind": {
+      "other same-origin": 7,
+      "cdn/external": 5,
+      "bundles": 22,
+      "vfs files": 572,
+      "vfs via SW": 4
+    }
+  },
+  "repeat": {
+    "desktopReadyMs": 2232,
+    "megabytes": 0,
+    "requestsBeforeReady": 280,
+    "beforeReadyByKind": {
+      "other same-origin": 4,
+      "cdn/external": 4,
+      "bundles": 11,
+      "vfs files": 257,
+      "vfs via SW": 4
+    },
+    "requestsTotal": 281,
+    "settledMs": 2735,
+    "byKind": {
+      "other same-origin": 5,
+      "cdn/external": 4,
+      "bundles": 11,
+      "vfs files": 257,
+      "vfs via SW": 4
+    }
+  },
+  "repeat2": {
+    "desktopReadyMs": 1968,
+    "megabytes": 0,
+    "requestsBeforeReady": 280,
+    "beforeReadyByKind": {
+      "other same-origin": 4,
+      "cdn/external": 4,
+      "bundles": 11,
+      "vfs files": 257,
+      "vfs via SW": 4
+    },
+    "requestsTotal": 281,
+    "settledMs": 2471,
+    "byKind": {
+      "other same-origin": 5,
+      "cdn/external": 4,
+      "bundles": 11,
+      "vfs files": 257,
+      "vfs via SW": 4
+    }
+  }
+}

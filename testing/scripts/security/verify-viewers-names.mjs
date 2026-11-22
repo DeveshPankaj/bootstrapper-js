@@ -51,6 +51,7 @@ try {
 
   // ── fs-inspector: a real-disk folder (File System Access handle, stubbed) ───────────
   await section('fs-inspector', async () => {
+    await installApp(page, 'fs-inspector'); // not preinstalled
     await page.evaluate(() => window.platform.host.exec(window.platform, '/opt/apps/fs-inspector/main.html'));
     const f = await findFrame(page, { urlPart: 'fs-inspector/main.html', selector: '#selectFolder', timeout: 30000 });
     if (!f) throw new Error('fs-inspector frame not found');

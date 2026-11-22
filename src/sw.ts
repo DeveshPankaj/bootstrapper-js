@@ -16,6 +16,16 @@ self.addEventListener('activate', (event: Event | any) => {
     );
 });
 
+// A page that loaded while this worker was activating (after the claim above) is
+// left uncontrolled; it asks to be claimed (src/kernel/sw-bridge.ts) instead of
+// reloading. clients.claim() only takes over this origin's uncontrolled pages.
+self.addEventListener('message', (event: any) => {
+    const msg = event && event.data
+    if (msg && typeof msg === 'object' && msg.type === 'sw/claim') {
+        event.waitUntil((self as any).clients.claim())
+    }
+});
+
 
 
 

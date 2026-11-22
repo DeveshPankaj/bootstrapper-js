@@ -1,0 +1,68 @@
+{
+  "label": "local-before",
+  "base": "http://localhost:8091",
+  "at": "2026-11-21T15:46:16.376Z",
+  "first": {
+    "desktopReadyMs": 4089,
+    "megabytes": 27.74,
+    "requestsBeforeReady": 610,
+    "beforeReadyByKind": {
+      "other same-origin": 6,
+      "cdn/external": 6,
+      "bundles": 22,
+      "vfs files": 572,
+      "vfs via SW": 4
+    },
+    "requestsTotal": 611,
+    "settledMs": 4592,
+    "byKind": {
+      "other same-origin": 7,
+      "cdn/external": 6,
+      "bundles": 22,
+      "vfs files": 572,
+      "vfs via SW": 4
+    }
+  },
+  "repeat": {
+    "desktopReadyMs": 2069,
+    "megabytes": 0.04,
+    "requestsBeforeReady": 280,
+    "beforeReadyByKind": {
+      "other same-origin": 4,
+      "cdn/external": 4,
+      "bundles": 11,
+      "vfs files": 257,
+      "vfs via SW": 4
+    },
+    "requestsTotal": 281,
+    "settledMs": 2572,
+    "byKind": {
+      "other same-origin": 5,
+      "cdn/external": 4,
+      "bundles": 11,
+      "vfs files": 257,
+      "vfs via SW": 4
+    }
+  },
+  "repeat2": {
+    "desktopReadyMs": 2085,
+    "megabytes": 0,
+    "requestsBeforeReady": 280,
+    "beforeReadyByKind": {
+      "other same-origin": 4,
+      "cdn/external": 4,
+      "bundles": 11,
+      "vfs files": 257,
+      "vfs via SW": 4
+    },
+    "requestsTotal": 281,
+    "settledMs": 2588,
+    "byKind": {
+      "other same-origin": 5,
+      "cdn/external": 4,
+      "bundles": 11,
+      "vfs files": 257,
+      "vfs via SW": 4
+    }
+  }
+}

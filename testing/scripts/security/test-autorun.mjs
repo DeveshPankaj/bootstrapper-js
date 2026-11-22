@@ -76,7 +76,20 @@ try {
     if (orig === null) return { pass: null, detail: 'menuItem.js missing' };
     await vfsWrite(page, { '/usr/lib/ui/menuItem.js': orig + PAY('menu') });
     await closeAllWindows(page);
-    const box = await page.evaluate(() => { const el = document.querySelector('.content-area') || document.body; const r = el.getBoundingClientRect(); return { x: r.left + r.width - 40, y: r.top + r.height - 60 }; });
+    // An empty spot of the desktop itself: not an icon, not a window, and not the dock
+    // iframe along the bottom edge (a right-click there never reaches the desktop).
+    const box = await page.evaluate(() => {
+      const el = document.querySelector('.content-area') || document.body;
+      const r = el.getBoundingClientRect();
+      for (let fy = 0.5; fy > 0.1; fy -= 0.1) {
+        for (let fx = 0.9; fx > 0.3; fx -= 0.1) {
+          const x = r.left + r.width * fx, y = r.top + r.height * fy;
+          const hit = document.elementFromPoint(x, y);
+          if (hit && el.contains(hit) && !hit.closest('iframe, .window, .vfs-desktop-icon')) return { x, y };
+        }
+      }
+      return { x: r.left + r.width * 0.7, y: r.top + r.height * 0.4 };
+    });
     await page.mouse.click(box.x, box.y, { button: 'right' });
     await sleep(1500);
     const menuShown = await page.evaluate(() => [...document.querySelectorAll('.contextmenu')].some((m) => m.offsetParent !== null && m.style.display !== 'none'));

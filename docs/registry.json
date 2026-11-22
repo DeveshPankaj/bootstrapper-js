@@ -147,7 +147,7 @@
         {
           "dest": "loader.js",
           "src": "/public/mount/opt/apps/pkg-manager/loader.js",
-          "sha256": "85fab875af08655253277450ee1dad3502dcf50d63639cb9cffe6f541a70f739"
+          "sha256": "8ad39dceae61f89863bb1c553c5a04011ddf0f615b78c78018cd8490f2f5a183"
         }
       ],
       "main": "main.js"
@@ -165,7 +165,7 @@
         {
           "dest": "main.js",
           "src": "/public/mount/opt/apps/spotlight/main.js",
-          "sha256": "c429dcbd088b4b1cc6fc7732205459011a55875f03dd5fadc649408944169acc"
+          "sha256": "83b882b400bb5a5fed94911d5fb872bee0daf7ca201316a46bc7f971f000f0ed"
         }
       ],
       "main": "main.js"

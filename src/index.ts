@@ -1,6 +1,6 @@
 //@ts-nocheck
 import { initVFS } from './kernel/vfs'
-import { initSwBridge } from './kernel/sw-bridge'
+import { initSwBridge, registerServiceWorker } from './kernel/sw-bridge'
 import { tryHandoffDeepLink, showHandoffNotice } from './kernel/deeplink'
 import { hardenWindow } from './kernel/ipc-bus'
 
@@ -79,11 +79,19 @@ if (isFramedByAnotherOrigin()) {
             window.__bootLog.push({ label, durationMs: Date.now() - startMs, error })
         }
 
+        // Ring 0: the service worker starts registering right away, in parallel
+        // with the VFS (on a first visit it activates and claims this page)
+        const swControlled = registerServiceWorker()
+
         // Ring 0: bring up VFS + IPC bus
         const fs = await initVFS(bootLog)
 
-        // Ring 0: register service worker + VFS file bridge
+        // Ring 0: answer the SW's /(sw)/ file requests from the VFS
         initSwBridge(fs)
+
+        // The shell's /(sw)/ resources (icons, wallpapers, app pages) need the SW
+        // in control; this is usually resolved already (bounded wait otherwise)
+        await swControlled
 
         // Load the main app bundle (remote.bundle.js → Platform + Layout)
         loadBootstrapScript()

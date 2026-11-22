@@ -145,6 +145,14 @@ Spec: [documentation/security/runtime-spec.md](documentation/security/runtime-sp
 - **2026-11-20** — 1A (kernel) done: IPC answers registered frames only, SW headers and reply binding, no bootstrap override, server `meta.json` authoritative, framing refusal + meta CSP, deep-link validation. CLAUDE.md "Security model" section; webrtc / remote-machines docs updated.
 - **2026-11-21** — 1D (files, packages, shell) done: structured explorer menus with explicit Run, zip-slip fixed, App Manager per-file sha256 (`scripts/gen-registry-integrity.mjs`), terminal/xargs `runFile`. 1F (viewers) done: DOMPurify vendored, mermaid strict, TOTP secrets out of localStorage, text-only rendering, CDN libraries pinned with SRI. 1G: regression suite `testing/scripts/security/run-all.mjs` — baseline (pre-fix) 0/121 phase-1 checks, final run 121/121 (47/47 findings); phase-2 checks fail as expected.
 - **2026-11-21** — Integration: `meta.json` fixes (docks, missing core apps), last CDN tags given SRI, registry hashes regenerated, bundles rebuilt. Projects demo (`/home/user1/projects/temp.html`) ported to the sandbox SDK (`window.ipc`): renders opaque, live-reloads `temp.js`, opens it in Notepad through the new `editor.open` IPC event (path checked against the frame's read scope).
+- **2026-11-22** — Boot loading (no security model change, D1 intact):
+  - Production webpack build. Babel is only in the remote bundle (bundles 49.6 → 5.4 MB).
+  - meta.json carries generated `sha256`/`when`/`app`. Boot downloads only changed or missing files, and the rest syncs after landing.
+  - Apps that aren't preinstalled are left out of meta.json; registry apps install once from App Manager.
+  - No service-worker reload on a first visit. Deferred bundles and a background spinner.
+  - System modules run from the vfs only when their hash matches the server's (`metaSha256`), otherwise from the static copy.
+  - Measured on a local GitHub Pages-like server: first visit 610 → 130 requests before the desktop (4.1 → 1.6 s); repeat visit 281 → 24 requests.
+  - Security tests now install non-preinstalled apps first. BOOT-11 clicks an empty desktop spot (the dock iframe covered the old one).
 
 ---
 

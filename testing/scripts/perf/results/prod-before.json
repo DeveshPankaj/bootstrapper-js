@@ -1,0 +1,64 @@
+{
+  "label": "prod-before",
+  "base": "https://pankajdevesh.com",
+  "at": "2026-11-21T10:05:20.251Z",
+  "first": {
+    "desktopReadyMs": null,
+    "requestsBeforeReady": 563,
+    "beforeReadyByKind": {
+      "other same-origin": 6,
+      "cdn/external": 3,
+      "bundles": 13,
+      "vfs files": 541
+    },
+    "requestsTotal": 570,
+    "settledMs": 121262,
+    "byKind": {
+      "other same-origin": 7,
+      "cdn/external": 5,
+      "bundles": 13,
+      "vfs files": 541,
+      "vfs via SW": 4
+    }
+  },
+  "repeat": {
+    "desktopReadyMs": 6090,
+    "requestsBeforeReady": 281,
+    "beforeReadyByKind": {
+      "other same-origin": 4,
+      "cdn/external": 4,
+      "bundles": 11,
+      "vfs files": 258,
+      "vfs via SW": 4
+    },
+    "requestsTotal": 282,
+    "settledMs": 6593,
+    "byKind": {
+      "other same-origin": 5,
+      "cdn/external": 4,
+      "bundles": 11,
+      "vfs files": 258,
+      "vfs via SW": 4
+    }
+  },
+  "repeat2": {
+    "desktopReadyMs": 9236,
+    "requestsBeforeReady": 281,
+    "beforeReadyByKind": {
+      "other same-origin": 4,
+      "cdn/external": 4,
+      "bundles": 11,
+      "vfs files": 258,
+      "vfs via SW": 4
+    },
+    "requestsTotal": 282,
+    "settledMs": 9738,
+    "byKind": {
+      "other same-origin": 5,
+      "cdn/external": 4,
+      "bundles": 11,
+      "vfs files": 258,
+      "vfs via SW": 4
+    }
+  }
+}

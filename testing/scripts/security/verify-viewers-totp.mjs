@@ -7,7 +7,7 @@
 //
 // Run: node testing/scripts/security/verify-viewers-totp.mjs   (OS dev server on :8080)
 // Exit code: 0 = all checks pass, 1 = a check failed.
-import { launch, bootReady, addFrame, check, finish, sleep, pollFor, closeAllWindows, findFrame, pwnedKeys, writeFiles } from './verify-viewers-lib.mjs';
+import { launch, installApp, bootReady, addFrame, check, finish, sleep, pollFor, closeAllWindows, findFrame, pwnedKeys, writeFiles } from './verify-viewers-lib.mjs';
 
 const STORE = '/home/user1/.local/share/totp-auth/accounts.json';
 const LEGACY = '/home/user1/.totp-accounts.json';
@@ -23,6 +23,7 @@ try {
   await page.evaluate((v) => localStorage.setItem('totp_entries', v), JSON.stringify(lsEntries));
   await writeFiles(page, { [LEGACY]: JSON.stringify(vfsEntries) });
 
+  await installApp(page, 'totp-auth'); // not preinstalled
   const open = async () => {
     const t0 = Date.now();
     await page.evaluate(() => window.platform.host.exec(window.platform, '/opt/apps/totp-auth/main.html'));

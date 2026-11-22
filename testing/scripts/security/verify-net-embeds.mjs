@@ -3,6 +3,7 @@
 // allow-popups-to-escape-sandbox — plus a referrer policy.
 // Run: node testing/scripts/security/verify-net-embeds.mjs   (dev server on :8080; YouTube/fast.com
 // reachability is reported but only required for the "still works" checks when online)
+import { installApp } from './verify-viewers-lib.mjs'; // apps not preinstalled: install first
 import { launchBrowser, bootPage, openWindow, appFrame, waitFor, waitForCommand, check, finish, sleep } from './verify-net-lib.mjs';
 
 const FORBIDDEN = ['allow-top-navigation', 'allow-top-navigation-by-user-activation', 'allow-top-navigation-to-custom-protocols', 'allow-popups-to-escape-sandbox', 'allow-storage-access-by-user-activation'];
@@ -41,6 +42,8 @@ if (ytLoaded) {
 } else console.log('INFO  YouTube not reachable from here — skipped the live-player checks');
 
 // ── Speed test (fast.com) ──
+await installApp(page, 'speed-test');
+await installApp(page, 'vscode-online');
 await openWindow(page, 'ui.iframe', '/opt/apps/speed-test/main.html');
 const st = await appFrame(page, 'speed-test/main.html');
 const stAttrs = await st.evaluate(() => { const f = document.querySelector('iframe'); return { sandbox: f.getAttribute('sandbox'), referrer: f.getAttribute('referrerpolicy'), src: f.src }; });

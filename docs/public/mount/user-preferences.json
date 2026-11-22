@@ -1,8 +1,8 @@
 {
-    "wallpaper": "/public/wp-12.png",
-    "default_wallpaper": "/public/wp-12.png",
+    "wallpaper": "/public/wp-12.webp",
+    "default_wallpaper": "/public/wp-12.webp",
     "wallpapers": [
-      "/public/wp-12.png",
+      "/public/wp-12.webp",
       "/public/wallpaper-1.webp",
       "/public/wallpaper-2.jpg",
       "/public/wallpaper-3.jpg",

@@ -1,4 +1,4 @@
-import { ActivityDef, Command, Host, Platform, PlatformEvent, SettingsSectionDef, WidgetDef } from "@shared/index";
+import { ActivityDef, Command, Host, Platform, PlatformEvent, SettingsSectionDef, WidgetDef, provideBabel, setModulesPending } from "@shared/index";
 import { removeRecursive, VFS, readJsonFile, writeJsonFile } from "@shared/fs-utils";
 import { KEYBINDINGS_FILE, WIDGETS_DIR } from "@shared/constants";
 import { BehaviorSubject, Subject } from "rxjs";
@@ -10,6 +10,9 @@ import { DESKTOP_CONTAINER_CLASS, WINDOWS_CONTAINER_CLASS } from './core/window-
 import { startCronScheduler } from './core/cron'
 import { startSystemd, startUnit, stopUnit, restartUnit, enableUnit, disableUnit, getStatus as getUnitStatus, listUnits, readJournal, getSelf as getSystemdSelf } from './core/systemd'
 import { initIpc } from './core/ipc'
+
+// The one copy of Babel standalone: Host.execString / Platform.require transpile vfs code with it.
+provideBabel(require('./shared/babel.js'));
 
 class WindowService {
   constructor(private window: Window, private container: HTMLElement) {}
@@ -45,6 +48,11 @@ class WindowService {
       script.onload = () => {
         resolve(window.platform);
       };
+      // A bundle that fails to load must not hold up boot or the background loader.
+      script.onerror = () => {
+        console.error(`[modules] failed to load ${src}`);
+        resolve(window.platform);
+      };
       window.document.head.appendChild(script);
     });
   }
@@ -62,47 +70,39 @@ const modulesMap = new Map<
 >();
 
 const isLoadedOnceRef = {current: false}
+// Bundles marked `preload` (src/modules/modules.json) are what the landing page needs and
+// load first; the rest load in the background once the landing page is on screen
+// (small spinner, bottom-right). Until they're in, openWindow waits for a command one of
+// them registers (setModulesPending).
 const loadModules = async (modules: { [name: string]: Module }) => {
-  const runAfterLoad: Array<() => void> = [];
-  const Q: Array<Promise<any>> = [];
-
-  for (let _module_name in modules) {
-    // TODO:  // if (modulesMap.has(_module_name) && modulesMap.get(_module_name)?.module.url === modules[_module_name].url) continue;
-    if (modulesMap.has(_module_name)) continue;
-
-    const _module = modules[_module_name];
-
-
-    const loadScript = async () => {
-      const [win, eventEmitter] = await windowService.createWindow(_module_name);
-      modulesMap.set(_module_name, {
-        module: _module,
-        window: win,
-        eventEmitter,
-        platform: win.platform,
-      });
-
-      const _ = windowService.loadScript(_module.url, win);
-
-      if(_module.preload) {
-        await _;
-      }
-
-      runAfterLoad.push(() =>
-        eventEmitter.next({ type: "loaded", payload: [], module: _module})
-      );
-
-      // eventEmitter.next({type: 'exit', payload: []})
-    };
-
-    Q.push(loadScript());
+  const eager: string[] = [];
+  const deferred: string[] = [];
+  for (const name in modules) {
+    if (modulesMap.has(name)) continue;
+    (modules[name].preload ? eager : deferred).push(name);
   }
 
-  if (Q.length) await Promise.all(Q);
-  runAfterLoad.forEach((callback) => callback());
+  const loadModule = async (name: string) => {
+    const _module = modules[name];
+    const [win, eventEmitter] = await windowService.createWindow(name);
+    modulesMap.set(name, { module: _module, window: win, eventEmitter, platform: win.platform });
+    await windowService.loadScript(_module.url, win);
+    return () => eventEmitter.next({ type: "loaded", payload: [], module: _module });
+  };
 
-  if(!isLoadedOnceRef.current && (isLoadedOnceRef.current = true)) {
+  const announceEager = await Promise.all(eager.map(loadModule));
+  announceEager.forEach((announce) => announce());
+
+  if (!isLoadedOnceRef.current && (isLoadedOnceRef.current = true)) {
     setTimeout(runInitCommands)
+  }
+
+  if (deferred.length) {
+    const background = host.whenLandingReady().then(() => host.trackBackgroundTask(async () => {
+      const announce = await Promise.all(deferred.map(loadModule));
+      announce.forEach((a) => a());
+    }, 'loading apps'));
+    setModulesPending(background.then(() => setModulesPending(null)));
   }
 };
 

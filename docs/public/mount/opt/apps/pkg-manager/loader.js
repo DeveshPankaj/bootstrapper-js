@@ -58,14 +58,17 @@ const loadApp = (appDir, mainFile) => {
 
 const loaded = new Set();
 
-// Load core apps first (skip uninstalled)
-for (const app of CORE_APPS) {
-  if (uninstalled.has(app.id)) continue;
-  if (fs.existsSync(app.mainFile)) {
-    loadApp(app.appDir, app.mainFile);
-    loaded.add(app.mainFile);
+// Load core apps first (skip uninstalled, already loaded, and ones whose files
+// haven't arrived yet — see the end of this file)
+const loadCoreApps = () => {
+  for (const app of CORE_APPS) {
+    if (uninstalled.has(app.id) || loaded.has(app.mainFile)) continue;
+    if (fs.existsSync(app.mainFile)) {
+      loadApp(app.appDir, app.mainFile);
+      loaded.add(app.mainFile);
+    }
   }
-}
+};
 
 // installed.json is writable by any app, so a record is loaded only when its id is a plain
 // app id and its main file lies inside that app's own /opt/apps/<id> folder; its `appDir`
@@ -79,20 +82,32 @@ const installedApp = (pkg) => {
   return mainFile !== appDir && isInside(appDir, mainFile) ? { appDir, mainFile } : null;
 };
 
-// Then load all installed apps (skip already-loaded and uninstalled)
-try {
-  const raw = fs.readFileSync(INSTALLED_PATH, 'utf8');
-  const installed = JSON.parse(raw || '[]');
-  for (const pkg of installed) {
-    if (!pkg || typeof pkg.mainFile !== 'string' || !pkg.mainFile.endsWith('.js')) continue;
-    const app = installedApp(pkg);
-    if (!app) { console.warn('[pkg-loader] skipping', pkg.id, '— main file outside /opt/apps/<id>:', pkg.mainFile); continue; }
-    if (loaded.has(app.mainFile)) continue;
-    if (uninstalled.has(pkg.id)) continue;
-    loadApp(app.appDir, app.mainFile);
-    loaded.add(app.mainFile);
-  }
-} catch (_) {}
+// Then load all installed apps (skip already-loaded, uninstalled, and not yet arrived)
+const loadInstalledApps = () => {
+  try {
+    const raw = fs.readFileSync(INSTALLED_PATH, 'utf8');
+    const installed = JSON.parse(raw || '[]');
+    for (const pkg of installed) {
+      if (!pkg || typeof pkg.mainFile !== 'string' || !pkg.mainFile.endsWith('.js')) continue;
+      const app = installedApp(pkg);
+      if (!app) { console.warn('[pkg-loader] skipping', pkg.id, '— main file outside /opt/apps/<id>:', pkg.mainFile); continue; }
+      if (loaded.has(app.mainFile) || uninstalled.has(pkg.id) || !fs.existsSync(app.mainFile)) continue;
+      loadApp(app.appDir, app.mainFile);
+      loaded.add(app.mainFile);
+    }
+  } catch (_) {}
+};
 
-// All apps loaded — hydrate persisted widgets now that renderers are registered
-try { platform.host.callCommand('hydrate-widgets'); } catch (_) {}
+const loadAvailableApps = (always = false) => {
+  const before = loaded.size;
+  loadCoreApps();
+  loadInstalledApps();
+  // Apps loaded — hydrate persisted widgets now that their renderers are registered
+  if (always || loaded.size !== before) { try { platform.host.callCommand('hydrate-widgets'); } catch (_) {} }
+};
+
+loadAvailableApps(true);
+
+// On a first visit the kernel installs preinstalled apps' files in the background,
+// after the landing page (src/kernel/vfs.ts); register each app as its files arrive.
+platform.window.addEventListener('wos:apps-installed', () => loadAvailableApps());

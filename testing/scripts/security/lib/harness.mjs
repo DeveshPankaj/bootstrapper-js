@@ -221,9 +221,39 @@ export async function openWindow(page, command, ...args) {
 export const waitForCommand = (page, name, ms = 30000) =>
   pollFor(() => page.evaluate((n) => !!(window.platform && window.platform.host.getCommand(n)), name), ms, 400);
 
-/** Loads an app's /opt/apps/<id>/main.js the way pkg-manager/loader.js does, if `command` isn't registered. */
+/**
+ * Makes sure app `id` is installed and `command` registered. Only the preinstalled apps
+ * ship in the vfs, so an app the user hasn't installed is installed first, the way App
+ * Manager does it: the registry entry's files are downloaded, checked against their
+ * sha256 and written to /opt/apps/<id>/. Then its main.js is loaded the way
+ * pkg-manager/loader.js does.
+ */
 export async function ensureApp(page, id, command) {
   if (await page.evaluate((c) => !!window.platform.host.getCommand(c), command)) return true;
+  const installError = await page.evaluate(async ({ id }) => {
+    const fs = window.fs || window.platform.host.getFS();
+    if (fs.existsSync(`/opt/apps/${id}/main.js`)) return '';
+    try {
+      const registry = await (await fetch('/registry.json', { cache: 'no-cache' })).json();
+      const app = (registry.apps || []).find((a) => a.id === id);
+      if (!app) return `${id} is not in the registry`;
+      const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+      const files = [];
+      for (const f of app.files) {
+        const data = await (await fetch(f.src)).arrayBuffer();
+        if (f.sha256 && hex(await crypto.subtle.digest('SHA-256', data)) !== f.sha256) return `integrity check failed for ${f.dest}`;
+        files.push({ dest: `/opt/apps/${id}/${f.dest}`, data });
+      }
+      for (const f of files) {
+        // segment by segment: BrowserFS's recursive mkdir fails with 2+ missing levels
+        let cur = '';
+        for (const part of f.dest.split('/').slice(1, -1)) { cur += '/' + part; if (!fs.existsSync(cur)) fs.mkdirSync(cur); }
+        fs.writeFileSync(f.dest, Buffer.from(f.data));
+      }
+      return '';
+    } catch (e) { return String(e && e.message || e); }
+  }, { id });
+  if (installError) { console.warn('ensureApp: install failed:', id, installError); return false; }
   await page.evaluate(({ id }) => {
     const p = window.platform;
     p._appDir = `/opt/apps/${id}`;

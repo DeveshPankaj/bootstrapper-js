@@ -88,7 +88,9 @@ const fetchRegistryForSpotlight = async () => {
     }
   } catch (_) {}
 }
-setTimeout(fetchRegistryForSpotlight, 1000)
+// Fetched the first time Spotlight opens (not at every boot): it only adds
+// "install" suggestions for apps from the registry.
+let _registryRequested = false
 
 let overlayRoot = null
 let overlayContainer = null
@@ -209,6 +211,7 @@ const Spotlight = ({ onClose }) => {
 }
 
 const openSpotlight = () => {
+  if (!_registryRequested) { _registryRequested = true; fetchRegistryForSpotlight() }
   if (overlayContainer) return
   const topDocument = platform.window.top.document
   overlayContainer = topDocument.createElement('div')

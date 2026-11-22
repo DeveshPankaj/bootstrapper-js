@@ -4,6 +4,8 @@
 
 import type _fs from 'fs'
 import { normalizePath, isInside, isKernelOwned } from './path-policy'
+import { trackBackground, whenLandingReady } from './background'
+import { metaSha256 } from './meta-hashes'
 
 export type IpcHandler = (data: unknown, source: Window) => unknown | Promise<unknown>
 
@@ -65,6 +67,12 @@ export type WosKernelHook = Readonly<{
     hardenWindow?: (win: Window | null | undefined) => void
     /** Posts a `wos-ipc-event` to the registered frames whose policy covers it (see broadcastIpcEvent). */
     broadcastIpcEvent?: (event: string, data: unknown) => void
+    /** Background work after the landing page, shown by the small spinner (src/kernel/background.ts). */
+    trackBackground?: <T>(work: Promise<T> | (() => Promise<T>), label?: string) => Promise<T | undefined>
+    /** Resolves once the landing page is on screen and the browser is idle. */
+    whenLandingReady?: () => Promise<void>
+    /** The server's sha256 (from meta.json) for a vfs path, if listed (src/kernel/meta-hashes.ts). */
+    metaSha256?: (path: string) => string | undefined
 }>
 
 /**
@@ -304,7 +312,7 @@ export function initIpcBus(fs: typeof _fs) {
         isKernelCopy = true
         // Cross-bundle entry point to the registry above (see the comment there).
         Object.defineProperty(window, '__wosKernel', {
-            value: Object.freeze({ registerIpcFrame, hardenWindow, broadcastIpcEvent }),
+            value: Object.freeze({ registerIpcFrame, hardenWindow, broadcastIpcEvent, trackBackground, whenLandingReady, metaSha256 }),
             writable: false,
             configurable: false,
             enumerable: false,

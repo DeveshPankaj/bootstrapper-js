@@ -6,7 +6,24 @@ import { ProcessManager } from '../platform/process-manager'
 import { ProxyFS } from '../platform/proxy-fs'
 import { pathPolicy, type PathPolicy } from '../kernel/path-policy'
 import type { IpcFramePolicy } from '../kernel/ipc-bus'
-const Babel = require('./babel.js');
+// Babel standalone (~5 MB) lives only in the remote bundle (src/remote.ts calls
+// provideBabel). Every Host and Platform instance is created there, so only that
+// bundle's copy of this module ever transpiles; the other bundles import this file
+// for its classes and types and must not each carry their own copy of Babel.
+type BabelStandalone = { transform: (code: string, opts: unknown) => { code: string; map: any } };
+let babelStandalone: BabelStandalone | null = null;
+export function provideBabel(babel: BabelStandalone): void { babelStandalone = babel; }
+
+// While the bundles that load after the landing page are still loading (src/remote.ts),
+// openWindow waits for them instead of failing on a command they are about to register.
+let modulesPending: Promise<unknown> | null = null;
+export function setModulesPending(pending: Promise<unknown> | null): void { modulesPending = pending; }
+const Babel = {
+  transform(code: string, opts: unknown) {
+    if (!babelStandalone) throw new Error('Babel is not available in this bundle (only the remote bundle transpiles)');
+    return babelStandalone.transform(code, opts);
+  },
+};
 
 const babelOpts = (filename: string, cwd: string) => ({
     presets: [['env', { modules: 'commonjs' }], 'react', 'typescript'],
@@ -615,7 +632,12 @@ export class Host {
   // passed to a window.
   public openWindow(commandName: string, ...args: unknown[]): unknown {
     const command = this.getCommand(commandName);
-    if (!command) throw new Error(`Command: [${commandName}] not found`);
+    if (!command) {
+      // Bundles that aren't needed for the landing page load in the background
+      // (src/remote.ts); one of them may be about to register this command.
+      if (modulesPending) return modulesPending.then(() => this.openWindow(commandName, ...args));
+      throw new Error(`Command: [${commandName}] not found`);
+    }
     const open = this.getService('001-core.layout', 'open-window') as
       | ((command: Command, ...args: unknown[]) => unknown)
       | undefined;
@@ -630,6 +652,25 @@ export class Host {
   public hardenWindow(win: Window | null | undefined): void {
     const kernel = kernelHookOf(this.window);
     try { kernel?.hardenWindow?.(win); } catch (_) { /* cross-origin or closed frame */ }
+  }
+
+  // Background work after the landing page (src/kernel/background.ts): shown by the
+  // small spinner in the bottom-right corner while it runs. Errors are logged.
+  public trackBackgroundTask<T>(work: Promise<T> | (() => Promise<T>), label?: string): Promise<T | undefined> {
+    const kernel = kernelHookOf(this.window);
+    if (kernel?.trackBackground) return kernel.trackBackground(work, label);
+    return Promise.resolve(typeof work === 'function' ? work() : work).catch(() => undefined);
+  }
+
+  // The server's sha256 (from meta.json) for a vfs path, if listed. Trusted code uses
+  // it to run a vfs copy only when it is byte-identical to the deployed file.
+  public metaSha256(path: string): string | undefined {
+    return kernelHookOf(this.window)?.metaSha256?.(path);
+  }
+
+  // Resolves once the landing page is on screen and the browser is idle.
+  public whenLandingReady(): Promise<void> {
+    return kernelHookOf(this.window)?.whenLandingReady?.() ?? Promise.resolve();
   }
 
   public getService(moduleName: string, serviceName: string): unknown {

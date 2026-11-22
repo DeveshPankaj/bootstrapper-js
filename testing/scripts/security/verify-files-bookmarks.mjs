@@ -7,7 +7,7 @@
 //
 // Run: node testing/scripts/security/verify-files-bookmarks.mjs   (dev server on :8080)
 import {
-  launch, bootReady, writeVfs, makeReporter, sleep, pollFor, installSpies, resetSpies, getSpies,
+  launch, installApp, bootReady, writeVfs, makeReporter, sleep, pollFor, installSpies, resetSpies, getSpies,
   findFrame, closeAllWindows,
 } from './verify-files-lib.mjs';
 
@@ -35,7 +35,7 @@ try {
       { id: 3, title: 'Data link', url: 'data:text/html,<script>top.__pwnedBm=2</script>' },
     ]),
   });
-  await page.evaluate(() => window.platform.host.runFile(window.platform, '/opt/apps/bookmarks/main.js', [], { confirm: false }));
+  await installApp(page, 'bookmarks');
   const openBookmarks = async () => {
     await closeAllWindows(page);
     await page.evaluate(() => window.platform.host.openWindow('ui.bookmarks'));

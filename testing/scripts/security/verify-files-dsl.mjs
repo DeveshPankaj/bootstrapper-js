@@ -11,7 +11,7 @@
 //
 // Run: node testing/scripts/security/verify-files-dsl.mjs   (dev server on :8080)
 import {
-  launch, bootReady, writeVfs, makeReporter, sleep, pollFor, installSpies, resetSpies, getSpies,
+  launch, installApp, bootReady, writeVfs, makeReporter, sleep, pollFor, installSpies, resetSpies, getSpies,
   installDialogs, findFrame, fileItem, clickMenu, menuTitles, closeMenu, closeAllWindows, vfs,
 } from './verify-files-lib.mjs';
 
@@ -195,7 +195,7 @@ try {
   check('explorer: the folder opens in a second window', !!(await findFrame(page, '.file-explorer .file-name:text-is("keep.txt")')));
 
   // ── explorer-sifi (a registry app: load it the way the package loader does) ──────────────
-  await page.evaluate(() => window.platform.host.runFile(window.platform, '/opt/apps/explorer-sifi/main.js', [], { confirm: false }));
+  await installApp(page, 'explorer-sifi');
   check('explorer-sifi: registers its command', await page.evaluate(() => !!window.platform.host.getCommand('explorer-sifi')));
   check('explorer-sifi: window opens on the test folder', !!(await openExplorer('explorer-sifi')));
   r = await menuAction('explorer-sifi', H2, 'Edit');
@@ -286,7 +286,7 @@ try {
   await closeAllWindows(page);
 
   // ── no-arg launches (keybindings, launchers): run() → openWindow(own command) ────────────
-  await page.evaluate(() => window.platform.host.runFile(window.platform, '/opt/apps/bookmarks/main.js', [], { confirm: false }));
+  await installApp(page, 'bookmarks');
   for (const name of ['explorer', 'explorer-sifi', 'ui.pkg-manager', 'ui.task-manager', 'ui.app-launcher', 'ui.bookmarks']) {
     await closeAllWindows(page);
     await resetSpies(page);

@@ -1,8 +1,11 @@
 // Shared helpers for the Phase 1D (TODO 1D) browser checks:
 // testing/scripts/security/verify-files-*.mjs. Builds on spike-lib.mjs (bootOS etc.).
 import { launch, bootOS, writeVfs, OS_URL } from './spike-lib.mjs';
+import { installApp } from './verify-viewers-lib.mjs';
 
-export { launch, bootOS, writeVfs, OS_URL };
+// installApp(page, id): only the preinstalled apps ship in the vfs — this installs one
+// from docs/registry.json (as App Manager does) and loads its main.js.
+export { launch, bootOS, writeVfs, OS_URL, installApp };
 
 // PASS/FAIL collector; done() prints the summary and returns the failure count.
 export const makeReporter = () => {

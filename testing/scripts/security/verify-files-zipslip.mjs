@@ -8,7 +8,7 @@
 // The hostile archives are built here in Node (stored zip / bootar), so no library sanitises
 // the entry names first. Run: node testing/scripts/security/verify-files-zipslip.mjs (:8080)
 import {
-  launch, bootReady, makeReporter, sleep, pollFor, installDialogs, findFrame, fileItem, clickMenu,
+  launch, installApp, bootReady, makeReporter, sleep, pollFor, installDialogs, findFrame, fileItem, clickMenu,
   closeAllWindows, vfs,
 } from './verify-files-lib.mjs';
 
@@ -103,7 +103,7 @@ try {
   await closeAllWindows(page);
 
   // ── explorer-sifi: Extract here ───────────────────────────────────────────────────────────
-  await page.evaluate(() => window.platform.host.runFile(window.platform, '/opt/apps/explorer-sifi/main.js', [], { confirm: false }));
+  await installApp(page, 'explorer-sifi');
   await page.evaluate((d) => window.platform.host.openWindow('explorer-sifi', d), `${BASE}/sifi`);
   fx = await findFrame(page, '.sifi-explorer .file-name:text-is("evil.zip")');
   await fileItem(fx, 'evil.zip').click({ button: 'right', force: true });

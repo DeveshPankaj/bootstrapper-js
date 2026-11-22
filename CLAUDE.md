@@ -12,9 +12,54 @@ icons) and a set of bundled mini-apps that run inside iframe "windows".
 
 - Build: webpack, output to `./docs` (also the GitHub Pages preview root).
 - Dev server: `pnpm start` → `http://localhost:8080`.
-- Build once: `npx webpack`.
+- Build once: `npx webpack`. This is a **production** build (minified JS, production
+  React), which is what `docs/` should hold. `pnpm start` builds in development mode.
+  `optimization.minimize: { html: false }` keeps `docs/index.html` unminified, so its CSP
+  `<meta>` stays readable and the KRN-11 check can parse it.
+- Every build/watch first runs `scripts/gen-meta-manifest.mjs` (meta.json `sha256`/`when`/
+  `app` annotations) and `scripts/gen-registry-integrity.mjs` (registry `sha256`s), via
+  `ManifestHashesPlugin` in `webpack.config.js`. After editing a `docs/public/mount` file
+  without a build, run `node scripts/gen-meta-manifest.mjs` (`--check` only verifies).
 - The webpack build always prints one pre-existing, unrelated warning about
   `src/shared/babel.js` critical dependency expression — ignore it.
+- Babel standalone lives **only in `remote.bundle.js`**. `src/shared/index.ts` doesn't
+  import it; `remote.ts` hands it over with `provideBabel()`. Don't `require` it from any
+  other entry, or every bundle grows by ~3 MB (it used to be in all of them, 49.6 MB total).
+
+## Boot loading (what loads when)
+
+The landing page (desktop) comes first, and everything else loads in the background after it.
+`testing/scripts/perf/` measures this (`measure-boot.mjs`) and checks it (`test-boot-loading.mjs`).
+- **Service worker.** `registerServiceWorker()` (`src/kernel/sw-bridge.ts`) waits for
+  `clients.claim()` instead of reloading on a first visit, so the boot runs once. A page
+  that loaded while the worker was activating, after its claim (e.g. reloaded during the
+  first install), sends the active worker `sw/claim` on `navigator.serviceWorker.ready`.
+  Don't wait for a worker `statechange` instead: it may already have happened. It reloads
+  only as a last resort, at most once per session.
+- **meta.json sync** (`bootstrapMetaFiles`, `src/kernel/vfs.ts`). It fetches meta.json with
+  `no-cache`, then downloads only files that are missing or whose `sha256` differs from the vfs
+  copy (a repeat visit downloads nothing but meta.json). `when: "boot"` entries are awaited,
+  and `when: "background"` ones are synced after landing. A downloaded file whose hash doesn't
+  match is refetched with `cache: 'reload'` (GitHub Pages caches for 10 minutes).
+- **Apps install once.** Only *preinstalled* apps (in `docs/public/mount/etc/pkg/installed.json`)
+  are in meta.json, marked `app: "<id>"`. Such a file is written only if it is missing and
+  the app isn't in `uninstalled.json`; a meta.json change never overwrites it. Other registry
+  apps are downloaded only when the user installs them in App Manager. To ship an app update,
+  bump its `version` in `docs/registry.json` (App Manager offers "Update"). The generator's
+  `SYSTEM_APPS` list is the exception: system apps are `force_reload`, refreshed on hash change.
+- **Bundles.** In `src/modules/modules.json`, `preload: true` bundles (layout, iframe,
+  file-explorer) load before the desktop, and the rest load after landing. `host.openWindow` on a
+  command that a pending bundle will register waits for it (`setModulesPending`), not "not found".
+- **Background work + spinner.** `src/kernel/background.ts`: `whenLandingReady()` (desktop
+  rendered + idle), `trackBackground(work, label)` (shows the near-invisible 10px
+  `#wos-background-spinner` at the bottom right while anything is pending). Apps reach them
+  as `platform.host.whenLandingReady()` / `platform.host.trackBackgroundTask(work, label)`.
+- **Verified vfs reads.** `src/system/static-code.ts` runs a system module (`/opt/window-manager.js`,
+  `/opt/wm/*`, `/opt/desktop/*`, `menuItem.js`) from its vfs copy only if those exact bytes
+  hash to the server's meta.json `sha256` (`host.metaSha256`, kernel closure state). Otherwise
+  it fetches the immutable static copy. The D1 trust boundary is unchanged, and it saves a
+  request per module.
+- Lazy fetches: Spotlight fetches the registry the first time it opens.
 
 ## Security model (read before touching the kernel, app hosting or file opening)
 
@@ -42,7 +87,8 @@ Docs: `documentation/security/` — README (trust levels, invariants I1–I8), `
   not used; the SW purges it.
 - **Boot integrity.** The kernel is always `/remote.bundle.js`; there's no localStorage
   override. The server `meta.json` decides what is reloaded, and only same-origin
-  `/public/mount/` sources are accepted.
+  `/public/mount/` sources are accepted. Its `sha256`s are recorded in kernel closure
+  (`src/kernel/meta-hashes.ts`) and are never readable as vfs state apps could rewrite.
 - **Peers / network.** Distributed Compute runs other peers' tasks only for groups the
   user opted into ("Run tasks for others"), inside a no-network, no-storage sandbox.
   WebRTC group invites need acceptance, and `autoMesh` defaults to off.
@@ -57,11 +103,14 @@ Docs: `documentation/security/` — README (trust levels, invariants I1–I8), `
   IndexedDB-backed store mirrored behind an InMemory fs (`AsyncMirror`) for sync access.
 - `defaultDirs` and the default-files bootstrap list live in `src/index.ts`. Default
   files are described in `docs/public/mount/meta.json` — each entry is
-  `{ path, file, force_reload }`:
-  - `force_reload: true` → always re-fetched from server on boot, overwriting any user
-    edits (used for app/runtime files that aren't meant to be user-customized).
+  `{ path, file, force_reload, sha256, when, app? }` (`sha256`/`when`/`app` are generated,
+  see "Boot loading"):
+  - `force_reload: true` → re-fetched from the server when its `sha256` differs from the vfs
+    copy, overwriting any user edits (used for app/runtime files that aren't meant to be
+    user-customized).
   - `force_reload: false` / absent → only written if the path doesn't already exist in
     the virtual fs (safe for user-editable config/content).
+  - `app: "<id>"` → a preinstalled app's file: written once, never overwritten by boot.
   - Parent directories are created with `mkdirSync(..., { recursive: true })`
     automatically, so a dir doesn't need to be in `defaultDirs` for a meta.json file to
     land there (e.g. `/opt` is not in `defaultDirs` but `/opt/window-manager.js` works).
@@ -245,11 +294,14 @@ Split into two halves on purpose:
 
 2. **Behavior** (event wiring per window) — `/opt/window-manager.js`, plus the
    window-style modules `/opt/wm/<id>.js`, the desktop variants `/opt/desktop/<id>.js` and
-   `/usr/lib/ui/menuItem.js`. `src/system/static-code.ts` fetches each from its
-   **immutable static copy** (`/public/mount<path>`) once and evaluates it on first use,
-   so `createWindow` stays synchronous. Ids must be in the shipped lists. Until the fetch
-   lands, or if it fails, compiled defaults apply. Editing the vfs copy has **no
-   effect** (audit WIN-6/BOOT-5: a one-time vfs write used to persist top-realm code). To
+   `/usr/lib/ui/menuItem.js`. `src/system/static-code.ts` loads each once and evaluates it
+   on first use, so `createWindow` stays synchronous. It loads the vfs copy only when its
+   bytes match the server's meta.json `sha256`, and otherwise the **immutable static copy**
+   (`/public/mount<path>`). The window manager preloads the base module and the
+   *selected* style only. Ids must be in the shipped lists. Until the load lands, or if
+   it fails, compiled defaults apply. Editing the vfs copy has **no effect**: a changed
+   copy fails the hash check and the static one is used (audit WIN-6/BOOT-5: a one-time vfs
+   write used to persist top-realm code). To
    change behavior, edit the file under `docs/public/mount/` and redeploy. It exports:
    - `DEFAULT_SETTINGS`, `readSettings()` (reads `/etc/wm/current.json`).
    - `setupWindow({ container, head, iframe, command, settings, toggleFullScreen,
@@ -427,9 +479,19 @@ Affects any sufficiently wide modal content, not just one call site — fixed on
   Screenshots go in `testing/screenshots/`.
 - Playwright: `import { chromium } from 'playwright'` — it is a devDependency, so
   `pnpm install` makes the bare import work.
-- First page load commonly shows a "no client available to serve the request" service
-  worker error — reload (`page.reload({ waitUntil: 'networkidle' })`) **twice** after
-  the initial `goto()` before interacting.
+- A first visit no longer reloads for the service worker. Wait for
+  `.vfs-desktop-icon` after `goto()`, then wait for `#wos-background-spinner` to lose
+  `.active` before relying on background-loaded apps or bundles. Older scripts that
+  reload twice after `goto()` still work, just more slowly.
+- Only preinstalled apps are in the vfs. A test that needs another registry app installs
+  it first: `ensureApp(page, id, command)` (`security/lib/harness.mjs`) or
+  `installApp(page, id)` (`verify-viewers-lib.mjs` / `verify-files-lib.mjs`).
+- To test like GitHub Pages (production build, 10-minute cache headers), serve `docs/` with
+  `node testing/scripts/perf/static-server.mjs <port>`. Then run
+  `node testing/scripts/perf/run-regressions.mjs <port> [--jobs 3] [filter-regex]`: every
+  `security/verify-*.mjs`, the app tests and the boot-loading test, with one line per
+  script. Use `BASE_URL=http://localhost:<port> node testing/scripts/security/run-all.mjs
+  <label>` for the finding-keyed suite.
 - Windows render inside `<iframe>` elements; `page.frames()` returns many transient
   `about:blank` frames. To find the right one, search `page.frames()` for a frame whose
   `.locator('text=...')` count is > 0 — and **re-run this search after any action that

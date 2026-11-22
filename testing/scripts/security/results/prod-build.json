@@ -1,0 +1,1880 @@
+{
+  "label": "prod-build",
+  "baseUrl": "http://localhost:8090",
+  "root": null,
+  "finishedAt": "2026-11-22T04:38:45.474Z",
+  "totals": {
+    "phase1": {
+      "findings": 47,
+      "pass": 47,
+      "fail": 0,
+      "error": 0,
+      "checks": 121,
+      "checksPassed": 121
+    },
+    "phase2": {
+      "findings": 8,
+      "pass": 0,
+      "fail": 8,
+      "error": 0,
+      "checks": 9,
+      "checksPassed": 0
+    },
+    "info": {
+      "findings": 5,
+      "pass": 4,
+      "fail": 1,
+      "error": 0,
+      "checks": 6,
+      "checksPassed": 5
+    }
+  },
+  "scripts": [
+    {
+      "script": "test-acl.mjs",
+      "exit": 0,
+      "timedOut": false,
+      "seconds": 7,
+      "checks": 8,
+      "stderrTail": ""
+    },
+    {
+      "script": "test-autorun.mjs",
+      "exit": 0,
+      "timedOut": false,
+      "seconds": 26,
+      "checks": 8,
+      "stderrTail": ""
+    },
+    {
+      "script": "test-boot-integrity.mjs",
+      "exit": 0,
+      "timedOut": false,
+      "seconds": 28,
+      "checks": 4,
+      "stderrTail": ""
+    },
+    {
+      "script": "test-commands.mjs",
+      "exit": 0,
+      "timedOut": false,
+      "seconds": 58,
+      "checks": 7,
+      "stderrTail": ""
+    },
+    {
+      "script": "test-dsl-injection.mjs",
+      "exit": 0,
+      "timedOut": false,
+      "seconds": 121,
+      "checks": 18,
+      "stderrTail": ""
+    },
+    {
+      "script": "test-framing.mjs",
+      "exit": 0,
+      "timedOut": false,
+      "seconds": 42,
+      "checks": 5,
+      "stderrTail": ""
+    },
+    {
+      "script": "test-ipc.mjs",
+      "exit": 0,
+      "timedOut": false,
+      "seconds": 45,
+      "checks": 8,
+      "stderrTail": ""
+    },
+    {
+      "script": "test-open-policy.mjs",
+      "exit": 0,
+      "timedOut": false,
+      "seconds": 53,
+      "checks": 10,
+      "stderrTail": ""
+    },
+    {
+      "script": "test-peer.mjs",
+      "exit": 0,
+      "timedOut": false,
+      "seconds": 51,
+      "checks": 8,
+      "stderrTail": ""
+    },
+    {
+      "script": "test-sandbox-phase2.mjs",
+      "exit": 0,
+      "timedOut": false,
+      "seconds": 7,
+      "checks": 5,
+      "stderrTail": ""
+    },
+    {
+      "script": "test-static.mjs",
+      "exit": 0,
+      "timedOut": false,
+      "seconds": 0,
+      "checks": 23,
+      "stderrTail": ""
+    },
+    {
+      "script": "test-sw.mjs",
+      "exit": 0,
+      "timedOut": false,
+      "seconds": 18,
+      "checks": 9,
+      "stderrTail": ""
+    },
+    {
+      "script": "test-traversal.mjs",
+      "exit": 0,
+      "timedOut": false,
+      "seconds": 30,
+      "checks": 7,
+      "stderrTail": ""
+    },
+    {
+      "script": "test-url-launcher.mjs",
+      "exit": 0,
+      "timedOut": false,
+      "seconds": 48,
+      "checks": 4,
+      "stderrTail": ""
+    },
+    {
+      "script": "test-xss.mjs",
+      "exit": 0,
+      "timedOut": false,
+      "seconds": 30,
+      "checks": 12,
+      "stderrTail": ""
+    }
+  ],
+  "table": {
+    "phase1": [
+      {
+        "id": "APP-1",
+        "status": "PASS",
+        "pass": 1,
+        "total": 1,
+        "failing": [],
+        "scripts": [
+          "test-dsl-injection.mjs"
+        ]
+      },
+      {
+        "id": "APP-5",
+        "status": "PASS",
+        "pass": 2,
+        "total": 2,
+        "failing": [],
+        "scripts": [
+          "test-static.mjs",
+          "test-xss.mjs"
+        ]
+      },
+      {
+        "id": "APP-6",
+        "status": "PASS",
+        "pass": 1,
+        "total": 1,
+        "failing": [],
+        "scripts": [
+          "test-static.mjs"
+        ]
+      },
+      {
+        "id": "APP-7",
+        "status": "PASS",
+        "pass": 2,
+        "total": 2,
+        "failing": [],
+        "scripts": [
+          "test-static.mjs",
+          "test-xss.mjs"
+        ]
+      },
+      {
+        "id": "APP-8",
+        "status": "PASS",
+        "pass": 2,
+        "total": 2,
+        "failing": [],
+        "scripts": [
+          "test-static.mjs"
+        ]
+      },
+      {
+        "id": "APP-9",
+        "status": "PASS",
+        "pass": 1,
+        "total": 1,
+        "failing": [],
+        "scripts": [
+          "test-ipc.mjs"
+        ]
+      },
+      {
+        "id": "APP-10",
+        "status": "PASS",
+        "pass": 3,
+        "total": 3,
+        "failing": [],
+        "scripts": [
+          "test-static.mjs",
+          "test-xss.mjs"
+        ]
+      },
+      {
+        "id": "APP-11",
+        "status": "PASS",
+        "pass": 1,
+        "total": 1,
+        "failing": [],
+        "scripts": [
+          "test-static.mjs"
+        ]
+      },
+      {
+        "id": "APP-12",
+        "status": "PASS",
+        "pass": 1,
+        "total": 1,
+        "failing": [],
+        "scripts": [
+          "test-static.mjs"
+        ]
+      },
+      {
+        "id": "APP-13",
+        "status": "PASS",
+        "pass": 2,
+        "total": 2,
+        "failing": [],
+        "scripts": [
+          "test-static.mjs",
+          "test-xss.mjs"
+        ]
+      },
+      {
+        "id": "APP-14",
+        "status": "PASS",
+        "pass": 7,
+        "total": 7,
+        "failing": [],
+        "scripts": [
+          "test-static.mjs",
+          "test-xss.mjs"
+        ]
+      },
+      {
+        "id": "BOOT-3",
+        "status": "PASS",
+        "pass": 2,
+        "total": 2,
+        "failing": [],
+        "scripts": [
+          "test-open-policy.mjs"
+        ]
+      },
+      {
+        "id": "BOOT-4",
+        "status": "PASS",
+        "pass": 2,
+        "total": 2,
+        "failing": [],
+        "scripts": [
+          "test-traversal.mjs"
+        ]
+      },
+      {
+        "id": "BOOT-5",
+        "status": "PASS",
+        "pass": 2,
+        "total": 2,
+        "failing": [],
+        "scripts": [
+          "test-autorun.mjs"
+        ]
+      },
+      {
+        "id": "BOOT-6",
+        "status": "PASS",
+        "pass": 1,
+        "total": 1,
+        "failing": [],
+        "scripts": [
+          "test-boot-integrity.mjs"
+        ]
+      },
+      {
+        "id": "BOOT-8",
+        "status": "PASS",
+        "pass": 3,
+        "total": 3,
+        "failing": [],
+        "scripts": [
+          "test-traversal.mjs"
+        ]
+      },
+      {
+        "id": "BOOT-9",
+        "status": "PASS",
+        "pass": 2,
+        "total": 2,
+        "failing": [],
+        "scripts": [
+          "test-commands.mjs"
+        ]
+      },
+      {
+        "id": "BOOT-10",
+        "status": "PASS",
+        "pass": 1,
+        "total": 1,
+        "failing": [],
+        "scripts": [
+          "test-traversal.mjs"
+        ]
+      },
+      {
+        "id": "BOOT-11",
+        "status": "PASS",
+        "pass": 1,
+        "total": 1,
+        "failing": [],
+        "scripts": [
+          "test-autorun.mjs"
+        ]
+      },
+      {
+        "id": "D15",
+        "status": "PASS",
+        "pass": 1,
+        "total": 1,
+        "failing": [],
+        "scripts": [
+          "test-static.mjs"
+        ]
+      },
+      {
+        "id": "KRN-1",
+        "status": "PASS",
+        "pass": 2,
+        "total": 2,
+        "failing": [],
+        "scripts": [
+          "test-ipc.mjs"
+        ]
+      },
+      {
+        "id": "KRN-2",
+        "status": "PASS",
+        "pass": 3,
+        "total": 3,
+        "failing": [],
+        "scripts": [
+          "test-url-launcher.mjs"
+        ]
+      },
+      {
+        "id": "KRN-3",
+        "status": "PASS",
+        "pass": 14,
+        "total": 14,
+        "failing": [],
+        "scripts": [
+          "test-dsl-injection.mjs",
+          "test-static.mjs"
+        ]
+      },
+      {
+        "id": "KRN-5",
+        "status": "PASS",
+        "pass": 7,
+        "total": 7,
+        "failing": [],
+        "scripts": [
+          "test-acl.mjs"
+        ]
+      },
+      {
+        "id": "KRN-7",
+        "status": "PASS",
+        "pass": 5,
+        "total": 5,
+        "failing": [],
+        "scripts": [
+          "test-sw.mjs"
+        ]
+      },
+      {
+        "id": "KRN-8",
+        "status": "PASS",
+        "pass": 2,
+        "total": 2,
+        "failing": [],
+        "scripts": [
+          "test-sw.mjs"
+        ]
+      },
+      {
+        "id": "KRN-9",
+        "status": "PASS",
+        "pass": 3,
+        "total": 3,
+        "failing": [],
+        "scripts": [
+          "test-boot-integrity.mjs"
+        ]
+      },
+      {
+        "id": "KRN-10",
+        "status": "PASS",
+        "pass": 3,
+        "total": 3,
+        "failing": [],
+        "scripts": [
+          "test-commands.mjs"
+        ]
+      },
+      {
+        "id": "KRN-11",
+        "status": "PASS",
+        "pass": 5,
+        "total": 5,
+        "failing": [],
+        "scripts": [
+          "test-framing.mjs"
+        ]
+      },
+      {
+        "id": "KRN-13",
+        "status": "PASS",
+        "pass": 1,
+        "total": 1,
+        "failing": [],
+        "scripts": [
+          "test-ipc.mjs"
+        ]
+      },
+      {
+        "id": "NET-1",
+        "status": "PASS",
+        "pass": 2,
+        "total": 2,
+        "failing": [],
+        "scripts": [
+          "test-peer.mjs"
+        ]
+      },
+      {
+        "id": "NET-3",
+        "status": "PASS",
+        "pass": 1,
+        "total": 1,
+        "failing": [],
+        "scripts": [
+          "test-peer.mjs"
+        ]
+      },
+      {
+        "id": "NET-4",
+        "status": "PASS",
+        "pass": 1,
+        "total": 1,
+        "failing": [],
+        "scripts": [
+          "test-traversal.mjs"
+        ]
+      },
+      {
+        "id": "NET-5",
+        "status": "PASS",
+        "pass": 2,
+        "total": 2,
+        "failing": [],
+        "scripts": [
+          "test-peer.mjs",
+          "test-static.mjs"
+        ]
+      },
+      {
+        "id": "NET-6",
+        "status": "PASS",
+        "pass": 1,
+        "total": 1,
+        "failing": [],
+        "scripts": [
+          "test-peer.mjs"
+        ]
+      },
+      {
+        "id": "NET-8",
+        "status": "PASS",
+        "pass": 5,
+        "total": 5,
+        "failing": [],
+        "scripts": [
+          "test-open-policy.mjs"
+        ]
+      },
+      {
+        "id": "NET-10",
+        "status": "PASS",
+        "pass": 1,
+        "total": 1,
+        "failing": [],
+        "scripts": [
+          "test-peer.mjs"
+        ]
+      },
+      {
+        "id": "NET-11",
+        "status": "PASS",
+        "pass": 2,
+        "total": 2,
+        "failing": [],
+        "scripts": [
+          "test-peer.mjs"
+        ]
+      },
+      {
+        "id": "NET-12",
+        "status": "PASS",
+        "pass": 1,
+        "total": 1,
+        "failing": [],
+        "scripts": [
+          "test-static.mjs"
+        ]
+      },
+      {
+        "id": "WIN-2",
+        "status": "PASS",
+        "pass": 4,
+        "total": 4,
+        "failing": [],
+        "scripts": [
+          "test-dsl-injection.mjs"
+        ]
+      },
+      {
+        "id": "WIN-3",
+        "status": "PASS",
+        "pass": 3,
+        "total": 3,
+        "failing": [],
+        "scripts": [
+          "test-open-policy.mjs"
+        ]
+      },
+      {
+        "id": "WIN-4",
+        "status": "PASS",
+        "pass": 2,
+        "total": 2,
+        "failing": [],
+        "scripts": [
+          "test-ipc.mjs"
+        ]
+      },
+      {
+        "id": "WIN-5",
+        "status": "PASS",
+        "pass": 5,
+        "total": 5,
+        "failing": [],
+        "scripts": [
+          "test-static.mjs",
+          "test-xss.mjs"
+        ]
+      },
+      {
+        "id": "WIN-6",
+        "status": "PASS",
+        "pass": 4,
+        "total": 4,
+        "failing": [],
+        "scripts": [
+          "test-autorun.mjs"
+        ]
+      },
+      {
+        "id": "WIN-7",
+        "status": "PASS",
+        "pass": 2,
+        "total": 2,
+        "failing": [],
+        "scripts": [
+          "test-ipc.mjs"
+        ]
+      },
+      {
+        "id": "WIN-8",
+        "status": "PASS",
+        "pass": 1,
+        "total": 1,
+        "failing": [],
+        "scripts": [
+          "test-xss.mjs"
+        ]
+      },
+      {
+        "id": "WIN-10",
+        "status": "PASS",
+        "pass": 1,
+        "total": 1,
+        "failing": [],
+        "scripts": [
+          "test-acl.mjs"
+        ]
+      }
+    ],
+    "phase2": [
+      {
+        "id": "APP-15",
+        "status": "FAIL",
+        "pass": 0,
+        "total": 1,
+        "failing": [
+          "FAIL static-apps-no-top-parent"
+        ],
+        "scripts": [
+          "test-static.mjs"
+        ]
+      },
+      {
+        "id": "BOOT-5",
+        "status": "FAIL",
+        "pass": 0,
+        "total": 1,
+        "failing": [
+          "FAIL planted-widget-runs-sandboxed"
+        ],
+        "scripts": [
+          "test-autorun.mjs"
+        ]
+      },
+      {
+        "id": "KRN-4",
+        "status": "FAIL",
+        "pass": 0,
+        "total": 1,
+        "failing": [
+          "FAIL explicit-run-is-not-top-realm"
+        ],
+        "scripts": [
+          "test-sandbox-phase2.mjs"
+        ]
+      },
+      {
+        "id": "KRN-6",
+        "status": "FAIL",
+        "pass": 0,
+        "total": 2,
+        "failing": [
+          "FAIL sandbox-app-iframe-opaque",
+          "FAIL static-no-same-origin-app-sandboxes"
+        ],
+        "scripts": [
+          "test-sandbox-phase2.mjs",
+          "test-static.mjs"
+        ]
+      },
+      {
+        "id": "KRN-12",
+        "status": "FAIL",
+        "pass": 0,
+        "total": 1,
+        "failing": [
+          "FAIL deeplink-handoff-not-swallowable"
+        ],
+        "scripts": [
+          "test-commands.mjs"
+        ]
+      },
+      {
+        "id": "NET-7",
+        "status": "FAIL",
+        "pass": 0,
+        "total": 1,
+        "failing": [
+          "FAIL other-app-cannot-open-keystore"
+        ],
+        "scripts": [
+          "test-sandbox-phase2.mjs"
+        ]
+      },
+      {
+        "id": "WIN-1",
+        "status": "FAIL",
+        "pass": 0,
+        "total": 1,
+        "failing": [
+          "FAIL app-window-isolated"
+        ],
+        "scripts": [
+          "test-sandbox-phase2.mjs"
+        ]
+      },
+      {
+        "id": "WIN-9",
+        "status": "FAIL",
+        "pass": 0,
+        "total": 1,
+        "failing": [
+          "FAIL app-cannot-kill-other-window"
+        ],
+        "scripts": [
+          "test-sandbox-phase2.mjs"
+        ]
+      }
+    ],
+    "info": [
+      {
+        "id": "APP-11",
+        "status": "PASS",
+        "pass": 1,
+        "total": 1,
+        "failing": [],
+        "scripts": [
+          "test-static.mjs"
+        ]
+      },
+      {
+        "id": "KRN-2",
+        "status": "PASS",
+        "pass": 1,
+        "total": 1,
+        "failing": [],
+        "scripts": [
+          "test-url-launcher.mjs"
+        ]
+      },
+      {
+        "id": "KRN-3",
+        "status": "PASS",
+        "pass": 1,
+        "total": 1,
+        "failing": [],
+        "scripts": [
+          "test-dsl-injection.mjs"
+        ]
+      },
+      {
+        "id": "KRN-8",
+        "status": "FAIL",
+        "pass": 1,
+        "total": 2,
+        "failing": [
+          "FAIL forged-reply-from-second-tab"
+        ],
+        "scripts": [
+          "test-sw.mjs"
+        ]
+      },
+      {
+        "id": "KRN-10",
+        "status": "PASS",
+        "pass": 1,
+        "total": 1,
+        "failing": [],
+        "scripts": [
+          "test-commands.mjs"
+        ]
+      }
+    ]
+  },
+  "checks": [
+    {
+      "id": "KRN-5",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "namespace-traversal-write-denied",
+      "detail": "allowed=[]",
+      "script": "test-acl.mjs"
+    },
+    {
+      "id": "KRN-5",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "namespace-foreign-app-data-unreadable",
+      "detail": "allowed=[]",
+      "script": "test-acl.mjs"
+    },
+    {
+      "id": "KRN-5",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "namespace-kernel-owned-not-writable",
+      "detail": "allowed=[]",
+      "script": "test-acl.mjs"
+    },
+    {
+      "id": "KRN-5",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "namespace-tmp-per-app",
+      "detail": "shared allowed=[]; own dirs={\"/tmp/sec-acl-app/x\":\"ALLOWED\",\"/home/user1/.local/share/sec-acl-app/x\":\"ALLOWED\"}",
+      "script": "test-acl.mjs"
+    },
+    {
+      "id": "KRN-5",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "namespace-bad-id-no-write-scope",
+      "detail": "appDir=; allowed=[]",
+      "script": "test-acl.mjs"
+    },
+    {
+      "id": "KRN-5",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "proxyfs-refuses-traversal-and-secret",
+      "detail": "{\"write\":\"denied\",\"read\":\"denied\",\"onDisk\":false}",
+      "script": "test-acl.mjs"
+    },
+    {
+      "id": "KRN-5",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "appsdk-port-refuses-traversal-and-secret",
+      "detail": "{\"write\":\"denied: [acl] write denied: pid=9 id=ui.snake-game path=/tmp/../etc/\",\"read\":\"denied: [acl] read denied: pid=9 id=ui.snake-game path=/home/user1/.\",\"kernel\":\"denied: [acl] write denied: pid=9 id=ui.snake-ga\"}; /etc/sec-acl-sdk.txt=false; window-manager.js overwritten=false",
+      "script": "test-acl.mjs"
+    },
+    {
+      "id": "WIN-10",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "props-cannot-widen-acl",
+      "detail": "{\"namespaceExposed\":false,\"proxyFsExposed\":true,\"write\":\"denied\",\"onDisk\":false}",
+      "script": "test-acl.mjs"
+    },
+    {
+      "id": "WIN-6",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "tampered-window-manager-js",
+      "detail": "sentinels=[]",
+      "script": "test-autorun.mjs"
+    },
+    {
+      "id": "WIN-6",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "tampered-wm-style-module",
+      "detail": "sentinels=[]",
+      "script": "test-autorun.mjs"
+    },
+    {
+      "id": "BOOT-5",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "managers-json-wm-id-traversal",
+      "detail": "sentinels=[]",
+      "script": "test-autorun.mjs"
+    },
+    {
+      "id": "WIN-6",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "desktop-module-unknown-or-traversal-id",
+      "detail": "sentinels=[]",
+      "script": "test-autorun.mjs"
+    },
+    {
+      "id": "WIN-6",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "tampered-desktop-manager-js",
+      "detail": "sentinels=[]",
+      "script": "test-autorun.mjs"
+    },
+    {
+      "id": "BOOT-11",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "tampered-menu-item-js",
+      "detail": "menuShown=true; sentinels=[]",
+      "script": "test-autorun.mjs"
+    },
+    {
+      "id": "BOOT-5",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "installed-json-mainfile-outside-app-dir",
+      "detail": "ran at boot=false (all boot sentinels [\"__sec_ar_widget\"])",
+      "script": "test-autorun.mjs"
+    },
+    {
+      "id": "BOOT-5",
+      "status": "FAIL",
+      "phase": "phase2",
+      "check": "planted-widget-runs-sandboxed",
+      "detail": "/etc/widgets/sec-evil.js ran in the top realm=true",
+      "script": "test-autorun.mjs"
+    },
+    {
+      "id": "KRN-9",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "bootstrap-override-cross-site",
+      "detail": "osBooted=true; evilFetched=0; sentinels=[]; scripts=[\"bootstrapper.bundle.js\",\"/remote.bundle.js\"]",
+      "script": "test-boot-integrity.mjs"
+    },
+    {
+      "id": "KRN-9",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "bootstrap-override-vfs-file",
+      "detail": "osBooted=true; sentinels=[]; keyAfterBoot=null",
+      "script": "test-boot-integrity.mjs"
+    },
+    {
+      "id": "KRN-9",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "fsbackend-link-needs-consent",
+      "detail": "storedBackend=null; idbMarkerVisibleAfterReload=true; dialogs=[\"This link asks to switch this browser's file system storage from \\\"indexeddb\\\" to \"]",
+      "script": "test-boot-integrity.mjs"
+    },
+    {
+      "id": "BOOT-6",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "vfs-meta-json-not-authoritative",
+      "detail": "booted=true; explorerEqualsServerCopy=true (len 70329 vs 70329); attackerFetches=0; sentinels=[]",
+      "script": "test-boot-integrity.mjs"
+    },
+    {
+      "id": "KRN-10",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "app-cannot-replace-ui.notepad",
+      "detail": "owner before=005-ui.notepad; script ran; replaced=false; sentinels=[]",
+      "script": "test-commands.mjs"
+    },
+    {
+      "id": "KRN-10",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "app-cannot-replace-ui.remote-machines",
+      "detail": "owner before=/(sw)/opt/apps/remote-machines/main.js; script ran; replaced=false; sentinels=[]",
+      "script": "test-commands.mjs"
+    },
+    {
+      "id": "KRN-10",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "extension-claim-not-default",
+      "detail": "opened={\"readme.txt\":[\"ui.notepad\"],\"pic.svg\":[\"ui.imageviewer\"]}; sentinels=[]",
+      "script": "test-commands.mjs"
+    },
+    {
+      "id": "BOOT-9",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "deeplink-app-dotdot",
+      "detail": "booted=true; sentinels=[]",
+      "script": "test-commands.mjs"
+    },
+    {
+      "id": "BOOT-9",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "deeplink-uninstalled-app",
+      "detail": "booted=true; sentinels=[]",
+      "script": "test-commands.mjs"
+    },
+    {
+      "id": "KRN-12",
+      "status": "FAIL",
+      "phase": "phase2",
+      "check": "deeplink-handoff-not-swallowable",
+      "detail": "newTabBooted=false; rogueAcks=1; newTabText=\"Opened in your other tab\\n\\nThis link was handed to the tab where the app is alrea\"",
+      "script": "test-commands.mjs"
+    },
+    {
+      "id": "KRN-10",
+      "status": "PASS",
+      "phase": "info",
+      "check": "explorer-owned-by-files-app",
+      "detail": "{\"owner\":\"/(sw)/opt/apps/file-explorer/main.js\",\"fallback\":false}",
+      "script": "test-commands.mjs"
+    },
+    {
+      "id": "KRN-3",
+      "status": "PASS",
+      "phase": "info",
+      "check": "control-payload-is-live",
+      "detail": "sentinel after hand-built DSL: [\"__sec_k3\"]",
+      "script": "test-dsl-injection.mjs"
+    },
+    {
+      "id": "KRN-3",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "host-exec-txt",
+      "detail": "sentinel=[] windows=[\"ui.notepad\"]",
+      "script": "test-dsl-injection.mjs"
+    },
+    {
+      "id": "KRN-3",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "host-exec-md",
+      "detail": "sentinel=[] windows=[\"ui.markdown\"]",
+      "script": "test-dsl-injection.mjs"
+    },
+    {
+      "id": "KRN-3",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "host-exec-png",
+      "detail": "sentinel=[] windows=[\"ui.imageviewer\"]",
+      "script": "test-dsl-injection.mjs"
+    },
+    {
+      "id": "KRN-3",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "host-exec-unknown-ext",
+      "detail": "sentinel=[] windows=[\"ui.notepad\"]",
+      "script": "test-dsl-injection.mjs"
+    },
+    {
+      "id": "KRN-3",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "host-exec-folder",
+      "detail": "sentinel=[] windows=[\"explorer\"]",
+      "script": "test-dsl-injection.mjs"
+    },
+    {
+      "id": "KRN-3",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "ui-settings-initial-section",
+      "detail": "sentinel=[]",
+      "script": "test-dsl-injection.mjs"
+    },
+    {
+      "id": "KRN-3",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "files-double-click-txt",
+      "detail": "sentinel=[]",
+      "script": "test-dsl-injection.mjs"
+    },
+    {
+      "id": "KRN-3",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "files-double-click-audio",
+      "detail": "sentinel=[]",
+      "script": "test-dsl-injection.mjs"
+    },
+    {
+      "id": "KRN-3",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "files-context-menu-file",
+      "detail": "fired on: []; actions tried: [\"Edit\",\"Open\",\"Download\",\"Rename\",\"Compare with…\",\"Compress to ZIP\",\"Copy\",\"Cut\",\"Properties\",\"Edit (about.html)\",\"VS Code\",\"Browser\",\"Delete\"]",
+      "script": "test-dsl-injection.mjs"
+    },
+    {
+      "id": "KRN-3",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "files-context-menu-folder",
+      "detail": "fired on: []; actions tried: [\"Open in explorer\",\"Rename\",\"Compress to ZIP\",\"Copy\",\"Cut\",\"Properties\",\"Delete\"]",
+      "script": "test-dsl-injection.mjs"
+    },
+    {
+      "id": "WIN-2",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "files-multi-select-menu",
+      "detail": "menu=[\"Download\",\"Delete 2 items\"] fired on: []",
+      "script": "test-dsl-injection.mjs"
+    },
+    {
+      "id": "WIN-2",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "compiled-explorer-double-click-audio",
+      "detail": "sentinel=[]",
+      "script": "test-dsl-injection.mjs"
+    },
+    {
+      "id": "WIN-2",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "compiled-explorer-context-menu",
+      "detail": "fired on: []; actions tried: [\"Edit\",\"Open\",\"Download\",\"Rename\",\"Copy\",\"Cut\",\"Properties\",\"Delete\"]",
+      "script": "test-dsl-injection.mjs"
+    },
+    {
+      "id": "WIN-2",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "markdown-edit-in-notepad",
+      "detail": "sentinel=[]",
+      "script": "test-dsl-injection.mjs"
+    },
+    {
+      "id": "KRN-3",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "desktop-icon-double-click",
+      "detail": "sentinel=[]",
+      "script": "test-dsl-injection.mjs"
+    },
+    {
+      "id": "KRN-3",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "desktop-icon-context-menu",
+      "detail": "fired on: []; actions tried: [\"Edit\",\"Open\",\"Edit (about.html)\",\"VS Code\",\"Browser\",\"Delete\"]",
+      "script": "test-dsl-injection.mjs"
+    },
+    {
+      "id": "APP-1",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "explorer-sifi-double-click-and-menu",
+      "detail": "double-click sentinel=[]; menu fired on: []; actions: [\"Edit\",\"Open\",\"Rename\",\"Compare with…\",\"Compress to ZIP\",\"Copy\",\"Cut\",\"Properties\",\"Text Editor\",\"VS Code\",\"Spreadsheet\",\"Image Viewer\",\"Music Player\",\"SQLite Browser\",\"Python REPL\",\"Browser\",\"Delete\"]",
+      "script": "test-dsl-injection.mjs"
+    },
+    {
+      "id": "KRN-11",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "cross-site-embed-refused",
+      "detail": "{\"fs\":false,\"platform\":false,\"ipc\":false,\"desktop\":false,\"text\":\"This page can’t run inside another site\\nOpen it in its own tab\"}",
+      "script": "test-framing.mjs"
+    },
+    {
+      "id": "KRN-11",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "os-popup-drops-opener",
+      "detail": "popupBooted=true; popup.window.opener set=false; attackerStillHoldsHandle=true",
+      "script": "test-framing.mjs"
+    },
+    {
+      "id": "KRN-11",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "window-open-from-top-has-no-opener",
+      "detail": "{\"ret\":\"null\",\"opened\":true,\"hadOpener\":false,\"referrer\":\"\"}",
+      "script": "test-framing.mjs"
+    },
+    {
+      "id": "KRN-11",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "window-open-from-app-window-has-no-opener",
+      "detail": "{\"ret\":\"null\",\"opened\":true,\"hadOpener\":false,\"referrer\":\"\"}",
+      "script": "test-framing.mjs"
+    },
+    {
+      "id": "KRN-11",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "meta-csp-in-index-and-404",
+      "detail": "{\"/\":{\"meta\":true,\"objectSrcNone\":true,\"baseUriSelf\":true,\"scriptSrc\":true},\"/404.html\":{\"meta\":true,\"objectSrcNone\":true,\"baseUriSelf\":true,\"scriptSrc\":true}}",
+      "script": "test-framing.mjs"
+    },
+    {
+      "id": "KRN-1",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "unregistered-sandboxed-frame",
+      "detail": "0 replies, 0 successful; secretLeaked=false; fileWritten=false",
+      "script": "test-ipc.mjs"
+    },
+    {
+      "id": "WIN-4",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "browser-app-page-ipc",
+      "detail": "0 replies, 0 successful; secretLeaked=false; fileWritten=false",
+      "script": "test-ipc.mjs"
+    },
+    {
+      "id": "WIN-4",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "browser-app-cross-origin-sandboxed",
+      "detail": "sandbox=\"allow-scripts allow-same-origin allow-forms\" referrerpolicy=no-referrer",
+      "script": "test-ipc.mjs"
+    },
+    {
+      "id": "WIN-7",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "dock-frame-fs",
+      "detail": "4 replies, 0 successful; secretLeaked=false; written=[]",
+      "script": "test-ipc.mjs"
+    },
+    {
+      "id": "WIN-7",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "wallpaper-frame-fs",
+      "detail": "3 replies, 0 successful; secretLeaked=false; fileWritten=false",
+      "script": "test-ipc.mjs"
+    },
+    {
+      "id": "KRN-13",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "broadcast-to-foreign-frame",
+      "detail": "wos-ipc-events=0 []; other=[]",
+      "script": "test-ipc.mjs"
+    },
+    {
+      "id": "APP-9",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "bookmark-no-opener-no-ipc",
+      "detail": "in-OS frame; opener=false; 0 replies, 0 successful; secretLeaked=false",
+      "script": "test-ipc.mjs"
+    },
+    {
+      "id": "KRN-1",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "cross-site-popup",
+      "detail": "popupBooted=true; 0 replies, 0 successful; secretLeaked=false; fileWritten=false",
+      "script": "test-ipc.mjs"
+    },
+    {
+      "id": "BOOT-3",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "open-js-in-home",
+      "detail": "ran=[] windows=[\"ui.notepad\"] dialogs(declined)=[]",
+      "script": "test-open-policy.mjs"
+    },
+    {
+      "id": "BOOT-3",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "open-run-in-home",
+      "detail": "ran=[] windows=[\"ui.notepad\"] dialogs(declined)=[]",
+      "script": "test-open-policy.mjs"
+    },
+    {
+      "id": "WIN-3",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "open-svg-in-home",
+      "detail": "ran=[] windows=[\"ui.imageviewer\"] dialogs(declined)=[]",
+      "script": "test-open-policy.mjs"
+    },
+    {
+      "id": "WIN-3",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "open-html-in-home",
+      "detail": "ran=[] windows=[\"ui.sandboxed-app\"] dialogs(declined)=[]",
+      "script": "test-open-policy.mjs"
+    },
+    {
+      "id": "NET-8",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "open-js-in-mnt",
+      "detail": "ran=[] windows=[\"ui.notepad\"] dialogs(declined)=[]",
+      "script": "test-open-policy.mjs"
+    },
+    {
+      "id": "NET-8",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "open-run-in-mnt",
+      "detail": "ran=[] windows=[\"ui.notepad\"] dialogs(declined)=[]",
+      "script": "test-open-policy.mjs"
+    },
+    {
+      "id": "NET-8",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "open-svg-in-mnt",
+      "detail": "ran=[] windows=[\"ui.imageviewer\"] dialogs(declined)=[]",
+      "script": "test-open-policy.mjs"
+    },
+    {
+      "id": "NET-8",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "open-html-in-mnt",
+      "detail": "ran=[] windows=[\"ui.sandboxed-app\"] dialogs(declined)=[]",
+      "script": "test-open-policy.mjs"
+    },
+    {
+      "id": "WIN-3",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "files-double-click-in-home",
+      "detail": "ran=[] opened=[\"js:explorer+ui.notepad\",\"run:explorer+ui.notepad\",\"svg:explorer+ui.imageviewer\",\"html:explorer+ui.sandboxed-app\"]",
+      "script": "test-open-policy.mjs"
+    },
+    {
+      "id": "NET-8",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "files-double-click-in-mnt",
+      "detail": "ran=[] opened=[\"js:explorer+ui.notepad\",\"run:explorer+ui.notepad\",\"svg:explorer+ui.imageviewer\",\"html:explorer+ui.sandboxed-app\"]",
+      "script": "test-open-policy.mjs"
+    },
+    {
+      "id": "NET-1",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "dc-task-not-run-before-opt-in",
+      "detail": "subscribers=1; reply={\"type\":\"dc-result\",\"to\":\"sec-attacker\",\"taskId\":\"sec-task-1\",\"ok\":false,\"refused\":true,\"error\":\"not accepting tasks from this group\"}",
+      "script": "test-peer.mjs"
+    },
+    {
+      "id": "NET-1",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "dc-task-after-opt-in-is-opaque",
+      "detail": "opted in via hook; task sees {\"origin\":\"null\",\"idb\":\"BLOCKED SecurityError\",\"xhr\":\"BLOCKED NetworkError\",\"top\":false,\"caches\":\"undefined\"}",
+      "script": "test-peer.mjs"
+    },
+    {
+      "id": "NET-5",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "roster-peer-name-is-text",
+      "detail": "{\"imgs\":0,\"text\":\"Victim (you)<img src=x onerror=\\\"window.__sec_dc_xss=1\\\">\",\"xss\":false}",
+      "script": "test-peer.mjs"
+    },
+    {
+      "id": "NET-11",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "auto-mesh-off-by-default",
+      "detail": "fresh profile settings.autoMesh=false",
+      "script": "test-peer.mjs"
+    },
+    {
+      "id": "NET-11",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "group-add-needs-consent",
+      "detail": "victim became a member without consent=false; prompts (declined)=[\"Mallory wants to add you to the group \\\"Trap\\\".\\n\\nGroup members can message you the\"]",
+      "script": "test-peer.mjs"
+    },
+    {
+      "id": "NET-3",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "mount-traversal-stays-inside",
+      "detail": "mount=/mnt/webrtc/Mallory-stuff (mountShare did not settle in 20s); outside=[]; inside=2",
+      "script": "test-peer.mjs"
+    },
+    {
+      "id": "NET-6",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "webrtc-api-share-from-other-app-refused",
+      "detail": "result=\"[object Object]\"; shares=[]; prompts (declined)=[\"Another app or the terminal asks WebRTC Chat to run:\\n\\n webrtc share add /home/u\"]",
+      "script": "test-peer.mjs"
+    },
+    {
+      "id": "NET-10",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "no-rw-share-of-system-folder",
+      "detail": "rw system shares=[]; attempts={\"/etc\":\"[object Object]\",\"/etc:direct\":\"refused: /etc is in a system folder (/etc) — it can only be shared read-only\",\"/opt\":\"[object Object]\",\"/opt:direct\":\"refused: /opt is in a system folder (/opt) — it can only be shared read-only\"}",
+      "script": "test-peer.mjs"
+    },
+    {
+      "id": "WIN-1",
+      "status": "FAIL",
+      "phase": "phase2",
+      "check": "app-window-isolated",
+      "detail": "reachable from an app window: [\"topDocument\",\"parentPlatform\",\"topFs\",\"indexedDB\",\"localStorage\",\"sibling\"]",
+      "script": "test-sandbox-phase2.mjs"
+    },
+    {
+      "id": "WIN-9",
+      "status": "FAIL",
+      "phase": "phase2",
+      "check": "app-cannot-kill-other-window",
+      "detail": "other app's window still open after process.kill from an app=false",
+      "script": "test-sandbox-phase2.mjs"
+    },
+    {
+      "id": "KRN-4",
+      "status": "FAIL",
+      "phase": "phase2",
+      "check": "explicit-run-is-not-top-realm",
+      "detail": "vfs script reached the top realm=true",
+      "script": "test-sandbox-phase2.mjs"
+    },
+    {
+      "id": "KRN-6",
+      "status": "FAIL",
+      "phase": "phase2",
+      "check": "sandbox-app-iframe-opaque",
+      "detail": "reachable: [\"parentDocument\",\"indexedDB\",\"removeSandbox\"]",
+      "script": "test-sandbox-phase2.mjs"
+    },
+    {
+      "id": "NET-7",
+      "status": "FAIL",
+      "phase": "phase2",
+      "check": "other-app-cannot-open-keystore",
+      "detail": "OPENED stores=",
+      "script": "test-sandbox-phase2.mjs"
+    },
+    {
+      "id": "KRN-3",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "static-no-interpolated-dsl",
+      "detail": "0 interpolated DSL sites:",
+      "script": "test-static.mjs"
+    },
+    {
+      "id": "KRN-3",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "static-no-interpolated-dsl-etc-scripts",
+      "detail": "0 interpolated DSL sites in /etc/settings + /etc/widgets scripts (not assigned in TODO 1A–1F):",
+      "script": "test-static.mjs"
+    },
+    {
+      "id": "D15",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "static-dead-exec-engine-removed",
+      "detail": "removed",
+      "script": "test-static.mjs"
+    },
+    {
+      "id": "WIN-5",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "static-innerhtml-core/window-manager.ts",
+      "detail": "0 raw sinks in src/core/window-manager.ts",
+      "script": "test-static.mjs"
+    },
+    {
+      "id": "APP-14",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "static-innerhtml-dock/gnome.html",
+      "detail": "0 raw sinks in docs/public/mount/opt/apps/dock/gnome.html",
+      "script": "test-static.mjs"
+    },
+    {
+      "id": "APP-14",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "static-innerhtml-dock/macos.html",
+      "detail": "0 raw sinks in docs/public/mount/opt/apps/dock/macos.html",
+      "script": "test-static.mjs"
+    },
+    {
+      "id": "APP-14",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "static-innerhtml-audio-player/player.html",
+      "detail": "0 raw sinks in docs/public/mount/opt/apps/audio-player/player.html",
+      "script": "test-static.mjs"
+    },
+    {
+      "id": "APP-14",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "static-innerhtml-fs-inspector/main.html",
+      "detail": "0 raw sinks in docs/public/mount/opt/apps/fs-inspector/main.html",
+      "script": "test-static.mjs"
+    },
+    {
+      "id": "APP-10",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "static-innerhtml-trainboard/main.html",
+      "detail": "0 raw sinks in docs/public/mount/opt/apps/trainboard/main.html",
+      "script": "test-static.mjs"
+    },
+    {
+      "id": "APP-10",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "static-innerhtml-trainboard/board.html",
+      "detail": "0 raw sinks in docs/public/mount/opt/apps/trainboard/board.html",
+      "script": "test-static.mjs"
+    },
+    {
+      "id": "APP-8",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "static-innerhtml-totp-auth/main.html",
+      "detail": "0 raw sinks in docs/public/mount/opt/apps/totp-auth/main.html",
+      "script": "test-static.mjs"
+    },
+    {
+      "id": "NET-5",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "static-innerhtml-ui/app.js",
+      "detail": "0 raw sinks in docs/public/mount/opt/apps/distributed-compute/ui/app.js",
+      "script": "test-static.mjs"
+    },
+    {
+      "id": "APP-5",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "static-notebook-markdown-sanitised",
+      "detail": "0 unsanitised marked → innerHTML:",
+      "script": "test-static.mjs"
+    },
+    {
+      "id": "APP-13",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "static-dashboard-no-inline-handlers",
+      "detail": "0 inline handlers with interpolation:",
+      "script": "test-static.mjs"
+    },
+    {
+      "id": "APP-11",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "static-cdn-pinned-sri-viewer-apps",
+      "detail": "0 CDN <script src> in 1F-owned apps without exact version+SRI:",
+      "script": "test-static.mjs"
+    },
+    {
+      "id": "APP-11",
+      "status": "PASS",
+      "phase": "info",
+      "check": "static-cdn-pinned-sri-other-apps",
+      "detail": "0 in other apps / pages:",
+      "script": "test-static.mjs"
+    },
+    {
+      "id": "NET-12",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "static-webamp-pinned",
+      "detail": "no unpinned webamp URL",
+      "script": "test-static.mjs"
+    },
+    {
+      "id": "APP-7",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "static-mermaid-security-level",
+      "detail": "securityLevel values: [\"strict\"]",
+      "script": "test-static.mjs"
+    },
+    {
+      "id": "APP-12",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "static-ts-ide-preview-no-same-origin",
+      "detail": "ts-ide preview sandbox values: [\"allow-scripts\"]",
+      "script": "test-static.mjs"
+    },
+    {
+      "id": "APP-6",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "static-ai-dom-lens-page-frame-no-scripts",
+      "detail": "pageFrame sandbox values: [\"allow-same-origin\"] (tag: <iframe id=\"pageFrame\" sandbox=\"allow-same-origin\" style=\"flex:1;border:none;display:none;)",
+      "script": "test-static.mjs"
+    },
+    {
+      "id": "APP-8",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "static-totp-no-localstorage",
+      "detail": "no localStorage writes",
+      "script": "test-static.mjs"
+    },
+    {
+      "id": "KRN-6",
+      "status": "FAIL",
+      "phase": "phase2",
+      "check": "static-no-same-origin-app-sandboxes",
+      "detail": "1 sandbox strings with allow-scripts+allow-same-origin: src/core/window-manager.ts:600",
+      "script": "test-static.mjs"
+    },
+    {
+      "id": "APP-15",
+      "status": "FAIL",
+      "phase": "phase2",
+      "check": "static-apps-no-top-parent",
+      "detail": "14 app files reference top./parent.: audio-player/main.js(1), audio-player/player.html(1), bookmarks/main.js(1), distributed-compute/lib/worker-task-runtime.js(1), explorer-sifi/main.js(5), file-explorer/main.js(5), fs-inspector/main.html(3), mermaid-viewer/main.js(1), pkg-manager/main.js(1), spotlight/main.js(1), sqlite-browser/main.js(2), sqlite-charts/main.js(2), ts-ide/main.html(5), webrtc/main.html(1)",
+      "script": "test-static.mjs"
+    },
+    {
+      "id": "KRN-7",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "top-level-html-is-opaque",
+      "detail": "{\"origin\":\"null\",\"localStorage\":\"BLOCKED SecurityError\",\"indexedDB\":\"BLOCKED SecurityError\",\"parentPlatform\":false}",
+      "script": "test-sw.mjs"
+    },
+    {
+      "id": "KRN-7",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "top-level-svg-is-opaque",
+      "detail": "{\"origin\":\"null\",\"localStorage\":\"BLOCKED SecurityError\"}",
+      "script": "test-sw.mjs"
+    },
+    {
+      "id": "KRN-7",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "top-level-opt-apps-is-opaque",
+      "detail": "{\"origin\":\"null\",\"localStorage\":\"BLOCKED SecurityError\",\"indexedDB\":\"BLOCKED SecurityError\",\"parentPlatform\":false}",
+      "script": "test-sw.mjs"
+    },
+    {
+      "id": "KRN-7",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "iframe-home-html-is-opaque",
+      "detail": "{\"origin\":\"null\",\"localStorage\":\"BLOCKED SecurityError\",\"indexedDB\":\"BLOCKED SecurityError\",\"parentPlatform\":\"BLOCKED SecurityError\"}",
+      "script": "test-sw.mjs"
+    },
+    {
+      "id": "KRN-7",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "vfs-response-headers",
+      "detail": "{\"/(sw)/tmp/sec-sw/x.html\":{\"status\":200,\"type\":\"text/html; charset=utf-8\",\"csp\":\"sandbox allow-scripts allow-forms allow-modals\",\"nosniff\":\"nosniff\",\"corp\":\"same-origin\"},\"/(sw)/tmp/sec-sw/a.unknownext\":{\"status\":200,\"type\":\"application/octet-stream\",\"csp\":\"sandbox allow-scripts allow-forms allow-modals\",\"nosniff\":\"nosniff\",\"corp\":\"same-origin\"},\"/cache/tmp/sec-sw/t.txt\":{\"status\":200,\"type\":\"text/plain; charset=utf-8\",\"csp\":\"sandbox allow-scripts allow-forms allow-modals\",\"nosniff\":\"nosniff\",\"corp\":\"same-origin\"}}",
+      "script": "test-sw.mjs"
+    },
+    {
+      "id": "KRN-8",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "request-ids-unpredictable",
+      "detail": "ids=[\"818e0bb7-ca71-4ca8-bd0f-4f29c65af029\",\"9a50926f-705b-4eab-9a65-88bd835c6e20\",\"9c142ae5-e90f-4496-8700-a36cb8c3a8ae\",\"9cc9b881-2d52-4b44-b0d8-4a65f3e3feab\"] consecutiveIntegers=false",
+      "script": "test-sw.mjs"
+    },
+    {
+      "id": "KRN-8",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "forged-reply-from-nested-frame",
+      "detail": "{\"status\":404,\"body\":\"Not found\",\"ms\":10019}; nestedFrameGotRequestsDirectly=0",
+      "script": "test-sw.mjs"
+    },
+    {
+      "id": "KRN-8",
+      "status": "FAIL",
+      "phase": "info",
+      "check": "forged-reply-from-second-tab",
+      "detail": "{\"status\":200,\"body\":\"FORGED-BY-TAB\",\"ms\":2}; secondTabGotRequestsDirectly=1 (residual: one registered kernel client per request)",
+      "script": "test-sw.mjs"
+    },
+    {
+      "id": "KRN-8",
+      "status": "PASS",
+      "phase": "info",
+      "check": "os-tab-still-serves",
+      "detail": "{\"status\":200,\"body\":\"REAL-CONTENT\",\"ms\":1}",
+      "script": "test-sw.mjs"
+    },
+    {
+      "id": "BOOT-8",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "files-extract-zip-slip",
+      "detail": "via menu:Extract here; outside=[]; inside=1; prompts=[]",
+      "script": "test-traversal.mjs"
+    },
+    {
+      "id": "BOOT-8",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "unzip-run-zip-slip",
+      "detail": "ran; outside=[]; inside=1",
+      "script": "test-traversal.mjs"
+    },
+    {
+      "id": "BOOT-8",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "tar-run-path-slip",
+      "detail": "ran; outside=[]; inside=1",
+      "script": "test-traversal.mjs"
+    },
+    {
+      "id": "BOOT-4",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "registry-dest-traversal",
+      "detail": "initd.run changed=false; /etc/widgets/sec-boot4.js=false; outside=[]; fileFetches=[0,0,0]; prompts(accepted)=[]",
+      "script": "test-traversal.mjs"
+    },
+    {
+      "id": "BOOT-4",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "registry-wrong-sha256",
+      "detail": "main.js written=false; ran=[]; fetched=1",
+      "script": "test-traversal.mjs"
+    },
+    {
+      "id": "BOOT-10",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "uninstall-uses-validated-app-dir",
+      "detail": "~/sec-b10 survived=true; pre-uninstall ran=[]; /opt/apps/sec-victim-pkg removed=true",
+      "script": "test-traversal.mjs"
+    },
+    {
+      "id": "NET-4",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "ssh-mirror-and-save-stay-inside",
+      "detail": "mount=/mnt/ssh/sec-evil-box; save=saved; outside=[]; inside=3",
+      "script": "test-traversal.mjs"
+    },
+    {
+      "id": "KRN-2",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "app-param-breakout",
+      "detail": "booted=true; sentinels=[]",
+      "script": "test-url-launcher.mjs"
+    },
+    {
+      "id": "KRN-2",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "apps-param-breakout",
+      "detail": "booted=true; sentinels=[]",
+      "script": "test-url-launcher.mjs"
+    },
+    {
+      "id": "KRN-2",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "args-without-deeplink-optin",
+      "detail": "booted=true; attackerFetches=0; attackerFrames=0; windows=[\"ui.iframe\"]",
+      "script": "test-url-launcher.mjs"
+    },
+    {
+      "id": "KRN-2",
+      "status": "PASS",
+      "phase": "info",
+      "check": "launcher-still-opens-valid-name",
+      "detail": "windows=[\"ui.notepad\"]",
+      "script": "test-url-launcher.mjs"
+    },
+    {
+      "id": "WIN-5",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "html-title-and-icon-render-as-text",
+      "detail": "sentinels=[]; <img> in chrome=0",
+      "script": "test-xss.mjs"
+    },
+    {
+      "id": "WIN-5",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "header-style-allowlist",
+      "detail": "{\"position\":\"static\",\"zIndex\":\"9\",\"inline\":\"\"}",
+      "script": "test-xss.mjs"
+    },
+    {
+      "id": "WIN-5",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "geometry-ignores-cssText",
+      "detail": "{\"position\":\"absolute\",\"zIndex\":\"10\",\"inline\":\"\"}",
+      "script": "test-xss.mjs"
+    },
+    {
+      "id": "WIN-5",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "action-button-icon-is-text",
+      "detail": "sentinels=[]",
+      "script": "test-xss.mjs"
+    },
+    {
+      "id": "WIN-8",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "markdown-viewer-no-script",
+      "detail": "viewer=ui.markdown dom={\"onerrorAttrs\":0,\"jsLinks\":0}; fired=[]",
+      "script": "test-xss.mjs"
+    },
+    {
+      "id": "APP-5",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "notebook-markdown-cell-no-script",
+      "detail": "fired=[]",
+      "script": "test-xss.mjs"
+    },
+    {
+      "id": "APP-7",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "mermaid-click-javascript",
+      "detail": "fired=[]; javascript: links in svg=0",
+      "script": "test-xss.mjs"
+    },
+    {
+      "id": "APP-10",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "trainboard-log-values-are-text",
+      "detail": "fired=[]",
+      "script": "test-xss.mjs"
+    },
+    {
+      "id": "APP-13",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "dashboard-picker-folder-name",
+      "detail": "fired=[]",
+      "script": "test-xss.mjs"
+    },
+    {
+      "id": "APP-14",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "media-player-file-name-is-text",
+      "detail": "fired=[]",
+      "script": "test-xss.mjs"
+    },
+    {
+      "id": "APP-14",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "dock-gnome-title-is-text",
+      "detail": "{\"xss\":false,\"imgs\":0,\"text\":true}",
+      "script": "test-xss.mjs"
+    },
+    {
+      "id": "APP-14",
+      "status": "PASS",
+      "phase": "phase1",
+      "check": "dock-macos-title-is-text",
+      "detail": "{\"xss\":false,\"imgs\":0,\"text\":true}",
+      "script": "test-xss.mjs"
+    }
+  ]
+}

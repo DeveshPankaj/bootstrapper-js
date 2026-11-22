@@ -6,6 +6,7 @@
 // Run: node testing/scripts/security/verify-host-commands.mjs   (OS dev server on :8080)
 // Exit code: 0 = all checks pass, 1 = a check failed.
 import { launch, bootOS } from './spike-lib.mjs';
+import { installApp } from './verify-viewers-lib.mjs'; // apps not preinstalled: install first
 
 const results = [];
 const check = (name, ok, detail = '') => { results.push({ name, ok, detail }); console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  — ' + detail : ''}`); };
@@ -58,10 +59,7 @@ try {
   check('the same owner may re-register; another script may not take it', sameOwner === 2 && otherOwner === `/(sw)${D}/evil.js`, `registrations=${sameOwner} owner=${otherOwner}`);
 
   // The Markdown app from the registry replaces the compiled viewer (fallback) and becomes the .md default.
-  await page.evaluate(() => {
-    platform._appDir = '/opt/apps/markdown-reader';
-    try { platform.host.runFile(platform, '/opt/apps/markdown-reader/main.js', [], { confirm: false }); } finally { delete platform._appDir; }
-  });
+  await installApp(page, 'markdown-reader'); // not preinstalled: installs from the registry, then loads main.js
   const md = await page.evaluate(() => platform.host.getCommand('ui.markdown')?.servicePlatformName);
   check('markdown-reader replaces the compiled ui.markdown (fallback)', md === '/(sw)/opt/apps/markdown-reader/main.js', md);
 
