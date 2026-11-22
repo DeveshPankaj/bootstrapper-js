@@ -5,7 +5,7 @@ const { useState, useEffect, useRef } = React
 // ── Persistence ─────────────────────────────────────────────────────────────
 const PINNED_KEY  = 'app_drawer_pinned'
 const RECENT_KEY  = 'app_drawer_recent'
-const DEFAULT_PIN = ['explorer','ui.notepad','ui.vs-code','webamp','ui.task-manager','ui.dashboard']
+const DEFAULT_PIN = ['explorer','ui.notepad','ui.terminal','ui.audioplayer','ui.settings','ui.pkg-manager']
 
 const getPinned = () => { try { return JSON.parse(localStorage.getItem(PINNED_KEY) || JSON.stringify(DEFAULT_PIN)) } catch { return DEFAULT_PIN } }
 const savePinned = v => localStorage.setItem(PINNED_KEY, JSON.stringify(v))

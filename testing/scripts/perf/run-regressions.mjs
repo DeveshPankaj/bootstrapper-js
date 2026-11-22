@@ -24,6 +24,10 @@ const scripts = [
     'testing/scripts/test-implicit-function-visualizer.mjs',
     'testing/scripts/test-demo-project-sandboxed.mjs',
     'testing/scripts/test-temp-html-demo.mjs',
+    'testing/scripts/test-default-apps.mjs',
+    'testing/scripts/test-settings-sections.mjs',
+    'testing/scripts/test-appearance.mjs',
+    'testing/scripts/test-force-reload-source.mjs',
     'testing/scripts/perf/test-boot-loading.mjs',
 ].filter(s => !filter || filter.test(s));
 

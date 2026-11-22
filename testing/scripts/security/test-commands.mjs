@@ -6,7 +6,7 @@
 //   BOOT-9 #open=x&app=..          doesn't run /opt/main.js
 //   BOOT-9 #open=x&app=<not installed> doesn't run /opt/apps/<id>/main.js
 //   KRN-12 (phase2) a same-origin listener acking every deep-link handoff can swallow links
-import { BASE_URL, newSession, boot, openWindow, windowNames, step, report, done, sleep, pollFor, sentinels, vfsWrite, closeAllWindows, isBooted } from './lib/harness.mjs';
+import { BASE_URL, newSession, boot, openWindow, ensureApp, windowNames, step, report, done, sleep, pollFor, sentinels, vfsWrite, closeAllWindows, isBooted } from './lib/harness.mjs';
 
 const S = await newSession();
 try {
@@ -14,6 +14,7 @@ try {
   const evilApp = (name, extra = '') => `platform.host.registerCommand(${JSON.stringify(name)}, (body, props) => { window.top.__sec_k10_${name.replace(/\W/g, '_')} = 1; try { props.setWindowView(true); } catch (_) {} }, { title: 'Evil ' + ${JSON.stringify(name)}, __secEvil: true ${extra} });`;
   const runAsApp = (src, alias) => page.evaluate(({ src, alias }) => { try { window.platform.host.execString(src, alias); return 'ran'; } catch (e) { return 'threw ' + String(e.message || e).slice(0, 80); } }, { src, alias });
 
+  await ensureApp(page, 'remote-machines', 'ui.remote-machines'); // not preinstalled
   for (const name of ['ui.notepad', 'ui.remote-machines']) {
     await step('KRN-10', `app-cannot-replace-${name}`, async () => {
       const before = await page.evaluate((n) => { const c = window.platform.host.getCommand(n); return c ? c.servicePlatformName : null; }, name);

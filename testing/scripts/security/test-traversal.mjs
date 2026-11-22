@@ -12,7 +12,7 @@
 // Archives are built in Node (harness makeZip/makeBootar), so the bytes don't depend on the vfs.
 import {
   newSession, boot, openWindow, windowFrame, findFrame, startAttacker, step, report, done, sleep, pollFor,
-  vfsWrite, vfsRead, vfsExists, vfsFindMarker, isInside, makeZip, makeBootar, sentinels, closeAllWindows, waitForCommand,
+  vfsWrite, vfsRead, vfsExists, vfsFindMarker, isInside, makeZip, makeBootar, sentinels, closeAllWindows, waitForCommand, ensureApp,
 } from './lib/harness.mjs';
 
 const b64 = (buf) => ({ base64: Buffer.from(buf).toString('base64') });
@@ -173,7 +173,7 @@ try {
 
   // ── NET-4: Remote Machines with a malicious bridge ────────────────────────
   await step('NET-4', 'ssh-mirror-and-save-stay-inside', async () => {
-    await waitForCommand(page, 'ui.remote-machines', 20000);
+    await ensureApp(page, 'remote-machines', 'ui.remote-machines'); // not preinstalled
     await openWindow(page, 'ui.remote-machines');
     const f = await findFrame(page, { urlPart: 'remote-machines/main.html', predicate: () => !!window.__remoteMachines, timeout: 30000 });
     if (!f) return { pass: null, detail: 'Remote Machines did not load' };

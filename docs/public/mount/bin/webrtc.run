@@ -5,7 +5,7 @@ const [pwd, ...rest] = $args
 
 const api = platform.host.getCommand('webrtc.api')
 if (!api) {
-  write('webrtc: the WebRTC Chat app is not running — open it first (files/desktop: "WebRTC Chat")\r\n')
+  write('webrtc: the WebRTC Chat app is not running — open it first (install it from App Manager if it isn\'t installed)\r\n')
   return
 }
 // Relative folder arguments (share add) are resolved against the terminal's cwd.

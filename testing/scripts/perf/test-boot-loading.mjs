@@ -28,6 +28,14 @@ const until = async (fn, timeout = 30000) => {
 const browser = await chromium.launch();
 const context = await browser.newContext();
 const page = await context.newPage();
+// Record whether the background spinner ever turned on: under load the background
+// work can finish before a poll started after landing would see it.
+await page.addInitScript(() => {
+    const watch = () => new MutationObserver(() => {
+        if (document.querySelector('#wos-background-spinner.active')) window.__wosSpinnerSeen = true;
+    }).observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ['class'] });
+    if (document.documentElement) watch(); else document.addEventListener('DOMContentLoaded', watch);
+});
 const requests = [];
 page.on('request', r => requests.push(r.url()));
 let navigations = 0;
@@ -41,7 +49,7 @@ try {
     const ready = await until(() => page.evaluate(() => document.querySelectorAll('.vfs-desktop-icon').length > 0), 60000);
     check('first visit: desktop shows', !!ready);
 
-    const spinnerSeen = await until(() => page.evaluate(() => document.getElementById('wos-background-spinner')?.classList.contains('active')), 10000);
+    const spinnerSeen = await until(() => page.evaluate(() => window.__wosSpinnerSeen === true), 10000);
     check('background spinner shows while the rest loads', !!spinnerSeen);
 
     // Opening a file right after landing: Notepad's bundle may still be loading — the
@@ -60,7 +68,7 @@ try {
     check('spinner hides when background loading is done', !!idle);
 
     const commands = await page.evaluate(() => Object.fromEntries(
-        ['ui.notepad', 'ui.markdown', 'ui.remote-machines', 'ui.distributed-compute', 'ui.webrtc', 'explorer', 'ui.pkg-manager']
+        ['ui.notepad', 'ui.markdown', 'ui.audioplayer', 'ui.imageviewer', 'ui.app-drawer', 'explorer', 'ui.pkg-manager']
             .map(n => [n, !!window.platform.host.getCommand(n)])));
     check('deferred bundles and background-installed apps registered', Object.values(commands).every(Boolean), JSON.stringify(commands));
 
@@ -77,7 +85,7 @@ try {
     check('desktop icons load through the service worker', icons.length > 0 && icons.every(Boolean), JSON.stringify(icons));
     check('first visit runs once (no service-worker reload)', navigations === 1, `main-frame navigations: ${navigations}`);
 
-    const notInstalled = requests.filter(u => /\/public\/mount\/opt\/apps\/(ts-ide|glsl-shader|notebook|dashboard|totp-auth|robot-sim)\//.test(u));
+    const notInstalled = requests.filter(u => /\/public\/mount\/opt\/apps\/(ts-ide|glsl-shader|notebook|dashboard|totp-auth|robot-sim|webrtc|task-manager|snake-game|distributed-compute)\//.test(u));
     check('apps that are not installed are not downloaded', notInstalled.length === 0, notInstalled.slice(0, 3).join(', '));
 
     // ── Repeat visit ──

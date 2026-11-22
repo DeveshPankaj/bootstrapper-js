@@ -13,8 +13,8 @@ const writePrefs = (prefs) => {
 }
 
 const EXPLORER_OPTIONS = [
-  { value: 'explorer',      label: 'Standard',        desc: 'Default macOS-style file browser.' },
-  { value: 'explorer-sifi', label: 'Minimal',          desc: 'Clean light theme with warm-beige accents.' },
+  { value: 'explorer',      appId: 'file-explorer', label: 'Standard', desc: 'Default macOS-style file browser.' },
+  { value: 'explorer-sifi', appId: 'explorer-sifi', label: 'Minimal',  desc: 'Clean light theme with warm-beige accents.' },
 ]
 
 const isAppInstalled = (commandName) => {
@@ -45,7 +45,7 @@ const AppsSettings = () => {
 
       <div className="settings-section">
         <h2 className="settings-section-title">Default File Explorer</h2>
-        <p style={{fontSize:13,color:'#666',marginBottom:'1rem',marginTop:0}}>
+        <p className="settings-page-subtitle" style={{marginBottom:'1rem'}}>
           Takes effect on next page reload.
         </p>
 
@@ -55,25 +55,25 @@ const AppsSettings = () => {
             return (
               <label key={opt.value}
                 style={{
-                  display:'flex',alignItems:'flex-start',gap:'.75rem',
-                  padding:'.65rem .85rem',borderRadius:6,
+                  display:'flex',alignItems:'flex-start',gap:'.85rem',
+                  padding:'.8rem 1rem',borderRadius:16,
                   cursor: installed ? 'pointer' : 'default',
-                  border:`1.5px solid ${!installed ? '#e8e8e8' : selected===opt.value ? '#b09070' : '#e8e8e8'}`,
-                  background: !installed ? '#f8f8f8' : selected===opt.value ? '#faf6f1' : '#fff',
-                  opacity: installed ? 1 : 0.55,
-                  transition:'border-color .15s,background .15s',
+                  boxShadow: installed && selected===opt.value ? 'inset 0 0 0 1.5px var(--vs-selected-rim)' : 'inset 0 0 0 1px var(--vs-stroke)',
+                  background: installed && selected===opt.value ? 'var(--vs-fill-3)' : 'var(--vs-fill)',
+                  opacity: installed ? 1 : 0.7,
+                  transition:'background .15s',
                 }}>
                 <input type="radio" name="default_explorer" value={opt.value}
                   checked={selected===opt.value}
                   disabled={!installed}
                   onChange={()=> installed && save(opt.value)}
-                  style={{marginTop:2,accentColor:'#b09070'}} />
+                  style={{marginTop:2}} />
                 <div style={{flex:1}}>
-                  <div style={{fontWeight:500,fontSize:13.5,color: installed ? '#1c1c1e' : '#999'}}>{opt.label}</div>
-                  <div style={{fontSize:12,color:'#888',marginTop:2}}>{opt.desc}</div>
+                  <div style={{fontWeight:600,fontSize:'0.95rem',color: installed ? 'var(--vs-text)' : 'var(--vs-text-2)'}}>{opt.label}</div>
+                  <div style={{fontSize:'0.82rem',color:'var(--vs-text-2)',marginTop:2}}>{opt.desc}</div>
                   {!installed && (
-                    <div style={{fontSize:11.5,color:'#0a84ff',marginTop:4,cursor:'pointer',display:'inline-flex',alignItems:'center',gap:4}}
-                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); openAppManager(opt.label) }}>
+                    <div style={{fontSize:'0.8rem',color:'var(--vs-link)',marginTop:6,cursor:'pointer',display:'inline-flex',alignItems:'center',gap:4}}
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); openAppManager(opt.appId) }}>
                       <span className="material-symbols-outlined" style={{fontSize:14}}>download</span>
                       Install from App Manager
                     </div>
@@ -85,7 +85,7 @@ const AppsSettings = () => {
         </div>
 
         {saved && (
-          <p style={{fontSize:12,color:'#888',marginTop:'.75rem'}}>
+          <p style={{fontSize:'0.82rem',color:'var(--vs-text-2)',marginTop:'.75rem'}}>
             Saved. Reload the page to apply.
           </p>
         )}
@@ -94,7 +94,7 @@ const AppsSettings = () => {
   )
 }
 
-platform.getService('settings').registerSection('apps', (container, { onDestroy }) => {
+platform.getService('settings').registerSection('19-apps', (container, { onDestroy }) => {
   const { createRoot } = platform.getService('ReactDOM')
   const root = createRoot(container)
   root.render(<AppsSettings />)

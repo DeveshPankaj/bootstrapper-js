@@ -90,6 +90,12 @@ export const safeBorderRadius = (value: unknown): string | undefined => {
   return `${Math.min(parseFloat(m[1]), RADIUS_MAX[m[2]])}${m[2]}`;
 };
 
+// Window materials an app may ask for with props.setWindowMaterial(name). A fixed
+// list mapped to a `material-<name>` class on the window container, styled in
+// src/core/layout/styles/window.ts, so an app picks a look but never supplies CSS.
+// 'glass' is the spatial (visionOS-like) frosted material used by Settings.
+export const WINDOW_MATERIALS: readonly string[] = ['default', 'glass'];
+
 export const clampWindowRect = (
   rect: unknown,
   current: { width: number; height: number },
@@ -663,6 +669,12 @@ export class WindowManager {
             }
             const radius = safeBorderRadius((rect as Record<string, unknown> | null)?.borderRadius);
             if (radius !== undefined) container.style.borderRadius = radius;
+          },
+          // One of WINDOW_MATERIALS; anything else is ignored.
+          setWindowMaterial: (material: unknown) => {
+            if (typeof material !== 'string' || !WINDOW_MATERIALS.includes(material)) return;
+            WINDOW_MATERIALS.forEach(m => container.classList.remove(`material-${m}`));
+            if (material !== 'default') container.classList.add(`material-${material}`);
           },
           host: hostDimension,
         },

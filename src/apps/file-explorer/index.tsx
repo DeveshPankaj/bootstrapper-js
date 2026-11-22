@@ -98,14 +98,65 @@ platform.host.registerCommand('ui.file-explorer', (body: HTMLBodyElement, props:
     body.appendChild(container)
     const win = body.ownerDocument.defaultView!
 
+    // Spatial glass look, light or dark (Settings › Window Manager › Themes › Mode).
+    const windowProps = props as UICallbackProps & { setWindowMaterial?: (material: string) => void }
+    if (typeof windowProps.setWindowMaterial === 'function') windowProps.setWindowMaterial('glass')
+    const docEl = body.ownerDocument.documentElement
+    const appearanceSub = platform.host.appearance$?.subscribe(a => docEl.setAttribute('data-appearance', a))
+    win.addEventListener('pagehide', () => appearanceSub?.unsubscribe())
+
     const styles = new win.CSSStyleSheet()
     styles.replace(`
+        /* Spatial glass look (same tokens as Settings, /opt/apps/settings/main.html).
+           The window paints the frosted material (props.setWindowMaterial('glass'));
+           this page is transparent. data-appearance comes from platform.host.appearance$. */
+        :root {
+            --vs-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", Inter, "Segoe UI", Helvetica, Arial, sans-serif;
+            --vs-text: rgba(255, 255, 255, 0.96);
+            --vs-text-2: rgba(255, 255, 255, 0.66);
+            --vs-text-3: rgba(255, 255, 255, 0.44);
+            --vs-fill: rgba(255, 255, 255, 0.075);
+            --vs-fill-2: rgba(255, 255, 255, 0.13);
+            --vs-fill-3: rgba(255, 255, 255, 0.21);
+            --vs-recessed: rgba(0, 0, 0, 0.20);
+            --vs-stroke: rgba(255, 255, 255, 0.13);
+            --vs-separator: rgba(255, 255, 255, 0.09);
+            --vs-sidebar: rgba(255, 255, 255, 0.045);
+            --vs-selected-rim: rgba(255, 255, 255, 0.6);
+            --vs-strong: rgba(255, 255, 255, 0.94);
+            --vs-on-strong: #1c1c1e;
+            --vs-scroll: rgba(255, 255, 255, 0.22);
+            --vs-dialog-bg: rgba(54, 54, 60, 0.88);
+            --vs-danger: #ff7a70;
+            --vs-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+        :root[data-appearance="light"] {
+            --vs-text: rgba(0, 0, 0, 0.86);
+            --vs-text-2: rgba(0, 0, 0, 0.56);
+            --vs-text-3: rgba(0, 0, 0, 0.38);
+            --vs-fill: rgba(255, 255, 255, 0.50);
+            --vs-fill-2: rgba(0, 0, 0, 0.06);
+            --vs-fill-3: rgba(255, 255, 255, 0.88);
+            --vs-recessed: rgba(0, 0, 0, 0.06);
+            --vs-stroke: rgba(0, 0, 0, 0.07);
+            --vs-separator: rgba(0, 0, 0, 0.08);
+            --vs-sidebar: rgba(255, 255, 255, 0.28);
+            --vs-selected-rim: rgba(0, 0, 0, 0.22);
+            --vs-strong: #1c1c1e;
+            --vs-on-strong: #ffffff;
+            --vs-scroll: rgba(0, 0, 0, 0.22);
+            --vs-dialog-bg: rgba(246, 246, 249, 0.92);
+            --vs-danger: #d70015;
+        }
+
         html, body {
             margin: 0;
-            padding:0;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+            padding: 0;
+            font-family: var(--vs-font);
             height: 100svh;
-            background: #fff;
+            background: transparent;
+            color: var(--vs-text);
+            -webkit-font-smoothing: antialiased;
         }
 
         @font-face {
@@ -128,65 +179,101 @@ platform.host.registerCommand('ui.file-explorer', (body: HTMLBodyElement, props:
             direction: ltr;
             -webkit-font-feature-settings: 'liga';
             -webkit-font-smoothing: antialiased;
+            font-variation-settings: 'FILL' 0, 'wght' 300;
         }
 
         * {
             box-sizing: border-box;
+            scrollbar-width: thin;
+            scrollbar-color: var(--vs-scroll) transparent;
         }
+        ::-webkit-scrollbar { width: 10px; height: 10px; }
+        ::-webkit-scrollbar-thumb { background: var(--vs-scroll); border-radius: 999px; border: 3px solid transparent; background-clip: padding-box; }
+        ::-webkit-scrollbar-track { background: transparent; }
 
         .file-explorer {
-            color: #1d1d1f;
-            background: #fff;
+            color: var(--vs-text);
+            background: transparent;
         }
 
         .file-explorer > header {
-            background: linear-gradient(#f7f7f7, #ececec);
-            color: #333;
-            padding: .5rem .75rem;
             display: flex;
             align-items: center;
-            gap: .75rem;
-            border-bottom: 1px solid #d4d4d4;
+            gap: .6rem;
+            padding: .6rem .8rem;
+            background: transparent;
+            border-bottom: 1px solid var(--vs-separator);
         }
 
-        .toolbar-nav-buttons {
+        /* Round glass buttons */
+        .toolbar-nav-buttons,
+        .toolbar-actions {
             display: flex;
             align-items: center;
-            gap: .15rem;
+            gap: .3rem;
             flex-shrink: 0;
         }
 
-        .toolbar-nav-buttons .material-symbols-outlined {
-            padding: .25rem;
-            border-radius: 6px;
+        .toolbar-nav-buttons .material-symbols-outlined,
+        .toolbar-actions .material-symbols-outlined {
+            width: 2rem;
+            height: 2rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            background: var(--vs-fill-2);
+            box-shadow: inset 0 0 0 1px var(--vs-stroke);
+            color: var(--vs-text);
+            font-size: 19px;
             cursor: pointer;
-            color: #555;
+            transition: background .18s var(--vs-ease), transform .18s var(--vs-ease);
         }
 
-        .toolbar-nav-buttons .material-symbols-outlined.disabled {
-            color: #ccc;
+        .toolbar-nav-buttons .material-symbols-outlined:not(.disabled):hover,
+        .toolbar-actions .material-symbols-outlined:not(.disabled):hover {
+            background: var(--vs-fill-3);
+        }
+
+        .toolbar-nav-buttons .material-symbols-outlined:not(.disabled):active,
+        .toolbar-actions .material-symbols-outlined:not(.disabled):active {
+            transform: scale(.94);
+        }
+
+        .toolbar-nav-buttons .material-symbols-outlined.disabled,
+        .toolbar-actions .material-symbols-outlined.disabled {
+            opacity: .35;
             cursor: default;
         }
 
-        .toolbar-nav-buttons .material-symbols-outlined:not(.disabled):hover {
-            background: rgba(0, 0, 0, 0.08);
+        .toolbar-actions .material-symbols-outlined.active,
+        .toolbar-actions .material-symbols-outlined.active:not(.disabled):hover {
+            background: var(--vs-strong);
+            color: var(--vs-on-strong);
+            box-shadow: none;
         }
 
+        /* Path bar: a recessed capsule */
         .breadcrumbs {
             flex-grow: 1;
             display: flex;
             align-items: center;
-            gap: .15rem;
+            gap: .1rem;
+            height: 2.1rem;
+            padding: 0 .35rem;
+            border-radius: 999px;
+            background: var(--vs-recessed);
+            box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12);
             overflow: hidden;
             white-space: nowrap;
             font-size: 13px;
-            color: #555;
+            color: var(--vs-text-2);
             min-width: 0;
         }
 
         .breadcrumbs > span.crumb {
-            padding: .2rem .5rem;
-            border-radius: 5px;
+            padding: .22rem .6rem;
+            border-radius: 999px;
             cursor: pointer;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -194,50 +281,84 @@ platform.host.registerCommand('ui.file-explorer', (body: HTMLBodyElement, props:
         }
 
         .breadcrumbs > span.crumb:hover {
-            background: rgba(0, 0, 0, 0.06);
+            background: var(--vs-fill-2);
         }
 
         .breadcrumbs > span.crumb.current {
             font-weight: 600;
-            color: #1d1d1f;
+            color: var(--vs-text);
         }
 
         .breadcrumbs > span.sep {
-            color: #aaa;
-            font-size: 11px;
+            color: var(--vs-text-3);
+            font-size: 15px;
             flex-shrink: 0;
         }
 
-        .toolbar-actions {
+        .explorer-search {
+            flex: 1;
             display: flex;
             align-items: center;
-            gap: .15rem;
-            flex-shrink: 0;
+            gap: .4rem;
+            min-width: 0;
         }
 
-        .toolbar-actions .material-symbols-outlined {
+        .explorer-search-input {
+            flex: 1;
+            min-width: 0;
+            height: 2.1rem;
+            padding: 0 .9rem;
+            border: 0;
+            border-radius: 999px;
+            background: var(--vs-recessed);
+            box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12);
+            color: var(--vs-text);
+            font: inherit;
+            font-size: 13px;
+            outline: none;
+        }
+        .explorer-search-input::placeholder { color: var(--vs-text-3); }
+        .explorer-search-input:focus { box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12), 0 0 0 2px var(--vs-selected-rim); }
+
+        .explorer-search-close {
             cursor: pointer;
-            padding: .25rem;
-            border-radius: 6px;
-            color: #555;
+            color: var(--vs-text-2);
+            font-size: 18px;
         }
 
-        .toolbar-actions .material-symbols-outlined:hover {
-            background: rgba(0, 0, 0, 0.08);
+        .explorer-search-results {
+            position: absolute;
+            inset: 0;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            padding: .6rem;
+            background: var(--vs-dialog-bg);
+            backdrop-filter: blur(30px) saturate(170%);
+            -webkit-backdrop-filter: blur(30px) saturate(170%);
         }
-
-        .toolbar-actions .material-symbols-outlined.active {
-            background: rgba(10, 132, 255, 0.16);
-            color: #0a84ff;
+        .explorer-search-empty { padding: 1rem; color: var(--vs-text-3); font-size: 13px; }
+        .explorer-search-result {
+            display: flex;
+            align-items: center;
+            gap: .55rem;
+            padding: .45rem .65rem;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 13px;
         }
-
-        .toolbar-actions .material-symbols-outlined.disabled {
-            color: #ccc;
-            cursor: default;
-        }
-
-        .toolbar-actions .material-symbols-outlined.disabled:hover {
-            background: none;
+        .explorer-search-result:hover { background: var(--vs-fill-2); }
+        .explorer-search-result .material-symbols-outlined { font-size: 17px; color: var(--vs-text-2); }
+        .explorer-search-result .result-name { font-weight: 500; }
+        .explorer-search-result .result-path {
+            font-size: 11px;
+            color: var(--vs-text-3);
+            margin-left: auto;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 60%;
         }
 
         .file-explorer-body {
@@ -246,27 +367,28 @@ platform.host.registerCommand('ui.file-explorer', (body: HTMLBodyElement, props:
             min-height: 0;
         }
 
+        /* Details pane */
         .file-explorer-details {
             flex: 0 0 14rem;
-            background: #f6f6f6;
-            border-left: 1px solid #e2e2e2;
+            background: var(--vs-sidebar);
+            border-left: 1px solid var(--vs-separator);
             overflow: auto;
-            padding: .85rem .9rem;
+            padding: .95rem;
             font-size: 12px;
-            color: #333;
+            color: var(--vs-text);
         }
 
         .file-explorer-details h4 {
             margin: 0 0 .85rem;
             font-size: 11px;
             font-weight: 600;
-            color: #9a9a9e;
+            color: var(--vs-text-3);
             text-transform: uppercase;
-            letter-spacing: .04em;
+            letter-spacing: .06em;
         }
 
         .file-explorer-details .details-empty {
-            color: #9a9a9e;
+            color: var(--vs-text-3);
             font-size: 12px;
             padding-top: 1rem;
             text-align: center;
@@ -275,12 +397,12 @@ platform.host.registerCommand('ui.file-explorer', (body: HTMLBodyElement, props:
         .file-explorer-details .details-thumb {
             width: 100%;
             height: 8rem;
-            border-radius: 8px;
+            border-radius: 14px;
             background-size: contain;
             background-repeat: no-repeat;
             background-position: center;
-            background-color: #fff;
-            border: 1px solid #e2e2e2;
+            background-color: var(--vs-fill);
+            box-shadow: inset 0 0 0 1px var(--vs-stroke);
             margin-bottom: .85rem;
         }
 
@@ -299,10 +421,10 @@ platform.host.registerCommand('ui.file-explorer', (body: HTMLBodyElement, props:
         }
 
         .file-explorer-details .details-row .details-label {
-            color: #9a9a9e;
+            color: var(--vs-text-3);
             font-size: 10px;
             text-transform: uppercase;
-            letter-spacing: .03em;
+            letter-spacing: .05em;
         }
 
         .file-explorer-details .details-row .details-value {
@@ -313,7 +435,7 @@ platform.host.registerCommand('ui.file-explorer', (body: HTMLBodyElement, props:
         .file-explorer-details .details-multi-list {
             max-height: 12rem;
             overflow-y: auto;
-            border-top: 1px solid #e2e2e2;
+            border-top: 1px solid var(--vs-separator);
             padding-top: .5rem;
             display: flex;
             flex-direction: column;
@@ -327,58 +449,69 @@ platform.host.registerCommand('ui.file-explorer', (body: HTMLBodyElement, props:
             text-overflow: ellipsis;
         }
 
+        .file-explorer-details .details-multi-item .material-symbols-outlined {
+            color: var(--vs-text-2);
+        }
+
+        /* Sidebar */
         .file-explorer-nav {
-            flex: 0 0 11rem;
-            background: #f6f6f6;
-            border-right: 1px solid #e2e2e2;
+            flex: 0 0 11.5rem;
+            background: var(--vs-sidebar);
+            border-right: 1px solid var(--vs-separator);
             overflow: auto;
-            padding: .6rem .5rem;
+            padding: .8rem .55rem;
         }
 
         .file-explorer-nav .nav-section-title {
             font-size: 11px;
             font-weight: 600;
-            color: #9a9a9e;
+            color: var(--vs-text-3);
             text-transform: uppercase;
-            letter-spacing: .04em;
-            padding: .4rem .5rem .3rem;
+            letter-spacing: .06em;
+            padding: .3rem .65rem .5rem;
         }
 
         .file-explorer-nav > div {
             display: flex;
             align-items: center;
-            gap: .55rem;
-            padding: .35rem .5rem;
-            border-radius: 6px;
+            gap: .6rem;
+            padding: .45rem .65rem;
+            margin-bottom: 2px;
+            border-radius: 12px;
             cursor: pointer;
             white-space: nowrap;
             font-size: 13px;
-            color: #333;
+            color: var(--vs-text);
+            transition: background .18s var(--vs-ease);
         }
 
         .file-explorer-nav > div .material-symbols-outlined {
-            font-size: 18px;
-            color: #6aa9f4;
+            font-size: 19px;
+            color: var(--vs-text-2);
         }
 
         .file-explorer-nav > div:hover {
-            background: rgba(0, 0, 0, 0.05);
+            background: var(--vs-fill);
         }
 
         .file-explorer-nav > div.active {
-            background: #cfe6ff;
-            color: #0b5fcc;
-            font-weight: 500;
+            background: var(--vs-fill-3);
+            box-shadow: inset 0 0 0 1px var(--vs-stroke), 0 1px 3px rgba(0, 0, 0, 0.06);
+            font-weight: 600;
         }
 
         .file-explorer-nav > div.active .material-symbols-outlined {
-            color: #1f7bf0;
+            color: var(--vs-text);
+        }
+
+        .file-explorer-nav > div.nav-section-title:hover {
+            background: none;
         }
 
         .dir-list {
             flex-grow: 1;
             overflow: auto;
-            background: #ffffff;
+            background: transparent;
             display: flex;
             flex-direction: column;
         }
@@ -390,12 +523,60 @@ platform.host.registerCommand('ui.file-explorer', (body: HTMLBodyElement, props:
         .file-explorer-status {
             flex-shrink: 0;
             margin-top: auto;
-            border-top: 1px solid #e2e2e2;
-            background: #f6f6f6;
-            color: #8a8a8e;
+            border-top: 1px solid var(--vs-separator);
+            background: transparent;
+            color: var(--vs-text-3);
             font-size: 11px;
-            padding: .25rem .75rem;
+            padding: .3rem .9rem;
         }
+
+        /* Properties dialog */
+        .explorer-modal-overlay {
+            position: absolute;
+            inset: 0;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.25);
+        }
+        .explorer-modal {
+            min-width: 280px;
+            max-width: 400px;
+            padding: 1.4rem 1.5rem;
+            border-radius: 22px;
+            background: var(--vs-dialog-bg);
+            backdrop-filter: blur(36px) saturate(170%);
+            -webkit-backdrop-filter: blur(36px) saturate(170%);
+            box-shadow: inset 0 0 0 1px var(--vs-stroke), 0 24px 60px rgba(0, 0, 0, 0.35);
+            color: var(--vs-text);
+            font-family: inherit;
+        }
+        .explorer-modal h3 {
+            margin: 0 0 .9rem;
+            padding-bottom: .75rem;
+            font-size: 15px;
+            border-bottom: 1px solid var(--vs-separator);
+        }
+        .explorer-modal table { width: 100%; font-size: 13px; border-collapse: collapse; }
+        .explorer-modal tr { border-bottom: 1px solid var(--vs-separator); }
+        .explorer-modal tr:last-child { border-bottom: 0; }
+        .explorer-modal td { padding: .45rem .5rem; vertical-align: top; word-break: break-all; }
+        .explorer-modal td.prop-key { color: var(--vs-text-2); font-weight: 500; white-space: nowrap; word-break: normal; }
+        .explorer-modal .prop-error { color: var(--vs-danger); font-size: 13px; }
+        .explorer-modal-actions { text-align: right; margin-top: 1rem; }
+        .explorer-btn {
+            padding: .45rem 1.2rem;
+            border: 0;
+            border-radius: 999px;
+            background: var(--vs-strong);
+            color: var(--vs-on-strong);
+            font: inherit;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .explorer-btn:hover { filter: brightness(1.08); }
 
     `)
 
@@ -546,7 +727,7 @@ const DetailsPanel = ({ paths }: { paths: string[] }) => {
                 <div className="details-multi-list">
                     {items.map(it => (
                         <div key={it.path} className="details-multi-item">
-                            <span className="material-symbols-outlined" style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 4, color: '#6aa9f4' }}>
+                            <span className="material-symbols-outlined" style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 4 }}>
                                 {it.isDir ? 'folder' : 'insert_drive_file'}
                             </span>
                             {it.name}
@@ -1077,13 +1258,13 @@ const App = (props: UICallbackProps & { file: FileType }) => {
                         onClick={goBack}
                         aria-label="back"
                         title="back"
-                    >arrow_back_ios</span>
+                    >chevron_left</span>
                     <span
                         className={`material-symbols-outlined ${historyIndexRef.current >= historyRef.current.length - 1 ? 'disabled' : ''}`}
                         onClick={goForward}
                         aria-label="forward"
                         title="forward"
-                    >arrow_forward_ios</span>
+                    >chevron_right</span>
                     <span
                         className={`material-symbols-outlined ${dirRef.current === '/' ? 'disabled' : ''}`}
                         onClick={goUp}
@@ -1161,16 +1342,20 @@ const App = (props: UICallbackProps & { file: FileType }) => {
                 }
                 const mtime = stat && stat.mtime ? new Date(stat.mtime).toLocaleString() : '—'
                 return (
-                    <div onClick={() => setPropsFile(null)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 10, padding: '1.4rem 1.6rem', minWidth: 280, maxWidth: 360, boxShadow: '0 8px 32px rgba(0,0,0,.18)', fontFamily: 'system-ui,sans-serif', fontSize: 13 }}>
-                            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: '1rem', wordBreak: 'break-all' }}>{name}</div>
-                            {[['Name', name], ['Location', location], ['Type', typeLabel], isDir ? ['Contents', sizeLabel] : ['Size', sizeLabel], ['Modified', mtime]].map(([k, v]) => (
-                                <div key={k} style={{ display: 'flex', gap: '.5rem', marginBottom: '.45rem' }}>
-                                    <span style={{ color: '#888', width: 80, flexShrink: 0 }}>{k}</span>
-                                    <span style={{ wordBreak: 'break-all' }}>{v}</span>
-                                </div>
-                            ))}
-                            <button onClick={() => setPropsFile(null)} style={{ marginTop: '1rem', width: '100%', padding: '.45rem', borderRadius: 7, border: 'none', background: '#f0f0f0', cursor: 'pointer', fontWeight: 600 }}>Close</button>
+                    <div className="explorer-modal-overlay" onClick={() => setPropsFile(null)}>
+                        <div className="explorer-modal" onClick={e => e.stopPropagation()}>
+                            <h3 style={{ wordBreak: 'break-all' }}>{name}</h3>
+                            <table><tbody>
+                                {[['Name', name], ['Location', location], ['Type', typeLabel], isDir ? ['Contents', sizeLabel] : ['Size', sizeLabel], ['Modified', mtime]].map(([k, v]) => (
+                                    <tr key={k}>
+                                        <td className="prop-key">{k}</td>
+                                        <td>{v}</td>
+                                    </tr>
+                                ))}
+                            </tbody></table>
+                            <div className="explorer-modal-actions">
+                                <button className="explorer-btn" onClick={() => setPropsFile(null)}>Close</button>
+                            </div>
                         </div>
                     </div>
                 )
@@ -1348,9 +1533,9 @@ const ListDirComponent = ({ dir, openFile, showFileActions, showDirActions, hand
         styles.replaceSync(`
 
         .${DESKTOP_CONTAINER_CLASS}-files {
-            padding: .75rem;
+            padding: .9rem;
             display: flex;
-            gap: .25rem;
+            gap: .35rem;
             flex-wrap: wrap;
             align-content: flex-start;
         }
@@ -1360,37 +1545,39 @@ const ListDirComponent = ({ dir, openFile, showFileActions, showDirActions, hand
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: .35rem;
-            width: 5.5rem;
-            padding: .4rem .25rem;
-            border-radius: 8px;
+            gap: .4rem;
+            width: 5.75rem;
+            padding: .55rem .3rem .45rem;
+            border-radius: 16px;
             cursor: pointer;
             user-select: none;
+            transition: background .15s;
         }
 
         .${DESKTOP_CONTAINER_CLASS}-files .file-item:hover {
-            background: rgba(0, 90, 255, 0.06);
+            background: var(--vs-fill, rgba(0, 90, 255, 0.06));
         }
 
         .${DESKTOP_CONTAINER_CLASS}-files .file-item.selected {
-            background: rgba(0, 122, 255, 0.16);
+            background: var(--vs-fill-3, rgba(0, 122, 255, 0.16));
+            box-shadow: inset 0 0 0 1px var(--vs-stroke, transparent), 0 1px 3px rgba(0, 0, 0, 0.06);
         }
 
         .${DESKTOP_CONTAINER_CLASS}-files .file-item.selected .file-name {
-            background: #0a84ff;
-            color: #fff;
+            font-weight: 600;
         }
 
         .${DESKTOP_CONTAINER_CLASS}-files .file-item.drag-over {
-            background: rgba(10, 132, 255, 0.18);
-            outline: 2px dashed #0a84ff;
+            background: var(--vs-fill-2, rgba(10, 132, 255, 0.18));
+            outline: 2px dashed var(--vs-selected-rim, #0a84ff);
             outline-offset: -2px;
         }
 
         .${DESKTOP_CONTAINER_CLASS}-files.drag-over {
-            outline: 2px dashed #0a84ff;
-            outline-offset: -4px;
-            background: rgba(10, 132, 255, 0.04);
+            outline: 2px dashed var(--vs-selected-rim, #0a84ff);
+            outline-offset: -6px;
+            border-radius: 18px;
+            background: var(--vs-fill, rgba(10, 132, 255, 0.04));
         }
 
         .${DESKTOP_CONTAINER_CLASS}-files .file {
@@ -1400,18 +1587,19 @@ const ListDirComponent = ({ dir, openFile, showFileActions, showDirActions, hand
             height: 3rem;
             overflow: hidden;
             cursor: pointer;
+            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.18));
         }
 
         .${DESKTOP_CONTAINER_CLASS}-files .file-name {
             font-size: 12px;
-            color: #1d1d1f;
+            color: var(--vs-text, #1d1d1f);
             text-align: center;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
             max-width: 100%;
             padding: 1px 5px;
-            border-radius: 4px;
+            border-radius: 6px;
         }
 
         .${DESKTOP_CONTAINER_CLASS}-files .file-item.cut {

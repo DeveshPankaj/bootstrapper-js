@@ -263,7 +263,7 @@ const NODES = [
     ],
   },
   {
-    id: 'settings-app', label: 'Settings App', sub: 'home/user1/settings.html',
+    id: 'settings-app', label: 'Settings App', sub: 'opt/apps/settings/main.html',
     icon: 'settings', color: '#8e8e93',
     x: 30, y: 760, w: 165, h: 70,
     info: [

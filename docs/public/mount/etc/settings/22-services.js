@@ -87,7 +87,7 @@ const ServicesEditor = () => {
                   {journal.length
                     ? journal.map((l, i) => <div key={i}>{l}</div>)
                     : <span style={{ opacity: 0.5 }}>No log output yet.</span>}
-                  {u.lastError ? <div style={{ color: '#ff6961', marginTop: 4 }}>Error: {u.lastError}</div> : null}
+                  {u.lastError ? <div style={{ color: 'var(--vs-danger)', marginTop: 4 }}>Error: {u.lastError}</div> : null}
                 </div>
               )}
             </div>

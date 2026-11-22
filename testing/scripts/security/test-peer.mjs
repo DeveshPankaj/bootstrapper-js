@@ -10,7 +10,7 @@
 //   NET-3  M serves traversal names for a share V mounts → nothing lands outside /mnt/webrtc/<label>
 //   NET-6  another app's `webrtc.api share add … rw` is refused/prompted (prompt declined → no share)
 //   NET-10 a read-write share of /etc is refused even when the user confirms
-import { BASE_URL, newSession, boot, openWindow, findFrame, step, report, done, sleep, pollFor, vfsWrite, vfsFindMarker, isInside, waitForCommand } from './lib/harness.mjs';
+import { BASE_URL, newSession, boot, openWindow, ensureApp, findFrame, step, report, done, sleep, pollFor, vfsWrite, vfsFindMarker, isInside, waitForCommand } from './lib/harness.mjs';
 
 const GID = 'sec-net1-group';
 const XSS_NAME = '<img src=x onerror="window.__sec_dc_xss=1">';
@@ -39,6 +39,7 @@ try {
   }, { GID, XSS_NAME });
 
   const openDc = async () => {
+    await ensureApp(page, 'distributed-compute', 'ui.distributed-compute'); // not preinstalled
     await openWindow(page, 'ui.distributed-compute');
     const f = await findFrame(page, { urlPart: 'distributed-compute/main.html', predicate: () => window.__distComputeReady === true, timeout: 30000 });
     return f;
@@ -111,11 +112,11 @@ try {
 
   const webrtcFrame = (p) => findFrame(p, { urlPart: 'webrtc/main.html', predicate: () => !!window.__webrtcApp, timeout: 40000 });
   const connect = async () => {
-    await waitForCommand(pM, 'ui.webrtc');
+    await ensureApp(pM, 'webrtc', 'ui.webrtc'); // not preinstalled
     await openWindow(pM, 'ui.webrtc');
     const fM = await webrtcFrame(pM);
     const inv = await fM.evaluate(async () => (await window.__webrtcApp.createInvite('Mallory')).link);
-    await waitForCommand(pV, 'ui.webrtc');
+    await ensureApp(pV, 'webrtc', 'ui.webrtc');
     await openWindow(pV, 'ui.webrtc', inv);
     const fV = await webrtcFrame(pV);
     if (!(await pollFor(() => fV.evaluate(() => window.__webrtcApp.joins.size === 1), 30000))) throw new Error('victim never picked up the invite');

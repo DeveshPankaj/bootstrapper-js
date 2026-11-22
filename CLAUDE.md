@@ -41,6 +41,13 @@ The landing page (desktop) comes first, and everything else loads in the backgro
   copy (a repeat visit downloads nothing but meta.json). `when: "boot"` entries are awaited,
   and `when: "background"` ones are synced after landing. A downloaded file whose hash doesn't
   match is refetched with `cache: 'reload'` (GitHub Pages caches for 10 minutes).
+- **Default apps.** A fresh profile gets only the essential apps: File Explorer, Settings,
+  Terminal, Spotlight, Audio Player and App Drawer, plus App Manager (installs everything else)
+  and Image Viewer (the explorer opens images with it). Notepad and the dock are part of the
+  shell. The default set is kept in three places: `installed.json`, `CORE_APPS` in
+  `opt/apps/pkg-manager/loader.js` (loaded whenever their files exist, unless uninstalled) and
+  meta.json's `/opt/apps/<id>/` entries. Every other registry app installs from App Manager.
+  `testing/scripts/test-default-apps.mjs` checks this.
 - **Apps install once.** Only *preinstalled* apps (in `docs/public/mount/etc/pkg/installed.json`)
   are in meta.json, marked `app: "<id>"`. Such a file is written only if it is missing and
   the app isn't in `uninstalled.json`; a meta.json change never overwrites it. Other registry
@@ -139,7 +146,7 @@ follow these existing conventions (all bootstrapped via `meta.json`, all current
   (`/public/mount/opt/window-manager.js`), never from the vfs, whose copy is view-only
   (see "Window manager appearance & behavior").
 - `/opt/cron/*.js` — cron job scripts (`force_reload: false`).
-- `/home/user1/` — user home: `settings.html`, `initd.run` (boot script run by
+- `/home/user1/` — user home: `initd.run` (boot script run by
   `initd`), user content dirs (`projects/`, `welcome/`). All apps live under
   `/opt/apps/<name>/` now (see below) — there is no more `/home/user1/apps/`.
 - `/tmp`, `/mnt` — ephemeral / mounted-folder space, not part of `meta.json`.
@@ -165,8 +172,20 @@ direct user editing (`force_reload: true`); files under `/home/user1` and `/etc/
     key collisions since LocalStorage has no namespacing).
   - Each backend is a completely separate filesystem — switching doesn't move/merge
     files.
-- Settings → "Storage" page (`docs/public/mount/home/user1/settings.html`,
-  `StorageSettings` component) lets the user pick a backend and reloads
+- Settings → Storage → Default Files → **Force Reload** re-downloads every meta.json file.
+  - **Source:** an optional field, prefilled with this site's `meta.json`; empty means this site.
+    It accepts another site running this OS (its `/public/mount/meta.json` is used) or a
+    `meta.json` URL, `https:` only (`http:` only for localhost). It's never saved, so nothing
+    can pre-point it.
+  - **Another source:** gets its own confirmation naming the origin. Entries are checked with
+    the kernel's rules (no URLs / `..` / query characters; normalized targets), and sha256 is
+    checked where given.
+  - **What sticks:** the boot sync still restores this site's system files on the next start.
+  - **Saving:** before reloading it waits on `fs.whenFlushed()` (`src/kernel/vfs.ts`: the
+    AsyncMirror IndexedDB queues are empty). Use it whenever code reloads right after writing
+    many files.
+  - **Test:** `testing/scripts/test-force-reload-source.mjs`.
+- Settings → "Storage" page (`docs/public/mount/etc/settings/08-storage.js`) lets the user pick a backend and reloads
   (`top.location.href` with the query param set) to apply it. Keep its
   `FS_BACKEND_STORAGE_KEY`/`FS_BACKEND_QUERY_PARAM` constants in sync with `src/index.ts`.
 - **Gotcha (legacy data only)**: apps used to live at `/home/user1/apps/*.js` with
@@ -197,7 +216,7 @@ direct user editing (`force_reload: true`); files under `/home/user1` and `/etc/
   - `execString(source, filenameAlias, _platform?)` — Babel-transpiles
     (`env`+`react`+`typescript`, commonjs modules) and runs source via `new Function`,
     returns `module.exports`. This is how `.js` files in the virtual fs and dynamic
-    "scripts" (settings.html `<script type="text/React-Jsx">`) get executed. Inside the
+    "scripts" (the Settings page's `<script type="text/React-Jsx">`) get executed. Inside the
     executed code, `window` is a *shim* (`{ platform: newPlatform, document, top }`),
     not the real `window` — `window.platform` gives you a working `Platform` whose
     `.host` is the same shared `Host`. `Buffer` (Node polyfill) IS available as a bare
@@ -259,7 +278,7 @@ direct user editing (`force_reload: true`); files under `/home/user1` and `/etc/
 - `.content-area` needs `min-height: 0; min-width: 0; overflow: hidden` — grid items
   default to `min-height: auto`, which lets intrinsic content size override `1fr`
   track sizing otherwise.
-- Settings UI: `/home/user1/settings.html` → "Layout" page, lists layouts from
+- Settings UI: "Layout" page (`/etc/settings/05-layout.js`), lists layouts from
   `/etc/wm/layouts.json`, calls `platform.host.callCommand('set-layout', id)`.
 
 ### Window manager appearance & behavior
@@ -311,10 +330,38 @@ Split into two halves on purpose:
    - If the file is missing or throws, `window-manager.ts` falls back to a small inline
      `FALLBACK_WM_SETTINGS` default and skips `setupWindow`.
 
-Settings → "Window Manager" page (`settings.html`) shows a "Themes" section with
-clickable preset cards (swatch preview from each theme's `appearance`, highlights the
-active theme by matching `current.json`'s `name`), plus color pickers / sliders /
-checkboxes for fine-tuning that write straight to `current.json`. Deeper behavior
+**Window materials.** An app can ask its window for a fixed look with
+`props.setWindowMaterial(name)`, where name is one of `WINDOW_MATERIALS`
+(`src/core/window-manager.ts`). It becomes a `material-<name>` class on the container,
+styled in `src/core/layout/styles/window.ts`. Apps pick a name, never supply CSS. `glass`
+is the spatial (visionOS-like) frosted material: a strong backdrop blur, a neutral dark
+tint and a light rim, independent of the WM theme so white text stays readable. It also sets a
+22px radius (`--glass-radius`) and makes a glass window's title bar transparent. A theme can
+override `--glass-window-bg`, `--glass-blur`, `--glass-shadow` and `--glass-radius` on `:root`
+(plus the `-light` variants below).
+
+**Appearance (light / dark).**
+- The user picks a mode in Settings › Window Manager › Themes: System (default), Dark, Light or
+  Time. Time is light 07:00–19:00 (`DAY_START_HOUR`/`DAY_END_HOUR`) and dark otherwise.
+- `src/system/appearance.ts` (started in `remote.ts`) stores the mode as `appearance_mode` in
+  `/user-preferences.json`. It resolves the mode (System follows `prefers-color-scheme`; Time is
+  re-checked every minute) and sets `data-appearance="light|dark"` on the desktop document, so
+  `.window.material-glass` gets a light variant there. It also publishes the result on
+  `platform.host.appearance$` / `getAppearance()`. Commands: `get-appearance-mode`,
+  `set-appearance-mode(mode)` (unknown modes are refused).
+- The value lives at module level in `src/shared/index.ts`, not on a Host instance: every module
+  window has its own Host (all built in `remote.ts`), and an instance field wouldn't be shared.
+- A glass app subscribes to `appearance$` and sets `data-appearance` on its own document. Its
+  `--vs-*` tokens have a `:root[data-appearance="light"]` set (Settings `main.html`, both
+  explorer copies). `testing/scripts/test-appearance.mjs` covers all of this.
+
+Settings → "Window Manager" page (`/etc/settings/06-window-manager.js`) is the one place for
+window looks. It shows clickable theme cards (swatch preview from each theme's
+`appearance`, active one matched by `current.json`'s `name`), color pickers / sliders /
+checkboxes that write straight to `current.json`, and "Save as Theme", which writes
+`/etc/wm/themes/<slug>.json` and refuses names that are taken. Settings → "Managers"
+(`20-managers.js`) picks the components instead: title bar style, dock and desktop icons.
+Don't add theme or color controls there (it used to duplicate them). Deeper behavior
 customization means editing `docs/public/mount/opt/window-manager.js` in the repo (the
 shipped copy); the vfs copy is view-only.
 
@@ -360,12 +407,15 @@ webpack static assets.
   `extIconMap` instead references `/(sw)/usr/share/icons/...` directly — no blob-URL
   conversion needed there.
 
-Both explorer copies share the same macOS Finder look:
-- Toolbar: light gradient header with back/forward/up (history-stack based) nav arrows
-  and a clickable breadcrumb path bar (`getBreadcrumbs()`).
+Both explorer copies share the same spatial glass look (glass window material, light/dark via
+`appearance$`, the same `--vs-*` tokens as Settings, round glass toolbar buttons, a capsule path
+bar, pill selection in the sidebar and grid). Keep the token block identical in both files:
+- Toolbar: round glass back/forward/up buttons (history-stack based; `chevron_left`/
+  `chevron_right`/`arrow_upward`, aria-labels back/forward/up) and a clickable breadcrumb path
+  bar (`getBreadcrumbs()`) in a recessed capsule.
 - Sidebar: "FAVORITES" section (`NAV_SHORTCUTS` = Home `/home/user1`, Mounted `/mnt`,
-  Root `/`), rounded blue active highlight.
-- Content: icon grid, single-click selects (blue highlight), double-click opens
+  Root `/`), lighter-pill active highlight.
+- Content: icon grid, single-click selects (pill highlight), double-click opens
   (`.file-item`/`.file-item.selected`).
 - Status bar `.file-explorer-status` at the bottom (`margin-top: auto` so it sticks to
   the bottom of a flex column even with few items).
@@ -425,6 +475,10 @@ WebRTC invite/answer links). Two halves:
 - **Post-boot** (`/usr/bin/deeplink.js`, run from `initd.run` after the pkg loader): receives handoffs and
   handles this tab's own hash (consumed via `history.replaceState`). Waits for `.content-area` before
   `open-window` (it silently no-ops until the desktop is mounted).
+- **App not installed** (`app=<id>` names an app missing from `installed.json`, e.g. a WebRTC invite
+  sent to a new user): App Manager opens filtered to that app, with a toast. Nothing installs because of
+  a link. If the user clicks Install, the link carries on as soon as the command registers (it waits up
+  to 15 minutes).
 - **Opt-in security**: a command is reachable only if its `registerCommand` meta has `deepLink: true`;
   optional `hasDeepLinkTarget()` / `onDeepLink(arg)` route the link to a running window instead of a new one.
   Names are regex-validated, `arg` is capped, and passed only as `$args` (never interpolated).
@@ -483,9 +537,13 @@ Affects any sufficiently wide modal content, not just one call site — fixed on
   `.vfs-desktop-icon` after `goto()`, then wait for `#wos-background-spinner` to lose
   `.active` before relying on background-loaded apps or bundles. Older scripts that
   reload twice after `goto()` still work, just more slowly.
-- Only preinstalled apps are in the vfs. A test that needs another registry app installs
+- Only the default apps are in the vfs. A test that needs another registry app installs
   it first: `ensureApp(page, id, command)` (`security/lib/harness.mjs`) or
-  `installApp(page, id)` (`verify-viewers-lib.mjs` / `verify-files-lib.mjs`).
+  `installApp(page, id)` (`verify-viewers-lib.mjs` / `verify-files-lib.mjs`). `bootOS()`
+  (`security/spike-lib.mjs`, behind every `verify-*` script) installs `LEGACY_TEST_APPS`, the
+  apps that were preinstalled before the cut, as a preinstall would, unless called with
+  `{ legacyApps: false }`. Tests of the real defaults (`test-default-apps.mjs`,
+  `perf/test-boot-loading.mjs`) don't use it.
 - To test like GitHub Pages (production build, 10-minute cache headers), serve `docs/` with
   `node testing/scripts/perf/static-server.mjs <port>`. Then run
   `node testing/scripts/perf/run-regressions.mjs <port> [--jobs 3] [filter-regex]`: every
@@ -521,8 +579,21 @@ Affects any sufficiently wide modal content, not just one call site — fixed on
 - Material Symbols Outlined icon font is loaded from Google Fonts CDN and re-declared
   via `@font-face`/`.material-symbols-outlined` in several stylesheets (layout, both
   explorer copies) — keep consistent if editing.
-- `settings.html` pages array (`pages` in the `App` component) drives the left nav of
-  the Settings window; each entry is `{id, name, label, component}`.
+- **Settings app** (`/opt/apps/settings/main.html`; the old `/home/user1/settings.html` copy is
+  gone). Every sidebar section is a script in `/etc/settings/NN-name.js`, loaded in file-name
+  order each time Settings opens. A script must register under its file name without `.js`
+  (`registerSection('05-layout', …)`), because that's how a reopen knows it's loaded.
+  `registerSettingsSection` keeps one entry per name (registering again replaces it), so a
+  mismatch costs a re-run, never a duplicate. To retire a section, delete its file and its
+  meta.json entry, and add its name to `RETIRED_SECTIONS` in `main.html` (older vfs copies
+  stay on disk). `testing/scripts/test-settings-sections.mjs` checks the sidebar.
+- **Settings look** (spatial glass). The window uses `setWindowMaterial('glass')`, and the page is
+  transparent with white text. Colors, fills and radii come from the `--vs-*` tokens at the top of
+  the stylesheet in `main.html`: text levels `--vs-text/-2/-3`, platters `--vs-fill/-2/-3`, fields
+  `--vs-recessed`, rims `--vs-stroke`, and `--vs-radius-*`. Section scripts should use those
+  tokens (`'var(--vs-fill)'`), not hard-coded light colors. Checkboxes render as switches and
+  buttons as capsules. Don't set `color-scheme: dark` in the page: a color scheme different
+  from the desktop's makes Chrome paint the iframe opaque.
 - Settings → "Wallpaper" page: in addition to the `wallpapers` list in
   `/user-preferences.json`, an optional `wallpapers_dir` vfs path (set via "Set
   Wallpapers Folder" / `UserPreference.getWallpapersDir`/`setWallpapersDir`, command

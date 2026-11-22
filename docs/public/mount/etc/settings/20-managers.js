@@ -1,8 +1,9 @@
-// Settings > Managers — window manager style, dock manager, desktop environment.
+// Settings > Managers — window title bar style, dock manager, desktop icons.
+// (Themes, colors and window behavior: 06-window-manager.js.)
 const React = platform.getService('React')
 const ReactDOM = platform.getService('ReactDOM')
 const { utils } = platform.getService('settings')
-const { fs, DEFAULT_WM_SETTINGS, WM_SETTINGS_PATH, WM_THEMES_DIR, ColorAlphaInput } = utils
+const { fs } = utils
 
 // ─── Managers config (WM style + dock) ────────────────────────────────────────
 
@@ -67,13 +68,12 @@ const OptionList = ({ options, activeId, onSelect }) =>
                 key: opt.id,
                 style: {
                     display: 'flex', alignItems: 'center', gap: 10,
-                    padding: '8px 12px', textAlign: 'left', borderRadius: 6,
-                    border: activeId === opt.id
-                        ? '1.5px solid var(--accent, #0a84ff)'
-                        : '1.5px solid transparent',
-                    background: activeId === opt.id
-                        ? 'color-mix(in srgb, var(--accent, #0a84ff) 12%, transparent)'
-                        : 'rgba(128,128,128,0.08)',
+                    padding: '10px 14px', textAlign: 'left', borderRadius: 16, border: 'none',
+                    boxShadow: activeId === opt.id
+                        ? 'inset 0 0 0 1.5px var(--vs-selected-rim)'
+                        : 'inset 0 0 0 1px var(--vs-stroke)',
+                    background: activeId === opt.id ? 'var(--vs-fill-3)' : 'var(--vs-fill)',
+                    color: 'inherit', font: 'inherit',
                     cursor: 'pointer', width: '100%',
                 },
                 onClick: () => onSelect(opt.id),
@@ -88,7 +88,7 @@ const OptionList = ({ options, activeId, onSelect }) =>
                 ),
                 activeId === opt.id && React.createElement('span', {
                     className: 'material-symbols-outlined',
-                    style: { marginLeft: 'auto', fontSize: 16, color: 'var(--accent, #0a84ff)', flexShrink: 0 },
+                    style: { marginLeft: 'auto', fontSize: 18, color: 'var(--vs-text)', flexShrink: 0 },
                 }, 'check_circle'),
             )
         )
@@ -131,7 +131,7 @@ const SchemaSettingsPanel = ({ getCmd, setCmd, emptyMessage }) => {
         schema.map(entry =>
             React.createElement('div', {
                 key: entry.key,
-                style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 12px', borderRadius: 6, background: 'rgba(128,128,128,0.05)' },
+                style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: 14, background: 'var(--vs-fill)', boxShadow: 'inset 0 0 0 1px var(--vs-stroke)' },
             },
                 React.createElement('span', { style: { fontSize: 12, opacity: 0.8 } }, entry.label),
                 entry.type === 'color'
@@ -169,98 +169,6 @@ const SchemaSettingsPanel = ({ getCmd, setCmd, emptyMessage }) => {
     )
 }
 
-// ─── Appearance / theme picker ─────────────────────────────────────────────────
-
-const AppearanceSection = ({ settings, setAppearance, setBehavior, resetToDefaults }) => {
-    const readThemes = () => {
-        try {
-            if (!fs.existsSync(WM_THEMES_DIR)) return []
-            return fs.readdirSync(WM_THEMES_DIR).filter(f => f.endsWith('.json')).map(file => {
-                const id = file.replace(/\.json$/, '')
-                let raw = {}
-                try { raw = JSON.parse(fs.readFileSync(`${WM_THEMES_DIR}/${file}`, 'utf-8')) } catch (_) {}
-                return { id, name: raw.name || id, appearance: { ...DEFAULT_WM_SETTINGS.appearance, ...raw.appearance } }
-            })
-        } catch (_) { return [] }
-    }
-    const [themes] = React.useState(readThemes)
-    const [currentThemeId, setCurrentThemeId] = React.useState(() => {
-        try { return JSON.parse(fs.readFileSync(WM_SETTINGS_PATH, 'utf-8')).name?.toLowerCase() } catch (_) { return undefined }
-    })
-
-    const selectTheme = (theme) => { platform.host.callCommand('set-window-manager-theme', theme.id); setCurrentThemeId(theme.id) }
-
-    return React.createElement(React.Fragment, null,
-        React.createElement('p', { className: 'muted-small', style: { margin: '16px 0 6px' } }, 'THEME'),
-        React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 4 } },
-            themes.map(theme =>
-                React.createElement('div', {
-                    key: theme.id,
-                    style: {
-                        display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px',
-                        borderRadius: 6, cursor: 'pointer',
-                        border: theme.id === currentThemeId ? '1.5px solid #0a84ff' : '1.5px solid transparent',
-                        background: theme.id === currentThemeId ? 'color-mix(in srgb,#0a84ff 12%,transparent)' : 'rgba(128,128,128,0.08)',
-                    },
-                    onClick: () => selectTheme(theme),
-                },
-                    React.createElement('div', { style: { width: 32, height: 20, borderRadius: Math.min(theme.appearance.borderRadius, 6), background: theme.appearance.windowBackground, border: `2px solid ${theme.appearance.headerBackground}`, outline: `2px solid ${theme.appearance.accentColor}`, flexShrink: 0 } }),
-                    React.createElement('span', { style: { fontSize: 13 } }, theme.name),
-                    theme.id === currentThemeId && React.createElement('span', { className: 'material-symbols-outlined', style: { marginLeft: 'auto', fontSize: 16, color: '#0a84ff' } }, 'check_circle'),
-                )
-            ),
-        ),
-
-        React.createElement('p', { className: 'muted-small', style: { margin: '16px 0 6px' } }, 'APPEARANCE'),
-        React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 4 } },
-            [
-                ['Title bar background', 'color',    'headerBackground', null],
-                ['Title bar text',       'color',    'headerColor',      null],
-                ['Window background',    'alpha',    'windowBackground', null],
-                ['Taskbar background',   'alpha',    'taskbarBackground',null],
-                ['Taskbar size',         'range',    'taskbarSize',      [40,96]],
-                ['Accent color',         'color',    'accentColor',      null],
-                ['Corner radius',        'range',    'borderRadius',     [0,24]],
-                ['Background blur',      'range',    'blur',             [0,40]],
-            ].map(([label, type, key, range]) =>
-                React.createElement('div', { key, style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 12px', borderRadius: 6, background: 'rgba(128,128,128,0.05)' } },
-                    React.createElement('span', { style: { fontSize: 12, opacity: 0.8 } }, `${label}${range ? ` (${settings.appearance[key]}${key === 'taskbarSize' ? 'px' : key === 'blur' ? 'px' : 'px'})` : ''}`),
-                    type === 'alpha'
-                        ? React.createElement(ColorAlphaInput, { value: settings.appearance[key], onChange: v => setAppearance(key, v) })
-                        : React.createElement('input', {
-                            type: type === 'range' ? 'range' : 'color',
-                            min: range?.[0], max: range?.[1],
-                            value: settings.appearance[key],
-                            onChange: e => setAppearance(key, type === 'range' ? Number(e.target.value) : e.target.value),
-                            style: { width: type === 'range' ? 120 : 'auto' },
-                        })
-                )
-            ),
-            React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 12px', borderRadius: 6, background: 'rgba(128,128,128,0.05)' } },
-                React.createElement('span', { style: { fontSize: 12, opacity: 0.8 } }, 'Drop shadow'),
-                React.createElement('input', { type: 'checkbox', checked: settings.appearance.shadow, onChange: e => setAppearance('shadow', e.target.checked) }),
-            ),
-        ),
-
-        React.createElement('p', { className: 'muted-small', style: { margin: '16px 0 6px' } }, 'BEHAVIOR'),
-        React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 4 } },
-            [
-                ['Double-click title bar to fullscreen', 'dblClickHeaderFullscreen'],
-                ['Bring to front on click',              'bringToFrontOnClick'],
-            ].map(([label, key]) =>
-                React.createElement('div', { key, style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 12px', borderRadius: 6, background: 'rgba(128,128,128,0.05)' } },
-                    React.createElement('span', { style: { fontSize: 12, opacity: 0.8 } }, label),
-                    React.createElement('input', { type: 'checkbox', checked: settings.behavior[key], onChange: e => setBehavior(key, e.target.checked) }),
-                )
-            ),
-        ),
-
-        React.createElement('div', { style: { marginTop: 12 } },
-            React.createElement('button', { className: 'settings-btn', onClick: resetToDefaults }, 'Reset to defaults'),
-        ),
-    )
-}
-
 // ─── Main component ────────────────────────────────────────────────────────────
 
 const ManagersSettings = () => {
@@ -272,32 +180,16 @@ const ManagersSettings = () => {
         writeManagers(next)
     }
 
-    // WM appearance state
-    const readWmSettings = () => {
-        try {
-            const raw = JSON.parse(fs.readFileSync(WM_SETTINGS_PATH, 'utf-8'))
-            return { appearance: { ...DEFAULT_WM_SETTINGS.appearance, ...raw.appearance }, behavior: { ...DEFAULT_WM_SETTINGS.behavior, ...raw.behavior } }
-        } catch (_) { return DEFAULT_WM_SETTINGS }
-    }
-    const [wmSettings, setWmSettings] = React.useState(readWmSettings)
-
-    const persistWm = (next) => {
-        setWmSettings(next)
-        if (!fs.existsSync('/etc/wm')) fs.mkdirSync('/etc/wm', { recursive: true })
-        fs.writeFileSync(WM_SETTINGS_PATH, JSON.stringify(next, null, 2))
-        platform.host.callCommand('set-window-manager-settings', next)
-    }
-    const setAppearance = (key, value) => persistWm({ ...wmSettings, appearance: { ...wmSettings.appearance, [key]: value } })
-    const setBehavior   = (key, value) => persistWm({ ...wmSettings, behavior:   { ...wmSettings.behavior,   [key]: value } })
-    const resetToDefaults = () => persistWm(DEFAULT_WM_SETTINGS)
-
-    return React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 8 } },
-
-        // ── Theme + Appearance ──
-        React.createElement(AppearanceSection, { settings: wmSettings, setAppearance, setBehavior, resetToDefaults }),
+    // Colors, themes and window behavior live in Settings › Window Manager; this
+    // page picks the components themselves.
+    return React.createElement('div', { className: 'settings-page', style: { display: 'flex', flexDirection: 'column', gap: 8 } },
+        React.createElement('h1', { className: 'settings-page-title' }, 'Managers'),
+        React.createElement('p', { className: 'settings-page-subtitle' },
+            'Pick the window title bar style, the dock and the desktop icons. Colors and themes are under Window Manager.'
+        ),
 
         // ── Window Manager style ──
-        React.createElement('p', { className: 'muted-small', style: { margin: '20px 0 4px' } }, 'WINDOW CHROME'),
+        React.createElement('p', { className: 'muted-small', style: { margin: '12px 0 4px' } }, 'WINDOW CHROME'),
         React.createElement('p', { className: 'hint', style: { margin: '0 0 6px' } },
             'Applies to windows opened after switching.'
         ),
@@ -319,7 +211,7 @@ const ManagersSettings = () => {
         }),
 
         cfg.dockManager && cfg.dockManager !== 'none' && React.createElement('div', {
-            style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', borderRadius: 6, background: 'rgba(128,128,128,0.05)', marginTop: 6 },
+            style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: 14, background: 'var(--vs-fill)', boxShadow: 'inset 0 0 0 1px var(--vs-stroke)', marginTop: 6 },
         },
             React.createElement('div', null,
                 React.createElement('div', { style: { fontSize: 12, fontWeight: 500 } }, 'Occupy bottom space'),
@@ -372,7 +264,7 @@ const ManagersSettings = () => {
             ].map(({ path, label, desc }) =>
                 React.createElement('div', {
                     key: path,
-                    style: { background: 'rgba(128,128,128,0.07)', borderRadius: 6, padding: '6px 10px', cursor: 'pointer' },
+                    style: { background: 'var(--vs-fill)', boxShadow: 'inset 0 0 0 1px var(--vs-stroke)', borderRadius: 14, padding: '10px 14px', cursor: 'pointer' },
                     // the path travels as a value, never as DSL source (audit KRN-3)
                     onClick: () => platform.host.openWindow('ui.notepad', path),
                     title: 'Open in editor',

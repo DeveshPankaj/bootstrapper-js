@@ -5,10 +5,10 @@ const CONFIG_PATH = '/etc/widgets/toolbar.json';
 const DEFAULT_CONFIG = {
   commands: [
     { command: 'explorer' },
-    { command: 'ui.vs-code' },
     { command: 'ui.notepad' },
-    { command: 'webamp' },
-    { command: 'ui.task-manager' },
+    { command: 'ui.terminal' },
+    { command: 'ui.audioplayer' },
+    { command: 'ui.settings' },
   ],
 };
 

@@ -1,4 +1,4 @@
-// Settings > Widgets page. See /home/user1/settings.html for the shared
+// Settings > Widgets page. See /opt/apps/settings/main.html for the shared
 // `'settings'` service (registerSection / utils) this registers against.
 const React = platform.getService('React')
 const ReactDOM = platform.getService('ReactDOM')

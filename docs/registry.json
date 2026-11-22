@@ -16,7 +16,7 @@
         {
           "dest": "main.js",
           "src": "/public/mount/opt/apps/file-explorer/main.js",
-          "sha256": "10825f8e55229e89914b5f448fb133d6feb56e76d5fb9e64419f69b39fab364f"
+          "sha256": "caaed967bd1e662eac7205eac04ecc69d049f7cd048016a3885e6005b84ff6bb"
         }
       ],
       "main": "main.js"
@@ -88,7 +88,7 @@
         {
           "dest": "main.html",
           "src": "/public/mount/opt/apps/settings/main.html",
-          "sha256": "b3c5e465bbecb2a0e6f65e51e85ffeb44a1786c0b3b423c62bf96bbd5d672310"
+          "sha256": "295941175e50a1c37541ea92b544e5c20ec4e2275725d8d013c5b435101ef34c"
         }
       ],
       "main": "main.html"
@@ -106,7 +106,7 @@
         {
           "dest": "main.js",
           "src": "/public/mount/opt/apps/app-drawer/main.js",
-          "sha256": "bcba00a0a413a3754eb778526ca662fbc3ba18bfb8a9e6e13eb4df2afd93b641"
+          "sha256": "b4cd0457ae73b0c366ad70524ac1fce76064ea654488ee39e43273c5047425e7"
         }
       ],
       "main": "main.js"
@@ -147,7 +147,7 @@
         {
           "dest": "loader.js",
           "src": "/public/mount/opt/apps/pkg-manager/loader.js",
-          "sha256": "8ad39dceae61f89863bb1c553c5a04011ddf0f615b78c78018cd8490f2f5a183"
+          "sha256": "363b72a550364652177118e36889f3696d40a2bd6cce26bee0a9d8566caaf838"
         }
       ],
       "main": "main.js"
@@ -455,6 +455,51 @@
           "dest": "fashion-data.json",
           "src": "/public/mount/opt/apps/model-builder/fashion-data.json",
           "sha256": "823fd82ebe019725c609d61c30c7d71f9ef72ea94fc89a0906e566c9f9f77b5d"
+        },
+        {
+          "dest": "sample-datasets/car-evaluation.csv",
+          "src": "/public/mount/opt/apps/model-builder/sample-datasets/car-evaluation.csv",
+          "sha256": "f7ba49c457867ef893efd8ef39ad26bb4186ac1f38f55db2f78a3693b59335a3"
+        },
+        {
+          "dest": "sample-datasets/classification-4class.csv",
+          "src": "/public/mount/opt/apps/model-builder/sample-datasets/classification-4class.csv",
+          "sha256": "37d666f7a436310a81116a99b78e564c75b01cb7c8ae3450ac6ea18716182965"
+        },
+        {
+          "dest": "sample-datasets/classification.csv",
+          "src": "/public/mount/opt/apps/model-builder/sample-datasets/classification.csv",
+          "sha256": "89004bc48ae1d82ca319e5d895c5a5acb0e923bea1b47b379d4dd8d372d78228"
+        },
+        {
+          "dest": "sample-datasets/image-classification-4class.csv",
+          "src": "/public/mount/opt/apps/model-builder/sample-datasets/image-classification-4class.csv",
+          "sha256": "62e71d9a78d976963bfe3688aba8bdef0aac3971c852a7ed1edaee136c6c594e"
+        },
+        {
+          "dest": "sample-datasets/image-classification.csv",
+          "src": "/public/mount/opt/apps/model-builder/sample-datasets/image-classification.csv",
+          "sha256": "5996a650ab31ab04481ac7df38160a02e16e7b30d4845313d58c524e20339888"
+        },
+        {
+          "dest": "sample-datasets/image-segmentation.csv",
+          "src": "/public/mount/opt/apps/model-builder/sample-datasets/image-segmentation.csv",
+          "sha256": "f359fa3f1c298a38d3fa1df1994918f7e23802a11491c3aa08aad5dd4beae610"
+        },
+        {
+          "dest": "sample-datasets/iris-real.csv",
+          "src": "/public/mount/opt/apps/model-builder/sample-datasets/iris-real.csv",
+          "sha256": "c52742e50315a99f956a383faedf7575552675f6409ef0f9a47076dd08479930"
+        },
+        {
+          "dest": "sample-datasets/penguins-3d.csv",
+          "src": "/public/mount/opt/apps/model-builder/sample-datasets/penguins-3d.csv",
+          "sha256": "dbedb39d851cfb52fa87e68442dcbd8d18c5759d10ccfe39da035f2d4020b72b"
+        },
+        {
+          "dest": "sample-datasets/penguins.csv",
+          "src": "/public/mount/opt/apps/model-builder/sample-datasets/penguins.csv",
+          "sha256": "b5c0f8ad9e94e6e5a5e927e5dca6c98ee0ca4172d509845fd03770468dc9c94e"
         }
       ],
       "main": "main.js"

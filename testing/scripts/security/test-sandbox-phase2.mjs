@@ -7,7 +7,7 @@
 //   KRN-6  a sandboxAppIframe app (snake-game) can't reach parent.document / IndexedDB
 //   NET-7  another app can't open Remote Machines' key store
 //   WIN-9  an app can't kill another app's window
-import { newSession, boot, openWindow, windowFrame, findFrame, step, report, done, sleep, pollFor, sentinels, vfsWrite, closeAllWindows } from './lib/harness.mjs';
+import { newSession, boot, openWindow, ensureApp, windowFrame, findFrame, step, report, done, sleep, pollFor, sentinels, vfsWrite, closeAllWindows } from './lib/harness.mjs';
 
 const PROBE = () => {
   const p = (fn) => { try { const v = fn(); return v === undefined || v === null || v === false ? 'blocked(empty)' : 'REACHABLE'; } catch (e) { return 'blocked'; } };
@@ -59,6 +59,7 @@ try {
   }, { phase: 'phase2' });
 
   await step('KRN-6', 'sandbox-app-iframe-opaque', async () => {
+    if (!(await ensureApp(page, 'snake-game', 'ui.snake-game'))) return { pass: null, detail: 'snake-game could not be installed' };
     await openWindow(page, 'ui.snake-game');
     const f = await findFrame(page, { urlPart: 'snake-game/', predicate: () => !!window.AppSDK, timeout: 30000 });
     if (!f) return { pass: null, detail: 'snake-game app frame not found' };

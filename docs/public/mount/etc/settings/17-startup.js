@@ -5,12 +5,14 @@ const ReactDOM = platform.getService('ReactDOM')
 // Writing here persists across refreshes (force_reload: false in meta.json).
 const INITD_PATH = '/.initd.run'
 
-// Known apps that can be auto-launched on boot
+// Known apps that can be auto-launched on boot. Only installed ones are listed
+// (plus any already enabled, so they can be turned off).
 const KNOWN_APPS = [
   { name: 'ui.file-explorer', label: 'File Explorer', icon: 'folder_open' },
   { name: 'ui.terminal', label: 'Terminal', icon: 'terminal' },
   { name: 'ui.settings', label: 'Settings', icon: 'settings' },
   { name: 'ui.notepad', label: 'Notepad', icon: 'edit_note' },
+  { name: 'ui.audioplayer', label: 'Audio Player', icon: 'music_note' },
   { name: 'ui.task-manager', label: 'Task Manager', icon: 'bar_chart' },
   { name: 'ui.imageviewer', label: 'Image Viewer', icon: 'image' },
   { name: 'ui.bookmarks', label: 'Bookmarks', icon: 'bookmarks' },
@@ -69,7 +71,7 @@ const StartupApps = () => {
 
       <div className="settings-group">
         <div className="settings-group-body">
-          {KNOWN_APPS.map(app => (
+          {KNOWN_APPS.filter(app => enabled.has(app.name) || platform.host.getCommand(app.name)).map(app => (
             <div key={app.name} className="settings-row" style={{ alignItems: 'center' }}>
               <span className="material-symbols-outlined" style={{ marginRight: 10, opacity: 0.7 }}>{app.icon}</span>
               <div className="settings-row-text" style={{ flex: 1 }}>
@@ -95,7 +97,7 @@ const StartupApps = () => {
         <div className="settings-group-title">initd.run contents</div>
         <div className="settings-group-body">
           <textarea
-            style={{ width: '100%', minHeight: 120, fontFamily: 'monospace', fontSize: 12, background: 'rgba(0,0,0,0.1)', border: '1px solid rgba(127,127,127,0.3)', borderRadius: 6, padding: '8px', color: 'inherit', boxSizing: 'border-box' }}
+            style={{ width: '100%', minHeight: 120, fontFamily: 'monospace', fontSize: 12, background: 'var(--vs-recessed)', border: 'none', borderRadius: 12, padding: '8px', color: 'inherit', boxSizing: 'border-box' }}
             value={content}
             onChange={e => { setContent(e.target.value); fs.writeFileSync(INITD_PATH, e.target.value) }}
           />

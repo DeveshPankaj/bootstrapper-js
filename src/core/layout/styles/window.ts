@@ -32,6 +32,40 @@ export const WINDOW_CSS = `
         display: none;
     }
 
+    /* Spatial "glass" material (visionOS-like), asked for by an app with
+       props.setWindowMaterial('glass'). A fixed look that doesn't follow the WM
+       theme, so white text stays readable on any wallpaper. --glass-* can be
+       overridden on :root by a theme. */
+    .window.material-glass {
+        border-radius: var(--glass-radius, 22px);
+        background: var(--glass-window-bg, linear-gradient(160deg, rgba(96, 96, 104, 0.50), rgba(44, 44, 50, 0.60)));
+        backdrop-filter: blur(var(--glass-blur, 48px)) saturate(170%);
+        -webkit-backdrop-filter: blur(var(--glass-blur, 48px)) saturate(170%);
+        box-shadow: var(--glass-shadow, 0 30px 80px rgba(0, 0, 0, 0.30), 0 2px 8px rgba(0, 0, 0, 0.12)),
+            inset 0 0 0 1px rgba(255, 255, 255, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.30);
+    }
+    .window.material-glass.top {
+        outline: none;
+    }
+    /* Light appearance (data-appearance on the desktop document, set by
+       src/system/appearance.ts from Settings › Window Manager › Themes). */
+    :root[data-appearance="light"] .window.material-glass {
+        background: var(--glass-window-bg-light, linear-gradient(160deg, rgba(255, 255, 255, 0.62), rgba(234, 234, 240, 0.70)));
+        box-shadow: var(--glass-shadow-light, 0 30px 80px rgba(0, 0, 0, 0.18), 0 2px 8px rgba(0, 0, 0, 0.08)),
+            inset 0 0 0 1px rgba(255, 255, 255, 0.60), inset 0 1px 0 rgba(255, 255, 255, 0.90);
+    }
+    /* A glass window's title bar is part of the glass. */
+    .window.material-glass > .window-header {
+        background: transparent !important;
+        color: rgba(255, 255, 255, 0.92) !important;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+        box-shadow: none !important;
+    }
+    :root[data-appearance="light"] .window.material-glass > .window-header {
+        color: rgba(0, 0, 0, 0.82) !important;
+        border-bottom-color: rgba(0, 0, 0, 0.06) !important;
+    }
+
     .window.top {
         z-index: 10;
         outline: 1px solid var(--wm-accent, transparent);

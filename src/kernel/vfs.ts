@@ -87,6 +87,7 @@ export async function initVFS(bootLog: (label: string, t0: number, err?: string)
     const fsBackend = resolveFsBackend()
 
     let mfs: any
+    const mirrors: any[] = []
     if (fsBackend === 'localstorage') {
         const rootFS = await createBackend(Backend.LocalStorage, {})
         const tmpFS  = await createBackend(Backend.InMemory, {})
@@ -96,6 +97,7 @@ export async function initVFS(bootLog: (label: string, t0: number, err?: string)
         const rootFS = await createIndexedDBMirror(Backend, 'fs')
         const tmpFS  = await createIndexedDBMirror(Backend, 'tmp')
         const mntFS  = await createIndexedDBMirror(Backend, 'mnt')
+        mirrors.push(rootFS, tmpFS, mntFS)
         mfs = await createBackend(Backend.MountableFileSystem, { '/': rootFS, '/tmp': tmpFS, '/mnt': mntFS })
     }
 
@@ -114,6 +116,16 @@ export async function initVFS(bootLog: (label: string, t0: number, err?: string)
     ;(fs as any).umount = (mountPoint: string) => mfs.umount(mountPoint)
     ;(fs as any).createBackend = (name: string, opts: Record<string, unknown> = {}) =>
         createBackend((window.BrowserFS.FileSystem as any)[name], opts)
+    // Writes reach memory at once and IndexedDB through each AsyncMirror's queue
+    // (BrowserFS 2.0 `_queue` / `_queueRunning`). Code that reloads the page right
+    // after writing many files (Settings › Storage › Force Reload) waits for this,
+    // or the tail of the queue is lost. Resolves false if it times out.
+    ;(fs as any).whenFlushed = (timeoutMs = 30000): Promise<boolean> => new Promise(resolve => {
+        const end = Date.now() + timeoutMs
+        const idle = () => mirrors.every(m => !m._queueRunning && !(m._queue && m._queue.length))
+        const tick = () => idle() ? resolve(true) : Date.now() > end ? resolve(false) : setTimeout(tick, 50)
+        tick()
+    })
 
     // Wire IPC fs handlers so service worker / iframes can call fs via postMessage
     initIpcBus(fs)

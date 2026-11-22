@@ -83,11 +83,12 @@ export type PersistedWidget = {
 };
 
 // A settings section is a dynamically-registered page in the Settings app
-// (see /home/user1/settings.html) - registered via
+// (see /opt/apps/settings/main.html) - registered via
 // `platform.host.registerSettingsSection(...)` (or the 'settings' service's
 // `registerSection`/`unregisterSection`). Settings renders one nav item per
 // section (using `name` + `icon` from `meta`) and, when selected, calls
 // `render` with a container element to fill, mirroring `WidgetDef.render`.
+// Names are unique: registering a name again replaces that section in place.
 export type SettingsSectionApi = {
   platform: Platform;
   onDestroy: (cb: Function) => void;
@@ -203,7 +204,25 @@ export type UICallbackProps = {
     $args?: any[]
 }
 
+// Light or dark, for apps drawn on the glass material (Settings, Files). The
+// user picks a mode (system / dark / light / time); src/system/appearance.ts
+// resolves it and publishes the result here.
+export type Appearance = 'light' | 'dark';
+export const APPEARANCE_MODES = ['system', 'dark', 'light', 'time'] as const;
+export type AppearanceMode = typeof APPEARANCE_MODES[number];
+
+// One value for every Host: each module window gets its own Host instance (all
+// built by the remote bundle, src/remote.ts), so this lives at module level.
+const appearanceSubject = new BehaviorSubject<Appearance>('dark');
+
 export class Host {
+  /** The resolved light/dark appearance; emits the current value on subscribe. */
+  public readonly appearance$: Observable<Appearance> = appearanceSubject.asObservable();
+  public getAppearance(): Appearance { return appearanceSubject.getValue(); }
+  /** Set by the appearance service (src/system/appearance.ts); other values are ignored. */
+  public setAppearance(value: unknown): void {
+    if ((value === 'light' || value === 'dark') && value !== appearanceSubject.getValue()) appearanceSubject.next(value);
+  }
   public readonly commands$: Observable<Array<Command>>;
   public readonly widgets$: Observable<Array<WidgetDef>>;
   public readonly settingsSections$: Observable<Array<SettingsSectionDef>>;
@@ -383,7 +402,13 @@ export class Host {
       servicePlatformName: this.platform.name,
       meta,
     });
-    this.settingsSections.next([...this.settingsSections.getValue(), newSection]);
+    // One entry per name: a script that runs again (Settings loads its section
+    // scripts each time it opens) replaces its section instead of adding a copy.
+    const sections = this.settingsSections.getValue();
+    const at = sections.findIndex((x) => x.name === section_name);
+    this.settingsSections.next(at < 0
+      ? [...sections, newSection]
+      : sections.map((x, i) => (i === at ? newSection : x)).filter((x, i) => i <= at || x.name !== section_name));
 
     return {
       remove: () => {

@@ -153,6 +153,14 @@ Spec: [documentation/security/runtime-spec.md](documentation/security/runtime-sp
   - System modules run from the vfs only when their hash matches the server's (`metaSha256`), otherwise from the static copy.
   - Measured on a local GitHub Pages-like server: first visit 610 → 130 requests before the desktop (4.1 → 1.6 s); repeat visit 281 → 24 requests.
   - Security tests now install non-preinstalled apps first. BOOT-11 clicks an empty desktop spot (the dock iframe covered the old one).
+- **2026-11-22** — Default apps cut to the essentials: File Explorer, Settings, Terminal, Spotlight, Audio Player and App Drawer, plus App Manager and Image Viewer (28 → 8). The rest install from App Manager.
+  - A deep link to an app that isn't installed opens App Manager on it and carries on after Install; nothing installs because of a link alone.
+  - Settings: section names are unique (the "Apps" entry used to duplicate on every open). Theme Builder (broken copy) is merged into Window Manager as "Save as Theme", with the file name checked.
+  - Managers no longer repeats the theme and appearance controls. The Example page, two empty stubs and the unused `/home/user1/settings.html` copy are gone.
+- **2026-11-22** — Spatial glass UI (visionOS-like) for Settings and Files, in light and dark.
+  - Fixed window materials (`props.setWindowMaterial('glass')`) with design tokens (`--vs-*`).
+  - Appearance mode System / Dark / Light / Time (`src/system/appearance.ts`, `host.appearance$`), chosen in Settings › Window Manager › Themes; System is the default.
+  - Settings got a section search, and dragging a slider or selecting text no longer moves its window.
 
 ---
 

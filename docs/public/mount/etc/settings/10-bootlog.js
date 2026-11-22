@@ -25,19 +25,19 @@ const BootLog = () => {
           {log.map((entry, i) => (
             <div key={i} className="settings-row" style={{ alignItems: 'center', gap: '0.5rem' }}>
               <div className="settings-row-text" style={{ flex: 1 }}>
-                <div className="settings-row-title" style={{ color: entry.error ? '#ff453a' : undefined }}>{entry.label}</div>
-                {entry.error ? <div className="settings-row-subtitle" style={{ color: '#ff453a' }}>{entry.error}</div> : null}
+                <div className="settings-row-title" style={{ color: entry.error ? 'var(--vs-danger)' : undefined }}>{entry.label}</div>
+                {entry.error ? <div className="settings-row-subtitle" style={{ color: 'var(--vs-danger)' }}>{entry.error}</div> : null}
               </div>
               <span style={{
                 fontSize: '0.75rem', fontVariantNumeric: 'tabular-nums',
-                color: entry.durationMs > 1000 ? '#ff9f0a' : '#666',
+                color: entry.durationMs > 1000 ? 'var(--vs-warning)' : 'var(--vs-text-2)',
                 minWidth: '4rem', textAlign: 'right',
               }}>
                 {entry.durationMs}ms
               </span>
             </div>
           ))}
-          <div className="settings-row" style={{ borderTop: '1px solid #e5e5ea', marginTop: '0.25rem', paddingTop: '0.25rem' }}>
+          <div className="settings-row" style={{ borderTop: '1px solid var(--vs-separator)', marginTop: '0.25rem', paddingTop: '0.25rem' }}>
             <div className="settings-row-text" style={{ flex: 1 }}>
               <div className="settings-row-title" style={{ fontWeight: 600 }}>Total</div>
             </div>

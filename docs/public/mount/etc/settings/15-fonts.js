@@ -70,8 +70,8 @@ const FontSettings = () => {
     if (monoFont) { document.documentElement.style.setProperty('--app-mono-font', monoFont); const f = MONO_FONTS.find(x => x.value === monoFont); if (f?.google) loadGoogleFont(f.google) }
   }, [])
 
-  const sampleStyle = { fontFamily: uiFont || 'inherit', padding: '6px 10px', border: '1px solid rgba(127,127,127,0.3)', borderRadius: 6, marginTop: 6, fontSize: 14 }
-  const monoStyle = { fontFamily: monoFont || 'monospace', padding: '6px 10px', border: '1px solid rgba(127,127,127,0.3)', borderRadius: 6, marginTop: 6, fontSize: 13 }
+  const sampleStyle = { fontFamily: uiFont || 'inherit', padding: '6px 10px', background: 'var(--vs-fill)', boxShadow: 'inset 0 0 0 1px var(--vs-stroke)', borderRadius: 12, marginTop: 6, fontSize: 14 }
+  const monoStyle = { fontFamily: monoFont || 'monospace', padding: '6px 10px', background: 'var(--vs-fill)', boxShadow: 'inset 0 0 0 1px var(--vs-stroke)', borderRadius: 12, marginTop: 6, fontSize: 13 }
 
   return (
     <div className="settings-page">

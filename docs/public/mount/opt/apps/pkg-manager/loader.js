@@ -15,34 +15,16 @@ const UNINSTALLED_PATH = '/etc/pkg/uninstalled.json';
 let uninstalled = new Set();
 try { uninstalled = new Set(JSON.parse(fs.readFileSync(UNINSTALLED_PATH, 'utf8') || '[]')); } catch (_) {}
 
-// Core apps that are always loaded unless the user explicitly uninstalled them
+// Core apps: the default set, always loaded unless the user explicitly uninstalled
+// them. Terminal and Settings are pages (main.html) registered by the shell. Every
+// other app is installed from App Manager and loaded through installed.json below.
 const CORE_APPS = [
-  { id: 'file-explorer',  appDir: '/opt/apps/file-explorer',  mainFile: '/opt/apps/file-explorer/main.js' },
-  { id: 'app-drawer',     appDir: '/opt/apps/app-drawer',     mainFile: '/opt/apps/app-drawer/main.js' },
-  { id: 'spotlight',      appDir: '/opt/apps/spotlight',      mainFile: '/opt/apps/spotlight/main.js' },
-  { id: 'image-viewer',   appDir: '/opt/apps/image-viewer',   mainFile: '/opt/apps/image-viewer/main.js' },
-  { id: 'pkg-manager',    appDir: '/opt/apps/pkg-manager',    mainFile: '/opt/apps/pkg-manager/main.js' },
-  { id: 'task-manager',   appDir: '/opt/apps/task-manager',   mainFile: '/opt/apps/task-manager/main.js' },
-  { id: 'sqlite-charts',  appDir: '/opt/apps/sqlite-charts',  mainFile: '/opt/apps/sqlite-charts/main.js' },
-  { id: 'sqlite-browser', appDir: '/opt/apps/sqlite-browser', mainFile: '/opt/apps/sqlite-browser/main.js' },
-  { id: 'audio-player',   appDir: '/opt/apps/audio-player',   mainFile: '/opt/apps/audio-player/main.js' },
-  { id: 'colleps',        appDir: '/opt/apps/colleps',        mainFile: '/opt/apps/colleps/main.js' },
-  { id: 'trainboard',       appDir: '/opt/apps/trainboard',       mainFile: '/opt/apps/trainboard/main.js' },
-  { id: 'nn-ide',           appDir: '/opt/apps/nn-ide',           mainFile: '/opt/apps/nn-ide/main.js' },
-  { id: 'model-builder',    appDir: '/opt/apps/model-builder',    mainFile: '/opt/apps/model-builder/main.js' },
-  { id: 'snake-game',       appDir: '/opt/apps/snake-game',       mainFile: '/opt/apps/snake-game/main.js' },
-  { id: 'snake-lstm',       appDir: '/opt/apps/snake-lstm',       mainFile: '/opt/apps/snake-lstm/main.js' },
-  { id: 'snake-qlearning',  appDir: '/opt/apps/snake-qlearning',  mainFile: '/opt/apps/snake-qlearning/main.js' },
-  { id: 'snake-cnn3d',      appDir: '/opt/apps/snake-cnn3d',      mainFile: '/opt/apps/snake-cnn3d/main.js' },
-  { id: 'app-launcher',   appDir: '/opt/apps/app-launcher',   mainFile: '/opt/apps/app-launcher/main.js' },
-  { id: 'vector-store',   appDir: '/opt/apps/vector-store',   mainFile: '/opt/apps/vector-store/main.js' },
-  { id: 'ai-dom-lens',    appDir: '/opt/apps/ai-dom-lens',    mainFile: '/opt/apps/ai-dom-lens/main.js' },
-  { id: 'webrtc',         appDir: '/opt/apps/webrtc',         mainFile: '/opt/apps/webrtc/main.js' },
-  { id: 'remote-machines', appDir: '/opt/apps/remote-machines', mainFile: '/opt/apps/remote-machines/main.js' },
-  { id: 'youtube-player', appDir: '/opt/apps/youtube-player', mainFile: '/opt/apps/youtube-player/main.js' },
-  { id: 'distributed-compute', appDir: '/opt/apps/distributed-compute', mainFile: '/opt/apps/distributed-compute/main.js' },
-  { id: 'distributed-kv',      appDir: '/opt/apps/distributed-kv',      mainFile: '/opt/apps/distributed-kv/main.js' },
-  // python-demo is not a core app — install via App Manager
+  { id: 'file-explorer', appDir: '/opt/apps/file-explorer', mainFile: '/opt/apps/file-explorer/main.js' },
+  { id: 'app-drawer',    appDir: '/opt/apps/app-drawer',    mainFile: '/opt/apps/app-drawer/main.js' },
+  { id: 'spotlight',     appDir: '/opt/apps/spotlight',     mainFile: '/opt/apps/spotlight/main.js' },
+  { id: 'audio-player',  appDir: '/opt/apps/audio-player',  mainFile: '/opt/apps/audio-player/main.js' },
+  { id: 'pkg-manager',   appDir: '/opt/apps/pkg-manager',   mainFile: '/opt/apps/pkg-manager/main.js' },  // App Manager: installs everything else
+  { id: 'image-viewer',  appDir: '/opt/apps/image-viewer',  mainFile: '/opt/apps/image-viewer/main.js' }, // File Explorer opens images with it
 ];
 
 const loadApp = (appDir, mainFile) => {

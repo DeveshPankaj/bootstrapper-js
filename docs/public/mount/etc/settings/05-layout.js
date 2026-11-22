@@ -1,4 +1,4 @@
-// Settings > Layout page. See /home/user1/settings.html for the shared
+// Settings > Layout page. See /opt/apps/settings/main.html for the shared
 // `'settings'` service (registerSection / utils) this registers against.
 const React = platform.getService('React')
 const ReactDOM = platform.getService('ReactDOM')
@@ -41,7 +41,7 @@ const Layout = () => {
               <div className="settings-row-text">
                 <div className="settings-row-title">{layout.name}</div>
               </div>
-              {layout.id === currentLayout && <span className="material-symbols-outlined" style={{color: '#0a84ff'}}>check</span>}
+              {layout.id === currentLayout && <span className="material-symbols-outlined" style={{color: 'var(--vs-text)'}}>check</span>}
             </div>
           ))}
         </div>

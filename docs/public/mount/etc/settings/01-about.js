@@ -1,4 +1,4 @@
-// Settings > About page. See /home/user1/settings.html for the shared
+// Settings > About page. See /opt/apps/settings/main.html for the shared
 // `'settings'` service (registerSection / utils) this registers against.
 const React = platform.getService('React')
 const ReactDOM = platform.getService('ReactDOM')
@@ -28,12 +28,12 @@ const About = () => {
       </div>
       <div className="settings-group">
         <div className="settings-group-body" style={{padding: '1rem 1.25rem', display: 'block'}}>
-          <p style={{margin: '0 0 0.75rem', lineHeight: 1.6, color: '#3a3a3c'}}>
+          <p style={{margin: '0 0 0.75rem', lineHeight: 1.6, color: 'var(--vs-text-2)'}}>
             We are a passionate team dedicated to providing innovative solutions.
             Our focus is on delivering quality products and services that make a difference.
             Our mission is to enhance the lives of our users through technology.
           </p>
-          <p style={{margin: 0, lineHeight: 1.6, color: '#3a3a3c'}}>
+          <p style={{margin: 0, lineHeight: 1.6, color: 'var(--vs-text-2)'}}>
             With years of experience in the industry, we prioritize customer satisfaction
             and continuous improvement, ensuring that our offerings meet and exceed expectations.
           </p>

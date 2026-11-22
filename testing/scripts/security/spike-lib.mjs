@@ -25,10 +25,62 @@ export const launchRealistic = (args = []) => chromium.launch({
   args: ['--disable-features=' + PW_DISABLED_FEATURES.filter((f) => f !== 'ThirdPartyStoragePartitioning').join(','), ...args],
 });
 
+// Apps that were preinstalled before the default set was cut to the essentials
+// (2026-11-22). Many per-owner checks here exercise them, so bootOS() installs them
+// the way a preinstall would: the registry entry's files, checked against their
+// sha256, written to /opt/apps/<id>/, recorded in /etc/pkg/installed.json, then
+// loaded by pkg-manager/loader.js through its `wos:apps-installed` event. Apps the
+// test has uninstalled (/etc/pkg/uninstalled.json) are left alone. The real default
+// set is checked by testing/scripts/test-default-apps.mjs, which doesn't use this.
+export const LEGACY_TEST_APPS = [
+  'sqlite-browser', 'nn-ide', 'wamp-client', 'sqlite-charts', 'colleps', 'trainboard', 'model-builder',
+  'snake-game', 'snake-lstm', 'snake-qlearning', 'snake-cnn3d', 'app-launcher', 'task-manager',
+  'vector-store', 'ai-dom-lens', 'webrtc', 'remote-machines', 'youtube-player', 'distributed-compute', 'distributed-kv',
+];
+
+export async function installLegacyApps(page, ids = LEGACY_TEST_APPS) {
+  const result = await page.evaluate(async (ids) => {
+    const fs = window.fs;
+    const readList = (p) => { try { const v = JSON.parse(fs.readFileSync(p, 'utf8') || '[]'); return Array.isArray(v) ? v : []; } catch (_) { return []; } };
+    const uninstalled = new Set(readList('/etc/pkg/uninstalled.json'));
+    const installed = readList('/etc/pkg/installed.json');
+    const registry = await (await fetch('/registry.json', { cache: 'no-cache' })).json();
+    const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+    const mkdirp = (dir) => { let cur = ''; for (const part of dir.split('/').slice(1)) { cur += '/' + part; if (!fs.existsSync(cur)) fs.mkdirSync(cur); } };
+    const added = [];
+    const errors = [];
+    await Promise.all(ids.map(async (id) => {
+      if (uninstalled.has(id) || installed.some((p) => p && p.id === id)) return;
+      const app = (registry.apps || []).find((a) => a.id === id);
+      if (!app) { errors.push(`${id}: not in the registry`); return; }
+      try {
+        const files = await Promise.all(app.files.map(async (f) => {
+          const data = await (await fetch(f.src)).arrayBuffer();
+          if (f.sha256 && hex(await crypto.subtle.digest('SHA-256', data)) !== f.sha256) throw new Error(`integrity check failed for ${f.dest}`);
+          return { dest: `/opt/apps/${id}/${f.dest}`, data };
+        }));
+        for (const f of files) { mkdirp(f.dest.slice(0, f.dest.lastIndexOf('/'))); fs.writeFileSync(f.dest, Buffer.from(f.data)); }
+        added.push({
+          id, name: app.name, version: app.version, description: app.description, icon: app.icon, category: app.category, author: app.author,
+          appDir: `/opt/apps/${id}`, mainFile: `/opt/apps/${id}/${app.main}`, commandName: app.commandName || null,
+          registryUrl: '/registry.json', installedAt: Date.now(),
+        });
+      } catch (e) { errors.push(`${id}: ${e.message}`); }
+    }));
+    if (added.length) {
+      fs.writeFileSync('/etc/pkg/installed.json', JSON.stringify([...installed, ...added], null, 2));
+      window.dispatchEvent(new CustomEvent('wos:apps-installed', { detail: { ids: added.map((a) => a.id) } }));
+    }
+    return { added: added.map((a) => a.id), errors };
+  }, ids).catch((e) => ({ added: [], errors: [String(e.message || e)] }));
+  if (result.errors.length) console.warn('[installLegacyApps]', result.errors.join('; '));
+  return result;
+}
+
 // goto + 2 reloads (first-load SW quirk, see CLAUDE.md), then wait until the VFS,
 // the platform and an active SW controller are all up. Retries across the SW's own
 // activation reload (which destroys the execution context mid-wait).
-export async function bootOS(context, { url = OS_URL, timeout = 90000 } = {}) {
+export async function bootOS(context, { url = OS_URL, timeout = 90000, legacyApps = true } = {}) {
   const page = await context.newPage();
   await page.goto(url, { waitUntil: 'load' });
   await page.reload({ waitUntil: 'load' });
@@ -45,6 +97,10 @@ export async function bootOS(context, { url = OS_URL, timeout = 90000 } = {}) {
     await page.waitForTimeout(500);
   }
   await page.waitForTimeout(1500); // let initd / CORE_APPS finish registering
+  if (legacyApps) {
+    const { added } = await installLegacyApps(page);
+    if (added.length) await page.waitForTimeout(1500); // let the loader register them
+  }
   return page;
 }
 

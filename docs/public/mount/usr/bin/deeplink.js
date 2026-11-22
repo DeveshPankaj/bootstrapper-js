@@ -82,6 +82,47 @@ if (typeof BroadcastChannel !== 'undefined') {
 }
 
 // ── This tab's own link (present when it was opened from one) ──────────────
+// The layout module boots in parallel. open-window silently does nothing
+// until the desktop's .content-area is mounted, so wait for that first.
+const whenDesktop = async () => {
+  for (let attempt = 0; attempt < 75 && !top.document.querySelector('.content-area'); attempt++) await sleep(400)
+}
+
+// Resolves with the command once something registers it (null after `ms`).
+const whenCommand = (name, ms) => new Promise((resolve) => {
+  let sub = null
+  const finish = (cmd) => {
+    clearTimeout(timer)
+    setTimeout(() => { try { sub && sub.unsubscribe() } catch (_) {} }, 0)
+    resolve(cmd)
+  }
+  const timer = setTimeout(() => finish(null), ms)
+  try {
+    sub = platform.host.commands$.subscribe(() => {
+      const cmd = platform.host.getCommand(name)
+      if (cmd) finish(cmd)
+    })
+  } catch (_) { finish(platform.host.getCommand(name) || null) }
+})
+
+// The link is for an app that isn't installed (only a few apps are preinstalled).
+// Nothing is installed because of a link: App Manager opens on that app, and if
+// the user installs it, the link carries on.
+const INSTALL_WAIT_MS = 15 * 60 * 1000
+const offerInstall = async (link) => {
+  await whenDesktop()
+  try { await platform.host.openWindow('ui.pkg-manager', link.app) }
+  catch (e) { console.warn('[deeplink] could not open App Manager:', e); return null }
+  try {
+    platform.host.callCommand('notify', {
+      title: 'This link needs an app',
+      body: `Install "${link.app}" in App Manager and the link will open.`,
+      duration: 8000,
+    })
+  } catch (_) {}
+  return whenCommand(link.command, INSTALL_WAIT_MS)
+}
+
 const openLocally = async (link) => {
   const fs = platform.host.getFS()
   let cmd = platform.host.getCommand(link.command)
@@ -89,7 +130,7 @@ const openLocally = async (link) => {
     // Installed app whose command isn't registered yet: load it from its own dir.
     const mainFile = `/opt/apps/${link.app}/main.js`
     if (!isInstalledApp(fs, link.app)) {
-      console.warn(`[deeplink] app "${link.app}" is not installed — not loading it for this link`)
+      cmd = await offerInstall(link)
     } else if (fs.existsSync(mainFile)) {
       platform._appDir = `/opt/apps/${link.app}`
       try { platform.host.exec(platform, mainFile) } catch (e) { console.warn('[deeplink] loading app failed:', e) }
@@ -102,12 +143,10 @@ const openLocally = async (link) => {
     return
   }
   if (hasTarget(cmd) && cmd.meta.onDeepLink(link.arg) === true) return
-  // The layout module boots in parallel. open-window silently does nothing
-  // until the desktop's .content-area is mounted, so wait for that first.
   const doc = top.document
   const windowOpen = () => doc.querySelector(`.window[data-name="${link.command}"]`) !== null
+  await whenDesktop()
   for (let attempt = 0; attempt < 40; attempt++) {
-    if (!doc.querySelector('.content-area')) { await sleep(400); continue }
     try {
       await platform.host.execCommand("service('001-core.layout','open-window')(command($args[0]), $args[1])", platform, link.command, link.arg)
       if (windowOpen()) return

@@ -8,6 +8,7 @@ import { createRoot } from "react-dom/client";
 import * as utils from '@shared/utils'
 import { DESKTOP_CONTAINER_CLASS, WINDOWS_CONTAINER_CLASS } from './core/window-manager'
 import { startCronScheduler } from './core/cron'
+import { startAppearance } from './system/appearance'
 import { startSystemd, startUnit, stopUnit, restartUnit, enableUnit, disableUnit, getStatus as getUnitStatus, listUnits, readJournal, getSelf as getSystemdSelf } from './core/systemd'
 import { initIpc } from './core/ipc'
 
@@ -160,6 +161,10 @@ const host = new Host(window, hostPlatform, commands, widgets, modulesMap, setti
 hostPlatform.setHost(host);
 
 modulesMap.set('root', {platform} as any)
+
+// Light/dark for glass apps and the glass window material (Settings › Window
+// Manager › Themes picks system / dark / light / time).
+try { startAppearance(host) } catch (err) { console.error('[appearance] failed to start:', err) }
 
 
 platform.register('utils', utils)

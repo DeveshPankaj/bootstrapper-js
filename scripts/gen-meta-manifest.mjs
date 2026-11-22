@@ -35,8 +35,8 @@ const CHECK = process.argv.includes('--check');
 // Apps that are part of the shell itself: kept in sync with every deploy like other
 // system files (by hash, so unchanged files cost nothing).
 const SYSTEM_APPS = new Set([
-  'file-explorer', 'pkg-manager', 'app-drawer', 'app-launcher', 'spotlight',
-  'task-manager', 'terminal', 'settings', 'image-viewer', 'dock',
+  'file-explorer', 'pkg-manager', 'app-drawer', 'spotlight',
+  'terminal', 'settings', 'image-viewer', 'dock',
 ]);
 
 // Files the landing page doesn't need: synced in the background after it is shown.

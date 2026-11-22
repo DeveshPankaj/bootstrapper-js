@@ -8,7 +8,7 @@
 //   KRN-5  an id like ../../etc gets no write scope
 //   KRN-5  ProxyFS and a real app's AppSDK port (snake-game) refuse the same traversal / secret read
 //   WIN-10 window props don't hand out a live, mutable namespace that widens the app's ACL
-import { newSession, boot, openWindow, findFrame, step, report, done, sleep, pollFor, vfsWrite, vfsExists, closeAllWindows } from './lib/harness.mjs';
+import { newSession, boot, openWindow, ensureApp, findFrame, step, report, done, sleep, pollFor, vfsWrite, vfsExists, closeAllWindows } from './lib/harness.mjs';
 
 const SECRET = 'SEC-ACL-SECRET-' + Math.random().toString(36).slice(2);
 const S = await newSession();
@@ -71,6 +71,7 @@ try {
   });
 
   await step('KRN-5', 'appsdk-port-refuses-traversal-and-secret', async () => {
+    if (!(await ensureApp(page, 'snake-game', 'ui.snake-game'))) return { pass: null, detail: 'snake-game could not be installed' };
     await openWindow(page, 'ui.snake-game');
     const f = await findFrame(page, { urlPart: 'snake-game/', predicate: () => !!window.AppSDK, timeout: 30000 });
     if (!f) return { pass: null, detail: 'snake-game AppSDK frame not found' };

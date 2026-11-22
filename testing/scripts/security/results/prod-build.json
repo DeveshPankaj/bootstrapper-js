@@ -2,7 +2,7 @@
   "label": "prod-build",
   "baseUrl": "http://localhost:8090",
   "root": null,
-  "finishedAt": "2026-11-22T04:38:45.474Z",
+  "finishedAt": "2026-11-22T16:59:59.835Z",
   "totals": {
     "phase1": {
       "findings": 47,
@@ -34,7 +34,7 @@
       "script": "test-acl.mjs",
       "exit": 0,
       "timedOut": false,
-      "seconds": 7,
+      "seconds": 9,
       "checks": 8,
       "stderrTail": ""
     },
@@ -42,7 +42,7 @@
       "script": "test-autorun.mjs",
       "exit": 0,
       "timedOut": false,
-      "seconds": 26,
+      "seconds": 29,
       "checks": 8,
       "stderrTail": ""
     },
@@ -50,7 +50,7 @@
       "script": "test-boot-integrity.mjs",
       "exit": 0,
       "timedOut": false,
-      "seconds": 28,
+      "seconds": 30,
       "checks": 4,
       "stderrTail": ""
     },
@@ -58,7 +58,7 @@
       "script": "test-commands.mjs",
       "exit": 0,
       "timedOut": false,
-      "seconds": 58,
+      "seconds": 59,
       "checks": 7,
       "stderrTail": ""
     },
@@ -66,7 +66,7 @@
       "script": "test-dsl-injection.mjs",
       "exit": 0,
       "timedOut": false,
-      "seconds": 121,
+      "seconds": 122,
       "checks": 18,
       "stderrTail": ""
     },
@@ -106,7 +106,7 @@
       "script": "test-sandbox-phase2.mjs",
       "exit": 0,
       "timedOut": false,
-      "seconds": 7,
+      "seconds": 6,
       "checks": 5,
       "stderrTail": ""
     },
@@ -146,7 +146,7 @@
       "script": "test-xss.mjs",
       "exit": 0,
       "timedOut": false,
-      "seconds": 30,
+      "seconds": 70,
       "checks": 12,
       "stderrTail": ""
     }
@@ -945,7 +945,7 @@
       "status": "PASS",
       "phase": "phase1",
       "check": "vfs-meta-json-not-authoritative",
-      "detail": "booted=true; explorerEqualsServerCopy=true (len 70329 vs 70329); attackerFetches=0; sentinels=[]",
+      "detail": "booted=true; explorerEqualsServerCopy=true (len 77292 vs 77292); attackerFetches=0; sentinels=[]",
       "script": "test-boot-integrity.mjs"
     },
     {
@@ -1609,7 +1609,7 @@
       "status": "FAIL",
       "phase": "phase2",
       "check": "static-no-same-origin-app-sandboxes",
-      "detail": "1 sandbox strings with allow-scripts+allow-same-origin: src/core/window-manager.ts:600",
+      "detail": "1 sandbox strings with allow-scripts+allow-same-origin: src/core/window-manager.ts:606",
       "script": "test-static.mjs"
     },
     {
@@ -1665,7 +1665,7 @@
       "status": "PASS",
       "phase": "phase1",
       "check": "request-ids-unpredictable",
-      "detail": "ids=[\"818e0bb7-ca71-4ca8-bd0f-4f29c65af029\",\"9a50926f-705b-4eab-9a65-88bd835c6e20\",\"9c142ae5-e90f-4496-8700-a36cb8c3a8ae\",\"9cc9b881-2d52-4b44-b0d8-4a65f3e3feab\"] consecutiveIntegers=false",
+      "detail": "ids=[\"3e4a9a4d-c6ce-487b-9d75-22f6e6b54170\",\"3d14d49c-7ef2-4b2c-8b83-4188165ccfe9\",\"fcf657d4-08aa-486e-b775-678a41a46f10\",\"22755b84-d6cc-464e-8676-edf644e7c261\"] consecutiveIntegers=false",
       "script": "test-sw.mjs"
     },
     {
@@ -1673,7 +1673,7 @@
       "status": "PASS",
       "phase": "phase1",
       "check": "forged-reply-from-nested-frame",
-      "detail": "{\"status\":404,\"body\":\"Not found\",\"ms\":10019}; nestedFrameGotRequestsDirectly=0",
+      "detail": "{\"status\":404,\"body\":\"Not found\",\"ms\":10013}; nestedFrameGotRequestsDirectly=0",
       "script": "test-sw.mjs"
     },
     {

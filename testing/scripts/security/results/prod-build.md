@@ -2,7 +2,7 @@
 
 - BASE_URL: `http://localhost:8090`
 - static checks scanned: `this repo`
-- finished: 2026-11-22T04:38:45.474Z
+- finished: 2026-11-22T16:59:59.835Z
 - **phase1**: 47/47 findings pass (0 fail, 0 error); 121/121 checks
 - **phase2**: 0/8 findings pass (8 fail, 0 error); 0/9 checks
 - **info**: 4/5 findings pass (1 fail, 0 error); 5/6 checks
@@ -86,21 +86,21 @@
 
 | Script | Exit | Seconds | Checks |
 |---|---|---|---|
-| test-acl.mjs | 0 | 7 | 8 |
-| test-autorun.mjs | 0 | 26 | 8 |
-| test-boot-integrity.mjs | 0 | 28 | 4 |
-| test-commands.mjs | 0 | 58 | 7 |
-| test-dsl-injection.mjs | 0 | 121 | 18 |
+| test-acl.mjs | 0 | 9 | 8 |
+| test-autorun.mjs | 0 | 29 | 8 |
+| test-boot-integrity.mjs | 0 | 30 | 4 |
+| test-commands.mjs | 0 | 59 | 7 |
+| test-dsl-injection.mjs | 0 | 122 | 18 |
 | test-framing.mjs | 0 | 42 | 5 |
 | test-ipc.mjs | 0 | 45 | 8 |
 | test-open-policy.mjs | 0 | 53 | 10 |
 | test-peer.mjs | 0 | 51 | 8 |
-| test-sandbox-phase2.mjs | 0 | 7 | 5 |
+| test-sandbox-phase2.mjs | 0 | 6 | 5 |
 | test-static.mjs | 0 | 0 | 23 |
 | test-sw.mjs | 0 | 18 | 9 |
 | test-traversal.mjs | 0 | 30 | 7 |
 | test-url-launcher.mjs | 0 | 48 | 4 |
-| test-xss.mjs | 0 | 30 | 12 |
+| test-xss.mjs | 0 | 70 | 12 |
 
 ## All checks
 
@@ -138,7 +138,7 @@
 | BOOT-5 | phase1 | PASS | managers-json-wm-id-traversal | sentinels=[] |
 | BOOT-5 | phase1 | PASS | installed-json-mainfile-outside-app-dir | ran at boot=false (all boot sentinels ["__sec_ar_widget"]) |
 | BOOT-5 | phase2 | FAIL | planted-widget-runs-sandboxed | /etc/widgets/sec-evil.js ran in the top realm=true |
-| BOOT-6 | phase1 | PASS | vfs-meta-json-not-authoritative | booted=true; explorerEqualsServerCopy=true (len 70329 vs 70329); attackerFetches=0; sentinels=[] |
+| BOOT-6 | phase1 | PASS | vfs-meta-json-not-authoritative | booted=true; explorerEqualsServerCopy=true (len 77292 vs 77292); attackerFetches=0; sentinels=[] |
 | BOOT-8 | phase1 | PASS | files-extract-zip-slip | via menu:Extract here; outside=[]; inside=1; prompts=[] |
 | BOOT-8 | phase1 | PASS | unzip-run-zip-slip | ran; outside=[]; inside=1 |
 | BOOT-8 | phase1 | PASS | tar-run-path-slip | ran; outside=[]; inside=1 |
@@ -177,14 +177,14 @@
 | KRN-5 | phase1 | PASS | proxyfs-refuses-traversal-and-secret | {"write":"denied","read":"denied","onDisk":false} |
 | KRN-5 | phase1 | PASS | appsdk-port-refuses-traversal-and-secret | {"write":"denied: [acl] write denied: pid=9 id=ui.snake-game path=/tmp/../etc/","read":"denied: [acl] read denied: pid=9 id=ui.snake-game path=/home/user1/.","kernel":"denied: [acl] write denied: pid=9 id=ui.snake-ga"}; /etc/sec-acl-sdk.txt |
 | KRN-6 | phase2 | FAIL | sandbox-app-iframe-opaque | reachable: ["parentDocument","indexedDB","removeSandbox"] |
-| KRN-6 | phase2 | FAIL | static-no-same-origin-app-sandboxes | 1 sandbox strings with allow-scripts+allow-same-origin: src/core/window-manager.ts:600 |
+| KRN-6 | phase2 | FAIL | static-no-same-origin-app-sandboxes | 1 sandbox strings with allow-scripts+allow-same-origin: src/core/window-manager.ts:606 |
 | KRN-7 | phase1 | PASS | top-level-html-is-opaque | {"origin":"null","localStorage":"BLOCKED SecurityError","indexedDB":"BLOCKED SecurityError","parentPlatform":false} |
 | KRN-7 | phase1 | PASS | top-level-svg-is-opaque | {"origin":"null","localStorage":"BLOCKED SecurityError"} |
 | KRN-7 | phase1 | PASS | top-level-opt-apps-is-opaque | {"origin":"null","localStorage":"BLOCKED SecurityError","indexedDB":"BLOCKED SecurityError","parentPlatform":false} |
 | KRN-7 | phase1 | PASS | iframe-home-html-is-opaque | {"origin":"null","localStorage":"BLOCKED SecurityError","indexedDB":"BLOCKED SecurityError","parentPlatform":"BLOCKED SecurityError"} |
 | KRN-7 | phase1 | PASS | vfs-response-headers | {"/(sw)/tmp/sec-sw/x.html":{"status":200,"type":"text/html; charset=utf-8","csp":"sandbox allow-scripts allow-forms allow-modals","nosniff":"nosniff","corp":"same-origin"},"/(sw)/tmp/sec-sw/a.unknownext":{"status":200,"type":"application/oc |
-| KRN-8 | phase1 | PASS | request-ids-unpredictable | ids=["818e0bb7-ca71-4ca8-bd0f-4f29c65af029","9a50926f-705b-4eab-9a65-88bd835c6e20","9c142ae5-e90f-4496-8700-a36cb8c3a8ae","9cc9b881-2d52-4b44-b0d8-4a65f3e3feab"] consecutiveIntegers=false |
-| KRN-8 | phase1 | PASS | forged-reply-from-nested-frame | {"status":404,"body":"Not found","ms":10019}; nestedFrameGotRequestsDirectly=0 |
+| KRN-8 | phase1 | PASS | request-ids-unpredictable | ids=["3e4a9a4d-c6ce-487b-9d75-22f6e6b54170","3d14d49c-7ef2-4b2c-8b83-4188165ccfe9","fcf657d4-08aa-486e-b775-678a41a46f10","22755b84-d6cc-464e-8676-edf644e7c261"] consecutiveIntegers=false |
+| KRN-8 | phase1 | PASS | forged-reply-from-nested-frame | {"status":404,"body":"Not found","ms":10013}; nestedFrameGotRequestsDirectly=0 |
 | KRN-8 | info | FAIL | forged-reply-from-second-tab | {"status":200,"body":"FORGED-BY-TAB","ms":2}; secondTabGotRequestsDirectly=1 (residual: one registered kernel client per request) |
 | KRN-8 | info | PASS | os-tab-still-serves | {"status":200,"body":"REAL-CONTENT","ms":1} |
 | KRN-9 | phase1 | PASS | bootstrap-override-cross-site | osBooted=true; evilFetched=0; sentinels=[]; scripts=["bootstrapper.bundle.js","/remote.bundle.js"] |
